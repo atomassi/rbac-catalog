@@ -1,0 +1,113 @@
+name: Rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag to rollback to (e.g., v0.3.8). Leave empty to rollback to previous version.'
+        required: false
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  APP_NAME: azurerbac-builtinroles
+  RESOURCE_GROUP: builtinroles
+  ACR_NAME: azurerbacregistry
+  ACR_LOGIN_SERVER: azurerbacregistry.azurecr.io
+  IMAGE_NAME: azurerbac
+
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Determine rollback version
+        id: target
+        run: |
+          git fetch --tags --force
+          
+          if [ -n "${{ inputs.version }}" ]; then
+            # User specified a version
+            TARGET="${{ inputs.version }}"
+            echo "🎯 User specified version: $TARGET"
+          else
+            # Try to get current deployed version from live site
+            CURRENT=$(curl -sf --max-time 10 https://rbac-catalog.dev/version | jq -r '.version // empty' 2>/dev/null | cut -d'-' -f1)
+            
+            if [ -z "$CURRENT" ]; then
+              # Site is down or not responding - use latest tag
+              echo "⚠️ Could not reach live site, using latest git tag"
+              CURRENT=$(git tag --sort=-v:refname | head -1)
+            fi
+            
+            echo "📡 Current version: $CURRENT"
+            
+            # Get the tag before the current one
+            TARGET=$(git tag --sort=-v:refname | grep -A1 "^${CURRENT}$" | tail -1)
+            
+            if [ -z "$TARGET" ] || [ "$TARGET" = "$CURRENT" ]; then
+              echo "❌ Could not find previous version. Current: $CURRENT"
+              echo "Available tags:"
+              git tag --sort=-v:refname | head -10
+              exit 1
+            fi
+            echo "⏪ Rolling back to previous version: $TARGET"
+          fi
+          
+          # Validate format
+          if [[ ! "$TARGET" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "❌ Invalid version format: $TARGET. Expected: v0.0.0"
+            exit 1
+          fi
+          
+          echo "version=$TARGET" >> $GITHUB_OUTPUT
+          echo "🔄 Target rollback version: $TARGET"
+
+      - name: Azure Login
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5  # v2.3.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Check image exists in ACR
+        run: |
+          # Get the full version tag (includes SHA)
+          FULL_VERSION=$(az acr repository show-tags \
+            --name ${{ env.ACR_NAME }} \
+            --repository ${{ env.IMAGE_NAME }} \
+            --output tsv | grep "^${{ steps.target.outputs.version }}" | head -1)
+          
+          if [ -z "$FULL_VERSION" ]; then
+            echo "❌ Image not found for version ${{ steps.target.outputs.version }}"
+            echo "Available versions:"
+            az acr repository show-tags --name ${{ env.ACR_NAME }} --repository ${{ env.IMAGE_NAME }} --output tsv | head -20
+            exit 1
+          fi
+          
+          echo "IMAGE_VERSION=$FULL_VERSION" >> $GITHUB_ENV
+          echo "✅ Found image: $FULL_VERSION"
+
+      - name: Deploy to Azure App Service
+        uses: azure/webapps-deploy@2fdd5c3ebb4e540834e86ecc1f6fdcd5539023ee  # v3.0.2
+        with:
+          app-name: ${{ env.APP_NAME }}
+          images: ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_VERSION }}
+
+      - name: Azure Logout
+        if: always()
+        run: az logout
+
+      - name: Rollback summary
+        run: |
+          echo "✅ Rollback complete!"
+          echo "   Version: ${{ env.IMAGE_VERSION }}"
+          echo "🌐 https://rbac-catalog.dev"

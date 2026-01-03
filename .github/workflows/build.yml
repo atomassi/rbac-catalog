@@ -1,0 +1,95 @@
+name: Build
+
+on:
+  push:
+    branches: [main, release]
+  pull_request:
+    branches: [main, release]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install ruff && ruff check azurerbac/
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run tests
+        id: tests
+        run: |
+          pytest tests/ -q --tb=short --cov=azurerbac --cov-report=term --cov-fail-under=50 2>&1 | tee coverage.txt
+          PYTEST_EXIT=${PIPESTATUS[0]}
+          COVERAGE=$(grep -E '^TOTAL' coverage.txt | awk '{print $(NF)}' | tr -d '%')
+          echo "coverage=$COVERAGE" >> $GITHUB_OUTPUT
+          exit $PYTEST_EXIT
+        env:
+          DB_CONNECTION_STRING: "sqlite+aiosqlite:///:memory:"
+
+      - name: Update coverage badge
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: schneegans/dynamic-badges-action@v1.7.0
+        with:
+          auth: ${{ secrets.GIST_TOKEN }}
+          gistID: 56d5c381b196c9c18db9fedbecb79220
+          filename: coverage.json
+          label: coverage
+          message: ${{ steps.tests.outputs.coverage }}%
+          valColorRange: ${{ steps.tests.outputs.coverage }}
+          minColorRange: 50
+          maxColorRange: 90
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - run: pip install -r requirements.txt
+      - run: npm ci
+      - run: npx playwright install chromium --with-deps
+
+      - name: Seed test data
+        run: python e2e/seed_data.py
+        env:
+          DB_CONNECTION_STRING: "sqlite+aiosqlite:///e2e_test.db"
+
+      - name: Run E2E tests
+        run: |
+          uvicorn azurerbac.web.app:app --host 0.0.0.0 --port 8000 &
+          for i in {1..30}; do curl -s http://localhost:8000/healthz && break || sleep 1; done
+          npm run test:e2e
+        env:
+          DB_CONNECTION_STRING: "sqlite+aiosqlite:///e2e_test.db"
+
+      - name: Upload test report
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7

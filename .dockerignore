@@ -1,0 +1,75 @@
+# Git
+.git/
+.gitignore
+.github/
+
+# Python environments & cache
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv*/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+
+# Tests (not needed in production)
+tests/
+e2e/
+test-results/
+
+# Documentation
+*.md
+
+# Logs
+*.log
+logs/
+azurerbac/web/logs/
+
+# Node.js (only needed for dev/testing)
+node_modules/
+package.json
+package-lock.json
+playwright.config.js
+tailwind.config.js
+
+# Config files not needed in container
+pyproject.toml
+.pre-commit-config.yaml
+
+# Local database
+*.db
+
+# Azure / CI config
+.azure/
+
+# Cache directories
+.cache/
+azurerbac/.cache/
+
+# Local secrets
+.env
+.env.*
+
+# Docker (don't copy Docker files into image)
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# Build artifacts
+deploy.zip
+build/
+dist/
+
+# Large ML models (downloaded at runtime)
+azurerbac/airecommender/models/all-MiniLM-L6-v2/
+
+# Generated version file
+azurerbac/_version_generated.py

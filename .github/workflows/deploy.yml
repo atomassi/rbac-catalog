@@ -1,0 +1,105 @@
+name: Deploy
+
+on:
+  workflow_dispatch:  # Manual trigger
+  workflow_run:
+    workflows: ["Build"]
+    types: [completed]
+    branches: [release]
+
+# Required permissions for OIDC authentication (recommended)
+permissions:
+  id-token: write   # Required for requesting the JWT
+  contents: write   # Required for pushing git tags
+
+env:
+  APP_NAME: azurerbac-builtinroles
+  RESOURCE_GROUP: builtinroles
+  ACR_NAME: azurerbacregistry
+  ACR_LOGIN_SERVER: azurerbacregistry.azurecr.io
+  IMAGE_NAME: azurerbac
+  FRONT_DOOR_PROFILE: afd-azurerbac
+  ENDPOINT_NAME: azurerbac-builtinroles
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Calculate version
+        id: version
+        run: |
+          # Ensure all tags are fetched
+          git fetch --tags --force
+          # Get latest tag and bump patch version
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          MAJOR=$(echo "$LATEST_TAG" | sed 's/^v//' | cut -d. -f1)
+          MINOR=$(echo "$LATEST_TAG" | sed 's/^v//' | cut -d. -f2)
+          PATCH=$(echo "$LATEST_TAG" | sed 's/^v//' | cut -d. -f3)
+          NEW_PATCH=$((PATCH + 1))
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          NEW_TAG="v${MAJOR}.${MINOR}.${NEW_PATCH}"
+          VERSION="${NEW_TAG}-${SHORT_SHA}"
+          
+          echo "latest_tag=$LATEST_TAG" >> $GITHUB_OUTPUT
+          echo "new_tag=$NEW_TAG" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
+          echo "📦 Version: $LATEST_TAG → $VERSION"
+
+      - name: Create and push git tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "${{ steps.version.outputs.new_tag }}" -m "Release ${{ steps.version.outputs.new_tag }}"
+          git push origin "${{ steps.version.outputs.new_tag }}"
+          echo "🏷️ Created tag: ${{ steps.version.outputs.new_tag }}"
+
+      # Azure Login using OIDC (federated identity - no secrets stored)
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # Login to ACR using Azure identity (more secure than username/password)
+      - name: Login to Azure Container Registry
+        run: az acr login --name ${{ env.ACR_NAME }}
+
+      # Build and push Docker image
+      - name: Build and push Docker image
+        run: |
+          docker build \
+            --build-arg VERSION="${{ steps.version.outputs.version }}" \
+            -t ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }} \
+            -t ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:latest \
+            .
+          docker push ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
+          docker push ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:latest
+          echo "🐳 Built and pushed: ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}"
+
+      # Deploy using official Azure WebApps Deploy action
+      - name: Deploy to Azure App Service
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.APP_NAME }}
+          images: ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
+
+      - name: Azure Logout
+        if: always()
+        run: az logout
+
+      - name: Deployment summary
+        run: |
+          echo "✅ Deployment complete!"
+          echo "   Version: ${{ steps.version.outputs.version }}"
+          echo "   Tag: ${{ steps.version.outputs.new_tag }}"
+          echo "🌐 https://rbac-catalog.dev"

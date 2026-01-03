@@ -1,0 +1,78 @@
+"""Semantic Search recommendation engine."""
+
+from __future__ import annotations
+
+import logging
+from typing import override
+
+from azurerbac.airecommender.engines.base import BaseRecommenderEngine, RankedRole
+from azurerbac.airecommender.engines.config import SEMANTIC_THRESHOLDS
+from azurerbac.airecommender.engines.registry import EngineRegistry
+from azurerbac.airecommender.modes import RecommenderMode
+
+logger = logging.getLogger(__name__)
+
+
+@EngineRegistry.register(RecommenderMode.SEMANTIC)
+class SemanticEngine(BaseRecommenderEngine):
+    """Semantic Search recommendation engine."""
+
+    @property
+    @override
+    def name(self) -> str:
+        return "Semantic Search: Pure embedding similarity"
+
+    @property
+    @override
+    def requires_llm(self) -> bool:
+        """Return whether LLM is required."""
+        return False
+
+    @property
+    @override
+    def requires_embeddings(self) -> bool:
+        """Return whether embeddings are required."""
+        return True
+
+    @override
+    def recommend(
+        self,
+        query: str,
+        top_k: int = 5,
+        exclude_owner: bool = True,
+    ) -> list[RankedRole]:
+        """Get recommendations using semantic search.
+
+        Args:
+            query: Natural language query
+            top_k: Number of final recommendations
+            exclude_owner: Whether to exclude Owner role
+
+        Returns:
+            List of RankedRole objects sorted by similarity score
+        """
+        self._log_start(query, top_k)
+
+        query_embedding = self._encode_cached(query)
+        if query_embedding is None:
+            logger.warning("Semantic: Failed to encode query")
+            return []
+
+        # Retrieve top-K similar roles
+        candidates = self.retrieve_by_embedding(
+            query,
+            query_embedding,
+            top_k,
+            exclude_owner,
+            use_search_vector=True,
+        )
+
+        logger.debug("Semantic: Retrieved %d candidates", len(candidates))
+
+        # Filter and normalize
+        candidates = self._finalize_results(
+            candidates, threshold=SEMANTIC_THRESHOLDS.min_confidence
+        )
+
+        self._log_complete(candidates)
+        return candidates

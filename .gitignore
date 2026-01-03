@@ -1,0 +1,54 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv*/
+venv/
+
+# Node
+node_modules/
+
+# Testing & Linting
+.pytest_cache/
+.coverage
+.ruff_cache/
+.mypy_cache/
+htmlcov/
+test-results/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+
+# Secrets
+.env
+.env.*
+*.pem
+*.key
+
+# Database
+*.db
+
+# Logs
+*.log
+logs/
+azurerbac/web/logs/
+
+# Build artifacts
+deploy.zip
+build/
+dist/
+
+# Cache
+.cache/
+azurerbac/.cache/
+
+# Azure
+.azure/
+
+# Large ML models (downloaded at runtime or too large for git)
+azurerbac/airecommender/models/all-MiniLM-L6-v2/
+
+# Generated version file
+azurerbac/_version_generated.py

@@ -1,0 +1,867 @@
+<!doctype html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Prevent dark mode flash -->
+    <script>
+    (function() {
+        var stored = localStorage.getItem('darkMode');
+        var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        var hour = new Date().getHours();
+        var isNight = hour >= 19 || hour < 7;
+        if (stored === 'true' || (stored === null && (prefersDark || isNight))) {
+            document.documentElement.classList.add('dark');
+        }
+    })();
+    </script>
+    <title>{{ role.role_name }} ({{ role.role_id }}) - Azure Built-in Role | RBAC Permissions</title>
+    <meta name="description" content="{{ role.role_name }} role definition ID {{ role.role_id }}. {{ role.description[:130] if role.description else 'Azure built-in RBAC role' }}. Complete permissions list with actions, dataActions, and JSON.">
+    <meta name="keywords" content="{{ role.role_id }}, {{ role.role_id | replace('-', '') }}, {{ role.role_name }}, {{ role.role_name }} role, {{ role.role_name }} permissions, Azure RBAC, role definition id, Azure IAM">
+    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
+    <meta name="author" content="Azure RBAC Catalog">
+    <link rel="canonical" href="{{ site_url }}/roles/{{ role.role_id }}/{{ role.role_name | slugify }}">
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:title" content="{{ role.role_name }} - Azure Built-in Role ({{ role.role_id[:8] }}...)">
+    <meta property="og:description" content="{{ role.description[:200] if role.description else 'Azure built-in RBAC role ' ~ role.role_name ~ '. View permissions, actions, and JSON definition.' }}">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="{{ site_url }}/roles/{{ role.role_id }}/{{ role.role_name | slugify }}">
+    <meta property="og:site_name" content="Azure RBAC Catalog">
+    <meta property="og:image" content="{{ site_url }}/static/images/og-image.png">
+    <meta property="og:image:type" content="image/png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="Azure RBAC Catalog - Azure built-in role details">
+    <meta property="og:locale" content="en_US">
+    <meta property="article:modified_time" content="{{ (role.updated_on or role.last_seen_at).isoformat() if (role.updated_on or role.last_seen_at) else '' }}">
+    
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="{{ role.role_name }} - Azure Built-in Role">
+    <meta name="twitter:description" content="{{ role.description[:200] if role.description else 'Azure built-in RBAC role ' ~ role.role_name ~ '. View permissions and JSON definition.' }}">
+    <meta name="twitter:image" content="{{ site_url }}/static/images/og-image.png">
+    <meta name="twitter:image:alt" content="Azure RBAC Catalog - Azure built-in role details">
+    
+    <!-- Structured Data -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "TechArticle",
+        "headline": "{{ role.role_name }} - Azure Built-in Role Definition",
+        "description": "{{ role.description | default('Detailed definition and permissions for the Azure built-in role ' ~ role.role_name ~ '.', true) | replace('"', '\\"') }}",
+        "articleSection": "Azure RBAC Roles",
+        "keywords": "Azure, RBAC, {{ role.role_name }}, Security, IAM, {{ role.role_id }}, {{ role.role_id | replace('-', '') }}",
+        "datePublished": "{{ (role.created_on or role.first_seen_at or role.last_seen_at or role.updated_on).isoformat() if (role.created_on or role.first_seen_at or role.last_seen_at or role.updated_on) else '' }}",
+        "dateModified": "{{ (role.updated_on or role.last_seen_at).isoformat() if (role.updated_on or role.last_seen_at) else '' }}",
+        "author": {
+            "@type": "Organization",
+            "name": "Microsoft Azure"
+        },
+        "publisher": {
+            "@type": "Organization",
+            "name": "Azure RBAC Catalog",
+            "url": "{{ site_url }}/"
+        },
+        "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": "{{ site_url }}/roles/{{ role.role_id }}/{{ role.role_name | slugify }}"
+        }
+    }
+    </script>
+    
+    <!-- DefinedTerm Schema for Role Definition -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "DefinedTerm",
+        "name": "{{ role.role_name }}",
+        "description": "{{ role.description | default('Azure built-in RBAC role', true) | replace('"', '\\"') }}",
+        "identifier": [
+            "{{ role.role_id }}",
+            "{{ role.role_id | replace('-', '') }}"
+        ],
+        "sameAs": "https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles",
+        "inDefinedTermSet": {
+            "@type": "DefinedTermSet",
+            "name": "Azure Built-in RBAC Roles",
+            "url": "{{ site_url }}/"
+        },
+        "url": "{{ site_url }}/roles/{{ role.role_id }}/{{ role.role_name | slugify }}"
+    }
+    </script>
+    
+    <!-- Breadcrumb Structured Data -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+            {
+                "@type": "ListItem",
+                "position": 1,
+                "name": "Home",
+                "item": "{{ site_url }}/"
+            },
+            {
+                "@type": "ListItem",
+                "position": 2,
+                "name": "Roles",
+                "item": "{{ site_url }}/roles"
+            },
+            {
+                "@type": "ListItem",
+                "position": 3,
+                "name": "{{ role.role_name }}",
+                "item": "{{ site_url }}/roles/{{ role.role_id }}/{{ role.role_name | slugify }}"
+            }
+        ]
+    }
+    </script>
+    
+    <!-- Favicon - Google requires simple /favicon.ico link -->
+    <link rel="icon" href="/favicon.ico" sizes="any">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192.png">
+    <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48.png">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    <link rel="sitemap" type="application/xml" href="/sitemap.xml">
+    
+    <!-- Preload critical resources for faster LCP -->
+    <link rel="preload" href="/static/css/tailwind.min.css" as="style">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    
+    <!-- Self-hosted Tailwind CSS -->
+    <link rel="stylesheet" href="/static/css/tailwind.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Alpine.js Component for Effective Permissions (must be defined before Alpine.js loads) -->
+    <script>
+        function effectivePermsData() {
+            const data = window._effectivePermsData || { control: [], data: [] };
+            return {
+                controlSearch: '',
+                dataSearch: '',
+                showAllControl: false,
+                showAllData: false,
+                controlActions: data.control,
+                dataActions: data.data,
+                getOperationType(action) {
+                    const lower = action.toLowerCase();
+                    const lastPart = lower.split('/').pop();
+                    if (lastPart === 'read' || lastPart.endsWith('/read')) return 'read';
+                    if (lastPart === 'write' || lastPart.endsWith('/write')) return 'write';
+                    if (lastPart === 'delete' || lastPart.endsWith('/delete')) return 'delete';
+                    if (lastPart === 'action' || lastPart.endsWith('/action')) return 'action';
+                    return 'other';
+                },
+                getOperationTypeClass(action) {
+                    const type = this.getOperationType(action);
+                    switch(type) {
+                        case 'read': return 'bg-emerald-100 text-emerald-700';
+                        case 'write': return 'bg-blue-100 text-blue-700';
+                        case 'delete': return 'bg-red-100 text-red-700';
+                        case 'action': return 'bg-purple-100 text-purple-700';
+                        default: return 'bg-slate-100 text-slate-600';
+                    }
+                },
+                get filteredControl() {
+                    if (!this.controlSearch) {
+                        return this.showAllControl ? this.controlActions : this.controlActions.slice(0, 100);
+                    }
+                    const search = this.controlSearch.toLowerCase();
+                    return this.controlActions.filter(a => a.toLowerCase().includes(search));
+                },
+                get filteredData() {
+                    if (!this.dataSearch) {
+                        return this.showAllData ? this.dataActions : this.dataActions.slice(0, 100);
+                    }
+                    const search = this.dataSearch.toLowerCase();
+                    return this.dataActions.filter(a => a.toLowerCase().includes(search));
+                }
+            };
+        }
+    </script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+<body class="h-full bg-slate-50 dark:bg-slate-900 transition-colors duration-200">
+    <!-- Navigation state handler - must load before content -->
+    <script src="/static/js/nav-state.js"></script>
+    <script>NavState.initAiModeFromUrl();</script>
+    <div class="min-h-full">
+        <!-- Header -->
+        <div class="gradient-bg">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                <!-- Navigation Button Group -->
+                <div class="inline-flex items-center bg-white/10 backdrop-blur-sm rounded-lg overflow-hidden mb-6">
+                    <a href="/" class="inline-flex items-center justify-center px-3 py-2 text-white/70 hover:text-white hover:bg-white/10 transition-colors border-r border-white/20" title="Home">
+                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                        </svg>
+                    </a>
+                    <a id="back-button" href="/recent" class="inline-flex items-center px-3 py-2 text-sm font-medium text-white/70 hover:text-white hover:bg-white/10 transition-colors">
+                        <svg class="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                        </svg>
+                        <span id="back-label">Back</span>
+                    </a>
+                    <script>
+                        (function() {
+                            const backBtn = document.getElementById('back-button');
+                            const backLabel = document.getElementById('back-label');
+                            const state = NavState.get();
+                            // Prevent loop - if back points to this same role, use default
+                            if (state.back === 'role' && state.from_role_id === '{{ role.role_id }}') {
+                                backBtn.href = '/roles';
+                                backLabel.textContent = 'Back to Roles';
+                            } else {
+                                backBtn.href = NavState.getBackUrl({ back: 'roles' });
+                                backLabel.textContent = NavState.getBackLabel({ back: 'roles' });
+                            }
+                            NavState.consumeBackContext();
+                        })();
+                    </script>
+                </div>
+
+                <h1 class="text-3xl sm:text-4xl font-bold text-white mb-2">{{ role.role_name }}</h1>
+                <p class="text-azure-200 text-sm font-mono">{{ role.role_id }}</p>
+            </div>
+        </div>
+
+        <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-6">
+            {% if role.status == 'deleted' %}
+            <div class="rounded-2xl bg-gradient-to-r from-red-50 to-rose-50 p-6 mb-6 border border-red-200 shadow-lg">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0 bg-red-100 rounded-xl p-3">
+                        <svg class="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                    </div>
+                    <div class="ml-4">
+                        <h3 class="text-lg font-semibold text-red-800">Role Deleted</h3>
+                        <p class="text-sm text-red-700">This role has been deleted from Azure.</p>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Meta Card -->
+            <div class="bg-white rounded-2xl shadow-lg overflow-hidden mb-8">
+                <div class="px-6 py-5 border-b border-slate-100">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0 bg-gradient-to-br from-azure-500 to-azure-600 rounded-xl p-3">
+                            <svg class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                            </svg>
+                        </div>
+                        <div class="ml-4">
+                            <h3 class="text-lg font-semibold text-slate-900">Role Information</h3>
+                            <p class="text-sm text-slate-500">Details and metadata</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="divide-y divide-slate-100">
+                    <div class="px-6 py-4 sm:grid sm:grid-cols-3 sm:gap-4">
+                        <dt class="text-sm font-medium text-slate-500">Role ID</dt>
+                        <dd class="mt-1 sm:mt-0 sm:col-span-2">
+                            <code class="text-sm font-mono text-slate-700 bg-slate-100 px-3 py-1.5 rounded-lg">{{ role.role_id }}</code>
+                        </dd>
+                    </div>
+                    <div class="px-6 py-4 sm:grid sm:grid-cols-3 sm:gap-4">
+                        <dt class="text-sm font-medium text-slate-500">Type</dt>
+                        <dd class="mt-1 text-sm text-slate-900 sm:mt-0 sm:col-span-2">
+                            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-azure-100 text-azure-700">
+                                {{ role.role_type or 'BuiltInRole' }}
+                            </span>
+                        </dd>
+                    </div>
+                    <div class="px-6 py-4 sm:grid sm:grid-cols-3 sm:gap-4">
+                        <dt class="text-sm font-medium text-slate-500">Created (Azure)</dt>
+                        <dd class="mt-1 text-sm font-mono tabular-nums text-slate-500 sm:mt-0 sm:col-span-2">
+                            {%- if role.created_on -%}
+                                {{ role.created_on | format_date }}
+                            {%- elif role.role_json and role.role_json.properties and role.role_json.properties.createdOn -%}
+                                {{ role.role_json.properties.createdOn | format_date }}
+                            {%- elif role.last_known_json and role.last_known_json.properties and role.last_known_json.properties.createdOn -%}
+                                {{ role.last_known_json.properties.createdOn | format_date }}
+                            {%- else -%}
+                                <span class="text-slate-400">(not available)</span>
+                            {%- endif -%}
+                        </dd>
+                    </div>
+                    <div class="px-6 py-4 sm:grid sm:grid-cols-3 sm:gap-4">
+                        <dt class="text-sm font-medium text-slate-500">
+                            {%- if role.status == 'deleted' -%}Deleted{%- else -%}Last Updated (Azure){%- endif -%}
+                        </dt>
+                        <dd class="mt-1 text-sm font-mono tabular-nums text-slate-500 sm:mt-0 sm:col-span-2">
+                            {%- if role.status == 'deleted' -%}
+                                {{ role.last_seen_at | format_date if role.last_seen_at else '(not available)' }}
+                            {%- elif role.updated_on -%}
+                                {{ role.updated_on | format_date }}
+                            {%- elif role.role_json and role.role_json.properties and role.role_json.properties.updatedOn -%}
+                                {{ role.role_json.properties.updatedOn | format_date }}
+                            {%- elif role.role_json and role.role_json.properties and role.role_json.properties.createdOn -%}
+                                {{ role.role_json.properties.createdOn | format_date }}
+                            {%- else -%}
+                                <span class="text-slate-400">(not available)</span>
+                            {%- endif -%}
+                        </dd>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Change History -->
+            <div class="bg-white rounded-2xl shadow-lg overflow-hidden mb-8">
+                <div class="px-6 py-5 border-b border-slate-100">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0 bg-gradient-to-br from-violet-500 to-purple-600 rounded-xl p-3">
+                            <svg class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                        </div>
+                        <div class="ml-4">
+                            <h3 class="text-lg font-semibold text-slate-900">Change History</h3>
+                            <p class="text-sm text-slate-500">Track all modifications to this role{% if first_scan %} since {{ first_scan }}{% endif %}</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="overflow-x-auto">
+                    <!-- Desktop Header row - hidden on mobile -->
+                    <div class="hidden sm:flex bg-slate-50 border-b border-slate-100 px-6 py-4" style="gap: 80px;">
+                        <div class="flex-shrink-0 text-xs font-semibold text-slate-500 uppercase tracking-wider" style="width: 180px;">Timestamp</div>
+                        <div class="flex-shrink-0 text-xs font-semibold text-slate-500 uppercase tracking-wider" style="width: 130px;">Event Type</div>
+                        <div class="flex-1 text-xs font-semibold text-slate-500 uppercase tracking-wider">Summary & Details</div>
+                    </div>
+                    <!-- Body rows -->
+                    <div class="divide-y divide-slate-100">
+                        {% for ev in events %}
+                        <!-- Desktop row -->
+                        <div class="hidden sm:flex px-6 py-4 hover:bg-slate-50/50 transition-colors" style="gap: 80px;">
+                            <div class="flex-shrink-0 text-sm font-mono tabular-nums text-slate-500" style="width: 180px;">
+                                {# Deleted events always show scan_timestamp (no Azure timestamp for deletions) #}
+                                {# Initial Scan events show scan_timestamp #}
+                                {# Other events show azure_updated_on or fall back to scan_timestamp #}
+                                {% if ev.event_type == 'deleted' %}
+                                    {{ ev.scan_timestamp | format_datetime }}
+                                {% elif ev.event_type == 'initial_scan' %}
+                                    {{ ev.scan_timestamp | format_datetime }}
+                                {% else %}
+                                    {{ (ev.azure_updated_on or ev.scan_timestamp) | format_datetime }}
+                                {% endif %}
+                            </div>
+                            <div class="flex-shrink-0" style="width: 130px;">
+                                    {% if ev.event_type == 'created' %}
+                                        <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-gradient-to-r from-emerald-50 to-teal-50 text-emerald-700 border border-emerald-200">
+                                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-2"></span>
+                                            Created
+                                        </span>
+                                    {% elif ev.event_type == 'initial_scan' %}
+                                        <!-- Initial Scan: yellow -->
+                                        <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-gradient-to-r from-yellow-50 to-amber-50 text-yellow-700 border border-yellow-300">
+                                            <span class="w-1.5 h-1.5 rounded-full bg-yellow-500 mr-2"></span>
+                                            Initial Scan
+                                        </span>
+                                    {% elif ev.event_type == 'updated' %}
+                                        <!-- Updated: blue -->
+                                        <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 border border-blue-200">
+                                            <span class="w-1.5 h-1.5 rounded-full bg-blue-500 mr-2"></span>
+                                            Updated
+                                        </span>
+                                    {% elif ev.event_type == 'deleted' %}
+                                        <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-gradient-to-r from-red-50 to-rose-50 text-red-700 border border-red-200">
+                                            <span class="w-1.5 h-1.5 rounded-full bg-red-500 mr-2"></span>
+                                            Deleted
+                                        </span>
+                                    {% else %}
+                                        <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700">
+                                            {{ ev.event_type }}
+                                        </span>
+                                    {% endif %}
+                            </div>
+                            <div class="flex-1 text-sm text-slate-900">
+                                    {% set display_summary = ev.summary | replace("<root>", "") | trim %}
+                                    {% if display_summary %}
+                                    <div class="mb-3 font-medium">{{ display_summary }}</div>
+                                    {% endif %}
+                                    <details class="group">
+                                        <summary class="flex items-center text-sm text-azure-600 cursor-pointer hover:text-azure-700 font-medium select-none py-0.5">
+                                            <svg class="mr-2 h-4 w-4 transition-transform group-open:rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                                            </svg>
+                                            Show full JSON{% if ev.event_type not in ['created', 'initial_scan'] %} diff{% endif %}
+                                        </summary>
+                                        <div class="mt-4">
+                                            {% if ev.event_type == 'created' %}
+                                                {# Newly Created Role: show JSON in green (all added) #}
+                                                <div class="bg-slate-50 border border-slate-200 rounded-xl overflow-hidden">
+                                                    <div class="px-4 overflow-x-auto font-mono text-xs leading-6 bg-white max-h-96 overflow-y-auto">
+{%- for line in (ev.role_json_pretty or role_json_pretty).split('\n') %}
+<div class="bg-emerald-50 text-emerald-800 -mx-4 px-4 whitespace-pre border-l-4 border-emerald-400">+ {{ line }}</div>
+{%- endfor %}
+                                                    </div>
+                                                </div>
+                                            {% elif ev.event_type == 'initial_scan' %}
+                                                {# Initial Scan: show plain JSON without highlighting #}
+                                                <div class="bg-slate-50 border border-slate-200 rounded-xl overflow-hidden">
+                                                    <div class="px-4 overflow-x-auto font-mono text-xs leading-6 bg-white max-h-96 overflow-y-auto">
+<pre class="text-slate-700 whitespace-pre m-0 py-0">{{ (ev.role_json_pretty or role_json_pretty) | trim }}</pre>
+                                                    </div>
+                                                </div>
+                                            {% elif ev.diff and ev.diff.before_json is defined and ev.diff.after_json is defined %}
+                                                <div class="bg-slate-50 border border-slate-200 rounded-xl overflow-hidden">
+                                                    <div class="px-4 overflow-x-auto font-mono text-xs leading-6 bg-white max-h-96 overflow-y-auto">
+{%- for line in ev.diff.before_json | full_json_diff(ev.diff.after_json) %}
+{% if line.type == 'removed' -%}
+<div class="bg-red-50 text-red-800 -mx-4 px-4 whitespace-pre border-l-4 border-red-400">- {{ line.text }}</div>
+{% elif line.type == 'added' -%}
+<div class="bg-emerald-50 text-emerald-800 -mx-4 px-4 whitespace-pre border-l-4 border-emerald-400">+ {{ line.text }}</div>
+{% else -%}
+<div class="text-slate-500 whitespace-pre">  {{ line.text }}</div>
+{% endif -%}
+{%- endfor %}
+                                                    </div>
+                                                </div>
+                                            {% elif ev.diff and ev.diff.changes %}
+                                                <div class="bg-slate-50 border border-slate-200 rounded-xl overflow-hidden">
+                                                    {% for change in ev.diff.changes %}
+                                                        <div class="border-b border-slate-200 last:border-b-0">
+                                                            {% set display_path = change.path | replace("<root>", "") %}
+                                                            {% if display_path %}
+                                                            <div class="bg-slate-100 px-4 py-2 text-xs font-mono font-semibold text-slate-700 border-b border-slate-200">
+                                                                {{ display_path }}
+                                                            </div>
+                                                            {% endif %}
+                                                            <div class="px-4 overflow-x-auto font-mono text-xs leading-6 bg-white">
+{%- for line in change | diff_lines %}
+{% if line.type == 'removed' -%}
+<div class="bg-red-50 text-red-800 -mx-4 px-4 whitespace-pre-wrap border-l-4 border-red-400">- {{ line.text }}</div>
+{% elif line.type == 'added' -%}
+<div class="bg-emerald-50 text-emerald-800 -mx-4 px-4 whitespace-pre-wrap border-l-4 border-emerald-400">+ {{ line.text }}</div>
+{% else -%}
+<div class="text-slate-400 whitespace-pre-wrap">  {{ line.text }}</div>
+{% endif -%}
+{%- endfor %}
+                                                            </div>
+                                                        </div>
+                                                    {% endfor %}
+                                                </div>
+                                            {% else %}
+                                                <pre class="bg-slate-800 text-slate-100 p-4 rounded-xl overflow-auto text-xs font-mono leading-5">{{ ev.diff_pretty }}</pre>
+                                            {% endif %}
+                                        </div>
+                                    </details>
+                            </div>
+                        </div>
+                        <!-- Mobile row - card layout -->
+                        <div class="sm:hidden p-4">
+                            <div class="bg-slate-50 rounded-xl p-4">
+                                <!-- Date on left, Badge on right -->
+                                <div class="flex items-center justify-between mb-3">
+                                    <span class="text-sm font-mono tabular-nums text-slate-500">
+                                        {# Deleted events always show scan_timestamp (no Azure timestamp for deletions) #}
+                                        {# Initial Scan events show scan_timestamp #}
+                                        {# Other events show azure_updated_on or fall back to scan_timestamp #}
+                                        {% if ev.event_type == 'deleted' %}
+                                            {{ ev.scan_timestamp | format_datetime }}
+                                        {% elif ev.event_type == 'initial_scan' %}
+                                            {{ ev.scan_timestamp | format_datetime }}
+                                        {% else %}
+                                            {{ (ev.azure_updated_on or ev.scan_timestamp) | format_datetime }}
+                                        {% endif %}
+                                    </span>
+                                    {% if ev.event_type == 'created' %}
+                                        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-emerald-100 text-emerald-700">
+                                            <span class="w-2 h-2 rounded-full bg-emerald-500 mr-2"></span>
+                                            Created
+                                        </span>
+                                    {% elif ev.event_type == 'initial_scan' %}
+                                        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-yellow-100 text-yellow-700">
+                                            <span class="w-2 h-2 rounded-full bg-yellow-500 mr-2"></span>
+                                            Initial Scan
+                                        </span>
+                                    {% elif ev.event_type == 'updated' %}
+                                        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-blue-100 text-blue-700">
+                                            <span class="w-2 h-2 rounded-full bg-blue-500 mr-2"></span>
+                                            Updated
+                                        </span>
+                                    {% elif ev.event_type == 'deleted' %}
+                                        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-red-100 text-red-700">
+                                            <span class="w-2 h-2 rounded-full bg-red-500 mr-2"></span>
+                                            Deleted
+                                        </span>
+                                    {% else %}
+                                        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-slate-200 text-slate-700">
+                                            {{ ev.event_type }}
+                                        </span>
+                                    {% endif %}
+                                </div>
+                                {% set display_summary = ev.summary | replace("<root>", "") %}
+                                {% if display_summary %}
+                                <p class="text-sm text-slate-700 mb-3">{{ display_summary }}</p>
+                                {% endif %}
+                                <details class="group">
+                                    <summary class="flex items-center text-sm text-azure-600 cursor-pointer hover:text-azure-700 font-medium select-none py-1">
+                                        <svg class="mr-2 h-4 w-4 transition-transform group-open:rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                                        </svg>
+                                        View details
+                                    </summary>
+                                    <div class="mt-3 text-xs">
+                                    {% if ev.event_type == 'created' %}
+                                        <div class="bg-slate-50 border border-slate-200 rounded-lg overflow-hidden">
+                                            <div class="px-3 overflow-x-auto font-mono text-xs leading-5 bg-white max-h-64 overflow-y-auto">
+{%- for line in role_json_pretty.split('\n') %}
+<div class="bg-emerald-50 text-emerald-800 -mx-3 px-3 whitespace-pre border-l-2 border-emerald-400">+ {{ line }}</div>
+{%- endfor %}
+                                            </div>
+                                        </div>
+                                    {% elif ev.event_type == 'initial_scan' %}
+                                        <div class="bg-slate-50 border border-slate-200 rounded-lg overflow-hidden">
+                                            <div class="px-3 overflow-x-auto font-mono text-xs leading-5 bg-white max-h-64 overflow-y-auto">
+<pre class="text-slate-700 whitespace-pre m-0 py-0">{{ role_json_pretty | trim }}</pre>
+                                            </div>
+                                        </div>
+                                    {% elif ev.diff and ev.diff.before_json is defined and ev.diff.after_json is defined %}
+                                        <div class="bg-slate-50 border border-slate-200 rounded-lg overflow-hidden">
+                                            <div class="px-3 overflow-x-auto font-mono text-xs leading-5 bg-white max-h-64 overflow-y-auto">
+{%- for line in ev.diff.before_json | full_json_diff(ev.diff.after_json) %}
+{% if line.type == 'removed' -%}
+<div class="bg-red-50 text-red-800 -mx-3 px-3 whitespace-pre border-l-2 border-red-400">- {{ line.text }}</div>
+{% elif line.type == 'added' -%}
+<div class="bg-emerald-50 text-emerald-800 -mx-3 px-3 whitespace-pre border-l-2 border-emerald-400">+ {{ line.text }}</div>
+{% else -%}
+<div class="text-slate-500 whitespace-pre">  {{ line.text }}</div>
+{% endif -%}
+{%- endfor %}
+                                            </div>
+                                        </div>
+                                    {% elif ev.diff and ev.diff.changes %}
+                                        <div class="bg-slate-50 border border-slate-200 rounded-lg overflow-hidden">
+                                            {% for change in ev.diff.changes %}
+                                                <div class="border-b border-slate-200 last:border-b-0">
+                                                    {% set display_path = change.path | replace("<root>", "") %}
+                                                    {% if display_path %}
+                                                    <div class="bg-slate-100 px-3 py-1.5 text-xs font-mono font-semibold text-slate-700 border-b border-slate-200">
+                                                        {{ display_path }}
+                                                    </div>
+                                                    {% endif %}
+                                                    <div class="px-3 overflow-x-auto font-mono text-xs leading-5 bg-white">
+{%- for line in change | diff_lines %}
+{% if line.type == 'removed' -%}
+<div class="bg-red-50 text-red-800 -mx-3 px-3 whitespace-pre-wrap border-l-2 border-red-400">- {{ line.text }}</div>
+{% elif line.type == 'added' -%}
+<div class="bg-emerald-50 text-emerald-800 -mx-3 px-3 whitespace-pre-wrap border-l-2 border-emerald-400">+ {{ line.text }}</div>
+{% else -%}
+<div class="text-slate-400 whitespace-pre-wrap">  {{ line.text }}</div>
+{% endif -%}
+{%- endfor %}
+                                                    </div>
+                                                </div>
+                                            {% endfor %}
+                                        </div>
+                                    {% else %}
+                                        <pre class="bg-slate-800 text-slate-100 p-3 rounded-lg overflow-auto text-xs font-mono leading-5">{{ ev.diff_pretty }}</pre>
+                                    {% endif %}
+                                    </div>
+                                </details>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Latest JSON -->
+            <div class="bg-white rounded-2xl shadow-lg overflow-hidden mb-8">
+                <div class="px-6 py-5 border-b border-slate-100">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0 bg-gradient-to-br from-slate-700 to-slate-800 rounded-xl p-3">
+                            <svg class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                            </svg>
+                        </div>
+                        <div class="ml-4">
+                            <h3 class="text-lg font-semibold text-slate-900">Latest Role JSON</h3>
+                            <p class="text-sm text-slate-500">Raw definition from Azure</p>
+                        </div>
+                    </div>
+                </div>
+                {% if role.status == 'deleted' %}
+                    <div class="p-6">
+                        <div class="bg-slate-50 rounded-xl p-6 text-sm text-slate-500 italic border border-slate-200 text-center">
+                            <svg class="mx-auto h-10 w-10 text-slate-300 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            Role has been deleted - no JSON available
+                        </div>
+                    </div>
+                {% else %}
+                    <div class="bg-gradient-to-br from-slate-900 to-slate-800 m-4 rounded-xl overflow-hidden">
+                        <pre class="px-6 py-2 overflow-auto text-xs font-mono text-slate-100 leading-5 max-h-96">{{ role_json_pretty | trim }}</pre>
+                    </div>
+                {% endif %}
+            </div>
+
+            <!-- Effective Permissions -->
+            {% if role.status != 'deleted' and effective_perms %}
+            <script>
+                window._effectivePermsData = {
+                    control: {{ effective_perms.control_plane_actions | tojson | safe }},
+                    data: {{ effective_perms.data_plane_actions | tojson | safe }}
+                };
+            </script>
+            <div class="bg-white rounded-2xl shadow-lg overflow-hidden mb-8" 
+                 x-data="effectivePermsData()">
+                <div class="px-6 py-5 border-b border-slate-100">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl p-3">
+                                <svg class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                            </div>
+                            <div class="ml-4">
+                                <h3 class="text-lg font-semibold text-slate-900">Effective Permissions</h3>
+                                <p class="text-sm text-slate-500">Operations granted by this role ({{ effective_perms.control_plane_count + effective_perms.data_plane_count }} total)</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {% if effective_perms.has_unresolved_permissions %}
+                    <div class="mt-4 rounded-lg bg-amber-50 border border-amber-200 p-4">
+                        <div class="flex">
+                            <div class="flex-shrink-0">
+                                <svg class="h-5 w-5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                </svg>
+                            </div>
+                            <div class="ml-3">
+                                <h4 class="text-sm font-medium text-amber-800">Unresolved Operations</h4>
+                                <p class="text-sm text-amber-700 mt-1">This role defines permissions that could not be matched to any known Azure operations. This may indicate deprecated or removed operations that are no longer exposed by the Azure API.</p>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {% if effective_perms.has_conditions %}
+                    <div class="mt-4 rounded-lg bg-amber-50 border border-amber-200 p-4">
+                        <div class="flex">
+                            <div class="flex-shrink-0">
+                                <svg class="h-5 w-5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                </svg>
+                            </div>
+                            <div class="ml-3">
+                                <h4 class="text-sm font-medium text-amber-800">Conditional Permissions</h4>
+                                <p class="text-sm text-amber-700 mt-1">This role has conditions that may restrict effective permissions based on context (e.g., resource attributes, request properties).</p>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+                
+                <div class="p-6">
+                    <!-- Raw Patterns Summary - only show if there are wildcards (otherwise expanded = raw) -->
+                    {% if effective_perms.has_wildcards and (effective_perms.raw_actions or effective_perms.raw_data_actions) %}
+                    <div class="mb-6">
+                        <h4 class="text-sm font-semibold text-slate-700 mb-3">Permission Patterns (from role definition)</h4>
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                            {% if effective_perms.raw_actions %}
+                            <div class="bg-slate-50 rounded-lg p-4 border border-slate-200">
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="text-xs font-semibold text-slate-600 uppercase tracking-wide">Actions</span>
+                                    <span class="text-xs text-slate-500">{{ effective_perms.raw_actions | length }} pattern{{ 's' if effective_perms.raw_actions | length != 1 else '' }}</span>
+                                </div>
+                                <div class="space-y-1 max-h-32 overflow-y-auto">
+                                    {% for action in effective_perms.raw_actions %}
+                                    <code class="block text-xs font-mono text-emerald-700 bg-emerald-50 px-2 py-1 rounded">{{ action }}</code>
+                                    {% endfor %}
+                                </div>
+                                {% if effective_perms.raw_not_actions %}
+                                <div class="mt-3 pt-3 border-t border-slate-200">
+                                    <span class="text-xs font-semibold text-slate-600 uppercase tracking-wide">NotActions (excluded)</span>
+                                    <div class="space-y-1 mt-2 max-h-24 overflow-y-auto">
+                                        {% for action in effective_perms.raw_not_actions %}
+                                        <code class="block text-xs font-mono text-red-700 bg-red-50 px-2 py-1 rounded">{{ action }}</code>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                                {% endif %}
+                            </div>
+                            {% endif %}
+                            
+                            {% if effective_perms.raw_data_actions %}
+                            <div class="bg-slate-50 rounded-lg p-4 border border-slate-200">
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="text-xs font-semibold text-slate-600 uppercase tracking-wide">Data Actions</span>
+                                    <span class="text-xs text-slate-500">{{ effective_perms.raw_data_actions | length }} pattern{{ 's' if effective_perms.raw_data_actions | length != 1 else '' }}</span>
+                                </div>
+                                <div class="space-y-1 max-h-32 overflow-y-auto">
+                                    {% for action in effective_perms.raw_data_actions %}
+                                    <code class="block text-xs font-mono text-blue-700 bg-blue-50 px-2 py-1 rounded">{{ action }}</code>
+                                    {% endfor %}
+                                </div>
+                                {% if effective_perms.raw_not_data_actions %}
+                                <div class="mt-3 pt-3 border-t border-slate-200">
+                                    <span class="text-xs font-semibold text-slate-600 uppercase tracking-wide">NotDataActions (excluded)</span>
+                                    <div class="space-y-1 mt-2 max-h-24 overflow-y-auto">
+                                        {% for action in effective_perms.raw_not_data_actions %}
+                                        <code class="block text-xs font-mono text-red-700 bg-red-50 px-2 py-1 rounded">{{ action }}</code>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                                {% endif %}
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    <!-- Expanded Operations -->
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <!-- Control Plane Actions -->
+                        <div>
+                            <div class="flex items-center justify-between mb-2">
+                                <h4 class="text-sm font-semibold text-slate-700">
+                                    Control Plane Operations
+                                    <span class="ml-2 text-xs font-normal text-slate-500">({{ effective_perms.control_plane_count }})</span>
+                                </h4>
+                            </div>
+                            
+                            {% if effective_perms.control_plane_count > 0 %}
+                            <div class="mb-2">
+                                <div class="relative">
+                                    <input type="text" 
+                                           x-model="controlSearch"
+                                           placeholder="Filter operations..." 
+                                           class="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-300 rounded-md focus:ring-2 focus:ring-azure-500 focus:border-azure-500">
+                                    <svg class="absolute left-2.5 top-2 h-3.5 w-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                    </svg>
+                                </div>
+                            </div>
+                            
+                            <div class="bg-slate-50 rounded-lg border border-slate-200 max-h-96 overflow-y-auto">
+                                <template x-if="filteredControl.length === 0">
+                                    <div class="p-4 text-sm text-slate-500 text-center italic">No matching operations</div>
+                                </template>
+                                <template x-for="action in filteredControl" :key="action">
+                                    <div class="px-3 py-2 border-b border-slate-100 last:border-b-0 hover:bg-slate-100 transition-colors">
+                                        <div class="flex items-center gap-2">
+                                            <span class="flex-shrink-0 w-12 text-center inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[10px] font-medium"
+                                                  :class="getOperationTypeClass(action)">
+                                                <span x-text="getOperationType(action)"></span>
+                                            </span>
+                                            <a :href="'/operations/' + encodeURIComponent(action)" @click="NavState.setBackContext('role', { from_role_id: '{{ role.role_id }}', from_role_name: '{{ role.role_name }}', from_role_slug: '{{ role.role_name | slugify }}' })" class="text-xs font-mono text-slate-700 truncate hover:text-azure-600 hover:underline" x-text="action" :title="action"></a>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                            
+                            <template x-if="!controlSearch && controlActions.length > 100 && !showAllControl">
+                                <button @click="showAllControl = true" class="mt-2 text-xs text-azure-600 hover:text-azure-700 font-medium">
+                                    Show all <span x-text="controlActions.length"></span> operations...
+                                </button>
+                            </template>
+                            <template x-if="controlSearch">
+                                <p class="mt-1 text-xs text-slate-500">
+                                    <span x-text="filteredControl.length"></span> / <span x-text="controlActions.length"></span> shown
+                                </p>
+                            </template>
+                            {% else %}
+                            <div class="bg-slate-50 rounded-lg border border-slate-200 p-4 text-sm text-slate-500 text-center italic">
+                                No control plane operations granted
+                            </div>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- Data Plane Actions -->
+                        <div>
+                            <div class="flex items-center justify-between mb-2">
+                                <h4 class="text-sm font-semibold text-slate-700">
+                                    Data Plane Operations
+                                    <span class="ml-2 text-xs font-normal text-slate-500">({{ effective_perms.data_plane_count }})</span>
+                                </h4>
+                            </div>
+                            
+                            {% if effective_perms.data_plane_count > 0 %}
+                            <div class="mb-2">
+                                <div class="relative">
+                                    <input type="text" 
+                                           x-model="dataSearch"
+                                           placeholder="Filter operations..." 
+                                           class="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-300 rounded-md focus:ring-2 focus:ring-azure-500 focus:border-azure-500">
+                                    <svg class="absolute left-2.5 top-2 h-3.5 w-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                    </svg>
+                                </div>
+                            </div>
+                            
+                            <div class="bg-slate-50 rounded-lg border border-slate-200 max-h-96 overflow-y-auto">
+                                <template x-if="filteredData.length === 0">
+                                    <div class="p-4 text-sm text-slate-500 text-center italic">No matching operations</div>
+                                </template>
+                                <template x-for="action in filteredData" :key="action">
+                                    <div class="px-3 py-2 border-b border-slate-100 last:border-b-0 hover:bg-slate-100 transition-colors">
+                                        <div class="flex items-center gap-2">
+                                            <span class="flex-shrink-0 w-12 text-center inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[10px] font-medium"
+                                                  :class="getOperationTypeClass(action)">
+                                                <span x-text="getOperationType(action)"></span>
+                                            </span>
+                                            <a :href="'/operations/' + encodeURIComponent(action)" @click="NavState.setBackContext('role', { from_role_id: '{{ role.role_id }}', from_role_name: '{{ role.role_name }}', from_role_slug: '{{ role.role_name | slugify }}' })" class="text-xs font-mono text-slate-700 truncate hover:text-azure-600 hover:underline" x-text="action" :title="action"></a>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                            
+                            <template x-if="!dataSearch && dataActions.length > 100 && !showAllData">
+                                <button @click="showAllData = true" class="mt-2 text-xs text-azure-600 hover:text-azure-700 font-medium">
+                                    Show all <span x-text="dataActions.length"></span> operations...
+                                </button>
+                            </template>
+                            <template x-if="dataSearch">
+                                <p class="mt-1 text-xs text-slate-500">
+                                    <span x-text="filteredData.length"></span> / <span x-text="dataActions.length"></span> shown
+                                </p>
+                            </template>
+                            {% else %}
+                            <div class="bg-slate-50 rounded-lg border border-slate-200 p-4 text-sm text-slate-500 text-center italic">
+                                No data plane operations granted
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </main>
+
+        <!-- Footer -->
+        <footer class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div class="border-t border-slate-200 pt-8">
+                <div class="flex flex-col items-center" style="gap: 20px;">
+                    <!-- Internal navigation links for SEO -->
+                    <nav class="flex flex-col sm:flex-row flex-wrap justify-center items-center text-sm" style="gap: 12px 24px;">
+                        <a href="/recent" class="ai-nav-link text-slate-600 hover:text-azure-600 transition-colors">Recent Changes</a>
+                        <a href="/roles" class="ai-nav-link text-slate-600 hover:text-azure-600 transition-colors">Browse Roles</a>
+                        <a href="/operations" class="ai-nav-link text-slate-600 hover:text-azure-600 transition-colors">Browse Operations</a>
+                        <a href="/recommend" class="ai-nav-link text-slate-600 hover:text-azure-600 transition-colors">Role Recommender</a>
+                        <a href="/about" class="ai-nav-link text-slate-600 hover:text-azure-600 transition-colors">About</a>
+                        <a href="/sitemap.xml" class="text-slate-600 hover:text-azure-600 transition-colors">Sitemap</a>
+                    </nav>
+                    <div class="text-center px-4">
+                        <p class="text-sm text-slate-500">Azure RBAC Built-in Role Definitions Catalog — Track changes to <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles" target="_blank" rel="noopener noreferrer" class="text-azure-500 hover:text-azure-600 hover:underline">Azure built-in roles</a></p>
+                        <p class="text-xs text-slate-400 mt-3">{{ app_version }}</p>
+                        <p class="text-xs text-slate-400 mt-3 leading-relaxed">This site is not affiliated with or endorsed by Microsoft.<br class="sm:hidden"> Content is provided "as is" without warranty of any kind.</p>
+                    </div>
+                </div>
+            </div>
+        </footer>
+    </div>
+    
+    <!-- Dark mode handler -->
+    <script src="/static/js/darkmode.js"></script>
+</body>
+</html>

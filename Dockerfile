@@ -32,7 +32,6 @@ RUN python -c "import os; os.environ['GIT_PYTHON_REFRESH']='quiet'; from ragatou
 
 # Copy application code
 COPY azurerbac/ ./azurerbac/
-COPY migrations/ ./migrations/
 
 # Write version from build arg
 ARG VERSION

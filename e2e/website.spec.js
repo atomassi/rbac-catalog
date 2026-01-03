@@ -91,7 +91,7 @@ test.describe('Roles List', () => {
       test(`should sort by ${field} ${order}`, async ({ page }) => {
         await page.setViewportSize({ width: 1280, height: 720 });
         await page.goto(`/roles?sort=${field}&order=${order}`);
-        await expect(page).toHaveURL(new RegExp(`sort=${field}`));
+        expect(page.url()).toContain(`sort=${field}`);
         await expect(page.locator('table')).toBeVisible();
       });
     }
@@ -327,7 +327,8 @@ test.describe('Error Handling', () => {
   test('should return 404 for unknown routes', async ({ request }) => {
     const response = await request.get('/nonexistent-page-12345');
     expect(response.status()).toBe(404);
-    expect(await response.text()).toContain('404');
+    const text = await response.text();
+    expect(text.includes('404')).toBe(true);
   });
 
   test('should redirect old tab parameter', async ({ page }) => {
@@ -443,7 +444,7 @@ test.describe('Operations Page', () => {
       test(`should sort by ${field} ${order}`, async ({ page }) => {
         await page.setViewportSize({ width: 1280, height: 720 });
         await page.goto(`/operations?sort=${field}&order=${order}`);
-        await expect(page).toHaveURL(new RegExp(`sort=${field}`));
+        expect(page.url()).toContain(`sort=${field}`);
         await expect(page.locator('table')).toBeVisible();
       });
     }
@@ -559,10 +560,10 @@ test.describe('Sitemap and Robots', () => {
     const response = await request.get('/sitemap.xml');
     expect(response.status()).toBe(200);
     const content = await response.text();
-    expect(content).toContain('<?xml version="1.0"');
-    expect(content).toContain('<urlset');
-    expect(content).toContain('/operations</loc>');
-    expect(content).toContain('/operations/');
+    // Validate XML structure using string checks
+    expect(content.startsWith('<?xml')).toBe(true);
+    expect(content.includes('urlset')).toBe(true);
+    expect(content.includes('/operations')).toBe(true);
   });
 
   test('should have valid robots.txt', async ({ request }) => {

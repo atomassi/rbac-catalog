@@ -1,0 +1,588 @@
+<!doctype html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Prevent dark mode flash -->
+    <script>
+    (function() {
+        var stored = localStorage.getItem('darkMode');
+        var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        var hour = new Date().getHours();
+        var isNight = hour >= 19 || hour < 7;
+        if (stored === 'true' || (stored === null && (prefersDark || isNight))) {
+            document.documentElement.classList.add('dark');
+        }
+    })();
+    </script>
+    <title>{{ operation.name }} - Azure Operation | Azure RBAC</title>
+    <meta name="description" content="{{ operation.name }} - {{ operation.description or 'Azure RBAC operation' }}. View which Azure built-in roles allow this operation.">
+    <meta name="keywords" content="{{ operation.name }}, Azure Operation, Azure RBAC, Azure Permissions, {{ operation.provider_display_name or '' }}, {{ 'Data Plane' if operation.is_data_action else 'Control Plane' }}">
+    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
+    <meta name="author" content="Azure RBAC Catalog">
+    <link rel="canonical" href="{{ site_url }}/operations/{{ operation.name }}">
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:title" content="{{ operation.name }} - Azure Operation">
+    <meta property="og:description" content="{{ operation.description or 'Azure RBAC operation' }}. View which Azure built-in roles allow this operation.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="{{ site_url }}/operations/{{ operation.name }}">
+    <meta property="og:site_name" content="Azure RBAC Catalog">
+    <meta property="og:image" content="{{ site_url }}/static/images/og-image.png">
+    <meta property="og:image:type" content="image/png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="Azure RBAC Catalog - Azure operation details">
+    <meta property="og:locale" content="en_US">
+    
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="{{ operation.name }} - Azure Operation">
+    <meta name="twitter:description" content="{{ operation.description or 'Azure RBAC operation' }}. View which roles allow this operation.">
+    <meta name="twitter:image" content="{{ site_url }}/static/images/og-image.png">
+    <meta name="twitter:image:alt" content="Azure RBAC Catalog - Azure operation details">
+    
+    <!-- Breadcrumb Structured Data -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+            {
+                "@type": "ListItem",
+                "position": 1,
+                "name": "Home",
+                "item": "{{ site_url }}/"
+            },
+            {
+                "@type": "ListItem",
+                "position": 2,
+                "name": "Operations",
+                "item": "{{ site_url }}/operations"
+            },
+            {
+                "@type": "ListItem",
+                "position": 3,
+                "name": "{{ operation.display_name or operation.name }}",
+                "item": "{{ site_url }}/operations/{{ operation.name }}"
+            }
+        ]
+    }
+    </script>
+    
+    <!-- TechArticle Structured Data -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "TechArticle",
+        "headline": "{{ operation.name }} - Azure RBAC Operation",
+        "description": "{{ operation.description | default('Azure RBAC operation ' ~ operation.name ~ '. View which built-in roles allow this permission.', true) | replace('"', '\\"') }}",
+        "articleSection": "Azure RBAC Operations",
+        "keywords": "Azure, RBAC, {{ operation.name }}, {{ operation.provider_display_name or operation.provider_namespace }}, {{ 'Data Plane' if operation.is_data_action else 'Control Plane' }}, Permissions",
+        "datePublished": "{{ operation.first_seen_at.isoformat() if operation.first_seen_at else '' }}",
+        "dateModified": "{{ operation.last_seen_at.isoformat() if operation.last_seen_at else '' }}",
+        "author": {
+            "@type": "Organization",
+            "name": "Microsoft Azure"
+        },
+        "publisher": {
+            "@type": "Organization",
+            "name": "Azure RBAC Catalog",
+            "url": "{{ site_url }}/"
+        },
+        "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": "{{ site_url }}/operations/{{ operation.name }}"
+        }
+    }
+    </script>
+    
+    <!-- Favicon - Google requires simple /favicon.ico link -->
+    <link rel="icon" href="/favicon.ico" sizes="any">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192.png">
+    <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48.png">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    <link rel="sitemap" type="application/xml" href="/sitemap.xml">
+    
+    <!-- Preload critical resources for faster LCP -->
+    <link rel="preload" href="/static/css/tailwind.min.css" as="style">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    
+    <!-- Self-hosted Tailwind CSS -->
+    <link rel="stylesheet" href="/static/css/tailwind.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Alpine.js for interactive components -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    
+    <style>
+        body { font-family: 'Inter', system-ui, sans-serif; }
+        
+        /* Custom tooltip for Conditional badge */
+        .tooltip-container {
+            position: relative;
+            display: inline-flex;
+        }
+        .tooltip-container .tooltip-text {
+            visibility: hidden;
+            opacity: 0;
+            position: absolute;
+            bottom: 125%;
+            right: 0;
+            background-color: #1e293b;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 400;
+            width: 250px;
+            text-align: center;
+            z-index: 1000;
+            transition: opacity 0.2s;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        .tooltip-container .tooltip-text::after {
+            content: "";
+            position: absolute;
+            top: 100%;
+            right: 40px;
+            border-width: 5px;
+            border-style: solid;
+            border-color: #1e293b transparent transparent transparent;
+        }
+        .tooltip-container:hover .tooltip-text {
+            visibility: visible;
+            opacity: 1;
+        }
+        
+        /* Mobile responsive table */
+        @media (max-width: 640px) {
+            .hide-on-mobile {
+                display: none !important;
+            }
+            .mobile-role-name {
+                width: 75% !important;
+            }
+            .mobile-note {
+                width: 25% !important;
+            }
+            .conditional-text {
+                display: none;
+            }
+            .conditional-badge {
+                padding: 6px;
+                border-radius: 50%;
+            }
+            .conditional-badge svg {
+                width: 16px;
+                height: 16px;
+                margin: 0;
+            }
+        }
+    </style>
+</head>
+<body class="h-full bg-slate-50 dark:bg-slate-900 transition-colors duration-200">
+    <!-- Navigation state handler - must load before content -->
+    <script src="/static/js/nav-state.js"></script>
+    <script>NavState.initAiModeFromUrl();</script>
+    <div class="min-h-full">
+        <!-- Header with gradient -->
+        <div class="gradient-bg">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                <!-- Navigation Button Group -->
+                <div class="inline-flex items-center bg-white/10 backdrop-blur-sm rounded-lg overflow-hidden mb-6">
+                    <a href="/" class="inline-flex items-center justify-center px-3 py-2 text-white/70 hover:text-white hover:bg-white/10 transition-colors border-r border-white/20" title="Home">
+                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                        </svg>
+                    </a>
+                    <a id="back-button" href="/operations" class="inline-flex items-center px-3 py-2 text-sm font-medium text-white/70 hover:text-white hover:bg-white/10 transition-colors">
+                        <svg class="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                        </svg>
+                        <span id="back-label">Back to Operations</span>
+                    </a>
+                    <script>
+                        (function() {
+                            const backBtn = document.getElementById('back-button');
+                            const backLabel = document.getElementById('back-label');
+                            const state = NavState.get();
+                            // Prevent loop - if back points to this same operation, use default
+                            if (state.back === 'operation' && state.from_operation === '{{ operation.name }}') {
+                                backBtn.href = '/operations';
+                                backLabel.textContent = 'Back to Operations';
+                            } else {
+                                backBtn.href = NavState.getBackUrl({ back: 'operations' });
+                                backLabel.textContent = NavState.getBackLabel({ back: 'operations' });
+                            }
+                            NavState.consumeBackContext();
+                        })();
+                    </script>
+                </div>
+
+                <h1 class="text-2xl sm:text-3xl font-bold text-white mb-2">Azure RBAC Operation: {{ operation.display_name or operation.name }}</h1>
+                <p class="text-azure-200 text-sm mb-1">{{ operation.provider_display_name or 'Azure RBAC Operation' }}</p>
+            </div>
+        </div>
+
+        <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-6">
+            <!-- Operation Info Card -->
+            <div class="bg-white rounded-2xl shadow-lg overflow-hidden mb-8">
+                <div class="px-6 py-5 border-b border-slate-100">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0 bg-gradient-to-br from-azure-500 to-azure-600 rounded-xl p-3">
+                            <svg class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M10.343 3.94c.09-.542.56-.94 1.11-.94h1.093c.55 0 1.02.398 1.11.94l.149.894c.07.424.384.764.78.93.398.164.855.142 1.205-.108l.737-.527a1.125 1.125 0 011.45.12l.773.774c.39.389.44 1.002.12 1.45l-.527.737c-.25.35-.272.806-.107 1.204.165.397.505.71.93.78l.893.15c.543.09.94.559.94 1.109v1.094c0 .55-.397 1.02-.94 1.11l-.894.149c-.424.07-.764.383-.929.78-.165.398-.143.854.107 1.204l.527.738c.32.447.269 1.06-.12 1.45l-.774.773a1.125 1.125 0 01-1.449.12l-.738-.527c-.35-.25-.806-.272-1.204-.107-.397.165-.71.505-.78.929l-.15.894c-.09.542-.56.94-1.11.94h-1.094c-.55 0-1.019-.398-1.11-.94l-.148-.894c-.071-.424-.384-.764-.781-.93-.398-.164-.854-.142-1.204.108l-.738.527c-.447.32-1.06.269-1.45-.12l-.773-.774a1.125 1.125 0 01-.12-1.45l.527-.737c.25-.35.273-.806.108-1.204-.165-.397-.506-.71-.93-.78l-.894-.15c-.542-.09-.94-.56-.94-1.109v-1.094c0-.55.398-1.02.94-1.11l.894-.149c.424-.07.765-.383.93-.78.165-.398.143-.854-.108-1.204l-.526-.738a1.125 1.125 0 01.12-1.45l.773-.773a1.125 1.125 0 011.45-.12l.737.527c.35.25.807.272 1.204.107.397-.165.71-.505.78-.929l.15-.894z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            </svg>
+                        </div>
+                        <div class="ml-4">
+                            <h3 class="text-lg font-semibold text-slate-900">Operation Information</h3>
+                            <p class="text-sm text-slate-500">Details and metadata</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="divide-y divide-slate-100">
+                    <div class="px-6 py-4 sm:grid sm:grid-cols-3 sm:gap-4">
+                        <dt class="text-sm font-medium text-slate-500">Operation Name</dt>
+                        <dd class="mt-1 sm:mt-0 sm:col-span-2 overflow-hidden">
+                            <code class="text-sm font-mono text-slate-700 bg-slate-100 px-3 py-1.5 rounded-lg inline-block max-w-full" style="word-break: break-word;">{{ operation.name }}</code>
+                        </dd>
+                    </div>
+                    {% if operation.display_name %}
+                    <div class="px-6 py-4 sm:grid sm:grid-cols-3 sm:gap-4">
+                        <dt class="text-sm font-medium text-slate-500">Display Name</dt>
+                        <dd class="mt-1 text-sm text-slate-900 sm:mt-0 sm:col-span-2">{{ operation.display_name }}</dd>
+                    </div>
+                    {% endif %}
+                    {% if operation.description %}
+                    <div class="px-6 py-4 sm:grid sm:grid-cols-3 sm:gap-4">
+                        <dt class="text-sm font-medium text-slate-500">Description</dt>
+                        <dd class="mt-1 text-sm text-slate-900 sm:mt-0 sm:col-span-2">{{ operation.description }}</dd>
+                    </div>
+                    {% endif %}
+                    <div class="px-6 py-4 sm:grid sm:grid-cols-3 sm:gap-4">
+                        <dt class="text-sm font-medium text-slate-500">Operation Type</dt>
+                        <dd class="mt-1 text-sm text-slate-900 sm:mt-0 sm:col-span-2">
+                            {% if operation.is_data_action %}
+                            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-700">
+                                Data Plane
+                            </span>
+                            {% else %}
+                            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">
+                                Control Plane
+                            </span>
+                            {% endif %}
+                        </dd>
+                    </div>
+                    {% if operation.provider_display_name %}
+                    <div class="px-6 py-4 sm:grid sm:grid-cols-3 sm:gap-4">
+                        <dt class="text-sm font-medium text-slate-500">Provider</dt>
+                        <dd class="mt-1 text-sm text-slate-900 sm:mt-0 sm:col-span-2">{{ operation.provider_display_name }}</dd>
+                    </div>
+                    {% endif %}
+                    {% if operation.resource_type_display_name %}
+                    <div class="px-6 py-4 sm:grid sm:grid-cols-3 sm:gap-4">
+                        <dt class="text-sm font-medium text-slate-500">Resource Type</dt>
+                        <dd class="mt-1 text-sm text-slate-900 sm:mt-0 sm:col-span-2">{{ operation.resource_type_display_name }}</dd>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Roles that Allow this Operation -->
+            <div class="bg-white rounded-2xl shadow-lg overflow-hidden mb-8">
+                <div class="px-6 py-5 border-b border-slate-100">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0 bg-emerald-500 rounded-xl p-3">
+                                <svg class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                            </div>
+                            <div class="ml-4">
+                                <h3 class="text-lg font-semibold text-slate-900">Roles Allowing This Operation</h3>
+                                <p class="text-sm text-slate-500">{{ allowing_roles | length }} role{% if allowing_roles | length != 1 %}s{% endif %} grant this permission</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                {% if allowing_roles %}
+                {% if allowing_roles | length > 10 %}
+                <!-- Search input for roles (only shown when more than 10 roles) -->
+                <div class="px-6 py-4 bg-slate-50 border-b border-slate-100">
+                    <div class="relative" style="width: 450px;">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <svg class="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                            </svg>
+                        </div>
+                        <input type="text" id="roleSearchInput" placeholder="Search roles by name or ID..." 
+                               class="block w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-lg bg-white text-sm placeholder-slate-400 focus:outline-none focus:border-azure-500 focus:ring-2 focus:ring-azure-500/20"
+                               oninput="filterRoles(this.value)">
+                    </div>
+                </div>
+                {% endif %}
+                
+                <div>
+                    <table class="w-full divide-y divide-slate-200 table-fixed">
+                        <thead class="bg-slate-50">
+                            <tr>
+                                <th scope="col" class="mobile-role-name px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer hover:text-slate-700" style="width: 40%;" onclick="sortTable('name')">
+                                    <span class="inline-flex items-center">
+                                        Role Name
+                                        <span id="sort-name-icon" class="ml-1">
+                                            <svg class="h-4 w-4 text-azure-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/></svg>
+                                        </span>
+                                    </span>
+                                </th>
+                                <th scope="col" class="hide-on-mobile px-2 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer hover:text-slate-700" style="width: 15%;" onclick="sortTable('actions')">
+                                    <span class="inline-flex items-center justify-center">
+                                        Actions
+                                        <span id="sort-actions-icon" class="ml-1">
+                                            <svg class="h-4 w-4 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/></svg>
+                                        </span>
+                                    </span>
+                                </th>
+                                <th scope="col" class="hide-on-mobile px-2 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer hover:text-slate-700" style="width: 20%;" onclick="sortTable('dataActions')">
+                                    <span class="inline-flex items-center justify-center">
+                                        Data Actions
+                                        <span id="sort-dataActions-icon" class="ml-1">
+                                            <svg class="h-4 w-4 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/></svg>
+                                        </span>
+                                    </span>
+                                </th>
+                                <th scope="col" class="mobile-note px-2 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider" style="width: 25%;">
+                                    Note
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody id="rolesTableBody" class="bg-white divide-y divide-slate-100">
+                            {% for role in allowing_roles %}
+                            <tr class="role-row hover:bg-slate-50 transition-colors cursor-pointer {% if loop.index > 10 %}hidden-role{% endif %}" 
+                                data-role-name="{{ role.role_name | lower }}" 
+                                data-role-id="{{ role.role_id | lower }}"
+                                data-actions="{{ role.actions_count }}"
+                                data-data-actions="{{ role.data_actions_count }}"
+                                data-has-condition="{{ 'true' if role.has_condition else 'false' }}"
+                                onclick="NavState.setBackContext('operation', { from_operation: '{{ operation.name }}' }); window.location='/roles/{{ role.role_id }}/{{ role.role_name | slugify }}'">
+                                <td class="px-4 py-3">
+                                    <a href="/roles/{{ role.role_id }}/{{ role.role_name | slugify }}" 
+                                       class="text-sm font-medium text-azure-700 hover:text-azure-900"
+                                       onclick="event.stopPropagation(); NavState.setBackContext('operation', { from_operation: '{{ operation.name }}' })">{{ role.role_name }}</a>
+                                    <div class="text-xs text-slate-500 mt-1 font-mono truncate">{{ role.role_id }}</div>
+                                </td>
+                                <td class="hide-on-mobile px-2 py-3 text-center">
+                                    <span class="text-sm font-mono tabular-nums text-slate-600">{{ "{:,}".format(role.actions_count) }}</span>
+                                </td>
+                                <td class="hide-on-mobile px-2 py-3 text-center">
+                                    <span class="text-sm font-mono tabular-nums text-slate-600">{{ "{:,}".format(role.data_actions_count) }}</span>
+                                </td>
+                                <td class="px-2 py-3 text-center" onclick="event.stopPropagation()">
+                                    {% if role.has_condition %}
+                                    <span class="tooltip-container">
+                                        <span class="conditional-badge inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 border border-amber-200" style="cursor: help;">
+                                            <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                            </svg>
+                                            <span class="conditional-text ml-1">Conditional</span>
+                                        </span>
+                                        <span class="tooltip-text">This role has conditions that may restrict this permission</span>
+                                    </span>
+                                    {% else %}
+                                    <span class="text-slate-400">—</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                
+                {% if allowing_roles | length > 10 %}
+                <!-- Show more button -->
+                <div id="showMoreContainer" class="px-6 py-4 border-t border-slate-100 bg-slate-50 text-center">
+                    <button id="showMoreBtn" onclick="toggleShowAll()" class="inline-flex items-center px-4 py-2 text-sm font-medium text-azure-700 bg-azure-50 rounded-lg hover:bg-azure-100 transition-colors">
+                        <span id="showMoreText">Show all {{ allowing_roles | length }} roles</span>
+                        <svg id="showMoreIcon" class="ml-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                        </svg>
+                    </button>
+                </div>
+                {% endif %}
+                
+                <script>
+                    let showingAll = false;
+                    const totalRoles = {{ allowing_roles | length }};
+                    let currentSort = 'name';
+                    let currentOrder = 'asc';
+                    
+                    function toggleShowAll() {
+                        showingAll = !showingAll;
+                        const hiddenRows = document.querySelectorAll('.hidden-role');
+                        const btn = document.getElementById('showMoreBtn');
+                        const text = document.getElementById('showMoreText');
+                        const icon = document.getElementById('showMoreIcon');
+                        
+                        hiddenRows.forEach(row => {
+                            row.style.display = showingAll ? '' : 'none';
+                        });
+                        
+                        text.textContent = showingAll ? 'Show fewer roles' : `Show all ${totalRoles} roles`;
+                        icon.style.transform = showingAll ? 'rotate(180deg)' : '';
+                    }
+                    
+                    function filterRoles(query) {
+                        const rows = document.querySelectorAll('.role-row');
+                        const searchTerm = query.toLowerCase().trim();
+                        const showMoreContainer = document.getElementById('showMoreContainer');
+                        
+                        if (searchTerm === '') {
+                            // Reset to default state
+                            rows.forEach((row, index) => {
+                                if (row.classList.contains('hidden-role') && !showingAll) {
+                                    row.style.display = 'none';
+                                } else {
+                                    row.style.display = '';
+                                }
+                            });
+                            if (showMoreContainer) showMoreContainer.style.display = '';
+                        } else {
+                            // Filter mode - show all matching, hide non-matching
+                            if (showMoreContainer) showMoreContainer.style.display = 'none';
+                            rows.forEach(row => {
+                                const roleName = row.dataset.roleName || '';
+                                const roleId = row.dataset.roleId || '';
+                                if (roleName.includes(searchTerm) || roleId.includes(searchTerm)) {
+                                    row.style.display = '';
+                                } else {
+                                    row.style.display = 'none';
+                                }
+                            });
+                        }
+                    }
+                    
+                    function sortTable(column) {
+                        const tbody = document.getElementById('rolesTableBody');
+                        const rows = Array.from(tbody.querySelectorAll('.role-row'));
+                        
+                        // Toggle order if same column
+                        if (currentSort === column) {
+                            currentOrder = currentOrder === 'asc' ? 'desc' : 'asc';
+                        } else {
+                            currentSort = column;
+                            currentOrder = 'asc';
+                        }
+                        
+                        // Sort rows
+                        rows.sort((a, b) => {
+                            let aVal, bVal;
+                            if (column === 'name') {
+                                aVal = a.dataset.roleName || '';
+                                bVal = b.dataset.roleName || '';
+                            } else if (column === 'actions') {
+                                aVal = parseInt(a.dataset.actions) || 0;
+                                bVal = parseInt(b.dataset.actions) || 0;
+                            } else if (column === 'dataActions') {
+                                aVal = parseInt(a.dataset.dataActions) || 0;
+                                bVal = parseInt(b.dataset.dataActions) || 0;
+                            }
+                            
+                            if (typeof aVal === 'number') {
+                                return currentOrder === 'asc' ? aVal - bVal : bVal - aVal;
+                            }
+                            return currentOrder === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+                        });
+                        
+                        // Re-append sorted rows
+                        rows.forEach(row => tbody.appendChild(row));
+                        
+                        // Update icons
+                        updateSortIcons();
+                    }
+                    
+                    function updateSortIcons() {
+                        const columns = ['name', 'actions', 'dataActions'];
+                        const upArrow = '<svg class="h-4 w-4 text-azure-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/></svg>';
+                        const downArrow = '<svg class="h-4 w-4 text-azure-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>';
+                        const neutralArrow = '<svg class="h-4 w-4 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/></svg>';
+                        
+                        columns.forEach(col => {
+                            const icon = document.getElementById(`sort-${col}-icon`);
+                            if (icon) {
+                                if (col === currentSort) {
+                                    icon.innerHTML = currentOrder === 'asc' ? upArrow : downArrow;
+                                } else {
+                                    icon.innerHTML = neutralArrow;
+                                }
+                            }
+                        });
+                    }
+                    
+                    // Initialize hidden rows
+                    document.addEventListener('DOMContentLoaded', function() {
+                        const hiddenRows = document.querySelectorAll('.hidden-role');
+                        hiddenRows.forEach(row => row.style.display = 'none');
+                    });
+                </script>
+                {% else %}
+                <div class="px-6 py-12 text-center">
+                    <svg class="mx-auto h-12 w-12 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    <h3 class="mt-4 text-lg font-medium text-slate-900">No Roles Found</h3>
+                    <p class="mt-2 text-sm text-slate-500">No built-in roles explicitly grant this operation.</p>
+                </div>
+                {% endif %}
+            </div>
+            
+            <!-- Info Note -->
+            <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-8">
+                <div class="flex">
+                    <div class="flex-shrink-0">
+                        <svg class="h-5 w-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    </div>
+                    <div class="ml-3">
+                        <p class="text-sm text-blue-700">
+                            <strong>Note:</strong> This list includes roles where the operation is allowed by the role's <code class="bg-blue-100 px-1 rounded">actions</code> or <code class="bg-blue-100 px-1 rounded">dataActions</code> patterns, 
+                            excluding any patterns in <code class="bg-blue-100 px-1 rounded">notActions</code> or <code class="bg-blue-100 px-1 rounded">notDataActions</code>.
+                            Wildcard patterns (like <code class="bg-blue-100 px-1 rounded">*/read</code> or <code class="bg-blue-100 px-1 rounded">*</code>) are expanded to match this specific operation.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div class="border-t border-slate-200 pt-8">
+                <div class="flex flex-col items-center" style="gap: 20px;">
+                    <!-- Internal navigation links for SEO -->
+                    <nav class="flex flex-col sm:flex-row flex-wrap justify-center items-center text-sm" style="gap: 12px 24px;">
+                        <a href="/recent" class="ai-nav-link text-slate-600 hover:text-azure-600 transition-colors">Recent Changes</a>
+                        <a href="/roles" class="ai-nav-link text-slate-600 hover:text-azure-600 transition-colors">Browse Roles</a>
+                        <a href="/operations" class="ai-nav-link text-slate-600 hover:text-azure-600 transition-colors">Browse Operations</a>
+                        <a href="/recommend" class="ai-nav-link text-slate-600 hover:text-azure-600 transition-colors">Role Recommender</a>
+                        <a href="/about" class="ai-nav-link text-slate-600 hover:text-azure-600 transition-colors">About</a>
+                        <a href="/sitemap.xml" class="text-slate-600 hover:text-azure-600 transition-colors">Sitemap</a>
+                    </nav>
+                    <div class="text-center px-4">
+                        <p class="text-sm text-slate-500">Azure RBAC Built-in Role Definitions Catalog — Track changes to <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles" target="_blank" rel="noopener noreferrer" class="text-azure-500 hover:text-azure-600 hover:underline">Azure built-in roles</a></p>
+                        <p class="text-xs text-slate-400 mt-3">{{ app_version }}</p>
+                        <p class="text-xs text-slate-400 mt-3 leading-relaxed">This site is not affiliated with or endorsed by Microsoft.<br class="sm:hidden"> Content is provided "as is" without warranty of any kind.</p>
+                    </div>
+                </div>
+            </div>
+        </footer>
+    </div>
+    
+    <!-- Dark mode handler -->
+    <script src="/static/js/darkmode.js"></script>
+</body>
+</html>

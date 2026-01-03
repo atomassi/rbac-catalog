@@ -1,0 +1,70 @@
+{
+  "config":{
+    "query_token_id":"[unused0]",
+    "doc_token_id":"[unused1]",
+    "query_token":"[Q]",
+    "doc_token":"[D]",
+    "ncells":null,
+    "centroid_score_threshold":null,
+    "ndocs":null,
+    "load_index_with_mmap":false,
+    "index_path":null,
+    "index_bsize":32,
+    "nbits":4,
+    "kmeans_niters":20,
+    "resume":false,
+    "similarity":"cosine",
+    "bsize":64,
+    "accumsteps":1,
+    "lr":0.00001,
+    "maxsteps":400000,
+    "save_every":null,
+    "warmup":20000,
+    "warmup_bert":null,
+    "relu":false,
+    "nway":64,
+    "use_ib_negatives":true,
+    "reranker":false,
+    "distillation_alpha":1.0,
+    "ignore_scores":false,
+    "model_name":null,
+    "query_maxlen":32,
+    "attend_to_mask_tokens":false,
+    "interaction":"colbert",
+    "dim":128,
+    "doc_maxlen":512,
+    "mask_punctuation":true,
+    "checkpoint":"colbert-ir/colbertv2.0",
+    "triples":"/future/u/okhattab/root/unit/experiments/2021.10/downstream.distillation.round2.2_score/round2.nway6.cosine.ib/examples.64.json",
+    "collection":[
+      "list with 866 elements starting with...",
+      [
+        "manage secrets manage keys key vault keyvault Key Vault Administrator Perform all data plane operations on a key vault and all objects in it, including certificates, keys, and secrets. Cannot manage key vault resources or manage role assignments. Only works for key vaults that use the 'Azure role-based access control' permission model. resources operations keyvault resourcegroups deletedvaults subscriptions checknameavailability read",
+        "Azure Arc Enabled Kubernetes Cluster User Role List cluster user credentials action. resources deployments listclusterusercredential connectedclusters operationresults resourcegroups listclusterusercredentials subscriptions write read action kubernetes",
+        "Backup Operator Lets you manage backup services, except removal of backup, vault creation and giving access to others revokeinstantitemrecovery storage resources backupresourceguardproxies operations validaterestore backupvaults registeredidentities validateformodifybackup backupprotectioncontainers provisioninstantitemrecovery operationresults backupoperations storageaccounts subscriptions"
+      ]
+    ],
+    "queries":"/future/u/okhattab/data/MSMARCO/queries.train.tsv",
+    "index_name":"azure_roles",
+    "overwrite":false,
+    "root":".ragatouille/",
+    "experiment":"colbert",
+    "index_root":null,
+    "name":"2025-12/27/16.38.47",
+    "rank":0,
+    "nranks":1,
+    "amp":true,
+    "gpus":0,
+    "avoid_fork_if_possible":false
+  },
+  "num_chunks":1,
+  "num_partitions":2048,
+  "num_embeddings":39153,
+  "avg_doclen":45.2113163972,
+  "RAGatouille":{
+    "index_config":{
+      "index_type":"PLAID",
+      "index_name":"azure_roles"
+    }
+  }
+}

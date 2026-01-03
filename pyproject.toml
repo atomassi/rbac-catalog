@@ -1,0 +1,114 @@
+[project]
+name = "azurerbac"
+description = "Azure RBAC Built-in Role Definitions Monitor"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dynamic = ["version"]
+
+[tool.setuptools.dynamic]
+version = {attr = "azurerbac._version.__version__"}
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["azurerbac*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+exclude = [
+    ".git",
+    ".venv",
+    "__pycache__",
+    ".pytest_cache",
+    "logs",
+    "*.egg-info",
+    "finetune/*",  # Exclude fine-tuning scripts from strict linting
+    "benchmark/*",  # Exclude benchmarks from strict linting
+]
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # Pyflakes
+    "I",      # isort
+    "B",      # flake8-bugbear
+    "C4",     # flake8-comprehensions
+    "UP",     # pyupgrade
+    "S",      # flake8-bandit (security)
+    "T20",    # flake8-print
+    "SIM",    # flake8-simplify
+    "RUF",    # Ruff-specific rules
+    "D",      # pydocstyle (Google convention)
+    "ANN",    # flake8-annotations (type hints)
+    "N",      # pep8-naming
+    "PL",     # Pylint
+    "PERF",   # Perflint (performance)
+    "FURB",   # refurb (modern Python)
+]
+ignore = [
+    "S101",   # Use of assert (OK in tests)
+    "S104",   # Binding to all interfaces (needed for containers)
+    "S311",   # Random not for crypto (OK for non-security uses)
+    "B008",   # Depends() in function arguments (FastAPI pattern)
+    "D100",   # Missing docstring in public module (too strict)
+    "D104",   # Missing docstring in public package
+    "D105",   # Missing docstring in magic method
+    "D107",   # Missing docstring in __init__
+    "ANN401", # Dynamically typed expressions (Any) - needed for JSON
+    "PLR0913", # Too many arguments (sometimes needed)
+    "PLR2004", # Magic value comparison (too strict)
+    "PLR0915", # Too many statements (complex functions allowed)
+    "PLR0912", # Too many branches (complex functions allowed)
+    "PLR0911", # Too many return statements
+    "PLC0415", # Import outside top-level (lazy imports for performance)
+    "PLW0603", # Global statement (singleton patterns)
+    "ERA001",  # Commented-out code (keep for reference)
+    "E402",    # Module import not at top (needed for warnings filter)
+    "PERF401", # Manual list append in loop (often clearer than extend)
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101", "S105", "S106", "D", "ANN", "PLR"]
+"finetune/*" = ["T20", "D", "ANN", "PLR"]
+"benchmark/*" = ["T20", "D", "ANN", "PLR"]
+"azurerbac/web/routes/static.py" = ["N806"]  # SessionLocal variable naming
+"azurerbac/core/models.py" = ["D101"]  # SQLAlchemy models are self-documenting
+"azurerbac/backgroundjobs/*" = ["D103", "D101", "ANN"]  # Internal workers
+"azurerbac/airecommender/llm/client.py" = ["S310"]  # URL from trusted config, not user input
+"azurerbac/cache/persistence.py" = ["S301"]  # Internal cache file, not untrusted data
+
+[tool.ruff.lint.isort]
+known-first-party = ["azurerbac"]
+
+[tool.black]
+line-length = 100
+target-version = ["py311", "py312", "py313"]
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+    | \.venv
+    | __pycache__
+    | \.pytest_cache
+    | logs
+)/
+'''
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+filterwarnings = [
+    # Ignore deprecation warnings from third-party libraries we can't fix
+    "ignore::DeprecationWarning:opencensus.*",
+]

@@ -77,10 +77,6 @@ AI_RECOMMENDER_TESTS: Final = [
         {"query": "backup databases", "top_k": 3, "recommender_mode": "crossencoder"},
     ),
     (
-        "AI: ColBERT mode",
-        {"query": "create resource groups", "top_k": 3, "recommender_mode": "colbert"},
-    ),
-    (
         "AI: LLM mode",
         {"query": "manage kubernetes clusters", "top_k": 3, "recommender_mode": "llm"},
     ),

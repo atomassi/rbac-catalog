@@ -21,9 +21,16 @@ env:
   STAGING_URL: https://azurerbac-builtinroles-staging.azurewebsites.net
 
 jobs:
-  deploy:
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Job 1: Create release tag and push image to ACR
+  # ═══════════════════════════════════════════════════════════════════════════
+  release:
     runs-on: ubuntu-latest
     if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      new_tag: ${{ steps.version.outputs.new_tag }}
+      latest_tag: ${{ steps.version.outputs.latest_tag }}
     
     steps:
       - uses: actions/checkout@v4
@@ -97,7 +104,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Azure Login using OIDC (federated identity - no secrets stored)
+      # Azure Login using OIDC (federated identity)
       - name: Azure Login
         uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5  # v2.3.0
         with:
@@ -121,31 +128,102 @@ jobs:
           docker push ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:latest
           echo "🐳 Built and pushed: ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}"
 
-      # Deploy to staging slot first
+      - name: Azure Logout
+        if: always()
+        run: az logout
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Job 2: Deploy to staging, smoke tests, swap to production
+  # ═══════════════════════════════════════════════════════════════════════════
+  deploy:
+    runs-on: ubuntu-latest
+    needs: release
+    
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5  # v2.3.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
       - name: Deploy to Staging Slot
         uses: azure/webapps-deploy@2fdd5c3ebb4e540834e86ecc1f6fdcd5539023ee  # v3.0.2
         with:
           app-name: ${{ env.APP_NAME }}
           slot-name: staging
-          images: ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
+          images: ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ needs.release.outputs.version }}
 
-      # Start staging slot with the new image
       - name: Start staging slot
         run: |
           az webapp start --name ${{ env.APP_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} --slot staging
           echo "🚀 Started staging slot with new image"
 
-      # Wait for staging to be ready
-      - name: Wait for staging to start
-        run: sleep 120
+      - name: Get runner IP
+        id: runner_ip
+        run: |
+          # Get both IPv4 and IPv6
+          IPV4=$(curl -s -4 https://api.ipify.org || echo "")
+          IPV6=$(curl -s -6 https://api64.ipify.org || echo "")
+          echo "ipv4=$IPV4" >> $GITHUB_OUTPUT
+          echo "ipv6=$IPV6" >> $GITHUB_OUTPUT
+          echo "📍 Runner IPs - v4: ${IPV4:-none} | v6: ${IPV6:-none}"
 
-      # Run smoke tests against staging
+      - name: Allow runner IP on staging
+        run: |
+          # Add IPv4 rule if available
+          if [ -n "${{ steps.runner_ip.outputs.ipv4 }}" ]; then
+            az webapp config access-restriction add \
+              --name ${{ env.APP_NAME }} \
+              --resource-group ${{ env.RESOURCE_GROUP }} \
+              --slot staging \
+              --rule-name "GitHubRunner-v4" \
+              --priority 50 \
+              --ip-address ${{ steps.runner_ip.outputs.ipv4 }}/32 \
+              --output none
+            echo "✅ Added IPv4 ${{ steps.runner_ip.outputs.ipv4 }}"
+          fi
+          
+          # Add IPv6 rule if available
+          if [ -n "${{ steps.runner_ip.outputs.ipv6 }}" ]; then
+            az webapp config access-restriction add \
+              --name ${{ env.APP_NAME }} \
+              --resource-group ${{ env.RESOURCE_GROUP }} \
+              --slot staging \
+              --rule-name "GitHubRunner-v6" \
+              --priority 51 \
+              --ip-address ${{ steps.runner_ip.outputs.ipv6 }}/128 \
+              --output none
+            echo "✅ Added IPv6 ${{ steps.runner_ip.outputs.ipv6 }}"
+          fi
+
+      - name: Wait for staging to be ready
+        run: |
+          echo "⏳ Waiting for staging to be ready (up to 15 minutes)..."
+          MAX_WAIT_SECONDS=900
+          POLL_INTERVAL_SECONDS=30
+          WAITED_SECONDS=0
+          
+          while [ $WAITED_SECONDS -lt $MAX_WAIT_SECONDS ]; do
+            if curl -sf "${{ env.STAGING_URL }}/healthz" > /dev/null 2>&1; then
+              echo "✅ Staging is ready after ${WAITED_SECONDS}s"
+              exit 0
+            fi
+            sleep $POLL_INTERVAL_SECONDS
+            WAITED_SECONDS=$((WAITED_SECONDS + POLL_INTERVAL_SECONDS))
+            echo "⏳ Waiting... ${WAITED_SECONDS}s / ${MAX_WAIT_SECONDS}s"
+          done
+          
+          echo "❌ Staging not ready after ${MAX_WAIT_SECONDS}s"
+          exit 1
+
       - name: Smoke tests on staging
         run: |
           pip install httpx
           python scripts/smoke_tests.py --url ${{ env.STAGING_URL }}
 
-      # Swap staging with production
       - name: Swap staging to production
         run: |
           az webapp deployment slot swap \
@@ -155,20 +233,36 @@ jobs:
             --target-slot production
           echo "🔄 Swapped staging to production"
 
-      # Stop staging slot to save costs
+      # Cleanup always runs, even if smoke tests fail
       - name: Stop staging slot
         if: always()
         run: |
           az webapp stop --name ${{ env.APP_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} --slot staging
           echo "🛑 Stopped staging slot"
 
+      - name: Remove runner IP from staging
+        if: always()
+        run: |
+          az webapp config access-restriction remove \
+            --name ${{ env.APP_NAME }} \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --slot staging \
+            --rule-name "GitHubRunner-v4" || true
+          az webapp config access-restriction remove \
+            --name ${{ env.APP_NAME }} \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --slot staging \
+            --rule-name "GitHubRunner-v6" || true
+          echo "🧹 Removed runner IPs from staging allowlist"
+
       - name: Azure Logout
         if: always()
         run: az logout
 
       - name: Deployment summary
+        if: success()
         run: |
           echo "✅ Deployment complete!"
-          echo "   Version: ${{ steps.version.outputs.version }}"
-          echo "   Tag: ${{ steps.version.outputs.new_tag }}"
+          echo "   Version: ${{ needs.release.outputs.version }}"
+          echo "   Tag: ${{ needs.release.outputs.new_tag }}"
           echo "🌐 https://rbac-catalog.dev"

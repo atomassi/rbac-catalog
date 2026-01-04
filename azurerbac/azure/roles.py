@@ -4,7 +4,6 @@ import logging
 from typing import Any, Final
 
 from azurerbac.azure.http import authenticated_management_async_client, management_url
-from azurerbac.settings import Settings
 
 # Permission field mappings: (output_key, lowercase_key, capitalized_key)
 _PERMISSION_FIELDS: Final = (
@@ -145,14 +144,12 @@ def _transform_resource_graph_role(item: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-async def fetch_builtin_roles(_subscription_id: str) -> list[dict[str, Any]]:
+async def fetch_builtin_roles() -> list[dict[str, Any]]:
     """Fetch all built-in role definitions using Azure Resource Graph.
 
     Uses a Resource Graph query to fetch role definitions efficiently.
     """
     logger = logging.getLogger("azurerbac.azure_roles")
-    settings = Settings.get()
-    debug = settings.debug
 
     roles: list[dict[str, Any]] = []
 
@@ -169,8 +166,7 @@ authorizationresources
         url = management_url("/providers/Microsoft.ResourceGraph/resources")
         params = {"api-version": "2022-10-01"}
 
-        if debug:
-            logger.info("Fetching roles via Azure Resource Graph")
+        logger.info("Fetching roles via Azure Resource Graph")
 
         async with authenticated_management_async_client(timeout=120.0) as client:
             skip_token = None
@@ -186,8 +182,7 @@ authorizationresources
                 if skip_token:
                     body["options"]["$skipToken"] = skip_token
 
-                if debug:
-                    logger.info("POST %s body=%s", url, body)
+                logger.debug("POST %s body=%s", url, body)
 
                 response = await client.post(
                     url,
@@ -212,7 +207,6 @@ authorizationresources
         logger.exception("Failed to fetch built-in roles via Resource Graph: %s", e)
         raise
 
-    if debug:
-        logger.info("Total built-in roles fetched: %d", len(roles))
+    logger.info("Total built-in roles fetched: %d", len(roles))
 
     return roles

@@ -57,6 +57,28 @@ class _CredentialFilter(logging.Filter):
         return True
 
 
+class _EnvironmentFilter(logging.Filter):
+    """Filter to add environment (production/staging) to log records.
+
+    This adds the 'environment' attribute to each log record.
+    Azure Monitor reads arbitrary record attributes and maps them
+    to customDimensions in Application Insights.
+
+    Note: Resource attributes like deployment.environment only work
+    for traces/spans, not for Python logs. This filter is the
+    recommended approach for logs.
+    """
+
+    def __init__(self, environment: str) -> None:
+        super().__init__()
+        self.environment = environment
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        """Add environment directly to log record."""
+        record.environment = self.environment
+        return True
+
+
 def configure_logging(component: str = "app", level: int = logging.INFO) -> str | None:
     """Configure logging based on environment.
 
@@ -87,8 +109,10 @@ def configure_logging(component: str = "app", level: int = logging.INFO) -> str 
     # Clear existing handlers to avoid duplicates
     root_logger.handlers.clear()
 
-    # Add credential filter to prevent sensitive data leakage
-    root_logger.addFilter(_CredentialFilter())
+    # Create filters - will attach to handlers, not root logger
+    # (filters on root logger don't always apply to all handlers consistently)
+    credential_filter = _CredentialFilter()
+    environment_filter = _EnvironmentFilter(settings.environment_name)
 
     # Reduce verbosity of noisy dependencies (always, regardless of environment)
     logging.getLogger("azure").setLevel(logging.WARNING)
@@ -111,6 +135,8 @@ def configure_logging(component: str = "app", level: int = logging.INFO) -> str 
         console_handler = logging.StreamHandler()
         console_handler.setLevel(level)
         console_handler.setFormatter(formatter)
+        console_handler.addFilter(credential_filter)
+        console_handler.addFilter(environment_filter)
         root_logger.addHandler(console_handler)
 
         # File handler - create logs directory if needed
@@ -120,6 +146,8 @@ def configure_logging(component: str = "app", level: int = logging.INFO) -> str 
         file_handler = logging.FileHandler(log_file_path, encoding="utf-8")
         file_handler.setLevel(level)
         file_handler.setFormatter(formatter)
+        file_handler.addFilter(credential_filter)
+        file_handler.addFilter(environment_filter)
         root_logger.addHandler(file_handler)
 
         _configured_log_file = str(log_file_path)
@@ -137,13 +165,16 @@ def configure_logging(component: str = "app", level: int = logging.INFO) -> str 
             # service.name -> cloud_RoleName in App Insights
             # service.version -> application_Version in App Insights
             # service.instance.id -> cloud_RoleInstance in App Insights
+            # Note: deployment.environment works for traces/spans but NOT for logs
+            # Logs get environment via _EnvironmentFilter attached to handlers
+            env_name = settings.environment_name
             resource = Resource.create(
                 {
                     # azurerbac-ux or azurerbac-worker
                     "service.name": f"azurerbac-{component}",
                     "service.version": __version__,
                     "service.instance.id": component,  # ux or worker
-                    "deployment.environment": "production",
+                    "deployment.environment": env_name,  # for traces/spans only
                 }
             )
 
@@ -170,6 +201,11 @@ def configure_logging(component: str = "app", level: int = logging.INFO) -> str 
             # into log records. This correlates logs with requests in App Insights.
             LoggingInstrumentor().instrument(set_logging_format=False)
 
+            # Attach filters to all handlers (including those added by Azure Monitor)
+            for handler in root_logger.handlers:
+                handler.addFilter(credential_filter)
+                handler.addFilter(environment_filter)
+
             logging.getLogger(__name__).info(
                 "Application Insights configured - component: %s, version: %s",
                 component,
@@ -180,6 +216,8 @@ def configure_logging(component: str = "app", level: int = logging.INFO) -> str 
             console_handler = logging.StreamHandler()
             console_handler.setLevel(level)
             console_handler.setFormatter(formatter)
+            console_handler.addFilter(credential_filter)
+            console_handler.addFilter(environment_filter)
             root_logger.addHandler(console_handler)
 
             logging.getLogger(__name__).warning(
@@ -190,6 +228,8 @@ def configure_logging(component: str = "app", level: int = logging.INFO) -> str 
             console_handler = logging.StreamHandler()
             console_handler.setLevel(level)
             console_handler.setFormatter(formatter)
+            console_handler.addFilter(credential_filter)
+            console_handler.addFilter(environment_filter)
             root_logger.addHandler(console_handler)
 
             logging.getLogger(__name__).warning(
@@ -201,6 +241,8 @@ def configure_logging(component: str = "app", level: int = logging.INFO) -> str 
         console_handler = logging.StreamHandler()
         console_handler.setLevel(level)
         console_handler.setFormatter(formatter)
+        console_handler.addFilter(credential_filter)
+        console_handler.addFilter(environment_filter)
         root_logger.addHandler(console_handler)
 
     return _configured_log_file

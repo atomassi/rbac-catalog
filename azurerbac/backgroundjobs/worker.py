@@ -47,9 +47,7 @@ def _create_job_specs(settings: Any) -> list[JobSpec]:
     from azurerbac.telemetry import track_operations_scan, track_role_scan
 
     async def _fetch_roles() -> list[dict]:
-        if not settings.azure_subscription_id:
-            raise ValueError("AZURE_SUBSCRIPTION_ID is required for role-scan")
-        return await fetch_builtin_roles(settings.azure_subscription_id)
+        return await fetch_builtin_roles()
 
     def _on_roles_success(elapsed: float, roles: list[dict], stats: dict) -> None:
         track_role_scan(

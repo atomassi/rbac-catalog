@@ -59,6 +59,9 @@ class EnvVars:
     # Telemetry
     APPLICATIONINSIGHTS_CONNECTION_STRING: Final = "APPLICATIONINSIGHTS_CONNECTION_STRING"
 
+    # Environment
+    IS_PRODUCTION: Final = "IS_PRODUCTION"
+
     # Testing (set by pytest)
     PYTEST_CURRENT_TEST: Final = "PYTEST_CURRENT_TEST"
 
@@ -149,6 +152,14 @@ class Settings(BaseModel):
     app_insights_connection_string: str = ""
     telemetry_flush_timeout_ms: int = Field(default=10000, gt=0)
 
+    # Environment
+    is_production: bool = False
+
+    @property
+    def environment_name(self) -> str:
+        """Return 'production' or 'staging' based on is_production flag."""
+        return "production" if self.is_production else "staging"
+
     @classmethod
     def reset(cls) -> None:
         """Reset settings singleton to force reload from environment."""
@@ -210,6 +221,8 @@ def _load_settings() -> Settings:
         enable_embeddings_in_tests=_get_bool(EnvVars.AZURERBAC_ENABLE_EMBEDDINGS_IN_TESTS, False),
         # Telemetry
         app_insights_connection_string=app_insights,
+        # Environment
+        is_production=_get_bool(EnvVars.IS_PRODUCTION, False),
     )
 
 

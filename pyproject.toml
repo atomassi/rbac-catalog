@@ -77,6 +77,7 @@ convention = "google"
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S101", "S105", "S106", "D", "ANN", "PLR"]
+"scripts/*" = ["T20", "D", "ANN"]  # CLI scripts use print
 "finetune/*" = ["T20", "D", "ANN", "PLR"]
 "benchmark/*" = ["T20", "D", "ANN", "PLR"]
 "azurerbac/web/routes/static.py" = ["N806"]  # SessionLocal variable naming

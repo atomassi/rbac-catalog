@@ -77,7 +77,7 @@ flowchart TD
 |---------|--------:|
 | Cloudflare | $0 |
 | App Service | ~$45 |
-| PostgreSQL Flexible | ~$13 |
+| PostgreSQL | ~$13 |
 | Container Registry | ~$5 |
 | App Insights | ~$5 |
 | Ollama VM (inference) | ~$32 |
@@ -87,7 +87,7 @@ flowchart TD
 ## AI Recommendation Modes
 
 > [!NOTE]
-> The primary goal of this project is learning. These recommendation modes are a work in progress and may produce inaccurate results. Further improvements and tuning are expected.
+> This project was created for my personal learning and for experimenting with different recommendation modes. The recommendation modes are experimental and may produce inaccurate results. I plan to continue improving and fine-tuning them.
 
 The AI Role Recommender supports **8 different modes**, each with different speed/accuracy trade-offs:
 
@@ -101,12 +101,6 @@ The AI Role Recommender supports **8 different modes**, each with different spee
 | **RAG** | Retrieval-Augmented Generation with LLM reranking | Embeddings + Ollama |
 | **HyDE** | Hypothetical document generation + semantic search | Embeddings + Ollama |
 | **Hybrid** | Multi-stage: TF-IDF → Embeddings → LLM pipeline | All components |
-
-### Mode Selection
-
-- **Fast & Offline**: Use `tfidf` or `semantic` — no LLM required
-- **Best Accuracy**: Use `llm` or `hybrid` — requires Ollama with fine-tuned model
-- **Balanced**: Use `crossencoder` or `colbert` — good accuracy without LLM latency
 
 ## Fine-Tuning
 
@@ -126,7 +120,35 @@ pytest tests/ -q --cov=azurerbac
 npm ci
 npx playwright install chromium
 npm run test:e2e
+
+# Smoke tests (pre-production validation)
+pip install httpx
+python scripts/smoke_tests.py --url https://your-staging-url.azurewebsites.net
 ```
+
+## Deployment
+
+Deployments use a **staging-first approach** with automatic promotion:
+
+```mermaid
+flowchart LR
+    A[Push to release] --> B[Build Docker image]
+    B --> C[Push to ACR]
+    C --> D[Deploy to staging slot]
+    D --> E[Run smoke tests]
+    E -->|Pass| F[Swap to production]
+    E -->|Fail| G[Abort deployment]
+```
+
+1. **Build** — GitHub Actions builds a versioned Docker image
+2. **Push to ACR** — The image is pushed to Azure Container Registry
+3. **Deploy to Staging** — The image is deployed to the App Service staging slot
+4. **Smoke Tests** — Automated tests validate pages, APIs, and AI recommender endpoints
+5. **Slot Swap** — If all tests pass, staging is swapped to production
+
+This ensures every production deployment is validated before users see it.
+
+> See [Azure App Service staging slots](https://learn.microsoft.com/en-us/azure/app-service/deploy-staging-slots) for more details.
 
 ## Project Structure
 
@@ -141,7 +163,8 @@ azurerbac/
 ├── telemetry/       # Application Insights integration
 └── web/             # FastAPI app, routes, templates
 
-tests/               # Unit and integration tests
+scripts/             # Deployment and smoke test scripts
+tests/               # Unit tests
 e2e/                 # Playwright end-to-end tests
 ```
 

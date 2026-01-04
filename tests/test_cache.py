@@ -755,7 +755,7 @@ class TestCacheFileOperations:
             # Save
             result = save_cache_to_disk(data)
             assert result is True
-            assert (temp_cache_dir / "app_cache.pkl").exists()
+            assert (temp_cache_dir / "app_cache.msgpack").exists()
 
             # Load
             loaded = load_cache_from_disk()
@@ -780,11 +780,11 @@ class TestCacheFileOperations:
                 metadata=metadata, roles_by_id=roles_by_id, all_operations=all_operations
             )
             save_cache_to_disk(data)
-            assert (temp_cache_dir / "app_cache.pkl").exists()
+            assert (temp_cache_dir / "app_cache.msgpack").exists()
 
             # Delete
             delete_cache_file()
-            assert not (temp_cache_dir / "app_cache.pkl").exists()
+            assert not (temp_cache_dir / "app_cache.msgpack").exists()
 
     def test_delete_nonexistent_cache(self, temp_cache_dir):
         """Deleting nonexistent cache doesn't raise error."""
@@ -796,7 +796,7 @@ class TestCacheFileOperations:
         """Loading corrupted cache returns None."""
         with patch("azurerbac.cache.persistence._get_cache_dir", return_value=temp_cache_dir):
             # Write corrupted data
-            cache_file = temp_cache_dir / "app_cache.pkl"
+            cache_file = temp_cache_dir / "app_cache.msgpack"
             cache_file.write_bytes(b"not valid pickle data")
 
             result = load_cache_from_disk()
@@ -933,7 +933,7 @@ class TestCacheReloadLogic:
                 )
                 result = save_cache_to_disk(data)
                 assert result is False
-                assert not (temp_path / "app_cache.pkl").exists()
+                assert not (temp_path / "app_cache.msgpack").exists()
 
                 # Empty operations
                 data = CacheData(
@@ -942,7 +942,7 @@ class TestCacheReloadLogic:
                 )
                 result = save_cache_to_disk(data)
                 assert result is False
-                assert not (temp_path / "app_cache.pkl").exists()
+                assert not (temp_path / "app_cache.msgpack").exists()
 
 
 # =============================================================================

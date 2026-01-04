@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import pickle
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -35,7 +34,7 @@ def _get_cache_dir() -> Path:
 
 def _get_cache_file() -> Path:
     """Get the path to the cache file."""
-    return _get_cache_dir() / "app_cache.pkl"
+    return _get_cache_dir() / "app_cache.msgpack"
 
 
 def get_cache_file_path() -> Path:
@@ -62,8 +61,17 @@ def save_cache_to_disk(data: CacheData) -> bool:
         # Write to temp file first, then rename (atomic)
         cache_file = _get_cache_file()
         temp_file = cache_file.with_suffix(".tmp")
+
+        # Convert dataclass to dict and serialize
+        from dataclasses import asdict
+
+        from azurerbac.cache.serialization import packb
+
+        data_dict = asdict(data)
+        packed = packb(data_dict)
+
         with open(temp_file, "wb") as f:
-            pickle.dump(data, f)
+            f.write(packed)
         temp_file.rename(cache_file)
         logger.info("Saved cache to disk: %s", cache_file)
         return True
@@ -85,7 +93,42 @@ def load_cache_from_disk() -> CacheData | None:
 
     try:
         with open(cache_file, "rb") as f:
-            data = pickle.load(f)
+            packed = f.read()
+
+        from azurerbac.cache.serialization import unpackb
+
+        data_dict = unpackb(packed)
+
+        # Reconstruct dataclass from dict
+        from azurerbac.cache.models import CacheData, CacheMetadata
+
+        metadata_dict = data_dict.pop("metadata", {})
+        metadata = CacheMetadata(**metadata_dict)
+
+        # Post-process fields with tuple values
+        # role_coverage: dict[str, tuple[set, set]] - values are tuples of sets
+        if "role_coverage" in data_dict and data_dict["role_coverage"]:
+            data_dict["role_coverage"] = {
+                k: (set(v[0]) if isinstance(v[0], list) else v[0], set(v[1]) if isinstance(v[1], list) else v[1])
+                for k, v in data_dict["role_coverage"].items()
+            }
+
+        # role_net_permissions: dict[str, tuple[int, int]] - values are tuples of ints
+        if "role_net_permissions" in data_dict and data_dict["role_net_permissions"]:
+            data_dict["role_net_permissions"] = {
+                k: tuple(v) for k, v in data_dict["role_net_permissions"].items()
+            }
+
+        # partial_coverage values are tuples: (int, int, int, list)
+        if "partial_coverage" in data_dict and data_dict["partial_coverage"]:
+            data_dict["partial_coverage"] = {
+                k: tuple(v) for k, v in data_dict["partial_coverage"].items()
+            }
+
+        # cache_ops_count is a list (expected as list, no change needed)
+
+        data = CacheData(metadata=metadata, **data_dict)
+
         logger.info("Loaded cache from disk: %s", cache_file)
         logger.info(
             "  Roles: %d, Operations: %d",

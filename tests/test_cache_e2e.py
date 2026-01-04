@@ -171,7 +171,7 @@ class TestWorkerRefreshFlow:
             assert result is True
 
             # Verify file exists and is substantial
-            cache_file = temp_cache_dir / "app_cache.pkl"
+            cache_file = temp_cache_dir / "app_cache.msgpack"
             assert cache_file.exists()
             assert cache_file.stat().st_size > 1000  # Should be several KB
 
@@ -771,7 +771,7 @@ class TestInvalidationFlow:
             cache_data = build_complete_cache(sample_roles, sample_operations)
             save_cache_to_disk(cache_data)
 
-            cache_file = temp_cache_dir / "app_cache.pkl"
+            cache_file = temp_cache_dir / "app_cache.msgpack"
             assert cache_file.exists()
 
             # Delete cache file
@@ -794,7 +794,7 @@ class TestInvalidationFlow:
             assert len(app_cache.cache.all_operations) > 0
             assert len(app_cache._role_pages) > 0
             assert len(app_cache._misc_cache) > 0
-            assert (temp_cache_dir / "app_cache.pkl").exists()
+            assert (temp_cache_dir / "app_cache.msgpack").exists()
 
             # Invalidate all
             app_cache.invalidate_all()
@@ -804,7 +804,7 @@ class TestInvalidationFlow:
             assert len(app_cache.cache.roles_by_id) == 0
             assert len(app_cache._role_pages) == 0
             assert len(app_cache._misc_cache) == 0
-            assert not (temp_cache_dir / "app_cache.pkl").exists()
+            assert not (temp_cache_dir / "app_cache.msgpack").exists()
 
     def test_swap_clears_misc_cache(self, sample_operations):
         """Atomic swap clears misc_cache (dynamic lookups like roles_allowing_op)."""
@@ -921,7 +921,7 @@ class TestFullLifecycleE2E:
         """Web handles corrupt disk cache gracefully."""
         with patch("azurerbac.cache.persistence._get_cache_dir", return_value=temp_cache_dir):
             # Write corrupt data
-            cache_file = temp_cache_dir / "app_cache.pkl"
+            cache_file = temp_cache_dir / "app_cache.msgpack"
             cache_file.write_bytes(b"not a valid pickle")
 
             # Load should return None (not crash)
@@ -1067,7 +1067,7 @@ class TestWorkerUpdateFlow:
             assert result is True
 
             # Verify file exists
-            cache_file = temp_cache_dir / "app_cache.pkl"
+            cache_file = temp_cache_dir / "app_cache.msgpack"
             assert cache_file.exists()
 
     def test_web_process_detects_disk_update(self, temp_cache_dir, sample_roles, sample_operations):
@@ -1298,7 +1298,7 @@ class TestInvalidationAfterDataChange:
             assert len(app_cache._misc_cache) == 0
 
             # Disk cache deleted
-            assert not (temp_cache_dir / "app_cache.pkl").exists()
+            assert not (temp_cache_dir / "app_cache.msgpack").exists()
 
     def test_swap_clears_misc_cache(self, sample_operations):
         """Verify atomic swap clears misc_cache (roles_allowing_op, etc.)."""

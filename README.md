@@ -7,7 +7,7 @@
 
 **Live site:** [rbac-catalog.dev](https://rbac-catalog.dev/recommend?ai=1)
 
-A comprehensive catalog and monitoring tool for Azure built-in RBAC roles. Browse roles, explore their permissions, track changes over time, find least-privilege roles based on operation requirements, and get AI-powered role recommendations.
+A comprehensive catalog and monitoring tool for [Azure built-in RBAC roles](https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles). Browse roles, explore their permissions, track changes over time, find least-privilege roles based on operation requirements, and get AI-powered role recommendations.
 
 ## Features
 
@@ -29,21 +29,47 @@ A comprehensive catalog and monitoring tool for Azure built-in RBAC roles. Brows
 | **Hosting** | Azure App Service, Cloudflare CDN |
 | **CI/CD** | GitHub Actions, Docker |
 
-## Quick Start
+## Infrastructure
 
-```bash
-# Clone and setup
-git clone https://github.com/atomassi/azurerbac-builtinroles.git
-cd azurerbac-builtinroles
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+The site runs on Azure with Cloudflare CDN.
 
-# Run locally
-uvicorn azurerbac.web.app:app --reload
+### Architecture
+
+```mermaid
+flowchart TD
+    USER((👥  Users)):::user
+    GH[GitHub Actions]:::github
+    CDN[Cloudflare]:::cdn
+    
+    subgraph AZ ["<span style='font-size:22px;font-weight:bold'>Azure</span>"]
+        CR[(Container<br/>Registry)]:::azure
+        AS[App Service]:::azure
+        PG[(PostgreSQL)]:::db
+        AI[App Insights]:::monitor
+        OL[Ollama VM]:::ollama
+        GPU[GPU VM]:::gpu
+    end
+    
+    USER -->|requests| CDN
+    CDN -->|proxy| AS
+    GH -->|push image| CR
+    CR -->|deploy| AS
+    AS <-->|queries/ingestion| PG
+    AS -->|telemetry| AI
+    AS -->|inference| OL
+    GPU -.->|models| OL
+    
+    classDef user fill:#FFC107,color:#000,stroke:#FFA000,stroke-width:2px
+    classDef github fill:#24292e,color:#fff,stroke:#1a1e22,stroke-width:2px
+    classDef cdn fill:#F6821F,color:#fff,stroke:#d4700f,stroke-width:2px
+    classDef azure fill:#0078D4,color:#fff,stroke:#005a9e,stroke-width:2px
+    classDef db fill:#336791,color:#fff,stroke:#264d73,stroke-width:2px
+    classDef ollama fill:#412991,color:#fff,stroke:#301d6b,stroke-width:2px
+    classDef gpu fill:#76B900,color:#fff,stroke:#5a8c00,stroke-width:2px
+    classDef monitor fill:#68217A,color:#fff,stroke:#4e185c,stroke-width:2px
+    
+    style AZ fill:#E6F2FA,stroke:#0078D4,stroke-width:2px,rx:10
 ```
-
-Open http://localhost:8000
 
 ## AI Recommendation Modes
 
@@ -102,52 +128,6 @@ azurerbac/
 tests/               # Unit and integration tests
 e2e/                 # Playwright end-to-end tests
 ```
-
-## Infrastructure & Costs
-
-The site runs on Azure with Cloudflare CDN.
-
-### Architecture
-
-```mermaid
-graph TD
-    GH[GitHub Actions<br/>CI/CD]:::github
-    CDN[Cloudflare<br/>CDN · DNS · DDoS]:::cdn
-    
-    subgraph Azure["<b style='font-size:18px'>Azure</b>"]
-        CR[Container Registry]:::azure
-        AS[App Service]:::azure
-        PG[(PostgreSQL)]:::db
-        AI[App Insights]:::monitor
-        OL[Ollama VM<br/>2 vCPU · 8 GB]:::ollama
-        GPU[GPU VM<br/>NVIDIA A10]:::gpu
-    end
-    
-    GH -->|push image| CR
-    CDN -->|requests| AS
-    CR -->|deploy| AS
-    AS -->|queries| PG
-    AS -->|telemetry| AI
-    AS -->|inference| OL
-    GPU -.->|models| OL
-    
-    classDef github fill:#24292e,color:#fff
-    classDef cdn fill:#F6821F,color:#fff
-    classDef azure fill:#0078D4,color:#fff
-    classDef db fill:#336791,color:#fff
-    classDef ollama fill:#412991,color:#fff
-    classDef gpu fill:#76B900,color:#fff
-    classDef monitor fill:#68217A,color:#fff
-    
-    style Azure fill:#E6F2FA,stroke:#0078D4,stroke-width:2px
-```
-
-## Privacy
-
-- **No cookies** — No tracking cookies or consent banners
-- **No tracking scripts** — No Google Analytics or third-party trackers on the site
-- **PII masked** — IP addresses and other personally identifiable information are masked in telemetry
-- **No user accounts** — No personal data collection or storage
 
 ## References
 

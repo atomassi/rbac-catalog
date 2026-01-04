@@ -37,8 +37,8 @@ jobs:
         run: |
           # Ensure all tags are fetched
           git fetch --tags --force
-          # Get latest tag and bump patch version
-          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          # Get latest semver tag (works across all branches)
+          LATEST_TAG=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1 || echo "v0.0.0")
           MAJOR=$(echo "$LATEST_TAG" | sed 's/^v//' | cut -d. -f1)
           MINOR=$(echo "$LATEST_TAG" | sed 's/^v//' | cut -d. -f2)
           PATCH=$(echo "$LATEST_TAG" | sed 's/^v//' | cut -d. -f3)
@@ -51,7 +51,6 @@ jobs:
           echo "new_tag=$NEW_TAG" >> $GITHUB_OUTPUT
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
-          echo "latest_tag=$LATEST_TAG" >> $GITHUB_OUTPUT
           echo "📦 Version: $LATEST_TAG → $VERSION"
 
       - name: Generate changelog
@@ -63,15 +62,15 @@ jobs:
             CHANGELOG=$(git log --pretty=format:"- %s (%h)" --no-merges | head -50)
           else
             # Get commits since last tag
-            CHANGELOG=$(git log ${LATEST_TAG}..HEAD --pretty=format:"- %s (%h)" --no-merges)
+            CHANGELOG=$(git log "${LATEST_TAG}"..HEAD --pretty=format:"- %s (%h)" --no-merges)
           fi
           
-          # Escape for GitHub Actions
-          CHANGELOG="${CHANGELOG//'%'/'%25'}"
-          CHANGELOG="${CHANGELOG//$'\n'/'%0A'}"
-          CHANGELOG="${CHANGELOG//$'\r'/'%0D'}"
-          
-          echo "changelog=$CHANGELOG" >> $GITHUB_OUTPUT
+          # Output multiline changelog
+          {
+            echo 'changelog<<EOL'
+            echo "$CHANGELOG"
+            echo 'EOL'
+          } >> $GITHUB_OUTPUT
 
       - name: Create and push git tag
         run: |

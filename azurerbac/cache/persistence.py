@@ -107,23 +107,22 @@ def load_cache_from_disk() -> CacheData | None:
 
         # Post-process fields with tuple values
         # role_coverage: dict[str, tuple[set, set]] - values are tuples of sets
-        if "role_coverage" in data_dict and data_dict["role_coverage"]:
+        if role_coverage := data_dict.get("role_coverage"):
             data_dict["role_coverage"] = {
-                k: (set(v[0]) if isinstance(v[0], list) else v[0], set(v[1]) if isinstance(v[1], list) else v[1])
-                for k, v in data_dict["role_coverage"].items()
+                k: (
+                    set(v[0]) if isinstance(v[0], list) else v[0],
+                    set(v[1]) if isinstance(v[1], list) else v[1],
+                )
+                for k, v in role_coverage.items()
             }
 
         # role_net_permissions: dict[str, tuple[int, int]] - values are tuples of ints
-        if "role_net_permissions" in data_dict and data_dict["role_net_permissions"]:
-            data_dict["role_net_permissions"] = {
-                k: tuple(v) for k, v in data_dict["role_net_permissions"].items()
-            }
+        if role_net_perms := data_dict.get("role_net_permissions"):
+            data_dict["role_net_permissions"] = {k: tuple(v) for k, v in role_net_perms.items()}
 
         # partial_coverage values are tuples: (int, int, int, list)
-        if "partial_coverage" in data_dict and data_dict["partial_coverage"]:
-            data_dict["partial_coverage"] = {
-                k: tuple(v) for k, v in data_dict["partial_coverage"].items()
-            }
+        if partial_cov := data_dict.get("partial_coverage"):
+            data_dict["partial_coverage"] = {k: tuple(v) for k, v in partial_cov.items()}
 
         # cache_ops_count is a list (expected as list, no change needed)
 

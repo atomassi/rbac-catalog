@@ -29,6 +29,8 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 from starlette.exceptions import HTTPException
 from starlette.middleware.gzip import GZipMiddleware
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
@@ -205,6 +207,12 @@ app.include_router(static_routes.router)
 
 # API routes (/api/*)
 app.include_router(api_routes.router)
+
+# Register rate limiter state and exception handler
+from azurerbac.web.limiter import limiter
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Dashboard routes (/, /recent, /roles) - uses FastAPI dependency injection
 app.include_router(dashboard_routes.router)

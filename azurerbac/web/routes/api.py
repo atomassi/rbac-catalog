@@ -7,7 +7,7 @@ import logging
 from functools import partial
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 
 from azurerbac.airecommender import (
     AIRecommendRequest,
@@ -27,6 +27,7 @@ from azurerbac.web.constants import (
     MIN_SEARCH_CHARS,
 )
 from azurerbac.web.dependencies import APIDeps, get_api_deps
+from azurerbac.web.limiter import limiter
 from azurerbac.web.routes.models import (
     AIRecommendResponse,
     CountMatchesResponse,
@@ -44,6 +45,7 @@ from azurerbac.web.utils import clamp
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["api"])
+
 
 # Type aliases for FastAPI query parameters
 type SearchQuery = Annotated[str, Query(max_length=MAX_QUERY_LENGTH)]
@@ -161,8 +163,10 @@ async def api_recommend_roles(
 
 
 @router.post("/ai-recommend", response_model=AIRecommendResponse)
+@limiter.limit("10/minute")
 async def ai_recommend_endpoint(
-    request: AIRecommendRequest,
+    request: Request,
+    body: AIRecommendRequest,
     deps: Annotated[APIDeps, Depends(get_api_deps)],
 ) -> AIRecommendResponse:
     """AI-powered role recommendations based on natural language query.
@@ -171,15 +175,15 @@ async def ai_recommend_endpoint(
     description like "I need to read storage blobs" or "manage virtual machines".
 
     Engines (in order of speed/accuracy tradeoff):
-    - TFIDF: Fast lexical search (~50ms)
-    - Semantic: Pure embedding similarity (~100ms)
-    - ColBERT: Token-level late interaction (~150ms)
-    - CrossEncoder: Bi-encoder + reranking (~300ms)
-    - LLM: Fine-tuned Qwen model (~1.2s)
-    - RAG/Hybrid/HyDE: Multi-stage pipelines (~1.5-2s)
+    - TFIDF: Fast lexical search
+    - Semantic: Pure embedding similarity
+    - ColBERT: Token-level late interaction
+    - CrossEncoder: Bi-encoder + reranking
+    - LLM: Fine-tuned Qwen model
+    - RAG/Hybrid/HyDE: Multi-stage pipelines
     """
     # ─── Input Validation ─────────────────────────────────────────────────────
-    query = (request.query or "").strip()[:MAX_QUERY_LENGTH]
+    query = (body.query or "").strip()[:MAX_QUERY_LENGTH]
 
     if not query:
         return ai_error_response(ErrorMessages.QUERY_EMPTY)
@@ -188,11 +192,11 @@ async def ai_recommend_endpoint(
 
     # ─── Request Normalization ────────────────────────────────────────────────
     requested_mode = (
-        request.recommender_mode
-        if RecommenderMode.is_valid(request.recommender_mode)
+        body.recommender_mode
+        if RecommenderMode.is_valid(body.recommender_mode)
         else RecommenderMode.LLM.value
     )
-    top_k = clamp(request.top_k, 1, MAX_TOP_K)
+    top_k = clamp(body.top_k, 1, MAX_TOP_K)
     role_jsons = await deps.get_all_role_jsons()
 
     # ─── Execute AI Recommendation ────────────────────────────────────────────

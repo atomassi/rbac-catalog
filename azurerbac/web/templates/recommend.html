@@ -1688,6 +1688,15 @@
                     })
                 });
                 
+                // Handle rate limiting (429 Too Many Requests)
+                if (response.status === 429) {
+                    aiHint.innerHTML = '<span class="text-amber-600">⏳ Too many requests. Please wait a moment before trying again.</span>';
+                    aiHint.classList.remove('hidden');
+                    aiLoading.classList.add('hidden');
+                    aiRecommendBtns.forEach(btn => btn.disabled = false);
+                    return;
+                }
+                
                 const data = await response.json();
                 
                 if (data.error) {

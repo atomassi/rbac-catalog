@@ -29,7 +29,7 @@ A comprehensive catalog and monitoring tool for [Azure built-in RBAC roles](http
 | **Hosting** | Azure App Service, Cloudflare CDN |
 | **CI/CD** | GitHub Actions, Docker |
 
-## Infrastructure
+## Infrastructure & Costs
 
 The site runs on Azure with Cloudflare CDN.
 
@@ -46,8 +46,8 @@ flowchart TD
         AS[App Service]:::azure
         PG[(PostgreSQL)]:::db
         AI[App Insights]:::monitor
-        OL[Ollama VM]:::ollama
-        GPU[GPU VM]:::gpu
+        OL[Ollama VM<br/>B2a v2]:::ollama
+        GPU[GPU VM<br/>NVIDIA A10]:::gpu
     end
     
     USER -->|requests| CDN
@@ -71,7 +71,23 @@ flowchart TD
     style AZ fill:#E6F2FA,stroke:#0078D4,stroke-width:2px,rx:10
 ```
 
+### Cost
+
+| Service | $/month |
+|---------|--------:|
+| Cloudflare | $0 |
+| App Service | ~$45 |
+| PostgreSQL Flexible | ~$13 |
+| Container Registry | ~$5 |
+| App Insights | ~$5 |
+| Ollama VM (inference) | ~$32 |
+| GPU VM (training/finetuning) | on-demand (~1$/hour) |
+| **Total** | **~$100** |
+
 ## AI Recommendation Modes
+
+> [!NOTE]
+> The primary goal of this project is learning. These recommendation modes are a work in progress and may produce inaccurate results. Further improvements and tuning are expected.
 
 The AI Role Recommender supports **8 different modes**, each with different speed/accuracy trade-offs:
 

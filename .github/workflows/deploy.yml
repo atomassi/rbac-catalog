@@ -57,12 +57,14 @@ jobs:
         id: changelog
         run: |
           LATEST_TAG="${{ steps.version.outputs.latest_tag }}"
+          REPO_URL="https://github.com/${{ github.repository }}"
+          
           if [ "$LATEST_TAG" = "v0.0.0" ]; then
             # First release - get all commits
-            CHANGELOG=$(git log --pretty=format:"- %s (%h)" --no-merges | head -50)
+            CHANGELOG=$(git log --pretty=format:"- %s ([%h](${REPO_URL}/commit/%H))" --no-merges | head -50)
           else
             # Get commits since last tag
-            CHANGELOG=$(git log "${LATEST_TAG}"..HEAD --pretty=format:"- %s (%h)" --no-merges)
+            CHANGELOG=$(git log "${LATEST_TAG}"..HEAD --pretty=format:"- %s ([%h](${REPO_URL}/commit/%H))" --no-merges)
           fi
           
           # Output multiline changelog
@@ -127,9 +129,15 @@ jobs:
           slot-name: staging
           images: ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
 
+      # Start staging slot with the new image
+      - name: Start staging slot
+        run: |
+          az webapp start --name ${{ env.APP_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} --slot staging
+          echo "🚀 Started staging slot with new image"
+
       # Wait for staging to be ready
       - name: Wait for staging to start
-        run: sleep 60
+        run: sleep 120
 
       # Run smoke tests against staging
       - name: Smoke tests on staging
@@ -146,6 +154,13 @@ jobs:
             --slot staging \
             --target-slot production
           echo "🔄 Swapped staging to production"
+
+      # Stop staging slot to save costs
+      - name: Stop staging slot
+        if: always()
+        run: |
+          az webapp stop --name ${{ env.APP_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} --slot staging
+          echo "🛑 Stopped staging slot"
 
       - name: Azure Logout
         if: always()

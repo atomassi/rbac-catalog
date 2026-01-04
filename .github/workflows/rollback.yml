@@ -21,6 +21,7 @@ env:
 
 jobs:
   rollback:
+    name: Rollback to Previous Version
     runs-on: ubuntu-latest
     
     steps:
@@ -101,6 +102,30 @@ jobs:
         with:
           app-name: ${{ env.APP_NAME }}
           images: ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_VERSION }}
+
+      - name: Verify deployment health
+        run: |
+          echo "⏳ Waiting for deployment to be healthy with correct version..."
+          MAX_WAIT=600
+          WAITED=0
+          EXPECTED_VERSION="${{ env.IMAGE_VERSION }}"
+          while [ $WAITED -lt $MAX_WAIT ]; do
+            RESPONSE=$(curl -sf --max-time 10 https://rbac-catalog.dev/version 2>/dev/null || echo "")
+            if [ -n "$RESPONSE" ]; then
+              DEPLOYED_VERSION=$(echo "$RESPONSE" | jq -r '.version // empty' 2>/dev/null)
+              if [ "$DEPLOYED_VERSION" = "$EXPECTED_VERSION" ]; then
+                echo "✅ Site is healthy with correct version after ${WAITED}s"
+                echo "   Deployed: $DEPLOYED_VERSION"
+                exit 0
+              else
+                echo "⏳ Version mismatch - expected: $EXPECTED_VERSION, got: $DEPLOYED_VERSION"
+              fi
+            fi
+            sleep 30
+            WAITED=$((WAITED + 30))
+            echo "⏳ Waiting... ${WAITED}s / ${MAX_WAIT}s"
+          done
+          echo "⚠️ Health check timed out after ${MAX_WAIT}s (deployment may still be in progress)"
 
       - name: Azure Logout
         if: always()

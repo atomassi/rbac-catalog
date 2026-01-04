@@ -14,6 +14,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from dotenv import load_dotenv
 
 from azurerbac.azure import fetch_builtin_roles, fetch_provider_operations
+from azurerbac.backgroundjobs.exceptions import EmptyFetchResultError
 from azurerbac.backgroundjobs.operations_monitor import apply_operations_scan
 from azurerbac.backgroundjobs.roles_monitor import apply_role_scan
 from azurerbac.core import (
@@ -179,6 +180,12 @@ class JobRunner:
             logger.info("%s", spec.fetch_label)
             items = await spec.fetch()
             logger.info("Fetched %s items", len(items))
+
+            # Azure should always return built-in roles and operations.
+            # Zero results indicates an API issue, auth problem, or misconfiguration.
+            if len(items) == 0:
+                raise EmptyFetchResultError(spec.name)
+
             async with self.session_factory() as session:
                 stats = await spec.apply(session, items)
             return items, stats

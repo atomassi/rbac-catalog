@@ -385,3 +385,83 @@ class TestWorkerImports:
         assert "fetch" in field_names
         assert "apply" in field_names
         assert "interval_seconds" in field_names
+
+
+class TestEmptyFetchResultError:
+    """Tests for empty fetch result validation."""
+
+    def test_empty_fetch_result_error_message(self):
+        """Test EmptyFetchResultError has correct message."""
+        from azurerbac.backgroundjobs.worker import EmptyFetchResultError
+
+        error = EmptyFetchResultError("role-scan")
+        assert "role-scan" in str(error)
+        assert "0 results" in str(error)
+        assert error.job_name == "role-scan"
+
+    @pytest.mark.asyncio
+    async def test_run_job_fails_on_empty_fetch(self, db_session):
+        """Test that run_job raises EmptyFetchResultError when fetch returns empty list."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        from azurerbac.backgroundjobs.worker import JobRunner, JobSpec
+
+        # Create a mock session factory
+        mock_session_factory = MagicMock()
+
+        runner = JobRunner(session_factory=mock_session_factory)
+
+        # Create a job spec that returns empty list
+        spec = JobSpec(
+            name="test-empty-job",
+            enabled=True,
+            fetch_label="Fetching test items...",
+            fetch=AsyncMock(return_value=[]),  # Returns empty list
+            apply=AsyncMock(return_value={"created": 0}),
+            on_success=MagicMock(),
+            interval_seconds=60,
+        )
+
+        # run_job should catch the error internally (via execute_with_telemetry)
+        # but it should log the failure. Let's verify the fetch was called
+        # and apply was NOT called (because of the empty result check)
+        await runner.run_job(spec)
+
+        spec.fetch.assert_called_once()
+        spec.apply.assert_not_called()  # Should not reach apply due to empty check
+        spec.on_success.assert_not_called()  # Should not call success callback
+
+    @pytest.mark.asyncio
+    async def test_run_job_succeeds_with_results(self, db_session):
+        """Test that run_job succeeds when fetch returns results."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        from azurerbac.backgroundjobs.worker import JobRunner, JobSpec
+
+        # Create mock session factory that returns an async context manager
+        mock_session = AsyncMock()
+        mock_session_factory = MagicMock()
+        mock_session_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session_factory.return_value.__aexit__ = AsyncMock(return_value=None)
+
+        runner = JobRunner(session_factory=mock_session_factory)
+
+        # Create a job spec that returns non-empty list
+        mock_apply = AsyncMock(return_value={"created": 1, "updated": 0})
+        mock_on_success = MagicMock()
+
+        spec = JobSpec(
+            name="test-success-job",
+            enabled=True,
+            fetch_label="Fetching test items...",
+            fetch=AsyncMock(return_value=[{"id": "1", "name": "test"}]),  # Non-empty
+            apply=mock_apply,
+            on_success=mock_on_success,
+            interval_seconds=60,
+        )
+
+        await runner.run_job(spec)
+
+        spec.fetch.assert_called_once()
+        mock_apply.assert_called_once()  # apply should be called
+        mock_on_success.assert_called_once()  # success callback should be called

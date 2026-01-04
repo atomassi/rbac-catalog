@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from collections.abc import Iterable
+from typing import Any
 
 from azurerbac.azure.roles import get_permission_condition, get_permission_condition_version
-
-if TYPE_CHECKING:
-    from collections.abc import Iterable
 
 
 def _sorted_list(value: Iterable) -> list:

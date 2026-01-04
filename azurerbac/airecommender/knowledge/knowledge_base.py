@@ -9,11 +9,9 @@ from __future__ import annotations
 import json
 import logging
 import re
+from collections.abc import Iterable
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Final
-
-if TYPE_CHECKING:
-    from collections.abc import Iterable
+from typing import Any, Final
 
 from azurerbac.airecommender.knowledge.azure_knowledge import USE_CASE_PATTERNS
 

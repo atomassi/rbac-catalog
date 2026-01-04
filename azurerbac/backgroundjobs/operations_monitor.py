@@ -3,17 +3,14 @@
 from __future__ import annotations
 
 import datetime as dt
-from typing import TYPE_CHECKING, Any, Final, NamedTuple
+from collections.abc import Callable
+from typing import Any, Final, NamedTuple
 
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from azurerbac.backgroundjobs.utils import rebuild_cache_if_needed
 from azurerbac.core import Operation, OperationScanStatus, utcnow
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
-
-    from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class FieldMapping(NamedTuple):

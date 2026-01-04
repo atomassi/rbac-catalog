@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import anyio
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncEngine
 
 from azurerbac.cache import app_cache
 from azurerbac.core import Role
@@ -16,8 +17,6 @@ from azurerbac.core.constants import RoleStatus
 from azurerbac.settings import Settings
 
 if TYPE_CHECKING:
-    from sqlalchemy.ext.asyncio import AsyncEngine
-
     from azurerbac.core.db import AsyncSessionLocal
 
 logger = logging.getLogger(__name__)

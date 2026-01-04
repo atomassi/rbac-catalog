@@ -4,10 +4,9 @@ from __future__ import annotations
 
 import logging
 import threading
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-if TYPE_CHECKING:
-    from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from azurerbac.cache.persistence import delete_cache_file
 from azurerbac.core.constants import RoleStatus

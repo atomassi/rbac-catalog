@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import datetime as dt
-from typing import TYPE_CHECKING
 
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from azurerbac.backgroundjobs.utils import parse_azure_date, rebuild_cache_if_needed
 from azurerbac.core import (
@@ -17,10 +17,6 @@ from azurerbac.core import (
     utcnow,
 )
 from azurerbac.core.diffing import diff_roles, diff_summary
-
-if TYPE_CHECKING:
-    from sqlalchemy.ext.asyncio import AsyncSession
-
 
 # Type alias for parsed role data
 type RoleData = tuple[str, str, str | None, dt.datetime | None, dt.datetime | None]

@@ -8,12 +8,11 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import select
 
-from azurerbac.cache import app_cache
+from azurerbac.cache import AppCache, app_cache
 from azurerbac.core import Operation, Role
 from azurerbac.core.constants import RoleStatus
 
 if TYPE_CHECKING:
-    from azurerbac.cache import AppCache
     from azurerbac.core.db import AsyncSessionLocal
 
 

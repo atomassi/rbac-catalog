@@ -16,15 +16,25 @@ from .engines import (
     RankedRole,
     TFIDFEngine,
 )
+from .exceptions import (
+    AIRecommenderError,
+    EmbeddingModelNotAvailableError,
+    KnowledgeBaseNotInitializedError,
+    OllamaClientNotAvailableError,
+)
 from .modes import RecommenderMode
 
 __all__ = [
     "AIRecommendRequest",
     "AIRecommendation",
+    "AIRecommenderError",
     "BaseRecommenderEngine",
+    "EmbeddingModelNotAvailableError",
     "EngineNotAvailableError",
     "HybridEngine",
+    "KnowledgeBaseNotInitializedError",
     "LLMEngine",
+    "OllamaClientNotAvailableError",
     "RAGEngine",
     "RankedRole",
     "RecommenderMode",

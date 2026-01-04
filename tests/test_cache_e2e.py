@@ -151,7 +151,7 @@ class TestWorkerRefreshFlow:
         self, temp_cache_dir, sample_roles, sample_operations, sample_change_events
     ):
         """Worker builds complete cache with all computed fields and saves to disk."""
-        with patch("azurerbac.cache.persistence._get_cache_dir", return_value=temp_cache_dir):
+        with patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_cache_dir):
             # Worker builds complete cache
             cache_data = build_complete_cache(sample_roles, sample_operations, sample_change_events)
 
@@ -179,7 +179,7 @@ class TestWorkerRefreshFlow:
         self, temp_cache_dir, sample_roles, sample_operations
     ):
         """Web process loads complete cache from disk - no recomputation needed."""
-        with patch("azurerbac.cache.persistence._get_cache_dir", return_value=temp_cache_dir):
+        with patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_cache_dir):
             # Worker saves cache with precomputed data
             cache_data = build_complete_cache(sample_roles, sample_operations)
             original_coverage = dict(cache_data.role_coverage)
@@ -201,7 +201,7 @@ class TestWorkerRefreshFlow:
         self, temp_cache_dir, sample_roles, sample_operations
     ):
         """Web process detects worker disk update and reloads cache."""
-        with patch("azurerbac.cache.persistence._get_cache_dir", return_value=temp_cache_dir):
+        with patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_cache_dir):
             # Initial state - web has old cache
             old_cache = CacheData(
                 metadata=CacheMetadata(roles_count=1, operations_count=1),
@@ -231,7 +231,7 @@ class TestWorkerRefreshFlow:
         self, temp_cache_dir, sample_roles, sample_operations
     ):
         """Reload is atomic - readers never see partial state."""
-        with patch("azurerbac.cache.persistence._get_cache_dir", return_value=temp_cache_dir):
+        with patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_cache_dir):
             # Setup initial cache
             old_ops = [{"name": "old-op", "is_data_action": False}]
             app_cache.build_from_operations(old_ops)
@@ -373,7 +373,7 @@ class TestWebStartupFlow:
         self, temp_cache_dir, sample_roles, sample_operations
     ):
         """Startup with valid disk cache loads directly - no DB query needed."""
-        with patch("azurerbac.cache.persistence._get_cache_dir", return_value=temp_cache_dir):
+        with patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_cache_dir):
             # Previous run saved cache
             cache_data = build_complete_cache(sample_roles, sample_operations)
             save_cache_to_disk(cache_data)
@@ -391,7 +391,7 @@ class TestWebStartupFlow:
         self, temp_cache_dir, sample_roles, sample_operations
     ):
         """Startup with no disk cache builds from database."""
-        with patch("azurerbac.cache.persistence._get_cache_dir", return_value=temp_cache_dir):
+        with patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_cache_dir):
             # No disk cache
             loaded = load_cache_from_disk()
             assert loaded is None
@@ -419,7 +419,7 @@ class TestWebStartupFlow:
         self, temp_cache_dir, sample_roles, sample_operations
     ):
         """Startup with stale disk cache (wrong counts) triggers rebuild."""
-        with patch("azurerbac.cache.persistence._get_cache_dir", return_value=temp_cache_dir):
+        with patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_cache_dir):
             # Save cache with 3 roles
             cache_data = build_complete_cache(sample_roles, sample_operations)
             save_cache_to_disk(cache_data)
@@ -436,7 +436,7 @@ class TestWebStartupFlow:
         self, temp_cache_dir, sample_roles, sample_operations
     ):
         """Startup with old cache version triggers rebuild."""
-        with patch("azurerbac.cache.persistence._get_cache_dir", return_value=temp_cache_dir):
+        with patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_cache_dir):
             # Save cache with old version
             cache_data = build_complete_cache(sample_roles, sample_operations)
             # Manually set old version
@@ -528,7 +528,7 @@ class TestThreadSafety:
         self, temp_cache_dir, sample_roles, sample_operations
     ):
         """Only one concurrent reload proceeds, others skip."""
-        with patch("azurerbac.cache.persistence._get_cache_dir", return_value=temp_cache_dir):
+        with patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_cache_dir):
             # Save cache
             cache_data = build_complete_cache(sample_roles, sample_operations)
             save_cache_to_disk(cache_data)
@@ -715,7 +715,7 @@ class TestDataConsistency:
         self, temp_cache_dir, sample_roles, sample_operations, sample_change_events
     ):
         """Change events are preserved through save/load cycle."""
-        with patch("azurerbac.cache.persistence._get_cache_dir", return_value=temp_cache_dir):
+        with patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_cache_dir):
             # Build and save
             cache_data = build_complete_cache(sample_roles, sample_operations, sample_change_events)
             save_cache_to_disk(cache_data)
@@ -737,7 +737,7 @@ class TestDataConsistency:
         for 'created' events, especially important for deleted roles where
         the current role_json is NULL.
         """
-        with patch("azurerbac.cache.persistence._get_cache_dir", return_value=temp_cache_dir):
+        with patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_cache_dir):
             # Build and save
             cache_data = build_complete_cache(sample_roles, sample_operations, sample_change_events)
             save_cache_to_disk(cache_data)
@@ -766,7 +766,7 @@ class TestInvalidationFlow:
         self, temp_cache_dir, sample_roles, sample_operations
     ):
         """delete_cache_file removes the disk cache file."""
-        with (patch("azurerbac.cache.persistence._get_cache_dir", return_value=temp_cache_dir),):
+        with (patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_cache_dir),):
             # Save cache
             cache_data = build_complete_cache(sample_roles, sample_operations)
             save_cache_to_disk(cache_data)
@@ -782,7 +782,7 @@ class TestInvalidationFlow:
         self, temp_cache_dir, sample_roles, sample_operations
     ):
         """invalidate_all clears all caches including memory and disk."""
-        with patch("azurerbac.cache.persistence._get_cache_dir", return_value=temp_cache_dir):
+        with patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_cache_dir):
             # Setup cache
             cache_data = build_complete_cache(sample_roles, sample_operations)
             app_cache.swap(cache_data)
@@ -832,7 +832,7 @@ class TestFullLifecycleE2E:
         self, temp_cache_dir, sample_roles, sample_operations, sample_change_events
     ):
         """Test complete lifecycle: startup -> worker update -> web reload -> periodic refresh."""
-        with patch("azurerbac.cache.persistence._get_cache_dir", return_value=temp_cache_dir):
+        with patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_cache_dir):
             # === PHASE 1: Cold Start ===
             # No disk cache, web builds from DB
             assert load_cache_from_disk() is None
@@ -903,7 +903,7 @@ class TestFullLifecycleE2E:
 
     def test_multiple_workers_scenario(self, temp_cache_dir, sample_roles, sample_operations):
         """Multiple workers writing cache - last writer wins."""
-        with patch("azurerbac.cache.persistence._get_cache_dir", return_value=temp_cache_dir):
+        with patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_cache_dir):
             # Worker 1 writes
             worker1_ops = sample_operations[:3]
             cache1 = build_complete_cache(sample_roles, worker1_ops)
@@ -919,7 +919,7 @@ class TestFullLifecycleE2E:
 
     def test_web_survives_corrupt_disk_cache(self, temp_cache_dir, sample_roles, sample_operations):
         """Web handles corrupt disk cache gracefully."""
-        with patch("azurerbac.cache.persistence._get_cache_dir", return_value=temp_cache_dir):
+        with patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_cache_dir):
             # Write corrupt data
             cache_file = temp_cache_dir / "app_cache.msgpack"
             cache_file.write_bytes(b"not a valid pickle")
@@ -934,7 +934,7 @@ class TestFullLifecycleE2E:
 
     def test_cache_survives_app_restart(self, temp_cache_dir, sample_roles, sample_operations):
         """Cache persists across app restarts."""
-        with patch("azurerbac.cache.persistence._get_cache_dir", return_value=temp_cache_dir):
+        with patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_cache_dir):
             # First run: build and save
             cache1 = build_complete_cache(sample_roles, sample_operations)
             save_cache_to_disk(cache1)
@@ -1010,7 +1010,7 @@ class TestStartupCacheFlow:
         self, temp_cache_dir, sample_roles, sample_operations
     ):
         """Simulate startup: no disk cache, build from database."""
-        with patch("azurerbac.cache.persistence._get_cache_dir", return_value=temp_cache_dir):
+        with patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_cache_dir):
             # No disk cache exists
             loaded = load_cache_from_disk()
             assert loaded is None
@@ -1045,7 +1045,7 @@ class TestWorkerUpdateFlow:
 
     def test_worker_saves_cache_to_disk(self, temp_cache_dir, sample_roles, sample_operations):
         """Verify worker can save cache to disk."""
-        with patch("azurerbac.cache.persistence._get_cache_dir", return_value=temp_cache_dir):
+        with patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_cache_dir):
             # Worker builds and saves cache
             roles_hash = compute_roles_hash(sample_roles)
             ops_hash = compute_operations_hash(sample_operations)
@@ -1072,7 +1072,7 @@ class TestWorkerUpdateFlow:
 
     def test_web_process_detects_disk_update(self, temp_cache_dir, sample_roles, sample_operations):
         """Verify web process detects when worker updates disk cache."""
-        with patch("azurerbac.cache.persistence._get_cache_dir", return_value=temp_cache_dir):
+        with patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_cache_dir):
             app_cache._loaded_cache_mtime = 1000.0  # Old mtime
             app_cache._last_cache_check = 0  # Force check
 
@@ -1101,7 +1101,7 @@ class TestWorkerUpdateFlow:
         The disk file contains the complete CacheData including all computed fields.
         No recomputation is needed on reload - just load and swap.
         """
-        with patch("azurerbac.cache.persistence._get_cache_dir", return_value=temp_cache_dir):
+        with patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_cache_dir):
             app_cache._loaded_cache_mtime = 1000.0
             app_cache._last_cache_check = 0
 
@@ -1135,7 +1135,7 @@ class TestWorkerUpdateFlow:
 
     def test_reload_updates_cache_atomically(self, temp_cache_dir, sample_roles, sample_operations):
         """Verify reload replaces cache atomically."""
-        with patch("azurerbac.cache.persistence._get_cache_dir", return_value=temp_cache_dir):
+        with patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_cache_dir):
             app_cache._loaded_cache_mtime = 1000.0
             app_cache._last_cache_check = 0
 
@@ -1270,7 +1270,7 @@ class TestInvalidationAfterDataChange:
         self, temp_cache_dir, sample_roles, sample_operations
     ):
         """Verify invalidate_all clears all caches including disk."""
-        with patch("azurerbac.cache.persistence._get_cache_dir", return_value=temp_cache_dir):
+        with patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_cache_dir):
             # Save to disk
             roles_by_id = {r["name"]: {"role_id": r["name"], "role_json": r} for r in sample_roles}
             data = CacheData(
@@ -1326,7 +1326,7 @@ class TestCacheLifecycleE2E:
         self, temp_cache_dir, sample_roles, sample_operations
     ):
         """Test complete lifecycle: startup -> worker update -> reload -> periodic refresh."""
-        with patch("azurerbac.cache.persistence._get_cache_dir", return_value=temp_cache_dir):
+        with patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_cache_dir):
             # === PHASE 1: Startup ===
             # Build from "database"
             app_cache.build_from_operations(sample_operations)

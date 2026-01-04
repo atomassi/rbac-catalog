@@ -156,7 +156,7 @@ class MetricsSender:
 
             provider = metrics.get_meter_provider()
             if hasattr(provider, "force_flush"):
-                return provider.force_flush(timeout_millis=timeout_ms)
+                return provider.force_flush(timeout_millis=timeout_ms)  # type: ignore[union-attr]
         except Exception as e:
             logger.exception("Failed to flush metrics: %s", e)
         return False

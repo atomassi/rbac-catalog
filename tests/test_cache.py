@@ -17,10 +17,10 @@ from azurerbac.cache import (
     AppCache,
     CacheData,
     CacheMetadata,
-    _get_cache_dir,
     compute_operations_hash,
     compute_roles_hash,
     delete_cache_file,
+    get_cache_dir,
     load_cache_from_disk,
     save_cache_to_disk,
 )
@@ -740,7 +740,7 @@ class TestCacheFileOperations:
 
     def test_save_and_load_cache(self, temp_cache_dir, sample_roles, sample_operations):
         """Test saving and loading cache from disk."""
-        with patch("azurerbac.cache.persistence._get_cache_dir", return_value=temp_cache_dir):
+        with patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_cache_dir):
             metadata = CacheMetadata(
                 roles_count=len(sample_roles),
                 operations_count=len(sample_operations),
@@ -765,13 +765,13 @@ class TestCacheFileOperations:
 
     def test_load_nonexistent_cache(self, temp_cache_dir):
         """Loading nonexistent cache returns None."""
-        with patch("azurerbac.cache.persistence._get_cache_dir", return_value=temp_cache_dir):
+        with patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_cache_dir):
             result = load_cache_from_disk()
             assert result is None
 
     def test_delete_cache(self, temp_cache_dir, sample_roles):
         """Test deleting cache file."""
-        with patch("azurerbac.cache.persistence._get_cache_dir", return_value=temp_cache_dir):
+        with patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_cache_dir):
             # Create a cache file with valid data (roles + operations)
             metadata = CacheMetadata(roles_count=len(sample_roles), operations_count=1)
             roles_by_id = {r["name"]: r for r in sample_roles}
@@ -788,13 +788,13 @@ class TestCacheFileOperations:
 
     def test_delete_nonexistent_cache(self, temp_cache_dir):
         """Deleting nonexistent cache doesn't raise error."""
-        with patch("azurerbac.cache.persistence._get_cache_dir", return_value=temp_cache_dir):
+        with patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_cache_dir):
             # Should not raise
             delete_cache_file()
 
     def test_load_corrupted_cache(self, temp_cache_dir):
         """Loading corrupted cache returns None."""
-        with patch("azurerbac.cache.persistence._get_cache_dir", return_value=temp_cache_dir):
+        with patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_cache_dir):
             # Write corrupted data
             cache_file = temp_cache_dir / "app_cache.msgpack"
             cache_file.write_bytes(b"not valid pickle data")
@@ -816,7 +816,7 @@ class TestCacheDirectory:
         with patch.dict(os.environ, {}, clear=True):
             # Remove WEBSITE_SITE_NAME if present
             os.environ.pop("WEBSITE_SITE_NAME", None)
-            cache_dir = _get_cache_dir()
+            cache_dir = get_cache_dir()
             assert ".cache" in str(cache_dir) or "cache" in str(cache_dir)
 
     def test_azure_cache_dir(self):
@@ -825,7 +825,7 @@ class TestCacheDirectory:
             patch.dict(os.environ, {"WEBSITE_SITE_NAME": "test-app"}),
             patch("pathlib.Path.mkdir"),
         ):
-            cache_dir = _get_cache_dir()
+            cache_dir = get_cache_dir()
             assert "/home/cache" in str(cache_dir)
 
 
@@ -925,7 +925,7 @@ class TestCacheReloadLogic:
         """save_cache_to_disk should reject incomplete cache data."""
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
-            with patch("azurerbac.cache.persistence._get_cache_dir", return_value=temp_path):
+            with patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_path):
                 # Empty roles
                 data = CacheData(
                     roles_by_id={},
@@ -957,7 +957,7 @@ class TestCacheInvalidation:
         self, temp_cache_dir, roles_for_hashing, operations_for_hashing
     ):
         """Cache should be valid after simulated app restart."""
-        with patch("azurerbac.cache.persistence._get_cache_dir", return_value=temp_cache_dir):
+        with patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_cache_dir):
             # Initial save
             roles_hash = compute_roles_hash(roles_for_hashing)
             ops_hash = compute_operations_hash(operations_for_hashing)
@@ -990,7 +990,7 @@ class TestCacheInvalidation:
         self, temp_cache_dir, roles_for_hashing, operations_for_hashing
     ):
         """Cache should be invalid after a new role is added."""
-        with patch("azurerbac.cache.persistence._get_cache_dir", return_value=temp_cache_dir):
+        with patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_cache_dir):
             metadata = CacheMetadata(
                 roles_count=len(roles_for_hashing),
                 operations_count=len(operations_for_hashing),
@@ -1012,7 +1012,7 @@ class TestCacheInvalidation:
         self, temp_cache_dir, roles_for_hashing, operations_for_hashing
     ):
         """Cache should be invalid after an operation is removed."""
-        with patch("azurerbac.cache.persistence._get_cache_dir", return_value=temp_cache_dir):
+        with patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_cache_dir):
             metadata = CacheMetadata(
                 roles_count=len(roles_for_hashing),
                 operations_count=len(operations_for_hashing),

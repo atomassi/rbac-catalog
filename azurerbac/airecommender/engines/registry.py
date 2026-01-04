@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, ClassVar
+from collections.abc import Callable
+from typing import TYPE_CHECKING, ClassVar, TypeVar
 
 if TYPE_CHECKING:
     from azurerbac.airecommender.embeddings import EmbeddingModel
@@ -14,6 +15,9 @@ if TYPE_CHECKING:
     from azurerbac.airecommender.modes import RecommenderMode
 
 logger = logging.getLogger(__name__)
+
+# Type variable for engine class decorator (bound to BaseRecommenderEngine)
+_EngineT = TypeVar("_EngineT", bound="BaseRecommenderEngine")
 
 
 class EngineRegistry:
@@ -42,7 +46,7 @@ class EngineRegistry:
     @classmethod
     def register(
         cls, mode: RecommenderMode, *, is_default: bool = False
-    ) -> type[BaseRecommenderEngine]:
+    ) -> Callable[[type[_EngineT]], type[_EngineT]]:
         """Decorator to register an engine class for a specific mode.
 
         Args:
@@ -53,7 +57,7 @@ class EngineRegistry:
             Decorator function that registers the engine class
         """
 
-        def decorator(engine_class: type[BaseRecommenderEngine]) -> type[BaseRecommenderEngine]:
+        def decorator(engine_class: type[_EngineT]) -> type[_EngineT]:
             cls._engines[mode] = engine_class
             if is_default:
                 cls._default_mode = mode

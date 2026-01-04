@@ -138,7 +138,7 @@ async def _execute_paginated_role_query(
     return [enrich_role_with_counts(r) for r in db_roles]
 
 
-def enrich_role_with_counts(role: Role, app_cache: AppCache | None = None) -> dict[str, Any]:
+def enrich_role_with_counts(role: Role | Any, app_cache: AppCache | None = None) -> dict[str, Any]:
     """Enrich a role object with actions_count and data_actions_count.
 
     Uses the pre-computed role net permissions cache from the recommender.
@@ -291,7 +291,8 @@ def filter_cached_events(
         scan_timestamp = ensure_utc(ev.get("scan_timestamp"))
 
         if _event_matches_type(ev_type, event_type, azure_updated, scan_timestamp, cutoff):
-            role_data = deps.app_cache.get_role_by_id(ev.get("role_id"))
+            role_id = ev.get("role_id")
+            role_data = deps.app_cache.get_role_by_id(role_id) if role_id else None
             enriched_ev = {**ev}
             if role_data:
                 enriched_ev["role_name"] = role_data.get("role_name", "")
@@ -368,7 +369,7 @@ async def fetch_events_from_db(
         ]
 
     # Join with RoleScanStatus for ordering and deleted event filtering
-    return (
+    return list(
         (
             await session.execute(
                 select(deps.RoleHistory)
@@ -418,14 +419,14 @@ async def fetch_roles_paginated(
     cached_count = deps.app_cache.get_role_page(count_cache_key)
 
     if cached_roles is not None and cached_count is not None:
-        total_pages = _calculate_total_pages(cached_count, page_size)
-        return cached_roles, cached_count, total_pages
+        total_pages = _calculate_total_pages(int(cached_count), page_size)
+        return cached_roles, int(cached_count), total_pages
 
     # Cache miss - fetch from database
     stmt = _build_status_filter(deps.Role, status_filter)
 
     count_stmt = select(func.count()).select_from(stmt.subquery())
-    total_filtered_roles = await session.scalar(count_stmt)
+    total_filtered_roles = await session.scalar(count_stmt) or 0
     deps.app_cache.set_role_page(count_cache_key, total_filtered_roles)
 
     total_pages = _calculate_total_pages(total_filtered_roles, page_size)
@@ -611,7 +612,7 @@ async def search_roles_in_db(
     stmt = stmt.where(or_(*conditions))
 
     count_stmt = select(func.count()).select_from(stmt.subquery())
-    total_filtered_roles = await session.scalar(count_stmt)
+    total_filtered_roles = await session.scalar(count_stmt) or 0
     total_pages = _calculate_total_pages(total_filtered_roles, page_size)
 
     roles = await _execute_paginated_role_query(

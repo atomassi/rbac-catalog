@@ -8,6 +8,7 @@ from typing import Final, override
 from azurerbac.airecommender.engines.base import BaseRecommenderEngine, RankedRole
 from azurerbac.airecommender.engines.config import LLM_THRESHOLDS
 from azurerbac.airecommender.engines.registry import EngineRegistry
+from azurerbac.airecommender.exceptions import OllamaClientNotAvailableError
 from azurerbac.airecommender.modes import RecommenderMode
 
 logger = logging.getLogger(__name__)
@@ -50,6 +51,9 @@ class LLMEngine(BaseRecommenderEngine):
         Role names may be missing after hot-reload. This method ensures
         the Ollama client has the full role name list for post-processing.
         """
+        if self.ollama_client is None:
+            raise OllamaClientNotAvailableError("LLM")
+
         if self.ollama_client.has_role_names:
             return
 
@@ -71,6 +75,8 @@ class LLMEngine(BaseRecommenderEngine):
             List of (role_name, score, explanation, signals_matched) tuples,
             or empty list on failure.
         """
+        if self.ollama_client is None:
+            raise OllamaClientNotAvailableError("LLM")
         logger.debug("LLM: Querying Ollama %s model", self.ollama_client.model)
         try:
             return self.ollama_client.recommend_roles(query, top_k)

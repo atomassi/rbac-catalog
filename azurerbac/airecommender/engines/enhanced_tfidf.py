@@ -125,7 +125,12 @@ class BM25Index:
     def search(self, query: str, top_k: int = 10) -> list[SearchResult]:
         """Search the index using numpy-vectorized BM25 scoring."""
         query_tokens = self._tokenize(query)
-        if not query_tokens or self.tf_matrix is None:
+        if (
+            not query_tokens
+            or self.tf_matrix is None
+            or self.idf_values is None
+            or self.norm_factors is None
+        ):
             return []
 
         # Get term indices for query terms that exist in vocabulary

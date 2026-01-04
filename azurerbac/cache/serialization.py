@@ -72,7 +72,7 @@ def prepare_for_msgpack(data_dict: dict[str, Any]) -> dict[str, Any]:
 def packb(data: dict[str, Any]) -> bytes:
     """Serialize a dictionary to msgpack bytes."""
     prepared = prepare_for_msgpack(data)
-    return msgpack.packb(prepared, default=encode_ext, strict_types=False)
+    return msgpack.packb(prepared, default=encode_ext, strict_types=False)  # type: ignore[return-value]
 
 
 def unpackb(data: bytes) -> dict[str, Any]:

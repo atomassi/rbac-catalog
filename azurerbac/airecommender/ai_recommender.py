@@ -14,6 +14,7 @@ from azurerbac.airecommender.engines import (
     EngineRegistry,
     RankedRole,
 )
+from azurerbac.airecommender.exceptions import KnowledgeBaseNotInitializedError
 from azurerbac.airecommender.knowledge import RoleKnowledgeBase
 from azurerbac.airecommender.llm import OllamaClient
 from azurerbac.airecommender.modes import RecommenderMode
@@ -117,6 +118,10 @@ class AIRoleRecommender:
 
     def _init_embedding_model(self) -> None:
         """Initialize sentence embedding model for semantic search."""
+        if self._knowledge_base is None:
+            logger.warning("Cannot initialize embedding model: knowledge base not loaded")
+            return
+
         try:
             from .embeddings import EmbeddingModel, compute_documents_hash
 
@@ -196,6 +201,9 @@ class AIRoleRecommender:
 
         Lazily connects to Ollama only when an LLM-requiring mode is requested.
         """
+        if self._knowledge_base is None:
+            raise KnowledgeBaseNotInitializedError()
+
         # Lazy Ollama connection - only connect when LLM mode is actually used
         if mode.requires_llm and self._ollama_client and not self._ollama_client.is_connected:
             logger.debug("LLM mode requested, attempting lazy Ollama connection...")

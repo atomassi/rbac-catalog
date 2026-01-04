@@ -306,7 +306,7 @@ class WorkerOperationContext:
         exc_type: type[BaseException] | None,
         exc_val: BaseException | None,
         _exc_tb: TracebackType | None,
-    ) -> None:
+    ) -> bool:
         if self._span is not None:
             try:
                 from opentelemetry import context

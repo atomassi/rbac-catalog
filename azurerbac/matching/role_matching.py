@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Set as AbstractSet
 from typing import Final
 
 from azurerbac.cache import CacheData, app_cache
@@ -116,7 +117,7 @@ def check_operation_allowed(
 
 def get_matching_operations(
     pattern: str,
-    all_operations: set[str],
+    all_operations: AbstractSet[str],
     cache_key: int | None = None,
     *,
     caches: CacheData | None = None,
@@ -134,15 +135,14 @@ def get_matching_operations(
     """
     cache = caches if caches is not None else app_cache.cache
 
-    if cache_key is not None:
-        key = (pattern.lower(), cache_key)
-        if key in cache.pattern_match:
-            return cache.pattern_match[key]
+    key = (pattern.lower(), cache_key) if cache_key is not None else None
+    if key is not None and key in cache.pattern_match:
+        return cache.pattern_match[key]
 
     # Find matching operations
     matching = {op for op in all_operations if matches_pattern(op, pattern)}
 
-    if cache_key is not None:
+    if key is not None:
         cache.pattern_match[key] = matching
 
     return matching
@@ -152,7 +152,7 @@ def has_any_wildcard_coverage(
     requested_pattern: str,
     actions: list[str],
     not_actions: list[str],
-    all_operations: set[str],
+    all_operations: AbstractSet[str],
     cache_key: int | None = None,
 ) -> bool:
     """Fast check if actions provide ANY coverage for a wildcard pattern."""
@@ -261,7 +261,7 @@ def check_wildcard_operation_allowed(
 def _compute_covered_operations(
     actions: list[str],
     matching_ops: set[str],
-    all_operations: set[str],
+    all_operations: AbstractSet[str],
     cache_key: int | None,
     cache: CacheData,
 ) -> set[str]:
@@ -283,7 +283,7 @@ def _compute_covered_operations(
 def _remove_excluded_operations(
     covered: set[str],
     not_actions: list[str],
-    all_operations: set[str],
+    all_operations: AbstractSet[str],
     cache_key: int | None,
     cache: CacheData,
 ) -> set[str]:
@@ -308,7 +308,7 @@ def count_wildcard_partial_coverage(
     requested_pattern: str,
     actions: list[str],
     not_actions: list[str],
-    all_operations: set[str],
+    all_operations: AbstractSet[str],
     cache_key: int | None = None,
     max_uncovered_sample: int = MAX_UNCOVERED_SAMPLE,
 ) -> tuple[int, int, int, list[str]]:
@@ -369,7 +369,7 @@ def count_wildcard_partial_coverage(
 
 
 def count_operations_matching_pattern(
-    pattern: str, all_operations: set[str], cache_key: int | None = None
+    pattern: str, all_operations: AbstractSet[str], cache_key: int | None = None
 ) -> int:
     """Count how many actual operations match a pattern (explicit or wildcard)."""
     if not is_wildcard_pattern(pattern):
@@ -382,7 +382,7 @@ def count_operations_matching_pattern(
 
 def count_wildcard_matches(
     pattern: str,
-    all_operations: set[str],
+    all_operations: AbstractSet[str],
     cache_key: int | None = None,
     *,
     caches: CacheData | None = None,
@@ -404,7 +404,7 @@ def count_wildcard_matches(
 
 def _count_all_actions_grant(
     not_actions: list[str],
-    all_operations: set[str],
+    all_operations: AbstractSet[str],
     cache_key: int | None,
 ) -> int:
     """Count when actions contains '*' (grants all operations)."""
@@ -423,7 +423,7 @@ def _count_all_actions_grant(
 
 def _count_action_grants(
     actions: list[str],
-    all_operations: set[str],
+    all_operations: AbstractSet[str],
     cache_key: int | None,
 ) -> tuple[int, list[str], list[str]]:
     """Count grants from explicit and wildcard actions."""
@@ -440,7 +440,7 @@ def _subtract_not_actions(
     not_actions: list[str],
     explicit_actions: list[str],
     wildcard_patterns: list[str],
-    all_operations: set[str],
+    all_operations: AbstractSet[str],
     cache_key: int | None,
 ) -> int:
     """Subtract exclusions from notActions."""
@@ -457,7 +457,7 @@ def _subtract_not_actions(
 def count_net_permissions(
     actions: list[str],
     not_actions: list[str],
-    all_operations: set[str],
+    all_operations: AbstractSet[str],
     cache_key: int | None = None,
 ) -> int:
     """Count the net number of operations granted (actions minus notActions).

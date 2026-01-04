@@ -7,6 +7,7 @@ all role recommendation logic with single-responsibility methods.
 from __future__ import annotations
 
 import logging
+from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -174,7 +175,7 @@ class RoleRecommendationService:
     def _evaluate_explicit_ops(
         self,
         ctx: RoleEvaluationContext,
-        ops: set[str],
+        ops: AbstractSet[str],
         role_ops: set[str],
     ) -> None:
         """Evaluate explicit operations against role coverage."""
@@ -183,7 +184,7 @@ class RoleRecommendationService:
     def _evaluate_wildcard_ops(
         self,
         ctx: RoleEvaluationContext,
-        patterns: set[str],
+        patterns: AbstractSet[str],
         wildcard_ops_map: dict[str, set[str]],
         role_ops: set[str],
         plane_prefix: str,

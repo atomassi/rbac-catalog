@@ -15,6 +15,7 @@ from typing import Final, override
 from azurerbac.airecommender.engines.base import BaseRecommenderEngine, RankedRole
 from azurerbac.airecommender.engines.config import HYDE_THRESHOLDS
 from azurerbac.airecommender.engines.registry import EngineRegistry
+from azurerbac.airecommender.exceptions import OllamaClientNotAvailableError
 from azurerbac.airecommender.modes import RecommenderMode
 
 logger = logging.getLogger(__name__)
@@ -109,6 +110,9 @@ class HyDEEngine(BaseRecommenderEngine):
             Generated role description or None if generation fails
         """
         prompt = HYDE_PROMPT_TEMPLATE.format(query=query)
+
+        if self.ollama_client is None:
+            raise OllamaClientNotAvailableError("HyDE")
 
         try:
             # Use qwen2.5:0.5b with low temp for focused, concise output

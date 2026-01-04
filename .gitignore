@@ -52,3 +52,7 @@ azurerbac/airecommender/models/all-MiniLM-L6-v2/
 
 # Generated version file
 azurerbac/_version_generated.py
+
+run_local.sh
+
+.gitignore

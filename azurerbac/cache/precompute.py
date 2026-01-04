@@ -234,8 +234,8 @@ def precompute_all_caches(
         {"name": op["name"], "is_data_action": op.get("is_data_action", False)}
         for op in all_operations
     ]
-    providers = {
-        op.get("provider_display_name") for op in all_operations if op.get("provider_display_name")
+    providers: set[str] = {
+        op["provider_display_name"] for op in all_operations if op.get("provider_display_name")
     }
     unique_providers = sorted(providers, key=str.casefold)
 

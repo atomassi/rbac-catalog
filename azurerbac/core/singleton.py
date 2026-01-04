@@ -72,14 +72,14 @@ class ThreadSafeSingleton[T]:
         Raises:
             ValueError: If neither cls nor factory is provided.
         """
-        if cls is None and factory is None:
+        if factory is not None:
+            self._factory: Callable[[], T] = factory
+        elif cls is not None:
+            self._factory = cls
+        else:
             msg = "Either cls or factory must be provided"
             raise ValueError(msg)
 
-        if factory is not None:
-            self._factory = factory
-        else:
-            self._factory = cls  # type: ignore[assignment]
         self._instance: T | None = None
         self._lock = threading.Lock()
 

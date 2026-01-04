@@ -212,7 +212,7 @@ app.include_router(api_routes.router)
 from azurerbac.web.limiter import limiter
 
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
 
 # Dashboard routes (/, /recent, /roles) - uses FastAPI dependency injection
 app.include_router(dashboard_routes.router)

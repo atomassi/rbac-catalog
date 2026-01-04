@@ -73,7 +73,7 @@ def top_k_similar(
     return [(doc_ids[i], float(similarities[i])) for i in top_indices]
 
 
-def _normalize_with_sigmoid(
+def normalize_with_sigmoid(
     candidates: list[RankedRole],
     *,
     midpoint: float,

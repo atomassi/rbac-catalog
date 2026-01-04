@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def _get_cache_dir() -> Path:
+def get_cache_dir() -> Path:
     """Get the cache directory, creating it if needed."""
     settings = Settings.get()
 
@@ -34,7 +34,7 @@ def _get_cache_dir() -> Path:
 
 def _get_cache_file() -> Path:
     """Get the path to the cache file."""
-    return _get_cache_dir() / "app_cache.msgpack"
+    return get_cache_dir() / "app_cache.msgpack"
 
 
 def get_cache_file_path() -> Path:

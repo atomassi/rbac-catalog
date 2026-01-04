@@ -2000,6 +2000,22 @@ class TestHyDEEngine:
             "role" in HYDE_PROMPT_TEMPLATE.lower() or "description" in HYDE_PROMPT_TEMPLATE.lower()
         )
 
+    def test_hyde_raises_error_when_ollama_client_none_in_generate(
+        self, mock_embedding_model, mock_knowledge_base
+    ):
+        """Test HyDE raises OllamaClientNotAvailableError when ollama_client is None."""
+        from azurerbac.airecommender.engines.hyde import HyDEEngine
+        from azurerbac.airecommender.exceptions import OllamaClientNotAvailableError
+
+        engine = HyDEEngine(
+            embedding_model=mock_embedding_model,
+            ollama_client=None,  # No client provided
+            knowledge_base=mock_knowledge_base,
+        )
+        # Directly call _generate_hypothetical_document to test the error
+        with pytest.raises(OllamaClientNotAvailableError):
+            engine._generate_hypothetical_document("test query")
+
 
 class TestHyDEPromptGeneration:
     """Tests for HyDE hypothetical document generation."""
@@ -2021,6 +2037,83 @@ class TestHyDEPromptGeneration:
 
         formatted = HYDE_PROMPT_TEMPLATE.format(query="manage virtual machines")
         assert "manage virtual machines" in formatted
+
+
+class TestLLMEngine:
+    """Tests for LLMEngine class."""
+
+    @pytest.fixture
+    def mock_knowledge_base(self):
+        """Create a mock knowledge base for LLM tests."""
+        kb = MagicMock()
+        kb.role_documents = {
+            "vm-contrib-id": {
+                "role_name": "Virtual Machine Contributor",
+                "description": "Manage VMs",
+                "document_text": "Virtual Machine Contributor: Manage virtual machines",
+            },
+        }
+        kb.get_all_role_names.return_value = ["Virtual Machine Contributor"]
+        kb.find_role_id_by_name.return_value = "vm-contrib-id"
+        return kb
+
+    @pytest.fixture
+    def mock_ollama_client(self):
+        """Create a mock Ollama client for LLM tests."""
+        client = MagicMock()
+        client.is_connected = True
+        client.has_role_names = True
+        client.model = "test-model"
+        client.recommend_roles.return_value = [
+            ("Virtual Machine Contributor", 0.95, "Good match", ["vm", "manage"]),
+        ]
+        return client
+
+    def test_llm_raises_error_when_ollama_client_none_in_ensure_role_names(
+        self, mock_knowledge_base
+    ):
+        """Test LLMEngine raises error when ollama_client is None in role init."""
+        from azurerbac.airecommender.engines.llm import LLMEngine
+        from azurerbac.airecommender.exceptions import OllamaClientNotAvailableError
+
+        engine = LLMEngine(
+            ollama_client=None,
+            knowledge_base=mock_knowledge_base,
+        )
+        with pytest.raises(OllamaClientNotAvailableError):
+            engine._ensure_role_names_initialized()
+
+    def test_llm_raises_error_when_ollama_client_none_in_query_llm(self, mock_knowledge_base):
+        """Test LLMEngine raises error when ollama_client is None in _query_llm."""
+        from azurerbac.airecommender.engines.llm import LLMEngine
+        from azurerbac.airecommender.exceptions import OllamaClientNotAvailableError
+
+        engine = LLMEngine(
+            ollama_client=None,
+            knowledge_base=mock_knowledge_base,
+        )
+        with pytest.raises(OllamaClientNotAvailableError):
+            engine._query_llm("test query", 5)
+
+    def test_llm_engine_name(self, mock_ollama_client, mock_knowledge_base):
+        """Test LLMEngine name property."""
+        from azurerbac.airecommender.engines.llm import LLMEngine
+
+        engine = LLMEngine(
+            ollama_client=mock_ollama_client,
+            knowledge_base=mock_knowledge_base,
+        )
+        assert "LLM" in engine.name
+
+    def test_llm_engine_requires_llm(self, mock_ollama_client, mock_knowledge_base):
+        """Test LLMEngine requires LLM."""
+        from azurerbac.airecommender.engines.llm import LLMEngine
+
+        engine = LLMEngine(
+            ollama_client=mock_ollama_client,
+            knowledge_base=mock_knowledge_base,
+        )
+        assert engine.requires_llm is True
 
 
 class TestEngineAvailability:

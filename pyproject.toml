@@ -113,3 +113,28 @@ filterwarnings = [
     # Ignore deprecation warnings from third-party libraries we can't fix
     "ignore::DeprecationWarning:opencensus.*",
 ]
+
+
+[tool.pyright]
+pythonVersion = "3.12"
+typeCheckingMode = "standard"
+include = ["azurerbac"]
+# Report settings
+reportMissingImports = true
+reportMissingModuleSource = false
+reportMissingTypeStubs = false
+reportUnusedImport = "warning"
+reportUnusedVariable = "warning"
+reportDuplicateImport = "error"
+reportPrivateUsage = true  # Allow protected method access in subclasses
+reportOptionalMemberAccess = true
+reportOptionalSubscript = true
+reportOptionalCall = true
+reportOptionalIterable = true
+reportOptionalOperand = true
+reportArgumentType = true
+reportReturnType = true
+reportAttributeAccessIssue = true
+reportCallIssue = true
+reportOperatorIssue = true
+

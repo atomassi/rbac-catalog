@@ -56,7 +56,7 @@ class AppCache:
                 # Double-check locking for thread safety
                 if cls._instance is None:
                     cls._instance = super().__new__(cls)
-        return cls._instance
+        return cls._instance  # type: ignore[return-value]
 
     def __init__(self) -> None:
         # Only initialize once (singleton may call __init__ multiple times)
@@ -182,14 +182,14 @@ class AppCache:
     # Role pages (paginated listings - separate from main cache)
     # ─────────────────────────────────────────────────────────────────────────
 
-    def get_role_page(self, page_key: str) -> list | None:
-        """Get a cached role page."""
+    def get_role_page(self, page_key: str) -> Any:
+        """Get a cached role page or count value."""
         result = self._role_pages.get(page_key)
         track_cache_hit("role_page", result is not None, page_key)
         return result
 
-    def set_role_page(self, page_key: str, roles: list) -> None:
-        """Cache a role page."""
+    def set_role_page(self, page_key: str, roles: Any) -> None:
+        """Cache a role page or count value."""
         self._role_pages[page_key] = roles
 
     def get_role_pages_count(self) -> int:

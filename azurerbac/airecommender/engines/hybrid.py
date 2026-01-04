@@ -152,7 +152,10 @@ class HybridEngine(BaseRecommenderEngine):
 
         for c in candidates:
             if c.role_id in embeddings:
-                c.embedding_score = cosine_similarity(query_embedding, embeddings[c.role_id])
+                c.embedding_score = cosine_similarity(
+                    list(query_embedding),
+                    embeddings[c.role_id],  # type: ignore[arg-type]
+                )
             else:
                 c.embedding_score = c.tfidf_score * 0.5  # Penalize if no embedding
 

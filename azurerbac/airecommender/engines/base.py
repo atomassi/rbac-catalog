@@ -174,7 +174,7 @@ class BaseRecommenderEngine(ABC):
             Embedding tuple if successful, None if model unavailable.
             Returns tuple (not list) for LRU cache hashability.
         """
-        if not self.is_embeddings_available:
+        if self.embedding_model is None or not self.embedding_model.is_loaded:
             logger.warning("%s: Embedding model not loaded", self.__class__.__name__)
             return None
         return self.embedding_model.encode_single_cached(text)
@@ -283,6 +283,11 @@ Rank these candidate roles from most to least appropriate (top 5 only):
 Return ONLY the role names in order, one per line, most appropriate first."""
 
         try:
+            if self.ollama_client is None:
+                logger.warning(
+                    "%s: Ollama client not available for reranking", self.__class__.__name__
+                )
+                return candidates[:top_k]
             response = self.ollama_client.generate(prompt)
             if not response:
                 logger.warning("%s: Empty response from LLM", self.__class__.__name__)
@@ -386,7 +391,7 @@ Return ONLY the role names in order, one per line, most appropriate first."""
             Empty list if embedding model unavailable.
         """
         # Fast path: check availability once
-        if not self.is_embeddings_available:
+        if self.embedding_model is None or not self.embedding_model.is_loaded:
             logger.warning("%s: Embedding model not available", self.__class__.__name__)
             return []
 
@@ -406,8 +411,11 @@ Return ONLY the role names in order, one per line, most appropriate first."""
 
         # Compute similarity scores with 2x candidates for filtering headroom
         retrieval_k = top_k * 2
-        if use_search_vector:
-            scores = self.embedding_model.search_vector(query_embedding, retrieval_k)
+        if use_search_vector and self.embedding_model is not None:
+            scores = self.embedding_model.search_vector(
+                list(query_embedding),
+                retrieval_k,
+            )
         else:
             from azurerbac.airecommender.engines.common import top_k_similar
 

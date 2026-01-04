@@ -5,24 +5,20 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from typing import TYPE_CHECKING
 
 import anyio
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncEngine
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from azurerbac.cache import app_cache
 from azurerbac.core import Role
 from azurerbac.core.constants import RoleStatus
 from azurerbac.settings import Settings
 
-if TYPE_CHECKING:
-    from azurerbac.core.db import AsyncSessionLocal
-
 logger = logging.getLogger(__name__)
 
 
-async def preload_cache(session_factory: AsyncSessionLocal) -> None:
+async def preload_cache(session_factory: async_sessionmaker[AsyncSession]) -> None:
     """Preload cache with commonly accessed data at startup.
 
     Uses the shared cache rebuild logic to populate the unified CacheData
@@ -77,7 +73,7 @@ async def preload_cache(session_factory: AsyncSessionLocal) -> None:
     track_cache_refresh(elapsed, "startup", roles_count, operations_count)
 
 
-async def cache_refresh_task(session_factory: AsyncSessionLocal) -> None:
+async def cache_refresh_task(session_factory: async_sessionmaker[AsyncSession]) -> None:
     """Background task to check for cache updates and periodic recompute.
 
     The cache refresh flow:
@@ -123,8 +119,8 @@ async def cache_refresh_task(session_factory: AsyncSessionLocal) -> None:
                     try:
                         from azurerbac.airecommender import get_ai_recommender
 
-                        active_role_jsons = [
-                            r.get("role_json")
+                        active_role_jsons: list[dict] = [
+                            r["role_json"]
                             for r in app_cache.cache.roles_by_id.values()
                             if r.get("status") == RoleStatus.ACTIVE and r.get("role_json")
                         ]

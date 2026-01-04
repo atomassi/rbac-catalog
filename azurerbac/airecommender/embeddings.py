@@ -237,7 +237,7 @@ class EmbeddingModel:
             query_vec = query_vec / query_norm
 
         # Compute all similarities in one matrix multiplication
-        similarities = self._embedding_matrix @ query_vec
+        similarities = self._embedding_matrix @ query_vec  # type: ignore[operator]
 
         # Get top-k indices efficiently
         n_docs = len(similarities)

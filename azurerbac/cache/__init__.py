@@ -10,8 +10,8 @@ from azurerbac.cache.models import (
     compute_roles_hash,
 )
 from azurerbac.cache.persistence import (
-    _get_cache_dir,
     delete_cache_file,
+    get_cache_dir,
     get_cache_file_mtime,
     get_cache_file_path,
     load_cache_from_disk,
@@ -39,7 +39,6 @@ __all__ = [
     "AppCache",
     "CacheData",
     "CacheMetadata",
-    "_get_cache_dir",
     "app_cache",
     "build_indexes",
     "build_operations_prefix_index",
@@ -47,6 +46,7 @@ __all__ = [
     "compute_operations_hash",
     "compute_roles_hash",
     "delete_cache_file",
+    "get_cache_dir",
     "get_cache_file_mtime",
     "get_cache_file_path",
     "get_matching_operations",

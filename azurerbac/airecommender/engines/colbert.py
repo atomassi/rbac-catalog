@@ -32,7 +32,7 @@ warnings.filterwarnings("ignore", message=".*torch.cuda.amp.GradScaler.*", categ
 warnings.filterwarnings("ignore", message=".*CUDA is not available.*", category=UserWarning)
 
 from azurerbac.airecommender.engines.base import BaseRecommenderEngine, RankedRole
-from azurerbac.airecommender.engines.common import _normalize_with_sigmoid
+from azurerbac.airecommender.engines.common import normalize_with_sigmoid
 from azurerbac.airecommender.engines.config import COLBERT_THRESHOLDS
 from azurerbac.airecommender.engines.registry import EngineRegistry
 from azurerbac.airecommender.knowledge import extract_keywords
@@ -97,7 +97,7 @@ class ColBERTEngine(BaseRecommenderEngine):
         - Raw scores ~15-22 are moderate matches (->55-80%)
         - Raw scores <15 are poor matches (->30-55%)
         """
-        candidates = _normalize_with_sigmoid(
+        candidates = normalize_with_sigmoid(
             candidates,
             midpoint=18.0,
             steepness=0.30,

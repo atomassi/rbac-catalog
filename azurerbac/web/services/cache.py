@@ -4,22 +4,19 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import TYPE_CHECKING
 
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from azurerbac.cache import AppCache, app_cache
 from azurerbac.core import Operation, Role
 from azurerbac.core.constants import RoleStatus
 
-if TYPE_CHECKING:
-    from azurerbac.core.db import AsyncSessionLocal
-
 
 @asynccontextmanager
 async def _session_factory_or_default(
-    session_factory: AsyncSessionLocal | None,
-) -> AsyncIterator[AsyncSessionLocal]:
+    session_factory: async_sessionmaker[AsyncSession] | None,
+) -> AsyncIterator[async_sessionmaker[AsyncSession]]:
     if session_factory is not None:
         yield session_factory
         return
@@ -35,7 +32,7 @@ async def _session_factory_or_default(
 
 async def get_all_operations(
     cache: AppCache | None = None,
-    session_factory: AsyncSessionLocal | None = None,
+    session_factory: async_sessionmaker[AsyncSession] | None = None,
 ) -> list[dict]:
     """Get all operations from cache or database.
 
@@ -78,7 +75,7 @@ async def get_all_operations(
 
 async def get_all_role_jsons(
     cache: AppCache | None = None,
-    session_factory: AsyncSessionLocal | None = None,
+    session_factory: async_sessionmaker[AsyncSession] | None = None,
 ) -> list[dict]:
     """Get all active role JSONs from cache or database.
 
@@ -108,7 +105,7 @@ async def get_all_role_jsons(
         # Build roles from DB and cache them
         roles_list = []
         for snap in snapshots:
-            if snap.current_version:
+            if snap.current_version and snap.current_version.role_json:
                 role_json = snap.current_version.role_json
                 props = role_json.get("properties", {})
                 roles_list.append(
@@ -129,7 +126,7 @@ async def get_all_role_jsons(
 
 async def get_operations_for_recommender(
     cache: AppCache | None = None,
-    session_factory: AsyncSessionLocal | None = None,
+    session_factory: async_sessionmaker[AsyncSession] | None = None,
 ) -> list[dict]:
     """Get operations in the format needed by the recommender.
 

@@ -60,9 +60,9 @@ def diff_roles(old: dict | None, new: dict | None) -> dict:
     add("properties.assignableScopes", old_scopes, new_scopes)
 
     # permissions: normalize each permission object into sorted lists
-    def norm_permissions(p: dict) -> dict:
+    def norm_permissions(p: dict) -> dict[str, Any]:
         """Normalize a permission block, including conditions."""
-        normalized = {
+        normalized: dict[str, Any] = {
             "actions": _sorted_list(p.get("actions", []) or []),
             "notActions": _sorted_list(p.get("notActions", []) or []),
             "dataActions": _sorted_list(p.get("dataActions", []) or []),

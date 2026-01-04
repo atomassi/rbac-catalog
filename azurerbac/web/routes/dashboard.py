@@ -104,7 +104,7 @@ async def _render_recent(
     if q:
         from urllib.parse import urlencode
 
-        params = {"q": q}
+        params: dict[str, str | int] = {"q": q}
         if ai:
             params["ai"] = ai
         return RedirectResponse(url=f"/roles?{urlencode(params)}", status_code=302)

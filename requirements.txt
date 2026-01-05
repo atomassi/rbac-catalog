@@ -32,16 +32,16 @@ torch==2.9.1+cpu; sys_platform == "linux"
 
 # Sentence embeddings for semantic search
 sentence-transformers==5.2.0
-transformers==4.49.0
+transformers==4.53.0
 
 # ColBERT for token-level late interaction
 RAGatouille==0.0.9.post2
-colbert-ai==0.2.19
-langchain==0.3.14
-langchain-community==0.3.14
-langchain-core==0.3.29
-langchain-text-splitters==0.3.5
-langsmith==0.2.11
+colbert-ai==0.2.22
+langchain==0.3.27
+langchain-community==0.3.27
+langchain-core==0.3.81
+langchain-text-splitters==0.3.9
+langsmith==0.6.0
 llama-index==0.14.10
 llama-index-core==0.14.10
 llama-parse==0.6.54

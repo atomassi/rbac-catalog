@@ -132,6 +132,9 @@ updates:
         patterns:
           - "*"
         dependency-type: "development"
+        update-types:
+          - "minor"
+          - "patch"
       npm-prod:
         patterns:
           - "*"
@@ -139,6 +142,10 @@ updates:
         update-types:
           - "minor"
           - "patch"
+    # Ignore major version updates for stability (review manually)
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
 
   # GitHub Actions
   - package-ecosystem: "github-actions"
@@ -160,3 +167,7 @@ updates:
       github-actions:
         patterns:
           - "*"
+    # Ignore major version updates for stability (review manually)
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]

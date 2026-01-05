@@ -44,8 +44,63 @@ updates:
         update-types:
           - "minor"
           - "patch"
+      # Database drivers and async
+      python-database:
+        patterns:
+          - "asyncpg"
+          - "aiosqlite"
+          - "greenlet"
+        update-types:
+          - "minor"
+          - "patch"
+      # Testing dependencies
+      python-testing:
+        patterns:
+          - "pytest"
+          - "pytest-*"
+        update-types:
+          - "minor"
+          - "patch"
+      # ML/AI dependencies (PyTorch, transformers, embeddings)
+      python-ml:
+        patterns:
+          - "torch"
+          - "sentence-transformers"
+          - "transformers"
+          - "safetensors"
+        update-types:
+          - "minor"
+          - "patch"
+      # LangChain/RAG dependencies
+      python-langchain:
+        patterns:
+          - "langchain*"
+          - "langsmith"
+          - "llama-*"
+          - "RAGatouille"
+          - "colbert-ai"
+        update-types:
+          - "minor"
+          - "patch"
+      # HTTP clients
+      python-http:
+        patterns:
+          - "httpx"
+          - "aiohttp"
+        update-types:
+          - "minor"
+          - "patch"
+      # Web utilities (templates, rate limiting, etc.)
+      python-web:
+        patterns:
+          - "jinja2"
+          - "python-multipart"
+          - "slowapi"
+        update-types:
+          - "minor"
+          - "patch"
       # All other minor/patch updates
-      python-minor:
+      python-other:
         patterns:
           - "*"
         update-types:

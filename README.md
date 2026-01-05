@@ -27,7 +27,7 @@ A comprehensive catalog and monitoring tool for [Azure built-in RBAC roles](http
 | **Database** | PostgreSQL |
 | **AI/ML** | Ollama, sentence-transformers, ColBERT, Qwen (fine-tuned) |
 | **Hosting** | Azure App Service, Cloudflare CDN |
-| **CI/CD** | GitHub Actions, Docker |
+| **CI/CD** | GitHub Actions, Azure Container Registry, Docker |
 
 ## Infrastructure & Costs
 

@@ -2,10 +2,11 @@ import copy
 
 import pytest
 
+from azurerbac.azure.models import RoleDefinition
 from azurerbac.core.diffing import diff_roles, diff_summary
 
 
-def _reader_role() -> dict:
+def _reader_role_dict() -> dict:
     return {
         "properties": {
             "roleName": "Reader",
@@ -30,55 +31,96 @@ def _reader_role() -> dict:
     }
 
 
+def _to_model(d: dict | None) -> RoleDefinition | None:
+    """Convert dict to RoleDefinition model."""
+    if d is None:
+        return None
+    return RoleDefinition.model_validate(d)
+
+
 def test_no_change_returns_changed_false():
-    role = _reader_role()
-    d = diff_roles(role, copy.deepcopy(role))
+    role_dict = _reader_role_dict()
+    d = diff_roles(_to_model(role_dict), _to_model(copy.deepcopy(role_dict)))
     assert d["changed"] is False
     assert d["changes"] == []
     assert diff_summary(d) == "No changes"
 
 
 def test_created_role_has_root_diff():
-    role = _reader_role()
-    d = diff_roles(None, role)
+    role_dict = _reader_role_dict()
+    d = diff_roles(None, _to_model(role_dict))
     assert d["changed"] is True
     assert d["changes"][0]["path"] == "<root>"
 
 
 def test_deleted_role_has_root_diff():
-    role = _reader_role()
-    d = diff_roles(role, None)
+    role_dict = _reader_role_dict()
+    d = diff_roles(_to_model(role_dict), None)
     assert d["changed"] is True
     assert d["changes"][0]["path"] == "<root>"
 
 
-def test_updated_on_change_is_detected():
-    old = _reader_role()
-    new = copy.deepcopy(old)
-    new["properties"]["updatedOn"] = "2025-12-14T00:00:00.0000000Z"
+def test_updated_on_change_is_tracked_but_not_considered_update():
+    """Metadata fields like updatedOn are tracked but don't trigger changed=True."""
+    old_dict = _reader_role_dict()
+    new_dict = copy.deepcopy(old_dict)
+    new_dict["properties"]["updatedOn"] = "2025-12-14T00:00:00.0000000Z"
 
-    d = diff_roles(old, new)
-    assert d["changed"] is True
+    d = diff_roles(_to_model(old_dict), _to_model(new_dict))
+    # changed should be False (metadata-only change)
+    assert d["changed"] is False
+    # But the change should still be tracked in changes
     paths = {c["path"] for c in d["changes"]}
     assert "properties.updatedOn" in paths
 
 
+def test_metadata_only_changes_not_considered_update():
+    """All metadata fields together should not trigger changed=True."""
+    old_dict = _reader_role_dict()
+    new_dict = copy.deepcopy(old_dict)
+    new_dict["properties"]["updatedOn"] = "2025-12-14T00:00:00.0000000Z"
+    new_dict["properties"]["updatedBy"] = "new-user-id"
+    new_dict["properties"]["createdOn"] = "2020-01-01T00:00:00.0000000Z"
+    new_dict["properties"]["createdBy"] = "another-user-id"
+
+    d = diff_roles(_to_model(old_dict), _to_model(new_dict))
+    assert d["changed"] is False
+    # All metadata changes should be tracked
+    paths = {c["path"] for c in d["changes"]}
+    assert "properties.updatedOn" in paths
+    assert "properties.updatedBy" in paths
+
+
+def test_real_change_with_metadata_is_detected():
+    """A real change alongside metadata changes should trigger changed=True."""
+    old_dict = _reader_role_dict()
+    new_dict = copy.deepcopy(old_dict)
+    new_dict["properties"]["updatedOn"] = "2025-12-14T00:00:00.0000000Z"
+    new_dict["properties"]["description"] = "New description"
+
+    d = diff_roles(_to_model(old_dict), _to_model(new_dict))
+    assert d["changed"] is True
+    paths = {c["path"] for c in d["changes"]}
+    assert "properties.updatedOn" in paths
+    assert "properties.description" in paths
+
+
 def test_assignable_scopes_are_order_insensitive():
-    old = _reader_role()
-    new = copy.deepcopy(old)
+    old_dict = _reader_role_dict()
+    new_dict = copy.deepcopy(old_dict)
 
-    old["properties"]["assignableScopes"] = ["/a", "/b", "/c"]
-    new["properties"]["assignableScopes"] = ["/c", "/a", "/b"]
+    old_dict["properties"]["assignableScopes"] = ["/a", "/b", "/c"]
+    new_dict["properties"]["assignableScopes"] = ["/c", "/a", "/b"]
 
-    d = diff_roles(old, new)
+    d = diff_roles(_to_model(old_dict), _to_model(new_dict))
     assert d["changed"] is False
 
 
 def test_permissions_actions_order_is_ignored():
-    old = _reader_role()
-    new = copy.deepcopy(old)
+    old_dict = _reader_role_dict()
+    new_dict = copy.deepcopy(old_dict)
 
-    old["properties"]["permissions"] = [
+    old_dict["properties"]["permissions"] = [
         {
             "actions": ["b", "a"],
             "notActions": [],
@@ -86,7 +128,7 @@ def test_permissions_actions_order_is_ignored():
             "notDataActions": [],
         }
     ]
-    new["properties"]["permissions"] = [
+    new_dict["properties"]["permissions"] = [
         {
             "actions": ["a", "b"],
             "notActions": [],
@@ -95,32 +137,31 @@ def test_permissions_actions_order_is_ignored():
         }
     ]
 
-    d = diff_roles(old, new)
+    d = diff_roles(_to_model(old_dict), _to_model(new_dict))
     assert d["changed"] is False
 
 
 def test_permissions_change_is_detected():
-    old = _reader_role()
-    new = copy.deepcopy(old)
+    old_dict = _reader_role_dict()
+    new_dict = copy.deepcopy(old_dict)
 
-    new["properties"]["permissions"][0]["actions"].append("Microsoft.Authorization/*")
+    new_dict["properties"]["permissions"][0]["actions"].append("Microsoft.Authorization/*")
 
-    d = diff_roles(old, new)
+    d = diff_roles(_to_model(old_dict), _to_model(new_dict))
     assert d["changed"] is True
     assert any(c["path"] == "properties.permissions" for c in d["changes"])
 
 
 def test_summary_includes_paths_and_limit():
-    old = _reader_role()
-    new = copy.deepcopy(old)
+    old_dict = _reader_role_dict()
+    new_dict = copy.deepcopy(old_dict)
 
-    new["properties"]["description"] = "new desc"
-    new["properties"]["roleName"] = "Reader v2"
-    new["properties"]["assignableScopes"] = ["/", "/more"]
-    new["type"] = "Microsoft.Authorization/roleDefinitionsV2"
-    new["properties"]["updatedOn"] = "2025-12-14T00:00:00Z"
+    new_dict["properties"]["description"] = "new desc"
+    new_dict["properties"]["roleName"] = "Reader v2"
+    new_dict["properties"]["assignableScopes"] = ["/", "/more"]
+    new_dict["type"] = "Microsoft.Authorization/roleDefinitionsV2"
 
-    d = diff_roles(old, new)
+    d = diff_roles(_to_model(old_dict), _to_model(new_dict))
     s = diff_summary(d, limit=2)
     # should list two paths plus +N more
     assert "+" in s
@@ -132,35 +173,35 @@ def test_summary_includes_paths_and_limit():
 )
 def test_condition_change_detected(test_id):
     """Test that Condition add/change/remove is detected."""
-    old = _reader_role()
+    old_dict = _reader_role_dict()
 
     if test_id == "added":
         # Old has no condition, new has condition
-        new = copy.deepcopy(old)
-        new["properties"]["permissions"][0][
-            "Condition"
+        new_dict = copy.deepcopy(old_dict)
+        new_dict["properties"]["permissions"][0][
+            "condition"
         ] = "@Request[Microsoft.Authorization/roleAssignments:RoleDefinitionId] GuidEquals '123'"
-        new["properties"]["permissions"][0]["ConditionVersion"] = "2.0"
+        new_dict["properties"]["permissions"][0]["conditionVersion"] = "2.0"
     elif test_id == "changed":
         # Old has condition A, new has condition B
-        old["properties"]["permissions"][0][
-            "Condition"
+        old_dict["properties"]["permissions"][0][
+            "condition"
         ] = "@Resource[Microsoft.Authorization/roleAssignments:RoleDefinitionId] GuidEquals 'abc'"
-        old["properties"]["permissions"][0]["ConditionVersion"] = "2.0"
-        new = copy.deepcopy(old)
-        new["properties"]["permissions"][0][
-            "Condition"
+        old_dict["properties"]["permissions"][0]["conditionVersion"] = "2.0"
+        new_dict = copy.deepcopy(old_dict)
+        new_dict["properties"]["permissions"][0][
+            "condition"
         ] = "@Resource[Microsoft.Authorization/roleAssignments:RoleDefinitionId] GuidEquals 'xyz'"
     else:  # removed
         # Old has condition, new has none
-        old["properties"]["permissions"][0][
-            "Condition"
+        old_dict["properties"]["permissions"][0][
+            "condition"
         ] = "@Request[Microsoft.Authorization/roleAssignments:RoleDefinitionId] GuidEquals '123'"
-        old["properties"]["permissions"][0]["ConditionVersion"] = "2.0"
-        new = copy.deepcopy(old)
-        del new["properties"]["permissions"][0]["Condition"]
-        del new["properties"]["permissions"][0]["ConditionVersion"]
+        old_dict["properties"]["permissions"][0]["conditionVersion"] = "2.0"
+        new_dict = copy.deepcopy(old_dict)
+        del new_dict["properties"]["permissions"][0]["condition"]
+        del new_dict["properties"]["permissions"][0]["conditionVersion"]
 
-    d = diff_roles(old, new)
+    d = diff_roles(_to_model(old_dict), _to_model(new_dict))
     assert d["changed"] is True
     assert any(c["path"] == "properties.permissions" for c in d["changes"])

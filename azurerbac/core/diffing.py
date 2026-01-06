@@ -3,7 +3,17 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Any
 
-from azurerbac.azure.roles import get_permission_condition, get_permission_condition_version
+from azurerbac.azure.models import RoleDefinition
+
+# Fields that are tracked but don't constitute a "real" change on their own
+METADATA_ONLY_FIELDS = frozenset(
+    {
+        "properties.updatedOn",
+        "properties.updatedBy",
+        "properties.createdOn",
+        "properties.createdBy",
+    }
+)
 
 
 def _sorted_list(value: Iterable) -> list:
@@ -15,8 +25,8 @@ def _sorted_list(value: Iterable) -> list:
         return list(value)
 
 
-def diff_roles(old: dict | None, new: dict | None) -> dict:
-    """Compute a small, opinionated diff between two Azure role definition JSON blobs.
+def diff_roles(old: RoleDefinition | None, new: RoleDefinition | None) -> dict:
+    """Compute a small, opinionated diff between two Azure role definitions.
 
     Output is JSON-serializable and geared towards UI rendering.
     """
@@ -26,13 +36,13 @@ def diff_roles(old: dict | None, new: dict | None) -> dict:
     if old is None:
         return {
             "changed": True,
-            "changes": [{"path": "<root>", "from": None, "to": new}],
+            "changes": [{"path": "<root>", "from": None, "to": new.to_dict() if new else None}],
         }
 
     if new is None:
         return {
             "changed": True,
-            "changes": [{"path": "<root>", "from": old, "to": None}],
+            "changes": [{"path": "<root>", "from": old.to_dict() if old else None, "to": None}],
         }
 
     changes: list[dict] = []
@@ -42,48 +52,44 @@ def diff_roles(old: dict | None, new: dict | None) -> dict:
             changes.append({"path": path, "from": a, "to": b})
 
     # Common top-level fields
-    add("id", old.get("id"), new.get("id"))
-    add("name", old.get("name"), new.get("name"))
-    add("type", old.get("type"), new.get("type"))
+    add("id", old.id, new.id)
+    add("name", old.name, new.name)
+    add("type", old.type, new.type)
 
-    oldp = old.get("properties", {}) or {}
-    newp = new.get("properties", {}) or {}
+    oldp = old.properties
+    newp = new.properties
 
-    add("properties.roleName", oldp.get("roleName"), newp.get("roleName"))
-    add("properties.description", oldp.get("description"), newp.get("description"))
-    add("properties.type", oldp.get("type"), newp.get("type"))
-    add("properties.updatedOn", oldp.get("updatedOn"), newp.get("updatedOn"))
+    add("properties.roleName", oldp.role_name, newp.role_name)
+    add("properties.description", oldp.description, newp.description)
+    add("properties.type", oldp.type, newp.type)
+
+    # Metadata fields - tracked but don't count as "real" changes on their own
+    # Serialize to ISO string for JSON compatibility
+    old_updated = oldp.updated_on.isoformat() if oldp.updated_on else None
+    new_updated = newp.updated_on.isoformat() if newp.updated_on else None
+    old_created = oldp.created_on.isoformat() if oldp.created_on else None
+    new_created = newp.created_on.isoformat() if newp.created_on else None
+    add("properties.updatedOn", old_updated, new_updated)
+    add("properties.updatedBy", oldp.updated_by, newp.updated_by)
+    add("properties.createdOn", old_created, new_created)
+    add("properties.createdBy", oldp.created_by, newp.created_by)
 
     # assignableScopes (set diff)
-    old_scopes = _sorted_list(oldp.get("assignableScopes", []) or [])
-    new_scopes = _sorted_list(newp.get("assignableScopes", []) or [])
+    old_scopes = _sorted_list(oldp.assignable_scopes)
+    new_scopes = _sorted_list(newp.assignable_scopes)
     add("properties.assignableScopes", old_scopes, new_scopes)
 
-    # permissions: normalize each permission object into sorted lists
-    def norm_permissions(p: dict) -> dict[str, Any]:
-        """Normalize a permission block, including conditions."""
-        normalized: dict[str, Any] = {
-            "actions": _sorted_list(p.get("actions", []) or []),
-            "notActions": _sorted_list(p.get("notActions", []) or []),
-            "dataActions": _sorted_list(p.get("dataActions", []) or []),
-            "notDataActions": _sorted_list(p.get("notDataActions", []) or []),
-        }
-        # Include condition fields if present (ABAC conditions)
-        condition = get_permission_condition(p)
-        condition_version = get_permission_condition_version(p)
-        if condition:
-            normalized["Condition"] = condition
-        if condition_version:
-            normalized["ConditionVersion"] = condition_version
-        return normalized
-
-    old_perms = [norm_permissions(p) for p in (oldp.get("permissions", []) or [])]
-    new_perms = [norm_permissions(p) for p in (newp.get("permissions", []) or [])]
+    # permissions: normalize for comparison
+    old_perms = [p.to_comparable_dict() for p in oldp.permissions]
+    new_perms = [p.to_comparable_dict() for p in newp.permissions]
 
     if old_perms != new_perms:
         changes.append({"path": "properties.permissions", "from": old_perms, "to": new_perms})
 
-    return {"changed": len(changes) > 0, "changes": changes}
+    # Determine if there are any "real" changes (not just metadata)
+    has_meaningful_changes = any(c["path"] not in METADATA_ONLY_FIELDS for c in changes)
+
+    return {"changed": has_meaningful_changes, "changes": changes}
 
 
 def diff_summary(diff: dict, limit: int = 4) -> str:

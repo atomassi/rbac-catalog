@@ -37,17 +37,20 @@ Schema Overview
 │                             OPERATION TABLES                                    │
 ├─────────────────────────────────────────────────────────────────────────────────┤
 │                                                                                 │
-│  ┌───────────────────────────┐                                                  │
-│  │        operations         │                                                  │
-│  ├───────────────────────────┤                                                  │
-│  │ name (PK)                 │                                                  │
-│  │ provider_name             │                                                  │
-│  │ resource_type             │                                                  │
-│  │ is_data_action            │                                                  │
-│  │ operation_json (JSONB)    │                                                  │
-│  │ first_seen_at             │                                                  │
-│  │ last_seen_at              │                                                  │
-│  └───────────────────────────┘                                                  │
+│  ┌───────────────────────────────┐                                              │
+│  │          operations           │                                              │
+│  ├───────────────────────────────┤                                              │
+│  │ name (PK)                     │                                              │
+│  │ display_name                  │                                              │
+│  │ description                   │                                              │
+│  │ origin                        │                                              │
+│  │ provider_display_name         │                                              │
+│  │ resource_type                 │                                              │
+│  │ resource_type_display_name    │                                              │
+│  │ is_data_action                │                                              │
+│  │ first_seen_at                 │                                              │
+│  │ last_seen_at                  │                                              │
+│  └───────────────────────────────┘                                              │
 │                                                                                 │
 │  ┌─────────────────────────┐                                                    │
 │  │  operation_scan_status  │                                                    │
@@ -80,11 +83,15 @@ Event Types
 from __future__ import annotations
 
 import datetime as dt
+from typing import TYPE_CHECKING
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, Enum, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from .constants import EventType, RoleStatus
+
+if TYPE_CHECKING:
+    from azurerbac.azure.models import RoleDefinition
 
 
 class Base(DeclarativeBase):
@@ -108,7 +115,10 @@ class Role(Base):
     role_name: Mapped[str] = mapped_column(String(256), index=True, default="")
 
     status: Mapped[RoleStatus] = mapped_column(
-        String(32), default=RoleStatus.ACTIVE, server_default="active", index=True
+        Enum(RoleStatus, native_enum=False, values_callable=lambda e: [x.value for x in e]),
+        default=RoleStatus.ACTIVE,
+        server_default="active",
+        index=True,
     )
 
     history: Mapped[list[RoleHistory]] = relationship(
@@ -137,15 +147,6 @@ class Role(Base):
             if h.role_json is not None:
                 return h
         return None
-
-    @property
-    def role_json(self) -> dict:
-        """Get role JSON from current version.
-
-        Returns empty dict for deleted roles (where role_json is NULL).
-        """
-        cv = self.current_version
-        return cv.role_json if cv and cv.role_json else {}
 
     @property
     def last_known_json(self) -> dict:
@@ -192,15 +193,29 @@ class Role(Base):
         return None
 
     @property
-    def events(self) -> list[RoleHistory]:
-        """Get all history entries for this role."""
-        return list(self.history)
-
-    @property
     def last_seen_at(self) -> dt.datetime | None:
         """Get last seen timestamp from current version's scan."""
         cv = self.current_version
         return cv.scan.scan_timestamp if cv and cv.scan else None
+
+    @property
+    def role_definition(self) -> RoleDefinition | None:
+        """Get RoleDefinition from current version.
+
+        Returns None for deleted roles (where role_json is NULL).
+        """
+        cv = self.current_version
+        return cv.role_definition if cv else None
+
+    @property
+    def last_known_definition(self) -> RoleDefinition | None:
+        """Get the most recent RoleDefinition, even for deleted roles.
+
+        For deleted roles, returns the definition from before deletion.
+        For active roles, returns the current definition.
+        """
+        lkv = self.last_known_version
+        return lkv.role_definition if lkv else None
 
 
 class RoleHistory(Base):
@@ -251,6 +266,18 @@ class RoleHistory(Base):
     def __repr__(self) -> str:
         return f"<RoleHistory {self.role_id} v{self.version_number} {self.event_type}>"
 
+    @property
+    def role_definition(self) -> RoleDefinition | None:
+        """Parse role_json through RoleDefinition model.
+
+        Returns None for delete events (where role_json is NULL).
+        """
+        if self.role_json is None:
+            return None
+        from azurerbac.azure.models import RoleDefinition
+
+        return RoleDefinition.model_validate(self.role_json)
+
 
 Index(
     "ix_role_history_role_version",
@@ -290,14 +317,22 @@ class RoleScanStatus(Base):
 class Operation(Base):
     """Stores Azure provider operations (permissions).
 
-    Core fields are denormalized for indexing/filtering.
-    Full details available via operation_json.
+    All operation fields are stored as proper columns for efficient querying.
     """
 
     __tablename__ = "operations"
 
     # Operation name is unique, e.g., "Microsoft.AAD/domainServices/read"
     name: Mapped[str] = mapped_column(String(512), primary_key=True)
+
+    # Display name from Azure API (display.operation)
+    display_name: Mapped[str | None] = mapped_column(String(512), nullable=True)
+
+    # Description from Azure API (display.description)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Origin from Azure API
+    origin: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     # Provider display name - indexed for grouping operations by provider
     provider_display_name: Mapped[str | None] = mapped_column(
@@ -307,11 +342,11 @@ class Operation(Base):
     # Resource type name - indexed for filtering by resource type
     resource_type: Mapped[str | None] = mapped_column(String(256), nullable=True, index=True)
 
+    # Resource type display name from Azure API (display.resource)
+    resource_type_display_name: Mapped[str | None] = mapped_column(String(512), nullable=True)
+
     # Whether this is a data action - indexed for filtering
     is_data_action: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
-
-    # The full operation JSON from Azure
-    operation_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     # When this operation was first seen (set on insert, never updated)
     first_seen_at: Mapped[dt.datetime | None] = mapped_column(
@@ -322,34 +357,6 @@ class Operation(Base):
     last_seen_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: dt.datetime.now(dt.UTC), index=True
     )
-
-    @property
-    def display_name(self) -> str | None:
-        """Get display name from JSON."""
-        if self.operation_json:
-            return self.operation_json.get("display", {}).get("operation")
-        return None
-
-    @property
-    def description(self) -> str | None:
-        """Get description from JSON."""
-        if self.operation_json:
-            return self.operation_json.get("display", {}).get("description")
-        return None
-
-    @property
-    def resource_type_display_name(self) -> str | None:
-        """Get resource type display name from JSON."""
-        if self.operation_json:
-            return self.operation_json.get("display", {}).get("resource")
-        return None
-
-    @property
-    def origin(self) -> str | None:
-        """Get origin from JSON."""
-        if self.operation_json:
-            return self.operation_json.get("origin")
-        return None
 
 
 class OperationScanStatus(Base):

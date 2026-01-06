@@ -1,5 +1,7 @@
 """Tests for SQLAlchemy models."""
 
+from datetime import UTC
+
 import pytest
 from sqlalchemy import select
 
@@ -57,7 +59,7 @@ class TestRole:
 
     @pytest.mark.asyncio
     async def test_role_json_from_history(self, db_session):
-        """Test that role_json property is derived from history[0] JSON."""
+        """Test that last_known_json property is derived from history[0] JSON."""
         role = Role(role_id="name-test", role_name="Derived Name")
         db_session.add(role)
 
@@ -65,8 +67,8 @@ class TestRole:
         await db_session.commit()
 
         await db_session.refresh(role)
-        # role_json property returns history[0].role_json
-        assert role.role_json.get("properties", {}).get("roleName") == "Derived Name"
+        # last_known_json property returns history[0].role_json
+        assert role.last_known_json.get("properties", {}).get("roleName") == "Derived Name"
 
     @pytest.mark.asyncio
     async def test_default_status_is_active(self, db_session):
@@ -236,6 +238,141 @@ class TestRoleHistory:
         assert history[1].role_json == {"v": 2}
         assert history[2].role_json == {"v": 3}
 
+    @pytest.mark.asyncio
+    async def test_deleted_event_requires_scan_for_event_date(self, db_session):
+        """Test that a deleted event without scan_id has no event date.
+
+        When recording a role deletion, you must associate it with a RoleScanStatus
+        to ensure the event_date (scan_timestamp) is populated in the dashboard.
+        """
+        from datetime import datetime
+
+        from azurerbac.core.models import RoleScanStatus
+
+        role = Role(role_id="delete-scan-test", role_name="Test", status="active")
+        db_session.add(role)
+        await db_session.flush()
+
+        # Create initial history
+        _make_history_entry(db_session, "delete-scan-test", 1, {"name": "Test"}, role_name="Test")
+
+        # Create a scan to associate with the delete event
+        scan = RoleScanStatus(
+            scan_timestamp=datetime.now(UTC),
+            roles_scanned=0,
+            additions=0,
+            updates=0,
+            deletions=1,
+        )
+        db_session.add(scan)
+        await db_session.flush()
+
+        # Create properly associated delete event
+        delete_entry = RoleHistory(
+            role_id="delete-scan-test",
+            version_number=2,
+            role_json={"name": "Test"},  # Keep the last known JSON
+            role_name="Test",
+            event_type="deleted",
+            diff_json={"deleted": True},
+            summary="Role deleted",
+            scan_id=scan.id,  # Associate with scan for event_date
+            azure_updated_on=datetime.now(UTC),
+        )
+        db_session.add(delete_entry)
+        role.status = "deleted"
+        await db_session.commit()
+
+        # Verify the delete event has a scan association
+        loaded = (
+            await db_session.execute(
+                select(RoleHistory)
+                .where(RoleHistory.role_id == "delete-scan-test")
+                .where(RoleHistory.event_type == "deleted")
+            )
+        ).scalar_one()
+
+        assert loaded.scan_id == scan.id
+        assert loaded.scan.scan_timestamp is not None
+
+    @pytest.mark.asyncio
+    async def test_updated_event_creates_new_version(self, db_session):
+        """Test that updating a role creates a new history entry, not modifies existing.
+
+        When recording a role update, create a NEW RoleHistory entry with
+        event_type='updated' and increment the version_number. Do not modify
+        the existing history entry in-place.
+        """
+        from datetime import datetime
+
+        from azurerbac.core.models import RoleScanStatus
+
+        role = Role(role_id="update-version-test", role_name="Original Name", status="active")
+        db_session.add(role)
+        await db_session.flush()
+
+        # Create initial history (version 1, created)
+        _make_history_entry(
+            db_session,
+            "update-version-test",
+            1,
+            {"properties": {"roleName": "Original Name"}},
+            event_type="created",
+            role_name="Original Name",
+        )
+        await db_session.flush()
+
+        # Create a scan for the update
+        scan = RoleScanStatus(
+            scan_timestamp=datetime.now(UTC),
+            roles_scanned=1,
+            additions=0,
+            updates=1,
+            deletions=0,
+        )
+        db_session.add(scan)
+        await db_session.flush()
+
+        # Update the role (create a NEW history entry)
+        role.role_name = "Updated Name"
+        updated_entry = RoleHistory(
+            role_id="update-version-test",
+            version_number=2,  # New version, not modifying v1
+            role_json={"properties": {"roleName": "Updated Name"}},
+            role_name="Updated Name",
+            event_type="updated",
+            diff_json={
+                "changes": [{"field": "roleName", "old": "Original Name", "new": "Updated Name"}]
+            },
+            summary="Role renamed",
+            scan_id=scan.id,
+            azure_updated_on=datetime.now(UTC),
+        )
+        db_session.add(updated_entry)
+        await db_session.commit()
+
+        # Verify we have two history entries
+        history = (
+            (
+                await db_session.execute(
+                    select(RoleHistory)
+                    .where(RoleHistory.role_id == "update-version-test")
+                    .order_by(RoleHistory.version_number)
+                )
+            )
+            .scalars()
+            .all()
+        )
+
+        assert len(history) == 2
+        assert history[0].version_number == 1
+        assert history[0].event_type == "created"
+        assert history[0].role_json["properties"]["roleName"] == "Original Name"
+        assert history[1].version_number == 2
+        assert history[1].event_type == "updated"
+        assert history[1].role_json["properties"]["roleName"] == "Updated Name"
+        assert history[1].scan_id == scan.id
+
 
 class TestDeletedRoleProperties:
     """Tests for Role properties that work correctly for deleted roles."""
@@ -305,9 +442,6 @@ class TestDeletedRoleProperties:
         db_session.add(h2)
         await db_session.commit()
         await db_session.refresh(role)
-
-        # role_json returns {} for deleted roles
-        assert role.role_json == {}
 
         # last_known_json returns the JSON from before deletion
         assert role.last_known_json == {

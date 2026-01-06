@@ -37,9 +37,9 @@ class JobSpec:
     name: str
     enabled: bool
     fetch_label: str
-    fetch: Callable[[], Awaitable[list[dict]]]
-    apply: Callable[[Any, list[dict]], Awaitable[dict]]
-    on_success: Callable[[float, list[dict], dict], None]
+    fetch: Callable[[], Awaitable[list[Any]]]
+    apply: Callable[[Any, list[Any]], Awaitable[dict]]
+    on_success: Callable[[float, list[Any], dict], None]
     interval_seconds: int
 
 
@@ -50,7 +50,7 @@ def _create_job_specs(settings: Any) -> list[JobSpec]:
     async def _fetch_roles() -> list[dict]:
         return await fetch_builtin_roles()
 
-    def _on_roles_success(elapsed: float, roles: list[dict], stats: dict) -> None:
+    def _on_roles_success(elapsed: float, roles: list[Any], stats: dict) -> None:
         track_role_scan(
             duration_seconds=elapsed,
             roles_fetched=len(roles),
@@ -59,7 +59,7 @@ def _create_job_specs(settings: Any) -> list[JobSpec]:
             roles_deleted=stats.get("deleted", 0),
         )
 
-    def _on_operations_success(elapsed: float, operations: list[dict], stats: dict) -> None:
+    def _on_operations_success(elapsed: float, operations: list[Any], stats: dict) -> None:
         track_operations_scan(elapsed, len(operations))
 
     return [
@@ -176,6 +176,8 @@ class JobRunner:
             logger.info("Job disabled: %s", spec.name)
             return
 
+        logger.info("Starting job: %s", spec.name)
+
         async def work() -> tuple[list[dict], dict]:
             logger.info("%s", spec.fetch_label)
             items = await spec.fetch()
@@ -184,6 +186,10 @@ class JobRunner:
             # Azure should always return built-in roles and operations.
             # Zero results indicates an API issue, auth problem, or misconfiguration.
             if len(items) == 0:
+                logger.error(
+                    "Fetch returned 0 items for %s - possible API/auth issue",
+                    spec.name,
+                )
                 raise EmptyFetchResultError(spec.name)
 
             async with self.session_factory() as session:
@@ -202,6 +208,23 @@ async def main() -> None:
     load_dotenv()
     settings = Settings.get()
     configure_logging("worker")
+
+    logger.info("=" * 60)
+    logger.info("Azure RBAC Worker starting...")
+    logger.info("Configuration:")
+    logger.info(
+        "  Role scan enabled: %s (interval: %ds)",
+        settings.role_scan_enabled,
+        settings.roles_poll_interval_seconds,
+    )
+    logger.info(
+        "  Operations scan enabled: %s (interval: %ds)",
+        settings.operations_scan_enabled,
+        settings.operations_poll_interval_seconds,
+    )
+    logger.info("  Run role scan on startup: %s", settings.run_roles_scan_on_startup)
+    logger.info("  Run operations scan on startup: %s", settings.run_operations_scan_on_startup)
+    logger.info("=" * 60)
 
     engine = DBEngine.get()
     session_local = create_sessionmaker(engine)

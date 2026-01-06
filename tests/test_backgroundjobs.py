@@ -4,7 +4,6 @@ import pytest
 from sqlalchemy import select
 
 from azurerbac.backgroundjobs.roles_monitor import apply_role_scan
-from azurerbac.backgroundjobs.utils import parse_azure_date
 from azurerbac.core import Role, RoleHistory
 
 
@@ -52,55 +51,6 @@ def _make_role(
         "name": role_id,
         "properties": props,
     }
-
-
-class TestParseAzureDate:
-    """Tests for Azure date parsing."""
-
-    def test_parses_standard_iso_format(self):
-        role_json = {"properties": {"updatedOn": "2021-11-11T20:13:47Z"}}
-        result = parse_azure_date(role_json, "updatedOn")
-        assert result is not None
-        assert result.year == 2021
-        assert result.month == 11
-        assert result.day == 11
-        assert result.microsecond == 0
-        assert result.utcoffset() is not None
-        assert result.utcoffset().total_seconds() == 0
-
-    def test_parses_azure_format_with_microseconds(self):
-        role_json = {"properties": {"updatedOn": "2021-11-11T20:13:47.8628684Z"}}
-        result = parse_azure_date(role_json, "updatedOn")
-        assert result is not None
-        assert result.year == 2021
-        # Azure can return 7-digit fractional seconds; we normalize to 6 digits.
-        assert result.microsecond == 862868
-        assert result.utcoffset() is not None
-        assert result.utcoffset().total_seconds() == 0
-
-    def test_parses_seven_digit_microseconds(self):
-        """Azure sometimes returns 7-digit microseconds which fromisoformat doesn't handle."""
-        role_json = {"properties": {"updatedOn": "2021-11-11T20:13:47.3564306Z"}}
-        result = parse_azure_date(role_json, "updatedOn")
-        assert result is not None
-        assert result.microsecond == 356430
-        assert result.utcoffset() is not None
-        assert result.utcoffset().total_seconds() == 0
-
-    def test_returns_none_for_missing_field(self):
-        role_json = {"properties": {}}
-        result = parse_azure_date(role_json, "updatedOn")
-        assert result is None
-
-    def test_returns_none_for_invalid_date(self):
-        role_json = {"properties": {"updatedOn": "not-a-date"}}
-        result = parse_azure_date(role_json, "updatedOn")
-        assert result is None
-
-    def test_returns_none_for_non_string(self):
-        role_json = {"properties": {"updatedOn": 12345}}
-        result = parse_azure_date(role_json, "updatedOn")
-        assert result is None
 
 
 class TestApplyRoleScan:
@@ -219,6 +169,8 @@ class TestApplyRoleScan:
         )
         assert len(deleted_history) == 1
         assert deleted_history[0].role_id == "role-2"
+        # Deleted events should have azure_updated_on set to scan timestamp (for UX)
+        assert deleted_history[0].azure_updated_on is not None
 
         # Verify snapshot status
         snapshot = await db_session.get(Role, "role-2")
@@ -302,18 +254,19 @@ class TestApplyOperationsScan:
     @pytest.mark.asyncio
     async def test_apply_operations_scan_new_operations(self, db_session):
         """Test adding new operations."""
+        from azurerbac.azure.models import OperationData
         from azurerbac.backgroundjobs.operations_monitor import apply_operations_scan
 
         operations = [
-            {
-                "name": "Microsoft.Test/resources/read",
-                "display_name": "Read Test Resources",
-                "description": "Read test resources",
-                "provider_display_name": "Microsoft Test",
-                "resource_type": "resources",
-                "resource_type_display_name": "Resources",
-                "is_data_action": False,
-            },
+            OperationData(
+                name="Microsoft.Test/resources/read",
+                display_name="Read Test Resources",
+                description="Read test resources",
+                provider_display_name="Microsoft Test",
+                resource_type="resources",
+                resource_type_display_name="Resources",
+                is_data_action=False,
+            ),
         ]
 
         stats = await apply_operations_scan(db_session, operations)

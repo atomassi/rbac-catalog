@@ -4,81 +4,85 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
-from collections.abc import Callable
-from typing import Any, Final, NamedTuple
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from azurerbac.azure.models import OperationData
 from azurerbac.cache import invalidate_and_rebuild_cache
 from azurerbac.core import Operation, OperationScanStatus, utcnow
 
 logger = logging.getLogger(__name__)
 
 
-class FieldMapping(NamedTuple):
-    """Maps an Operation attribute to a dict key with optional transform.
-
-    Since attr and dict_key are always identical, we use a single 'name' field.
-    """
-
-    name: str  # Used for both Operation attribute and dict key lookup
-    transform: Callable[[Any], Any] | None = None
-
-
-# Fields to compare/update when syncing operations from Azure
-# Only includes indexed fields - other data is in operation_json
-_UPDATABLE_FIELDS: Final[tuple[FieldMapping, ...]] = (
-    FieldMapping("provider_display_name"),
-    FieldMapping("resource_type"),
-    FieldMapping("is_data_action", lambda v: bool(v or False)),
-)
-
-
-def _deduplicate_operations(operations: list[dict]) -> tuple[dict[str, dict], int]:
+def _deduplicate_operations(
+    operations: list[OperationData],
+) -> tuple[dict[str, OperationData], int]:
     """Deduplicate operations by name, keeping last occurrence."""
-    ops_by_name: dict[str, dict] = {}
+    ops_by_name: dict[str, OperationData] = {}
     duplicates = 0
-    for op_data in operations:
-        name = op_data.get("name", "")
-        if not name:
+    for op in operations:
+        if not op.name:
             continue
-        if name in ops_by_name:
+        if op.name in ops_by_name:
             duplicates += 1
-        ops_by_name[name] = op_data
+        ops_by_name[op.name] = op
     return ops_by_name, duplicates
 
 
-def _try_update(existing_op: Operation, op_data: dict, now: dt.datetime) -> bool:
+def _try_update(existing_op: Operation, op_data: OperationData, now: dt.datetime) -> bool:
     """Update operation fields if they changed. Returns True if changed."""
     changed = False
-    for field in _UPDATABLE_FIELDS:
-        new_value = op_data.get(field.name)
-        if field.transform:
-            new_value = field.transform(new_value)
-        if getattr(existing_op, field.name) != new_value:
-            setattr(existing_op, field.name, new_value)
-            changed = True
+
+    if existing_op.display_name != op_data.display_name:
+        existing_op.display_name = op_data.display_name
+        changed = True
+
+    if existing_op.description != op_data.description:
+        existing_op.description = op_data.description
+        changed = True
+
+    if existing_op.origin != op_data.origin:
+        existing_op.origin = op_data.origin
+        changed = True
+
+    if existing_op.provider_display_name != op_data.provider_display_name:
+        existing_op.provider_display_name = op_data.provider_display_name
+        changed = True
+
+    if existing_op.resource_type != op_data.resource_type:
+        existing_op.resource_type = op_data.resource_type
+        changed = True
+
+    if existing_op.resource_type_display_name != op_data.resource_type_display_name:
+        existing_op.resource_type_display_name = op_data.resource_type_display_name
+        changed = True
+
+    if existing_op.is_data_action != op_data.is_data_action:
+        existing_op.is_data_action = op_data.is_data_action
+        changed = True
+
     existing_op.last_seen_at = now
     return changed
 
 
-def _create_operation(
-    name: str, op_data: dict, now: dt.datetime, operation_json: dict | None = None
-) -> Operation:
-    """Create a new Operation from data dict."""
+def _create_operation(op_data: OperationData, now: dt.datetime) -> Operation:
+    """Create a new DB Operation from OperationData model."""
     return Operation(
-        name=name,
-        provider_display_name=op_data.get("provider_display_name"),
-        resource_type=op_data.get("resource_type"),
-        is_data_action=bool(op_data.get("is_data_action", False)),
-        operation_json=operation_json,
+        name=op_data.name,
+        display_name=op_data.display_name,
+        description=op_data.description,
+        origin=op_data.origin,
+        provider_display_name=op_data.provider_display_name,
+        resource_type=op_data.resource_type,
+        resource_type_display_name=op_data.resource_type_display_name,
+        is_data_action=op_data.is_data_action,
         first_seen_at=now,
         last_seen_at=now,
     )
 
 
-async def apply_operations_scan(session: AsyncSession, operations: list[dict]) -> dict:
+async def apply_operations_scan(session: AsyncSession, operations: list[OperationData]) -> dict:
     """Store/update operations in the database.
 
     Uses upsert logic - updates existing operations, inserts new ones.
@@ -87,28 +91,35 @@ async def apply_operations_scan(session: AsyncSession, operations: list[dict]) -
     Returns stats dict.
     """
     now = utcnow()
+    logger.info(
+        "Starting operations scan at %s with %d operations from Azure", now, len(operations)
+    )
+
     ops_by_name, duplicates = _deduplicate_operations(operations)
+    if duplicates > 0:
+        logger.debug("Deduplicated %d operations (kept last occurrence)", duplicates)
 
     # Load existing operations by name
     existing = (await session.execute(select(Operation))).scalars().all()
     existing_by_name = {op.name: op for op in existing}
+    logger.debug(
+        "Loaded %d existing operations from DB, comparing with %d fetched operations",
+        len(existing_by_name),
+        len(ops_by_name),
+    )
 
     created = updated = 0
     for name, op_data in ops_by_name.items():
         existing_op = existing_by_name.get(name)
         if existing_op is None:
-            # Get the operation JSON from the data
-            raw_json = op_data.get("operation_json")
-            session.add(_create_operation(name, op_data, now, raw_json))
+            session.add(_create_operation(op_data, now))
             created += 1
         elif _try_update(existing_op, op_data, now):
             updated += 1
 
     # Count unique providers
     providers = {
-        op.get("provider_display_name")
-        for op in ops_by_name.values()
-        if op.get("provider_display_name")
+        op.provider_display_name for op in ops_by_name.values() if op.provider_display_name
     }
 
     # Record scan status
@@ -122,6 +133,14 @@ async def apply_operations_scan(session: AsyncSession, operations: list[dict]) -
     session.add(scan_status)
 
     await session.commit()
+    logger.info(
+        "Operations scan committed: scan_id=%d, created=%d, updated=%d, total=%d, providers=%d",
+        scan_status.id,
+        created,
+        updated,
+        len(ops_by_name),
+        len(providers),
+    )
 
     # Invalidate and rebuild cache if new operations were added
     if created > 0:

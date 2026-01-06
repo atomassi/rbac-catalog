@@ -8,6 +8,35 @@ import datetime as dt
 from datetime import UTC
 from unittest.mock import MagicMock, patch
 
+from azurerbac.azure.models import Permission, RoleDefinition, RoleProperties
+from azurerbac.cache.models import CachedRole
+from azurerbac.core.constants import RoleStatus
+
+
+def _make_cached_role(
+    role_id: str, role_name: str, status: RoleStatus = RoleStatus.ACTIVE
+) -> CachedRole:
+    """Create a CachedRole for testing."""
+    definition = RoleDefinition(
+        name=role_id,
+        id=f"/providers/Microsoft.Authorization/roleDefinitions/{role_id}",
+        type="Microsoft.Authorization/roleDefinitions",
+        properties=RoleProperties(
+            role_name=role_name,
+            type="BuiltInRole",
+            description=f"Test role: {role_name}",
+            permissions=[
+                Permission(actions=["*"], not_actions=[], data_actions=[], not_data_actions=[])
+            ],
+            assignable_scopes=["/"],
+        ),
+    )
+    return CachedRole(
+        definition=definition,
+        status=status,
+    )
+
+
 # =============================================================================
 # Tests for dashboard service functions
 # These tests cover the business logic extracted from the dashboard routes
@@ -96,7 +125,7 @@ class TestFilterCachedEvents:
         ]
 
         deps = MagicMock()
-        deps.app_cache.get_role_by_id.return_value = {"role_name": "Test Role"}
+        deps.app_cache.get_role_by_id.return_value = _make_cached_role("test-id", "Test Role")
 
         result = filter_cached_events(cached_events, deps, cutoff, "all")
 
@@ -111,13 +140,9 @@ class TestSearchRolesInCache:
         from azurerbac.web.services.dashboard import search_roles_in_cache
 
         cached_roles = {
-            "id1": {"role_id": "id1", "role_name": "Storage Reader", "status": "active"},
-            "id2": {
-                "role_id": "id2",
-                "role_name": "Storage Contributor",
-                "status": "active",
-            },
-            "id3": {"role_id": "id3", "role_name": "Network Admin", "status": "active"},
+            "id1": _make_cached_role("id1", "Storage Reader"),
+            "id2": _make_cached_role("id2", "Storage Contributor"),
+            "id3": _make_cached_role("id3", "Network Admin"),
         }
 
         with patch("azurerbac.web.services.dashboard.enrich_role_with_counts") as mock_enrich:
@@ -149,8 +174,8 @@ class TestSearchRolesInCache:
         from azurerbac.web.services.dashboard import search_roles_in_cache
 
         cached_roles = {
-            "id1": {"role_id": "id1", "role_name": "Reader", "status": "active"},
-            "id2": {"role_id": "id2", "role_name": "Storage Reader", "status": "active"},
+            "id1": _make_cached_role("id1", "Reader"),
+            "id2": _make_cached_role("id2", "Storage Reader"),
         }
 
         with patch("azurerbac.web.services.dashboard.enrich_role_with_counts") as mock_enrich:
@@ -182,8 +207,8 @@ class TestSearchRolesInCache:
         from azurerbac.web.services.dashboard import search_roles_in_cache
 
         cached_roles = {
-            "id1": {"role_id": "id1", "role_name": "Test Role 1", "status": "active"},
-            "id2": {"role_id": "id2", "role_name": "Test Role 2", "status": "deleted"},
+            "id1": _make_cached_role("id1", "Test Role 1", "active"),
+            "id2": _make_cached_role("id2", "Test Role 2", "deleted"),
         }
 
         with patch("azurerbac.web.services.dashboard.enrich_role_with_counts") as mock_enrich:
@@ -216,16 +241,8 @@ class TestSearchRolesInCache:
 
         test_guid = "12345678-1234-1234-1234-123456789abc"
         cached_roles = {
-            test_guid: {
-                "role_id": test_guid,
-                "role_name": "Some Role",
-                "status": "active",
-            },
-            "other-id": {
-                "role_id": "other-id",
-                "role_name": "Other Role",
-                "status": "active",
-            },
+            test_guid: _make_cached_role(test_guid, "Some Role"),
+            "other-id": _make_cached_role("other-id", "Other Role"),
         }
 
         with patch("azurerbac.web.services.dashboard.enrich_role_with_counts") as mock_enrich:

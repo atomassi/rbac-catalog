@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any, Final
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.sql import Select
 
+from azurerbac.cache.models import CachedRole
 from azurerbac.core.constants import RoleStatus
 from azurerbac.core.utils import (
     ensure_utc,
@@ -295,7 +296,7 @@ def filter_cached_events(
             role_data = deps.app_cache.get_role_by_id(role_id) if role_id else None
             enriched_ev = {**ev}
             if role_data:
-                enriched_ev["role_name"] = role_data.get("role_name", "")
+                enriched_ev["role_name"] = role_data.role_name
             filtered_events.append(SimpleNamespace(**enriched_ev))
 
     def get_sort_key(e: SimpleNamespace) -> dt.datetime:
@@ -496,7 +497,7 @@ async def search_roles(
 
 
 def search_roles_in_cache(
-    cached_roles: dict[str, dict[str, Any]],
+    cached_roles: dict[str, CachedRole],
     q: str,
     status_filter: str,
     sort: str,
@@ -508,7 +509,7 @@ def search_roles_in_cache(
     """Search roles in memory cache.
 
     Args:
-        cached_roles: Dict of role_id -> role data
+        cached_roles: Dict of role_id -> CachedRole
         q: Search query string
         status_filter: "active", "deleted", or "all"
         sort: Sort field
@@ -524,33 +525,32 @@ def search_roles_in_cache(
 
     normalized_guid = normalize_uuid_or_none(q)
 
-    matching_roles = []
-    for role_data in cached_roles.values():
-        role_name = (role_data.get("role_name") or "").lower()
-        role_id = (role_data.get("role_id") or "").lower()
-        role_status = role_data.get("status", "active")
+    matching_roles: list[CachedRole] = []
+    for role in cached_roles.values():
+        role_name_lower = role.role_name.lower()
+        role_id_lower = role.role_id.lower()
 
         # Apply status filter
-        if status_filter == "deleted" and role_status != "deleted":
+        if status_filter == "deleted" and role.status != "deleted":
             continue
-        if status_filter == "active" and role_status != "active":
+        if status_filter == "active" and role.status != "active":
             continue
 
         # Check for GUID match
-        guid_match = normalized_guid is not None and role_data.get("role_id") == normalized_guid
+        guid_match = normalized_guid is not None and role.role_id == normalized_guid
 
         # Apply search filter
         if exact_match:
-            if q_lower in {role_name, role_id} or guid_match:
-                matching_roles.append(role_data)
-        elif q_lower in role_name or q_lower in role_id or guid_match:
-            matching_roles.append(role_data)
+            if q_lower in {role_name_lower, role_id_lower} or guid_match:
+                matching_roles.append(role)
+        elif q_lower in role_name_lower or q_lower in role_id_lower or guid_match:
+            matching_roles.append(role)
 
     total_filtered_roles = len(matching_roles)
     total_pages = _calculate_total_pages(total_filtered_roles, page_size)
 
-    # Enrich with counts - combine conversion and enrichment in single pass
-    enriched_roles = [enrich_role_with_counts(SimpleNamespace(**r)) for r in matching_roles]
+    # Enrich with counts - CachedRole has all fields needed by enrich_role_with_counts
+    enriched_roles = [enrich_role_with_counts(r) for r in matching_roles]
 
     # Sort
     _sort_enriched_roles(enriched_roles, sort=sort, order=order)

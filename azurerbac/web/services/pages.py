@@ -6,14 +6,8 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Final
 
-from azurerbac.azure.roles import (
-    extract_permission_lists,
-    get_permission_condition,
-    get_role_id,
-    get_role_name,
-    get_role_properties,
-    has_any_condition,
-)
+from azurerbac.azure.models import OperationData, Permission, RoleDefinition
+from azurerbac.cache.models import CachedRole
 from azurerbac.core.patterns import is_wildcard_pattern, matches_pattern
 
 if TYPE_CHECKING:
@@ -39,7 +33,7 @@ class OperationSearchParams:
 
 
 def operation_matches_search(op: dict, query_lower: str) -> bool:
-    """Check if an operation matches a text search query.
+    """Check if an operation dict matches a text search query.
 
     Searches across name, display_name, description, provider, and resource type.
     """
@@ -97,20 +91,17 @@ def sort_operations(
     sort: str,
     order: str,
     app_cache: AppCache,
-    *,
-    enrich_role_counts: bool = True,
 ) -> None:
     """Sort operations in-place based on sort field and order.
 
     Args:
-        operations: List of operations to sort (modified in-place)
+        operations: List of operation dicts to sort (modified in-place)
         sort: Sort field - "name", "provider", "type", or "roles"
         order: Sort order - "asc" or "desc"
         app_cache: The application cache instance
-        enrich_role_counts: If True, enrich with role counts when sorting by roles
     """
-    # Enrich with role counts if needed for sorting
-    if sort == "roles" and enrich_role_counts:
+    # Enrich with role counts for "roles" sort
+    if sort == "roles":
         for op in operations:
             op["role_count"] = app_cache.get_operation_role_count(op["name"])
 
@@ -122,7 +113,7 @@ def enrich_operations_with_role_counts(operations: list[dict], app_cache: AppCac
     """Enrich operations with role count from cache.
 
     Args:
-        operations: List of operations to enrich (modified in-place)
+        operations: List of operation dicts to enrich (modified in-place)
         app_cache: The application cache instance
     """
     for op in operations:
@@ -136,7 +127,7 @@ def enrich_operations_with_role_counts(operations: list[dict], app_cache: AppCac
 
 
 def compute_role_effective_permissions(
-    role_json: dict, all_operations: list[dict], app_cache: AppCache
+    role: RoleDefinition, all_operations: list[OperationData], app_cache: AppCache
 ) -> dict:
     """Compute the effective permissions for a role.
 
@@ -145,7 +136,7 @@ def compute_role_effective_permissions(
     - dataActions - notDataActions for data plane
 
     Args:
-        role_json: The role's JSON definition from Azure.
+        role: The RoleDefinition Pydantic model.
         all_operations: List of all known Azure operations.
         app_cache: The application cache instance.
 
@@ -163,17 +154,22 @@ def compute_role_effective_permissions(
         - raw_data_actions: list of dataAction patterns from the role
         - raw_not_data_actions: list of notDataAction patterns from the role
     """
-    props = get_role_properties(role_json)
-    permissions = props.get("permissions", [])
-    role_id = get_role_id(role_json)
+    role_id = role.name
+    permissions = role.properties.permissions
 
-    # Extract raw patterns from the role using shared utility
-    raw_actions, raw_not_actions, raw_data_actions, raw_not_data_actions = extract_permission_lists(
-        permissions
-    )
+    # Extract raw patterns from the role using model properties
+    raw_actions: list[str] = []
+    raw_not_actions: list[str] = []
+    raw_data_actions: list[str] = []
+    raw_not_data_actions: list[str] = []
+    for perm in permissions:
+        raw_actions.extend(perm.actions)
+        raw_not_actions.extend(perm.not_actions)
+        raw_data_actions.extend(perm.data_actions)
+        raw_not_data_actions.extend(perm.not_data_actions)
 
     # Check for ABAC conditions
-    has_conditions = has_any_condition(permissions)
+    has_conditions = any(perm.condition for perm in permissions)
 
     # Try to get from cache first (already computed during startup)
     if cached_coverage := app_cache.get_role_coverage(role_id):
@@ -181,8 +177,8 @@ def compute_role_effective_permissions(
     else:
         # Fallback: compute manually (shouldn't happen if precompute_all_caches ran)
         # Build sets of all known operations
-        all_control_ops = {op["name"] for op in all_operations if not op.get("is_data_action")}
-        all_data_ops = {op["name"] for op in all_operations if op.get("is_data_action")}
+        all_control_ops = {op.name for op in all_operations if not op.is_data_action}
+        all_data_ops = {op.name for op in all_operations if op.is_data_action}
 
         # Expand actions to actual operations
         def expand_to_operations(patterns: list[str], all_ops: set[str]) -> set[str]:
@@ -239,20 +235,18 @@ def _find_matching_pattern_and_condition(
     operation_name: str,
     operation_lower: str,
     is_data_action: bool,
-    permissions: list[dict],
+    permissions: list[Permission],
 ) -> tuple[str | None, bool, str | None]:
     """Find the pattern that matches the operation and check for conditions.
 
     Returns:
         (matched_pattern, has_condition, condition_text)
     """
-    action_key = "dataActions" if is_data_action else "actions"
-
     for perm in permissions:
-        actions = perm.get(action_key, []) or []
+        actions = perm.data_actions if is_data_action else perm.actions
         for pattern in actions:
             if matches_pattern(operation_name, pattern):
-                condition = get_permission_condition(perm) or ""
+                condition = perm.condition or ""
                 has_condition = bool(condition and operation_lower in condition.lower())
                 return pattern, has_condition, condition if has_condition else None
     return None, False, None
@@ -286,15 +280,14 @@ def get_roles_allowing_operation(
     if (cached := app_cache.get(cache_key)) is not None:
         return cached
 
-    if not (all_role_jsons := app_cache.get_all_role_jsons()):
+    if not (all_roles := app_cache.get_all_roles()):
         return []
 
     allowing_roles = []
     operation_lower = operation_name.lower()
 
-    for role_json in all_role_jsons:
-        props = get_role_properties(role_json)
-        role_id = get_role_id(role_json)
+    for role in all_roles:
+        role_id = role.name
         cached_coverage = app_cache.get_role_coverage(role_id)
         if not cached_coverage:
             continue
@@ -305,7 +298,7 @@ def get_roles_allowing_operation(
         if not _operation_in_set(operation_lower, operation_set):
             continue
 
-        permissions = props.get("permissions", [])
+        permissions = role.properties.permissions
         matched_pattern, has_condition, condition_text = _find_matching_pattern_and_condition(
             operation_name, operation_lower, is_data_action, permissions
         )
@@ -313,8 +306,8 @@ def get_roles_allowing_operation(
         allowing_roles.append(
             {
                 "role_id": role_id,
-                "role_name": get_role_name(role_json),
-                "role_type": props.get("type", "BuiltInRole"),
+                "role_name": role.properties.role_name,
+                "role_type": role.properties.type or "BuiltInRole",
                 "matched_pattern": matched_pattern or "*",
                 "actions_count": len(control_effective),
                 "data_actions_count": len(data_effective),
@@ -372,7 +365,7 @@ async def get_role_from_cache_or_db(
     role_history_model: Any,
     role_id: str,
     max_events: int = 200,
-) -> tuple[object | None, dict, list[dict], object | None]:
+) -> tuple[CachedRole | None, RoleDefinition | None, list[dict], object | None]:
     """Get role data from cache or fallback to database.
 
     Args:
@@ -384,7 +377,7 @@ async def get_role_from_cache_or_db(
         max_events: Maximum number of events to return.
 
     Returns:
-        Tuple of (role_object, role_json, events_list, first_scan_datetime)
+        Tuple of (cached_role, role_definition, events_list, first_scan_datetime)
     """
     import logging
 
@@ -403,19 +396,28 @@ async def get_role_from_cache_or_db(
     )
 
     if cached_role:
-        role = type("CachedRole", (), cached_role)()
-        role_json = cached_role.get("role_json", {})
         first_scan = app_cache.cache.first_scan
         cached_events = app_cache.get_events_for_role(role_id)
         events_raw = cached_events[:max_events]
-        return role, role_json, events_raw, first_scan
+        return cached_role, cached_role.definition, events_raw, first_scan
 
     logger.warning("Cache miss for role %s, falling back to database", role_id)
     async with session_local() as session:
         role = await session.get(role_snapshot_model, role_id)
         if role is None:
-            return None, {}, [], None
-        role_json = role.role_json
+            return None, None, [], None
+        role_def = role.last_known_definition
+
+        # Build CachedRole from database model
+        cached_role_from_db = (
+            CachedRole(
+                definition=role_def,
+                status=role.status,
+                last_seen_at=role.last_seen_at,
+            )
+            if role_def
+            else None
+        )
 
         # Get first scan timestamp from RoleScanStatus
         from azurerbac.core import RoleScanStatus
@@ -441,11 +443,11 @@ async def get_role_from_cache_or_db(
                 "event_type": ev.event_type,
                 "summary": ev.summary,
                 "diff_json": ev.diff_json,
-                "role_json": ev.role_json,
+                "role_json": ev.role_definition.to_dict() if ev.role_definition else None,
             }
             for ev in db_events
         ]
-        return role, role_json, events_raw, first_scan
+        return cached_role_from_db, role_def, events_raw, first_scan
 
 
 def build_role_redirect_url(
@@ -499,37 +501,35 @@ def build_role_redirect_url(
     return str(url)
 
 
-def enrich_event_with_diff(ev: dict, remove_service_role_fn: Any) -> dict:
+def enrich_event_with_diff(ev: dict) -> dict:
     """Enrich a role change event with processed diff_json.
 
     Args:
         ev: Raw event dictionary with diff_json field.
-        remove_service_role_fn: Function to sanitize role JSON.
 
     Returns:
         Enriched event dictionary with diff and diff_pretty fields.
     """
     import json
 
+    from azurerbac.azure.models import RoleDefinition
+    from azurerbac.web.utils import role_json_pretty
+
+    def to_clean_dict(role_json: dict | None) -> dict | None:
+        """Parse role JSON through RoleDefinition model for consistent output."""
+        return RoleDefinition.model_validate(role_json).to_dict() if role_json else None
+
     diff_json = ev.get("diff_json")
     if diff_json:
-        if diff_json.get("before_json"):
-            diff_json = {
-                **diff_json,
-                "before_json": remove_service_role_fn(diff_json["before_json"]),
-            }
-        if diff_json.get("after_json"):
-            diff_json = {
-                **diff_json,
-                "after_json": remove_service_role_fn(diff_json["after_json"]),
-            }
+        if before := diff_json.get("before_json"):
+            diff_json = {**diff_json, "before_json": to_clean_dict(before)}
+        if after := diff_json.get("after_json"):
+            diff_json = {**diff_json, "after_json": to_clean_dict(after)}
 
     # Process role_json for created/initial_scan events
-    role_json = ev.get("role_json")
-    role_json_pretty = ""
-    if role_json:
-        display_json = remove_service_role_fn(role_json)
-        role_json_pretty = json.dumps(display_json, indent=2, sort_keys=False, default=str)
+    role_json_pretty_str = ""
+    if (role_json := ev.get("role_json")) and (display_json := to_clean_dict(role_json)):
+        role_json_pretty_str = role_json_pretty(display_json)
 
     return {
         "scan_timestamp": ev.get("scan_timestamp"),
@@ -537,8 +537,6 @@ def enrich_event_with_diff(ev: dict, remove_service_role_fn: Any) -> dict:
         "event_type": ev.get("event_type"),
         "summary": ev.get("summary"),
         "diff": diff_json,
-        "diff_pretty": (
-            json.dumps(diff_json, indent=2, sort_keys=True, default=str) if diff_json else ""
-        ),
-        "role_json_pretty": role_json_pretty,
+        "diff_pretty": (json.dumps(diff_json, indent=2, default=str) if diff_json else ""),
+        "role_json_pretty": role_json_pretty_str,
     }

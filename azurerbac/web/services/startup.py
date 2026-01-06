@@ -27,17 +27,23 @@ async def preload_cache(session_factory: async_sessionmaker[AsyncSession]) -> No
     Args:
         session_factory: Async session factory for database access
     """
+    from azurerbac.cache.persistence import delete_cache_file
     from azurerbac.cache.refresh import rebuild_cache
     from azurerbac.telemetry import TimedDbQuery
 
     logger.info("CACHE INITIALIZATION STARTED")
     start = time.time()
 
+    # Delete any stale cache from previous sessions.
+    # This ensures we only reload cache files created by worker during this session.
+    delete_cache_file()
+    logger.info("Deleted any stale cache file from previous session")
+
     async with session_factory() as session:
         logger.info("[Step 1/2] Rebuilding cache from database...")
-        if not await rebuild_cache(session, logger_name=__name__, update_in_memory=True):
-            logger.warning("Cache rebuild failed or skipped; leaving cache uninitialized")
-            return
+        # save_to_disk=False: only worker saves to disk, app just loads
+        if not await rebuild_cache(session, update_in_memory=True, save_to_disk=False):
+            raise RuntimeError("Cache initialization failed - cannot start without cache")
 
         # Warm common role list pages (first 5 pages)
         logger.info("[Step 2/2] Preloading role pages (first 5 pages)...")
@@ -119,12 +125,8 @@ async def cache_refresh_task(session_factory: async_sessionmaker[AsyncSession]) 
                     try:
                         from azurerbac.airecommender import get_ai_recommender
 
-                        active_role_jsons: list[dict] = [
-                            r["role_json"]
-                            for r in app_cache.cache.roles_by_id.values()
-                            if r.get("status") == RoleStatus.ACTIVE and r.get("role_json")
-                        ]
-                        get_ai_recommender().initialize(active_role_jsons)
+                        active_roles = app_cache.get_all_roles()
+                        get_ai_recommender().initialize(active_roles)
                     except Exception as e:
                         logger.warning("AI recommender reload failed (non-fatal): %s", e)
 
@@ -145,7 +147,8 @@ async def cache_refresh_task(session_factory: async_sessionmaker[AsyncSession]) 
                     start_time = time.time()
                     async with session_factory() as session:
                         # update_in_memory=True ensures app_cache is updated atomically
-                        if await rebuild_cache(session, update_in_memory=True):
+                        # save_to_disk=False: only worker saves to disk
+                        if await rebuild_cache(session, update_in_memory=True, save_to_disk=False):
                             elapsed = time.time() - start_time
                             last_db_rebuild = time.time()
                             logger.info("Periodic cache rebuild completed in %.2fs", elapsed)

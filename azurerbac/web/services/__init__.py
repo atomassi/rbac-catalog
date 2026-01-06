@@ -5,8 +5,7 @@ This package contains business logic separated from route handlers.
 
 from azurerbac.web.services.cache import (
     get_all_operations,
-    get_all_role_jsons,
-    get_operations_for_recommender,
+    get_all_roles,
 )
 from azurerbac.web.services.dashboard import (
     enrich_role_with_counts,
@@ -40,9 +39,8 @@ __all__ = [
     "fetch_roles_paginated",
     "filter_cached_events",
     "get_all_operations",
-    "get_all_role_jsons",
+    "get_all_roles",
     "get_common_dashboard_data",
-    "get_operations_for_recommender",
     "get_roles_allowing_operation",
     "get_unique_providers",
     "preload_cache",

@@ -232,16 +232,16 @@
 
         <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-6">
             {% if role.status == 'deleted' %}
-            <div class="rounded-2xl bg-gradient-to-r from-red-50 to-rose-50 p-6 mb-6 border border-red-200 shadow-lg">
+            <div class="rounded-2xl bg-gradient-to-r from-red-50 to-rose-50 dark:bg-none dark:bg-red-900/30 p-6 mb-6 border border-red-200 dark:border-red-700 shadow-lg">
                 <div class="flex items-center">
-                    <div class="flex-shrink-0 bg-red-100 rounded-xl p-3">
-                        <svg class="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <div class="flex-shrink-0 bg-red-100 dark:bg-red-900/50 rounded-xl p-3">
+                        <svg class="h-6 w-6 text-red-600 dark:text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                         </svg>
                     </div>
                     <div class="ml-4">
-                        <h3 class="text-lg font-semibold text-red-800">Role Deleted</h3>
-                        <p class="text-sm text-red-700">This role has been deleted from Azure.</p>
+                        <h3 class="text-lg font-semibold text-red-800 dark:text-yellow-400">Role Deleted</h3>
+                        <p class="text-sm text-red-700 dark:text-yellow-400">This role has been deleted from Azure.</p>
                     </div>
                 </div>
             </div>
@@ -282,8 +282,6 @@
                         <dd class="mt-1 text-sm font-mono tabular-nums text-slate-500 sm:mt-0 sm:col-span-2">
                             {%- if role.created_on -%}
                                 {{ role.created_on | format_date }}
-                            {%- elif role.role_json and role.role_json.properties and role.role_json.properties.createdOn -%}
-                                {{ role.role_json.properties.createdOn | format_date }}
                             {%- elif role.last_known_json and role.last_known_json.properties and role.last_known_json.properties.createdOn -%}
                                 {{ role.last_known_json.properties.createdOn | format_date }}
                             {%- else -%}
@@ -300,10 +298,10 @@
                                 {{ role.last_seen_at | format_date if role.last_seen_at else '(not available)' }}
                             {%- elif role.updated_on -%}
                                 {{ role.updated_on | format_date }}
-                            {%- elif role.role_json and role.role_json.properties and role.role_json.properties.updatedOn -%}
-                                {{ role.role_json.properties.updatedOn | format_date }}
-                            {%- elif role.role_json and role.role_json.properties and role.role_json.properties.createdOn -%}
-                                {{ role.role_json.properties.createdOn | format_date }}
+                            {%- elif role.last_known_json and role.last_known_json.properties and role.last_known_json.properties.updatedOn -%}
+                                {{ role.last_known_json.properties.updatedOn | format_date }}
+                            {%- elif role.last_known_json and role.last_known_json.properties and role.last_known_json.properties.createdOn -%}
+                                {{ role.last_known_json.properties.createdOn | format_date }}
                             {%- else -%}
                                 <span class="text-slate-400">(not available)</span>
                             {%- endif -%}
@@ -414,11 +412,11 @@
                                                     <div class="px-4 overflow-x-auto font-mono text-xs leading-6 bg-white max-h-96 overflow-y-auto">
 {%- for line in ev.diff.before_json | full_json_diff(ev.diff.after_json) %}
 {% if line.type == 'removed' -%}
-<div class="bg-red-50 text-red-800 -mx-4 px-4 whitespace-pre border-l-4 border-red-400">- {{ line.text }}</div>
+<div class="bg-red-50 text-red-800 -mx-4 px-4 whitespace-pre-wrap break-words border-l-4 border-red-400">- {{ line.text }}</div>
 {% elif line.type == 'added' -%}
-<div class="bg-emerald-50 text-emerald-800 -mx-4 px-4 whitespace-pre border-l-4 border-emerald-400">+ {{ line.text }}</div>
+<div class="bg-emerald-50 text-emerald-800 -mx-4 px-4 whitespace-pre-wrap break-words border-l-4 border-emerald-400">+ {{ line.text }}</div>
 {% else -%}
-<div class="text-slate-500 whitespace-pre">  {{ line.text }}</div>
+<div class="text-slate-500 whitespace-pre-wrap break-words">  {{ line.text }}</div>
 {% endif -%}
 {%- endfor %}
                                                     </div>

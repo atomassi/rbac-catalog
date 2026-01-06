@@ -890,7 +890,10 @@
                                     {% for ev in events %}
                                     <tr class="hover:bg-slate-50/50 transition-colors">
                                         <td class="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm font-mono tabular-nums text-slate-500">
-                                            {{ ev.azure_updated_on.strftime('%Y-%m-%d') if ev.azure_updated_on else '' }}
+                                            {# Deleted events use scan_timestamp (no Azure timestamp for deletions) #}
+                                            {# Other events prefer azure_updated_on but fall back to scan_timestamp #}
+                                            {% set event_date = ev.azure_updated_on or ev.scan_timestamp %}
+                                            {{ event_date.strftime('%Y-%m-%d') if event_date else '' }}
                                         </td>
                                         <td class="px-4 sm:px-6 py-3 sm:py-4">
                                             <div class="text-sm font-semibold text-azure-600">

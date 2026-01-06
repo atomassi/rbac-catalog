@@ -8,6 +8,7 @@ from azurerbac.airecommender.ai_recommender import (
     EngineNotAvailableError,
 )
 from azurerbac.airecommender.modes import RecommenderMode
+from azurerbac.azure.models import RoleDefinition
 
 # =============================================================================
 # AIRecommendation Tests
@@ -177,8 +178,8 @@ class TestAIRoleRecommender:
         """Test that hash is deterministic for same input."""
         recommender = AIRoleRecommender()
         roles = [
-            {"name": "role-1", "properties": {"roleName": "Role One"}},
-            {"name": "role-2", "properties": {"roleName": "Role Two"}},
+            RoleDefinition(name="role-1", properties={"roleName": "Role One"}),
+            RoleDefinition(name="role-2", properties={"roleName": "Role Two"}),
         ]
         hash1 = recommender._compute_roles_hash(roles)
         hash2 = recommender._compute_roles_hash(roles)
@@ -188,27 +189,27 @@ class TestAIRoleRecommender:
         """Test that hash is same regardless of role order."""
         recommender = AIRoleRecommender()
         roles_a = [
-            {"name": "role-1", "properties": {"roleName": "Role One"}},
-            {"name": "role-2", "properties": {"roleName": "Role Two"}},
+            RoleDefinition(name="role-1", properties={"roleName": "Role One"}),
+            RoleDefinition(name="role-2", properties={"roleName": "Role Two"}),
         ]
         roles_b = [
-            {"name": "role-2", "properties": {"roleName": "Role Two"}},
-            {"name": "role-1", "properties": {"roleName": "Role One"}},
+            RoleDefinition(name="role-2", properties={"roleName": "Role Two"}),
+            RoleDefinition(name="role-1", properties={"roleName": "Role One"}),
         ]
         assert recommender._compute_roles_hash(roles_a) == recommender._compute_roles_hash(roles_b)
 
     def test_compute_roles_hash_changes_with_different_roles(self):
         """Test that hash changes when roles are different."""
         recommender = AIRoleRecommender()
-        roles_a = [{"name": "role-1"}]
-        roles_b = [{"name": "role-2"}]
+        roles_a = [RoleDefinition(name="role-1")]
+        roles_b = [RoleDefinition(name="role-2")]
         assert recommender._compute_roles_hash(roles_a) != recommender._compute_roles_hash(roles_b)
 
     def test_compute_roles_hash_detects_added_role(self):
         """Test that hash changes when a role is added."""
         recommender = AIRoleRecommender()
-        roles_a = [{"name": "role-1"}]
-        roles_b = [{"name": "role-1"}, {"name": "role-2"}]
+        roles_a = [RoleDefinition(name="role-1")]
+        roles_b = [RoleDefinition(name="role-1"), RoleDefinition(name="role-2")]
         assert recommender._compute_roles_hash(roles_a) != recommender._compute_roles_hash(roles_b)
 
     def test_compute_roles_hash_empty_list(self):
@@ -218,20 +219,10 @@ class TestAIRoleRecommender:
         assert hash_empty is not None
         assert len(hash_empty) == 32  # Full MD5 hash
 
-    def test_compute_roles_hash_uses_name_or_id(self):
-        """Test that hash uses 'name' field, falling back to 'id'."""
-        recommender = AIRoleRecommender()
-        roles_with_name = [{"name": "role-1"}]
-        roles_with_id = [{"id": "role-1"}]
-        # Should produce same hash since both resolve to "role-1"
-        assert recommender._compute_roles_hash(roles_with_name) == recommender._compute_roles_hash(
-            roles_with_id
-        )
-
     def test_compute_roles_hash_length(self):
         """Test that hash is exactly 32 characters (full MD5)."""
         recommender = AIRoleRecommender()
-        roles = [{"name": f"role-{i}"} for i in range(100)]
+        roles = [RoleDefinition(name=f"role-{i}") for i in range(100)]
         hash_value = recommender._compute_roles_hash(roles)
         assert len(hash_value) == 32
         assert hash_value.isalnum()
@@ -240,12 +231,15 @@ class TestAIRoleRecommender:
         """Test that initialize creates a knowledge base."""
         recommender = AIRoleRecommender()
         test_roles = [
-            {
-                "id": "test-guid",
-                "role_name": "Test Role",
-                "description": "Test description",
-                "permissions": [{"actions": ["Microsoft.Test/*/read"]}],
-            }
+            RoleDefinition(
+                id="test-id",
+                name="test-guid",
+                properties={
+                    "roleName": "Test Role",
+                    "description": "Test description",
+                    "permissions": [{"actions": ["Microsoft.Test/*/read"]}],
+                },
+            )
         ]
         recommender.initialize(test_roles)
         assert recommender._knowledge_base is not None
@@ -333,12 +327,15 @@ class TestRecommenderEngineAvailability:
         """Create an initialized recommender with minimal roles."""
         recommender = AIRoleRecommender()
         test_roles = [
-            {
-                "id": "test-guid",
-                "role_name": "Test Role",
-                "description": "Test description",
-                "permissions": [{"actions": ["Microsoft.Test/*/read"]}],
-            }
+            RoleDefinition(
+                id="test-id",
+                name="test-guid",
+                properties={
+                    "roleName": "Test Role",
+                    "description": "Test description",
+                    "permissions": [{"actions": ["Microsoft.Test/*/read"]}],
+                },
+            )
         ]
         recommender.initialize(test_roles)
         return recommender
@@ -401,3 +398,136 @@ class TestRecommenderEngineAvailability:
         # Should list both missing components
         assert "Ollama LLM" in exc_info.value.missing_components
         assert "sentence-transformers" in exc_info.value.missing_components
+
+
+# =============================================================================
+# AI Recommender Query Edge Cases
+# =============================================================================
+
+
+class TestAIRecommenderQueryEdgeCases:
+    """Edge cases for query handling in AI recommender."""
+
+    @pytest.fixture
+    def query_test_recommender(self):
+        """Create an initialized recommender for query testing."""
+        from azurerbac.airecommender.ai_recommender import AIRoleRecommender
+
+        recommender = AIRoleRecommender()
+        # Minimal initialization with test roles
+        roles = [
+            RoleDefinition.model_validate(
+                {
+                    "name": "test-role-1",
+                    "properties": {
+                        "roleName": "Storage Blob Reader",
+                        "description": "Read storage blob data",
+                        "permissions": [
+                            {"actions": ["Microsoft.Storage/storageAccounts/blobServices/read"]}
+                        ],
+                    },
+                }
+            ),
+            RoleDefinition.model_validate(
+                {
+                    "name": "test-role-2",
+                    "properties": {
+                        "roleName": "Virtual Machine Reader",
+                        "description": "Read virtual machines",
+                        "permissions": [{"actions": ["Microsoft.Compute/virtualMachines/read"]}],
+                    },
+                }
+            ),
+        ]
+        recommender.initialize(roles)
+        return recommender
+
+    def test_empty_query_returns_results(self, query_test_recommender):
+        """Empty query string still returns results (TF-IDF handles it)."""
+        # TF-IDF mode should handle empty queries gracefully
+        recommendations, _mode = query_test_recommender.recommend(
+            query="", top_k=5, requested_mode="tfidf"
+        )
+        # Empty query may return empty or all results depending on implementation
+        assert isinstance(recommendations, list)
+
+    def test_whitespace_only_query(self, query_test_recommender):
+        """Whitespace-only query handled gracefully."""
+        recommendations, _mode = query_test_recommender.recommend(
+            query="   ", top_k=5, requested_mode="tfidf"
+        )
+        assert isinstance(recommendations, list)
+
+    def test_very_long_query(self, query_test_recommender):
+        """Very long query doesn't cause issues."""
+        long_query = "read storage " * 500  # ~6000 characters
+        recommendations, _mode = query_test_recommender.recommend(
+            query=long_query, top_k=5, requested_mode="tfidf"
+        )
+        assert isinstance(recommendations, list)
+
+    def test_special_characters_in_query(self, query_test_recommender):
+        """Query with special characters handled."""
+        special_query = "read <script>alert('xss')</script> data; DROP TABLE roles;--"
+        recommendations, _mode = query_test_recommender.recommend(
+            query=special_query, top_k=5, requested_mode="tfidf"
+        )
+        assert isinstance(recommendations, list)
+
+    def test_unicode_in_query(self, query_test_recommender):
+        """Query with unicode characters handled."""
+        unicode_query = "读取存储 Lesen Speicher читать хранилище"
+        recommendations, _mode = query_test_recommender.recommend(
+            query=unicode_query, top_k=5, requested_mode="tfidf"
+        )
+        assert isinstance(recommendations, list)
+
+    def test_top_k_zero_returns_empty(self, query_test_recommender):
+        """top_k=0 returns empty list."""
+        recommendations, _mode = query_test_recommender.recommend(
+            query="read storage", top_k=0, requested_mode="tfidf"
+        )
+        assert recommendations == []
+
+    def test_top_k_negative_returns_empty(self, query_test_recommender):
+        """top_k=-1 returns empty list (treated as 0)."""
+        recommendations, _mode = query_test_recommender.recommend(
+            query="read storage", top_k=-1, requested_mode="tfidf"
+        )
+        assert recommendations == []
+
+    def test_top_k_larger_than_roles(self, query_test_recommender):
+        """top_k larger than available roles returns all roles."""
+        recommendations, _mode = query_test_recommender.recommend(
+            query="read", top_k=1000, requested_mode="tfidf"
+        )
+        # Should return at most the number of available roles (2)
+        assert len(recommendations) <= 2
+
+
+class TestOwnerRoleExclusion:
+    """Tests for _should_exclude_owner method."""
+
+    def test_exclude_owner_default(self):
+        """Owner excluded by default when not mentioned in query."""
+        from azurerbac.airecommender.ai_recommender import AIRoleRecommender
+
+        recommender = AIRoleRecommender()
+        assert recommender._should_exclude_owner("read storage blobs")
+        assert recommender._should_exclude_owner("manage virtual machines")
+
+    def test_include_owner_when_mentioned(self):
+        """Owner included when explicitly mentioned in query."""
+        from azurerbac.airecommender.ai_recommender import AIRoleRecommender
+
+        recommender = AIRoleRecommender()
+        assert not recommender._should_exclude_owner("I need owner access")
+        assert not recommender._should_exclude_owner("Give me OWNER permissions")
+
+    def test_include_owner_for_full_access(self):
+        """Owner included when 'full access' mentioned."""
+        from azurerbac.airecommender.ai_recommender import AIRoleRecommender
+
+        recommender = AIRoleRecommender()
+        assert not recommender._should_exclude_owner("I need full access to everything")
+        assert not recommender._should_exclude_owner("FULL ACCESS required")

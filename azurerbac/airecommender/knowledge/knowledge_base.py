@@ -11,9 +11,12 @@ import logging
 import re
 from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Final
+from typing import TYPE_CHECKING, Any, Final
 
 from azurerbac.airecommender.knowledge.azure_knowledge import USE_CASE_PATTERNS
+
+if TYPE_CHECKING:
+    from azurerbac.azure.models import RoleDefinition
 
 logger = logging.getLogger(__name__)
 
@@ -118,7 +121,7 @@ class RoleKnowledgeBase:
 
     def build_from_roles(
         self,
-        roles: list[dict[str, Any]],
+        roles: list[RoleDefinition],
     ) -> None:
         """Build searchable knowledge base from role definitions.
 
@@ -128,12 +131,6 @@ class RoleKnowledgeBase:
         """
         # Import inside function to avoid circular import:
         # cache.refresh imports airecommender, airecommender imports knowledge_base
-        from azurerbac.azure.roles import (
-            get_role_description,
-            get_role_id,
-            get_role_name,
-            get_role_properties,
-        )
         from azurerbac.cache import app_cache
 
         # Reset state for fresh build
@@ -146,15 +143,14 @@ class RoleKnowledgeBase:
         role_to_patterns = _build_role_to_patterns_index()
 
         for role in roles:
-            role_id = get_role_id(role)
-            role_name = get_role_name(role)
-            description = get_role_description(role)
+            role_id = role.name  # GUID is in 'name' field
+            role_name = role.properties.role_name
+            description = role.properties.description
 
-            # Extract raw permission patterns
-            props = get_role_properties(role)
-            permissions = props.get("permissions", [{}])[0]
-            raw_actions = permissions.get("actions") or []
-            raw_data_actions = permissions.get("dataActions") or []
+            # Get permissions from first permission entry (standard Azure format)
+            first_perm = role.properties.permissions[0] if role.properties.permissions else None
+            raw_actions = first_perm.actions if first_perm else []
+            raw_data_actions = first_perm.data_actions if first_perm else []
 
             # Get EFFECTIVE permissions from precomputed cache
             cached_coverage = app_cache.get_role_coverage(role_id)

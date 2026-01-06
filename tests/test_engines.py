@@ -29,6 +29,7 @@ from azurerbac.airecommender.engines import (
     top_k_similar,
 )
 from azurerbac.airecommender.modes import RecommenderMode
+from azurerbac.azure.models import RoleDefinition
 
 
 class TestEngineRegistry:
@@ -889,11 +890,11 @@ class TestEnhancedTFIDFRecommender:
     def sample_roles(self):
         """Sample role data for testing."""
         return [
-            {
-                "name": "role-id-1",
-                "properties": {
+            RoleDefinition(
+                name="role-id-1",
+                properties={
                     "roleName": "Storage Blob Data Reader",
-                    "description": "Allows for read access to Azure Storage blob containers and data",  # noqa: E501
+                    "description": "Allows for read access to Azure Storage blob containers",
                     "permissions": [
                         {
                             "actions": ["Microsoft.Storage/storageAccounts/blobServices/read"],
@@ -905,10 +906,10 @@ class TestEnhancedTFIDFRecommender:
                         }
                     ],
                 },
-            },
-            {
-                "name": "role-id-2",
-                "properties": {
+            ),
+            RoleDefinition(
+                name="role-id-2",
+                properties={
                     "roleName": "Virtual Machine Contributor",
                     "description": "Lets you manage virtual machines, but not access to them",
                     "permissions": [
@@ -923,12 +924,12 @@ class TestEnhancedTFIDFRecommender:
                         }
                     ],
                 },
-            },
-            {
-                "name": "role-id-3",
-                "properties": {
+            ),
+            RoleDefinition(
+                name="role-id-3",
+                properties={
                     "roleName": "Key Vault Reader",
-                    "description": "Read metadata of key vaults and its certificates, keys, and secrets",  # noqa: E501
+                    "description": "Read metadata of key vaults and certificates",
                     "permissions": [
                         {
                             "actions": ["Microsoft.KeyVault/vaults/read"],
@@ -938,7 +939,7 @@ class TestEnhancedTFIDFRecommender:
                         }
                     ],
                 },
-            },
+            ),
         ]
 
     def test_recommender_initialize_with_roles(self, sample_roles):
@@ -1022,14 +1023,14 @@ class TestEnhancedTFIDFRecommender:
     def test_build_document_with_synonyms(self):
         """Test that synonyms are added to documents."""
         recommender = EnhancedTFIDFRecommender()
-        role = {
-            "name": "test-role",
-            "properties": {
+        role = RoleDefinition(
+            name="test-role",
+            properties={
                 "roleName": "Storage Account Contributor",
                 "description": "Manage storage accounts",
                 "permissions": [],
             },
-        }
+        )
         doc = recommender._build_document(role)
         # Should include storage-related synonyms
         assert "storage" in doc.lower()
@@ -1037,14 +1038,14 @@ class TestEnhancedTFIDFRecommender:
     def test_build_document_with_permission_levels(self):
         """Test that permission levels are added to documents."""
         recommender = EnhancedTFIDFRecommender()
-        role = {
-            "name": "test-role",
-            "properties": {
+        role = RoleDefinition(
+            name="test-role",
+            properties={
                 "roleName": "Storage Reader",
                 "description": "Read access to storage",
                 "permissions": [],
             },
-        }
+        )
         doc = recommender._build_document(role)
         # Should include reader-related keywords
         assert "reader" in doc.lower() or "read" in doc.lower()

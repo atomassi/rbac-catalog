@@ -99,7 +99,7 @@ def normalize_with_sigmoid(
 
 
 def normalize_scores(candidates: list[RankedRole]) -> list[RankedRole]:
-    """Legacy min-max normalization. Prefer engine-specific normalizers.
+    """Min-max normalization for role scores.
 
     Converts raw scores to 60-95% range based on relative position.
     WARNING: A bad match can still get 95% if it's the "best" result.

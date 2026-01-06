@@ -18,7 +18,7 @@ from azurerbac.airecommender.exceptions import KnowledgeBaseNotInitializedError
 from azurerbac.airecommender.knowledge import RoleKnowledgeBase
 from azurerbac.airecommender.llm import OllamaClient
 from azurerbac.airecommender.modes import RecommenderMode
-from azurerbac.azure.roles import get_role_id
+from azurerbac.azure.models import RoleDefinition
 from azurerbac.core.singleton import ThreadSafeSingleton
 
 if TYPE_CHECKING:
@@ -104,7 +104,7 @@ class AIRoleRecommender:
         self._initialized = False
         self._roles_hash: str | None = None
 
-    def _init_enhanced_tfidf(self, roles: list[dict]) -> None:
+    def _init_enhanced_tfidf(self, roles: list[RoleDefinition]) -> None:
         """Initialize enhanced TF-IDF + BM25 recommender."""
         try:
             from azurerbac.airecommender.engines import EnhancedTFIDFRecommender
@@ -145,12 +145,12 @@ class AIRoleRecommender:
 
     def initialize(
         self,
-        roles: list[dict],
+        roles: list[RoleDefinition],
     ) -> None:
         """Initialize the recommender with role data from the database.
 
         Args:
-            roles: List of role JSON objects from the database
+            roles: List of RoleDefinition Pydantic models
         """
         # Compute hash of sorted role IDs to detect changes
         current_hash = self._compute_roles_hash(roles)
@@ -185,11 +185,11 @@ class AIRoleRecommender:
             f"Ollama: {self._ollama_client.is_connected if self._ollama_client else False}"
         )
 
-    def _compute_roles_hash(self, roles: list[dict]) -> str:
+    def _compute_roles_hash(self, roles: list[RoleDefinition]) -> str:
         """Compute a hash of sorted role IDs to detect changes."""
         from azurerbac.core.utils import content_hash
 
-        role_ids = sorted(get_role_id(role) for role in roles)
+        role_ids = sorted(role.name for role in roles)
         combined = ",".join(role_ids)
         return content_hash(combined)
 
@@ -200,21 +200,47 @@ class AIRoleRecommender:
         using the @EngineRegistry.register decorator, eliminating hardcoded mappings.
 
         Lazily connects to Ollama only when an LLM-requiring mode is requested.
+        Raises EngineNotAvailableError if required components are unavailable.
         """
         if self._knowledge_base is None:
             raise KnowledgeBaseNotInitializedError()
 
+        missing_components: list[str] = []
+
         # Lazy Ollama connection - only connect when LLM mode is actually used
-        if mode.requires_llm and self._ollama_client and not self._ollama_client.is_connected:
-            logger.debug("LLM mode requested, attempting lazy Ollama connection...")
-            if self._ollama_client.try_connect():
-                logger.debug("Ollama connected successfully, initializing role names")
-                # Initialize role names for fuzzy matching
-                role_names = self._knowledge_base.get_all_role_names()
-                if role_names:
-                    self._ollama_client.set_known_role_names(role_names)
-            else:
-                logger.warning("Ollama connection failed, LLM mode will be unavailable")
+        if mode.requires_llm:
+            if not self._ollama_client:
+                missing_components.append("Ollama LLM")
+            elif not self._ollama_client.is_connected:
+                logger.debug("LLM mode requested, attempting lazy Ollama connection...")
+                if self._ollama_client.try_connect():
+                    logger.debug("Ollama connected successfully, initializing role names")
+                    role_names = self._knowledge_base.get_all_role_names()
+                    if role_names:
+                        self._ollama_client.set_known_role_names(role_names)
+                else:
+                    missing_components.append("Ollama LLM")
+
+        # Check embeddings availability
+        if mode.requires_embeddings and (
+            not self._embedding_model or not self._embedding_model.is_loaded
+        ):
+            missing_components.append("sentence-transformers")
+
+        # Check ColBERT availability (uses ragatouille library)
+        if mode == RecommenderMode.COLBERT:
+            import importlib.util
+
+            if importlib.util.find_spec("ragatouille") is None:
+                missing_components.append("ragatouille")
+
+        # Fail fast if any required components are missing
+        if missing_components:
+            raise EngineNotAvailableError(
+                engine_name=mode.value,
+                mode=mode.value,
+                missing_components=missing_components,
+            )
 
         return EngineRegistry.create(
             mode=mode,
@@ -260,28 +286,8 @@ class AIRoleRecommender:
         # Check if we should exclude Owner
         exclude_owner = self._should_exclude_owner(query)
 
-        # Get the appropriate engine
+        # Get the appropriate engine (validates availability and throws if missing)
         engine = self._get_engine(mode)
-
-        # Check if engine is available - raise error instead of silent fallback
-        if not engine.is_available():
-            missing = []
-            if mode.requires_llm and (
-                not self._ollama_client or not self._ollama_client.is_connected
-            ):
-                missing.append("Ollama LLM")
-            if mode.requires_embeddings and (
-                not self._embedding_model or not self._embedding_model.is_loaded
-            ):
-                missing.append("sentence-transformers")
-            # ColBERT requires ragatouille
-            if mode == RecommenderMode.COLBERT:
-                missing.append("ragatouille")
-            raise EngineNotAvailableError(
-                engine_name=engine.name,
-                mode=mode.value,
-                missing_components=missing,
-            )
 
         logger.debug("Using %s engine for query: %s...", engine.name, query[:50])
 
@@ -314,7 +320,7 @@ def reset_ai_recommender() -> None:
 
 def ai_recommend_roles(
     query: str,
-    roles: list[dict],
+    roles: list[RoleDefinition],
     top_k: int = 5,
     requested_mode: str | None = None,
 ) -> tuple[list[dict], str]:
@@ -322,7 +328,7 @@ def ai_recommend_roles(
 
     Args:
         query: Natural language description
-        roles: List of role JSON objects from database
+        roles: List of RoleDefinition Pydantic models
         top_k: Number of recommendations
         requested_mode: Requested recommender mode
 

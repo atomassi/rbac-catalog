@@ -26,7 +26,7 @@ from azurerbac.airecommender.knowledge import (
     find_matching_use_cases,
     get_negative_patterns,
 )
-from azurerbac.azure.roles import get_role_id, get_role_name, get_role_properties
+from azurerbac.azure.models import RoleDefinition
 
 logger = logging.getLogger(__name__)
 
@@ -193,12 +193,12 @@ class EnhancedTFIDFRecommender:
 
     def __init__(self) -> None:
         self._bm25_index = BM25Index()
-        self._role_data: dict[str, dict] = {}  # role_id -> role metadata
+        self._role_data: dict[str, RoleDefinition] = {}  # role_id -> role metadata
         # lowercase name -> (original_name, role_id) for lookup and iteration
         self._role_name_to_id: dict[str, tuple[str, str]] = {}
         self._initialized = False
 
-    def _build_document(self, role: dict) -> str:
+    def _build_document(self, role: RoleDefinition) -> str:
         """Build an enhanced document representation for a role.
 
         Creates a rich text document that captures:
@@ -207,9 +207,8 @@ class EnhancedTFIDFRecommender:
         - Actions/permissions as readable text
         - Related keywords
         """
-        props = get_role_properties(role)
-        name = props.get("roleName", "")
-        description = props.get("description", "")
+        name = role.properties.role_name
+        description = role.properties.description
 
         # Start with name (repeated for emphasis)
         parts = [name, name.lower(), name]
@@ -219,10 +218,9 @@ class EnhancedTFIDFRecommender:
             parts.append(description)
 
         # Extract action keywords from permissions
-        permissions = props.get("permissions", [])
-        for perm in permissions:
-            parts.extend(_action_to_keywords(action) for action in perm.get("actions", []))
-            parts.extend(_action_to_keywords(action) for action in perm.get("dataActions", []))
+        for perm in role.properties.permissions:
+            parts.extend(_action_to_keywords(action) for action in perm.actions)
+            parts.extend(_action_to_keywords(action) for action in perm.data_actions)
 
         # Add Azure service synonyms if role name matches
         name_lower = name.lower()
@@ -237,11 +235,11 @@ class EnhancedTFIDFRecommender:
 
         return " ".join(parts)
 
-    def initialize(self, roles: list[dict]) -> None:
+    def initialize(self, roles: list[RoleDefinition]) -> None:
         """Initialize the recommender with role data.
 
         Args:
-            roles: List of role JSON objects from the database
+            roles: List of RoleDefinition Pydantic models
         """
         if self._initialized:
             return
@@ -251,8 +249,8 @@ class EnhancedTFIDFRecommender:
         documents = []
 
         for role in roles:
-            role_id = get_role_id(role)
-            role_name = get_role_name(role)
+            role_id = role.name  # GUID is in 'name' field
+            role_name = role.properties.role_name
 
             if not role_id or not role_name:
                 continue
@@ -274,7 +272,7 @@ class EnhancedTFIDFRecommender:
     def _get_role_name(self, role_id: str) -> str:
         """Get role name from role ID."""
         role = self._role_data.get(role_id)
-        return get_role_name(role) if role else role_id
+        return role.properties.role_name if role else role_id
 
     def _score_pattern_match(self, query: str) -> dict[str, float]:
         """Score roles based on USE_CASE_PATTERNS matching.

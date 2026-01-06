@@ -7,8 +7,8 @@ import time
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from azurerbac.azure.roles import get_permission_actions, get_role_id, get_role_properties
-from azurerbac.cache.models import CacheData, CacheMetadata, build_indexes
+from azurerbac.azure.models import OperationData, RoleDefinition
+from azurerbac.cache.models import CacheData, CachedRole, CacheMetadata, build_indexes
 from azurerbac.cache.utils import build_operations_prefix_index, get_matching_operations
 from azurerbac.core.patterns import is_wildcard_pattern
 
@@ -52,21 +52,22 @@ def _precompute_common_patterns(
         get_matching_operations(pattern, all_data_ops, data_cache_key, pattern_match)
 
 
-def _collect_role_patterns(roles: list[dict]) -> set[str]:
+def _collect_role_patterns(roles: list[RoleDefinition]) -> set[str]:
     """Collect all unique wildcard action patterns from roles."""
     patterns: set[str] = set()
     for role in roles:
-        props = get_role_properties(role)
-        for perm in props.get("permissions", []):
-            actions, not_actions, data_actions, not_data_actions = get_permission_actions(perm)
-            for action in actions + not_actions + data_actions + not_data_actions:
+        for perm in role.properties.permissions:
+            all_actions = (
+                perm.actions + perm.not_actions + perm.data_actions + perm.not_data_actions
+            )
+            for action in all_actions:
                 if is_wildcard_pattern(action):
                     patterns.add(action.lower())
     return patterns
 
 
 def _compute_role_coverage(
-    role: dict,
+    role: RoleDefinition,
     all_control_ops: set[str],
     all_data_ops: set[str],
     control_cache_key: int,
@@ -76,18 +77,15 @@ def _compute_role_coverage(
     data_ops_lower_to_orig: dict[str, str],
 ) -> tuple[set[str], set[str]]:
     """Compute effective operations (granted - excluded) for a role."""
-    props = get_role_properties(role)
     control_granted: set[str] = set()
     data_granted: set[str] = set()
     control_excluded: set[str] = set()
     data_excluded: set[str] = set()
 
-    for perm in props.get("permissions", []):
-        actions, not_actions, data_actions, not_data_actions = get_permission_actions(perm)
-
+    for perm in role.properties.permissions:
         _add_operations_for_patterns(
             control_granted,
-            actions,
+            perm.actions,
             all_ops=all_control_ops,
             cache_key=control_cache_key,
             pattern_match=pattern_match,
@@ -95,7 +93,7 @@ def _compute_role_coverage(
         )
         _add_operations_for_patterns(
             control_excluded,
-            not_actions,
+            perm.not_actions,
             all_ops=all_control_ops,
             cache_key=control_cache_key,
             pattern_match=pattern_match,
@@ -103,7 +101,7 @@ def _compute_role_coverage(
         )
         _add_operations_for_patterns(
             data_granted,
-            data_actions,
+            perm.data_actions,
             all_ops=all_data_ops,
             cache_key=data_cache_key,
             pattern_match=pattern_match,
@@ -111,7 +109,7 @@ def _compute_role_coverage(
         )
         _add_operations_for_patterns(
             data_excluded,
-            not_data_actions,
+            perm.not_data_actions,
             all_ops=all_data_ops,
             cache_key=data_cache_key,
             pattern_match=pattern_match,
@@ -156,7 +154,6 @@ def clear_computed_caches(cache: AppCache | None = None) -> None:
         all_operations=current.all_operations,
         roles_by_id=current.roles_by_id,
         all_change_events=current.all_change_events,
-        operations_for_recommender=current.operations_for_recommender,
         unique_providers=current.unique_providers,
         last_scan=current.last_scan,
         first_scan=current.first_scan,
@@ -169,12 +166,12 @@ def clear_computed_caches(cache: AppCache | None = None) -> None:
 
 
 def precompute_all_caches(
-    roles: list[dict],
-    all_operations: list[dict],
+    roles: list[RoleDefinition],
+    all_operations: list[OperationData],
     cache: AppCache | None = None,
     *,
     metadata: CacheMetadata | None = None,
-    roles_by_id: dict | None = None,
+    roles_by_id: dict[str, CachedRole] | None = None,
     all_change_events: list | None = None,
     last_scan: datetime | None = None,
     first_scan: datetime | None = None,
@@ -194,8 +191,8 @@ def precompute_all_caches(
     If swap_in_memory=True, atomically swaps via cache.swap().
 
     Args:
-        roles: List of role JSON dicts from Role.role_json
-        all_operations: List of operation dicts with 'name' and 'is_data_action' keys
+        roles: List of RoleDefinition Pydantic models
+        all_operations: List of OperationData models
         cache: The AppCache instance to populate. Defaults to the app_cache singleton.
         metadata: Optional CacheMetadata for versioning/invalidation.
         roles_by_id: Optional dict of roles by ID. If not provided, uses current cache.
@@ -229,13 +226,8 @@ def precompute_all_caches(
     final_last_scan = last_scan if last_scan is not None else current.last_scan
     final_first_scan = first_scan if first_scan is not None else current.first_scan
 
-    # Compute derived fields from all_operations
-    operations_for_recommender = [
-        {"name": op["name"], "is_data_action": op.get("is_data_action", False)}
-        for op in all_operations
-    ]
     providers: set[str] = {
-        op["provider_display_name"] for op in all_operations if op.get("provider_display_name")
+        op.provider_display_name for op in all_operations if op.provider_display_name
     }
     unique_providers = sorted(providers, key=str.casefold)
 
@@ -248,8 +240,8 @@ def precompute_all_caches(
     partial_coverage: dict[tuple, tuple[int, int, int, list[str]]] = {}
 
     # Separate control and data plane operations
-    all_control_ops = {op["name"] for op in all_operations if not op.get("is_data_action")}
-    all_data_ops = {op["name"] for op in all_operations if op.get("is_data_action")}
+    all_control_ops = {op.name for op in all_operations if not op.is_data_action}
+    all_data_ops = {op.name for op in all_operations if op.is_data_action}
 
     logger.debug("Operations: %d control, %d data plane", len(all_control_ops), len(all_data_ops))
 
@@ -284,9 +276,7 @@ def precompute_all_caches(
     logger.debug("Computing role coverage and net permissions...")
     builtin_count = 0
     for role in roles:
-        props = get_role_properties(role)
-        role_id = get_role_id(role)
-        if props.get("type", "") != "BuiltInRole":
+        if not role.is_builtin:
             continue
 
         builtin_count += 1
@@ -300,8 +290,8 @@ def precompute_all_caches(
             control_ops_lower_to_orig,
             data_ops_lower_to_orig,
         )
-        role_coverage[role_id] = (net_control, net_data)
-        role_net_permissions[role_id] = (len(net_control), len(net_data))
+        role_coverage[role.role_id] = (net_control, net_data)
+        role_net_permissions[role.role_id] = (len(net_control), len(net_data))
 
     logger.debug("Computed coverage for %d built-in roles", builtin_count)
 
@@ -321,7 +311,6 @@ def precompute_all_caches(
         all_operations=all_operations,
         roles_by_id=final_roles_by_id,
         all_change_events=final_change_events,
-        operations_for_recommender=operations_for_recommender,
         unique_providers=unique_providers,
         last_scan=final_last_scan,
         first_scan=final_first_scan,

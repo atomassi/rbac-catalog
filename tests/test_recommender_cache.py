@@ -14,6 +14,7 @@ Fixtures used from conftest.py:
 
 import pytest
 
+from azurerbac.azure.models import OperationData, RoleDefinition
 from azurerbac.cache import (
     app_cache,
     clear_computed_caches,
@@ -29,9 +30,9 @@ def make_role(
     not_actions: list | None = None,
     data_actions: list | None = None,
     not_data_actions: list | None = None,
-) -> dict:
-    """Helper to create a role definition."""
-    return {
+) -> RoleDefinition:
+    """Helper to create a RoleDefinition for testing."""
+    role_dict = {
         "name": role_id,
         "properties": {
             "roleName": name,
@@ -47,6 +48,7 @@ def make_role(
             ],
         },
     }
+    return RoleDefinition.model_validate(role_dict)
 
 
 # =============================================================================
@@ -157,24 +159,24 @@ class TestCacheConsistency:
         for r_no, r_with in zip(result_no_cache, result_with_cache, strict=True):
             assert r_no.role_id == r_with.role_id, "Role ID mismatch"
             assert r_no.role_name == r_with.role_name, "Role name mismatch"
-            assert (
-                r_no.matched_operations == r_with.matched_operations
-            ), f"Matched ops mismatch for {r_no.role_name}"
-            assert (
-                r_no.missing_operations == r_with.missing_operations
-            ), f"Missing ops mismatch for {r_no.role_name}"
-            assert (
-                r_no.matched_operations_count == r_with.matched_operations_count
-            ), f"Matched count mismatch for {r_no.role_name}"
-            assert (
-                r_no.missing_operations_count == r_with.missing_operations_count
-            ), f"Missing count mismatch for {r_no.role_name}"
-            assert (
-                abs(r_no.match_percentage - r_with.match_percentage) < 0.001
-            ), f"Match % mismatch for {r_no.role_name}"
-            assert (
-                r_no.is_full_match == r_with.is_full_match
-            ), f"Full match mismatch for {r_no.role_name}"
+            assert r_no.matched_operations == r_with.matched_operations, (
+                f"Matched ops mismatch for {r_no.role_name}"
+            )
+            assert r_no.missing_operations == r_with.missing_operations, (
+                f"Missing ops mismatch for {r_no.role_name}"
+            )
+            assert r_no.matched_operations_count == r_with.matched_operations_count, (
+                f"Matched count mismatch for {r_no.role_name}"
+            )
+            assert r_no.missing_operations_count == r_with.missing_operations_count, (
+                f"Missing count mismatch for {r_no.role_name}"
+            )
+            assert abs(r_no.match_percentage - r_with.match_percentage) < 0.001, (
+                f"Match % mismatch for {r_no.role_name}"
+            )
+            assert r_no.is_full_match == r_with.is_full_match, (
+                f"Full match mismatch for {r_no.role_name}"
+            )
 
     def test_data_plane_wildcard_consistency(self, large_operations, sample_roles):
         """Test data plane wildcards produce same results with and without cache."""
@@ -310,9 +312,9 @@ class TestMissingOperationsExpanded:
         # Reader should have missing data plane operations
         # missing_operations_expanded should contain actual operation names
         if reader.missing_operations_count > 0:
-            assert (
-                len(reader.missing_operations_expanded) > 0
-            ), "missing_operations_expanded should have samples when missing_operations_count > 0"
+            assert len(reader.missing_operations_expanded) > 0, (
+                "missing_operations_expanded should have samples when missing_operations_count > 0"
+            )
             # Check that expanded ops are real operation names, not wildcards
             for op in reader.missing_operations_expanded:
                 assert "*" not in op, f"Expanded op should not be a wildcard: {op}"
@@ -410,12 +412,12 @@ class TestPartialWildcardCoverage:
         r_no = result_no_cache[0]
         r_with = result_with_cache[0]
 
-        assert (
-            r_no.matched_operations_count == r_with.matched_operations_count
-        ), f"Matched count: {r_no.matched_operations_count} vs {r_with.matched_operations_count}"
-        assert (
-            r_no.missing_operations_count == r_with.missing_operations_count
-        ), f"Missing count: {r_no.missing_operations_count} vs {r_with.missing_operations_count}"
+        assert r_no.matched_operations_count == r_with.matched_operations_count, (
+            f"Matched count: {r_no.matched_operations_count} vs {r_with.matched_operations_count}"
+        )
+        assert r_no.missing_operations_count == r_with.missing_operations_count, (
+            f"Missing count: {r_no.missing_operations_count} vs {r_with.missing_operations_count}"
+        )
         assert r_no.has_partial_wildcard_match == r_with.has_partial_wildcard_match
 
 
@@ -611,7 +613,7 @@ class TestCachePopulation:
 
         # Check all roles are cached
         for role in sample_roles:
-            role_id = role["name"]
+            role_id = role.role_id
             assert role_id in app_cache.cache.role_coverage
             assert role_id in app_cache.cache.role_net_permissions
 
@@ -777,12 +779,13 @@ class TestReaderRoleSpecificCases:
         """Operations for Reader testing."""
         # 100 control plane read operations
         ops = [
-            {"name": f"Microsoft.Provider{i}/resource/read", "is_data_action": False}
+            OperationData(name=f"Microsoft.Provider{i}/resource/read", is_data_action=False)
             for i in range(100)
         ]
         # 50 data plane read operations
         ops.extend(
-            {"name": f"Microsoft.Data{i}/resource/read", "is_data_action": True} for i in range(50)
+            OperationData(name=f"Microsoft.Data{i}/resource/read", is_data_action=True)
+            for i in range(50)
         )
         return ops
 
@@ -868,9 +871,9 @@ class TestReaderRoleSpecificCases:
                 requested_ops_data_flags=flags,
             )
 
-            assert len(result_no_cache) == len(
-                result_with_cache
-            ), f"Length mismatch for {flags_desc}"
+            assert len(result_no_cache) == len(result_with_cache), (
+                f"Length mismatch for {flags_desc}"
+            )
 
             if result_no_cache:
                 assert (
@@ -908,9 +911,9 @@ class TestSortingConsistency:
         no_cache_order = [r.role_id for r in result_no_cache]
         with_cache_order = [r.role_id for r in result_with_cache]
 
-        assert (
-            no_cache_order == with_cache_order
-        ), f"Sort order mismatch:\n  No cache: {no_cache_order}\n  With cache: {with_cache_order}"
+        assert no_cache_order == with_cache_order, (
+            f"Sort order mismatch:\n  No cache: {no_cache_order}\n  With cache: {with_cache_order}"
+        )
 
     def test_high_privilege_roles_sorted_last(self, large_operations, sample_roles):
         """High privilege roles should be sorted to end consistently."""
@@ -940,9 +943,9 @@ class TestSortingConsistency:
             ]
 
             if high_priv_indices and non_high_priv_indices:
-                assert max(non_high_priv_indices) < min(
-                    high_priv_indices
-                ), f"{desc}: High privilege roles should be after non-high privilege"
+                assert max(non_high_priv_indices) < min(high_priv_indices), (
+                    f"{desc}: High privilege roles should be after non-high privilege"
+                )
 
         check_high_privilege_last(result_no_cache, "No cache")
         check_high_privilege_last(result_with_cache, "With cache")
@@ -974,9 +977,9 @@ class TestCacheStalenessDetection:
         # Add new operations
         extended_operations = [
             *large_operations,
-            {"name": "Microsoft.NewProvider/newResource/read", "is_data_action": False},
-            {"name": "Microsoft.NewProvider/newResource/write", "is_data_action": False},
-            {"name": "Microsoft.NewProvider/newResource/delete", "is_data_action": False},
+            OperationData(name="Microsoft.NewProvider/newResource/read", is_data_action=False),
+            OperationData(name="Microsoft.NewProvider/newResource/write", is_data_action=False),
+            OperationData(name="Microsoft.NewProvider/newResource/delete", is_data_action=False),
         ]
 
         # Make a recommendation with extended operations
@@ -1032,7 +1035,7 @@ class TestCacheStalenessDetection:
         """
         # Step 1: Create initial operations (simulating DB state at cache build time)
         initial_operations = [
-            {"name": f"Microsoft.Provider{i}/resource/read", "is_data_action": False}
+            OperationData(name=f"Microsoft.Provider{i}/resource/read", is_data_action=False)
             for i in range(100)
         ]
 
@@ -1048,10 +1051,10 @@ class TestCacheStalenessDetection:
 
         # Step 3: Simulate new operations being added (DB updated)
         extended_operations = initial_operations + [
-            {
-                "name": f"Microsoft.NewProvider{i}/newResource/read",
-                "is_data_action": False,
-            }
+            OperationData(
+                name=f"Microsoft.NewProvider{i}/newResource/read",
+                is_data_action=False,
+            )
             for i in range(7)  # Add 7 new operations (like the original bug)
         ]
 
@@ -1077,17 +1080,17 @@ class TestCacheStalenessDetection:
 
         # Verify the counts are correct
         # Reader should match ALL 107 read operations (100 initial + 7 new)
-        assert (
-            reader.matched_operations_count == 107
-        ), f"Reader should match all 107 read operations, got {reader.matched_operations_count}"
-        assert (
-            reader.missing_operations_count == 0
-        ), f"Reader should have 0 missing operations, got {reader.missing_operations_count}"
+        assert reader.matched_operations_count == 107, (
+            f"Reader should match all 107 read operations, got {reader.matched_operations_count}"
+        )
+        assert reader.missing_operations_count == 0, (
+            f"Reader should have 0 missing operations, got {reader.missing_operations_count}"
+        )
 
         # Verify no partial wildcard match flag
-        assert (
-            not reader.has_partial_wildcard_match
-        ), "Reader should not have partial wildcard match for */read"
+        assert not reader.has_partial_wildcard_match, (
+            "Reader should not have partial wildcard match for */read"
+        )
 
     def test_cache_rebuilt_correctly_after_invalidation(self, sample_roles):
         """
@@ -1098,9 +1101,9 @@ class TestCacheStalenessDetection:
         """
         # Initial operations - 3 total, 2 are /read
         ops_v1 = [
-            {"name": "Microsoft.Storage/accounts/read", "is_data_action": False},
-            {"name": "Microsoft.Storage/accounts/write", "is_data_action": False},
-            {"name": "Microsoft.Compute/vms/read", "is_data_action": False},
+            OperationData(name="Microsoft.Storage/accounts/read", is_data_action=False),
+            OperationData(name="Microsoft.Storage/accounts/write", is_data_action=False),
+            OperationData(name="Microsoft.Compute/vms/read", is_data_action=False),
         ]
 
         clear_computed_caches()
@@ -1116,8 +1119,8 @@ class TestCacheStalenessDetection:
         # Add new operations (v2) - 5 total, 4 are /read
         ops_v2 = [
             *ops_v1,
-            {"name": "Microsoft.Network/vnets/read", "is_data_action": False},
-            {"name": "Microsoft.Web/sites/read", "is_data_action": False},
+            OperationData(name="Microsoft.Network/vnets/read", is_data_action=False),
+            OperationData(name="Microsoft.Web/sites/read", is_data_action=False),
         ]
 
         # Query with v2 ops - cache should be invalidated
@@ -1149,7 +1152,7 @@ class TestCacheStalenessDetection:
         """Test that data plane operation changes also invalidate cache."""
         # Initial: only control plane ops
         ops_v1 = [
-            {"name": "Microsoft.Storage/accounts/read", "is_data_action": False},
+            OperationData(name="Microsoft.Storage/accounts/read", is_data_action=False),
         ]
 
         clear_computed_caches()
@@ -1159,10 +1162,10 @@ class TestCacheStalenessDetection:
         # Add data plane operations
         ops_v2 = [
             *ops_v1,
-            {
-                "name": "Microsoft.Storage/storageAccounts/blobServices/containers/blobs/read",
-                "is_data_action": True,
-            },
+            OperationData(
+                name="Microsoft.Storage/storageAccounts/blobServices/containers/blobs/read",
+                is_data_action=True,
+            ),
         ]
 
         # Query - should trigger cache invalidation due to data ops change

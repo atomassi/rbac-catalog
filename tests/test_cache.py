@@ -8,14 +8,17 @@ Tests for the pure functions in azurerbac.cache.utils:
 import os
 import pickle
 import tempfile
+from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
+from azurerbac.azure.models import OperationData, RoleDefinition
 from azurerbac.cache import (
     AppCache,
     CacheData,
+    CachedRole,
     CacheMetadata,
     compute_operations_hash,
     compute_roles_hash,
@@ -24,10 +27,24 @@ from azurerbac.cache import (
     load_cache_from_disk,
     save_cache_to_disk,
 )
+from azurerbac.cache.models import CACHE_VERSION
 from azurerbac.cache.utils import (
     build_operations_prefix_index,
     get_matching_operations,
 )
+from azurerbac.core.constants import RoleStatus
+
+
+def make_cached_roles_by_id(roles: list[RoleDefinition]) -> dict[str, CachedRole]:
+    """Helper to build roles_by_id dict from RoleDefinition list."""
+    return {
+        r.role_id: CachedRole(
+            definition=r,
+            status=RoleStatus.ACTIVE,
+        )
+        for r in roles
+    }
+
 
 # =============================================================================
 # get_matching_operations Tests
@@ -225,7 +242,7 @@ class TestPreloadCache:
         assert len(cache.cache.roles_by_id) == 2
         assert "role-1" in cache.cache.roles_by_id
         assert "role-2" in cache.cache.roles_by_id
-        assert cache.cache.roles_by_id["role-1"]["role_name"] == "Reader"
+        assert cache.cache.roles_by_id["role-1"].role_name == "Reader"
 
     def test_build_from_operations_preserves_other_data(
         self, sample_operations, sample_roles_db_format
@@ -255,15 +272,12 @@ class TestPreloadCache:
         """Test set_metadata updates metadata fields."""
         cache = AppCache()
 
-        ops_for_rec = [{"name": "test", "is_data_action": False}]
         providers = ["Microsoft.Storage", "Microsoft.Compute"]
 
         cache.set_metadata(
-            operations_for_recommender=ops_for_rec,
             unique_providers=providers,
         )
 
-        assert cache.cache.operations_for_recommender == ops_for_rec
         assert cache.cache.unique_providers == providers
 
     def test_set_change_events(self):
@@ -279,26 +293,27 @@ class TestPreloadCache:
         assert cache.cache.all_change_events == events
 
     def test_get_role_by_id(self, sample_roles_db_format):
-        """Test get_role_by_id returns correct role."""
+        """Test get_role_by_id returns correct CachedRole."""
         cache = AppCache()
         cache.build_from_roles(sample_roles_db_format)
 
         role = cache.get_role_by_id("role-1")
         assert role is not None
-        assert role["role_name"] == "Reader"
+        assert role.role_name == "Reader"
+        assert role.definition is not None
 
         missing = cache.get_role_by_id("nonexistent")
         assert missing is None
 
-    def test_get_all_role_jsons(self, sample_roles_db_format):
-        """Test get_all_role_jsons returns role JSONs."""
+    def test_get_all_roles(self, sample_roles_db_format):
+        """Test get_all_roles returns RoleDefinition objects."""
         cache = AppCache()
         cache.build_from_roles(sample_roles_db_format)
 
-        jsons = cache.get_all_role_jsons()
-        assert len(jsons) == 2
-        # Check they are actual role_json objects
-        assert all("properties" in j for j in jsons)
+        roles = cache.get_all_roles()
+        assert len(roles) == 2
+        # Check they are RoleDefinition objects with properties
+        assert all(r.properties is not None for r in roles)
 
     def test_get_change_events(self):
         """Test get_change_events returns cached events."""
@@ -366,7 +381,7 @@ class TestPreloadCacheIntegration:
         mock_role.status = "active"
         mock_role.updated_on = None
         mock_role.last_seen_at = None
-        mock_role.role_json = {
+        mock_role.last_known_json = {
             "name": "test-role-1",
             "properties": {
                 "roleName": "Test Reader",
@@ -407,7 +422,7 @@ class TestPreloadCacheIntegration:
     @pytest.mark.asyncio
     async def test_preload_cache_calls_build_methods(self, mock_db_results):
         """Test that preload_cache delegates to rebuild_cache and warms role pages."""
-        from unittest.mock import ANY, AsyncMock, MagicMock, patch
+        from unittest.mock import AsyncMock, MagicMock, patch
 
         # Create a mock cache to track method calls
         mock_cache = MagicMock(spec=AppCache)
@@ -443,8 +458,8 @@ class TestPreloadCacheIntegration:
 
         rebuild_cache_mock.assert_awaited_once_with(
             mock_session,
-            logger_name=ANY,
             update_in_memory=True,
+            save_to_disk=False,
         )
         mock_cache.set_role_page.assert_called()
 
@@ -481,11 +496,11 @@ class TestAppCacheReloadLock:
         cache._loaded_cache_mtime = 1000.0
         cache._last_cache_check = 0
 
+        mock_op = OperationData(name="op1", is_data_action=False)
         mock_data = CacheData(
             metadata=CacheMetadata(roles_count=1, operations_count=1),
             roles_by_id={"role1": {"role_id": "role1", "role_json": {"properties": {}}}},
-            all_operations=[{"name": "op1", "is_data_action": False}],
-            operations_for_recommender=[{"name": "op1", "is_data_action": False}],
+            all_operations=[mock_op],
             unique_providers=["Microsoft.Test"],
         )
 
@@ -548,12 +563,16 @@ def roles_for_hashing():
     """Sample role data for hash computation tests.
 
     Uses minimal structure with updatedOn for modification detection tests.
+    Returns RoleDefinition objects as required by compute_roles_hash.
     """
-    return [
+    from azurerbac.azure.models import RoleDefinition
+
+    role_dicts = [
         {
             "name": "role-1",
             "properties": {
                 "roleName": "Reader",
+                "type": "BuiltInRole",
                 "updatedOn": "2024-01-01T00:00:00Z",
             },
         },
@@ -561,19 +580,21 @@ def roles_for_hashing():
             "name": "role-2",
             "properties": {
                 "roleName": "Contributor",
+                "type": "BuiltInRole",
                 "updatedOn": "2024-01-02T00:00:00Z",
             },
         },
     ]
+    return [RoleDefinition.model_validate(r) for r in role_dicts]
 
 
 @pytest.fixture
 def operations_for_hashing():
     """Sample operation data for hash computation tests."""
     return [
-        {"name": "Microsoft.Storage/read", "is_data_action": False},
-        {"name": "Microsoft.Compute/write", "is_data_action": False},
-        {"name": "Microsoft.KeyVault/secrets/read", "is_data_action": True},
+        OperationData(name="Microsoft.Storage/read", is_data_action=False),
+        OperationData(name="Microsoft.Compute/write", is_data_action=False),
+        OperationData(name="Microsoft.KeyVault/secrets/read", is_data_action=True),
     ]
 
 
@@ -658,10 +679,20 @@ class TestHashComputation:
 
     def test_compute_roles_hash_changes_on_update(self, roles_for_hashing):
         """Hash changes when role data changes."""
+        from azurerbac.azure.models import RoleDefinition
+
         hash1 = compute_roles_hash(roles_for_hashing)
 
-        modified_roles = roles_for_hashing.copy()
-        modified_roles[0]["properties"]["updatedOn"] = "2024-12-01T00:00:00Z"
+        # Create a new role with different updatedOn
+        modified_role_dict = {
+            "name": "role-1",
+            "properties": {
+                "roleName": "Reader",
+                "type": "BuiltInRole",
+                "updatedOn": "2024-12-01T00:00:00Z",
+            },
+        }
+        modified_roles = [RoleDefinition.model_validate(modified_role_dict), roles_for_hashing[1]]
         hash2 = compute_roles_hash(modified_roles)
 
         assert hash1 != hash2
@@ -690,7 +721,7 @@ class TestHashComputation:
 
         modified_ops = [
             *operations_for_hashing,
-            {"name": "New/operation", "is_data_action": False},
+            OperationData(name="New/operation", is_data_action=False),
         ]
         hash2 = compute_operations_hash(modified_ops)
 
@@ -712,7 +743,7 @@ class TestCacheData:
             operations_count=len(sample_operations),
         )
         # Convert sample_roles to roles_by_id format
-        roles_by_id = {r["name"]: r for r in sample_roles}
+        roles_by_id = make_cached_roles_by_id(sample_roles)
         data = CacheData(
             metadata=metadata,
             roles_by_id=roles_by_id,
@@ -745,7 +776,8 @@ class TestCacheFileOperations:
                 roles_count=len(sample_roles),
                 operations_count=len(sample_operations),
             )
-            roles_by_id = {r["name"]: r for r in sample_roles}
+            # Build CachedRole objects from RoleDefinitions
+            roles_by_id = make_cached_roles_by_id(sample_roles)
             data = CacheData(
                 metadata=metadata,
                 roles_by_id=roles_by_id,
@@ -761,7 +793,11 @@ class TestCacheFileOperations:
             loaded = load_cache_from_disk()
             assert loaded is not None
             assert loaded.metadata.roles_count == len(sample_roles)
-            assert loaded.roles_by_id == roles_by_id
+            # Compare role_ids
+            assert set(loaded.roles_by_id.keys()) == set(roles_by_id.keys())
+            # Verify loaded roles are CachedRole objects
+            for role_id, cached_role in loaded.roles_by_id.items():
+                assert cached_role.role_name == roles_by_id[role_id].role_name
 
     def test_load_nonexistent_cache(self, temp_cache_dir):
         """Loading nonexistent cache returns None."""
@@ -774,8 +810,8 @@ class TestCacheFileOperations:
         with patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_cache_dir):
             # Create a cache file with valid data (roles + operations)
             metadata = CacheMetadata(roles_count=len(sample_roles), operations_count=1)
-            roles_by_id = {r["name"]: r for r in sample_roles}
-            all_operations = [{"name": "test/op", "is_data_action": False}]
+            roles_by_id = make_cached_roles_by_id(sample_roles)
+            all_operations = [OperationData(name="test/op", is_data_action=False)]
             data = CacheData(
                 metadata=metadata, roles_by_id=roles_by_id, all_operations=all_operations
             )
@@ -968,7 +1004,7 @@ class TestCacheInvalidation:
                 roles_hash=roles_hash,
                 operations_hash=ops_hash,
             )
-            roles_by_id = {r["name"]: r for r in roles_for_hashing}
+            roles_by_id = make_cached_roles_by_id(roles_for_hashing)
             data = CacheData(
                 metadata=metadata,
                 roles_by_id=roles_by_id,
@@ -995,7 +1031,7 @@ class TestCacheInvalidation:
                 roles_count=len(roles_for_hashing),
                 operations_count=len(operations_for_hashing),
             )
-            roles_by_id = {r["name"]: r for r in roles_for_hashing}
+            roles_by_id = make_cached_roles_by_id(roles_for_hashing)
             data = CacheData(
                 metadata=metadata,
                 roles_by_id=roles_by_id,
@@ -1017,7 +1053,7 @@ class TestCacheInvalidation:
                 roles_count=len(roles_for_hashing),
                 operations_count=len(operations_for_hashing),
             )
-            roles_by_id = {r["name"]: r for r in roles_for_hashing}
+            roles_by_id = make_cached_roles_by_id(roles_for_hashing)
             data = CacheData(
                 metadata=metadata,
                 roles_by_id=roles_by_id,
@@ -1029,3 +1065,167 @@ class TestCacheInvalidation:
             # Simulate an operation being removed
             new_ops_count = len(operations_for_hashing) - 1
             assert not loaded.metadata.is_valid_for(len(roles_for_hashing), new_ops_count)
+
+
+# =============================================================================
+# CachedRole Deserialization Edge Cases
+# =============================================================================
+
+
+class TestCachedRoleFromDict:
+    """Edge cases for CachedRole.from_dict deserialization."""
+
+    def _make_cached_role_dict(self, **overrides) -> dict:
+        """Helper to create valid CachedRole dict with overrides."""
+        base = {
+            "definition": {
+                "id": "/test",
+                "name": "test-guid",
+                "type": "Microsoft.Authorization/roleDefinitions",
+                "properties": {"roleName": "Test Role"},
+            },
+            "status": "active",
+            "last_seen_at": "2024-01-15T10:30:00+00:00",
+        }
+        base.update(overrides)
+        return base
+
+    def test_valid_cached_role(self):
+        """CachedRole.from_dict works with valid data."""
+        data = self._make_cached_role_dict()
+        cached = CachedRole.from_dict(data)
+        assert cached.role_name == "Test Role"
+        assert cached.status == RoleStatus.ACTIVE
+        assert cached.last_seen_at is not None
+
+    def test_invalid_status_raises_value_error(self):
+        """from_dict with invalid status raises ValueError."""
+        data = self._make_cached_role_dict(status="invalid_status")
+        with pytest.raises(ValueError, match="invalid_status"):
+            CachedRole.from_dict(data)
+
+    def test_status_case_sensitivity(self):
+        """Status must be exact lowercase match."""
+        # ACTIVE in uppercase should fail
+        data = self._make_cached_role_dict(status="ACTIVE")
+        with pytest.raises(ValueError):
+            CachedRole.from_dict(data)
+
+    def test_missing_definition_raises_key_error(self):
+        """from_dict with missing 'definition' raises KeyError."""
+        data = {"status": "active", "last_seen_at": None}
+        with pytest.raises(KeyError):
+            CachedRole.from_dict(data)
+
+    def test_missing_status_raises_key_error(self):
+        """from_dict with missing 'status' raises KeyError."""
+        data = {
+            "definition": {
+                "name": "test",
+                "properties": {"roleName": "Test"},
+            }
+        }
+        with pytest.raises(KeyError):
+            CachedRole.from_dict(data)
+
+    def test_last_seen_at_none(self):
+        """from_dict handles last_seen_at: null."""
+        data = self._make_cached_role_dict(last_seen_at=None)
+        cached = CachedRole.from_dict(data)
+        assert cached.last_seen_at is None
+
+    def test_last_seen_at_missing(self):
+        """from_dict handles missing last_seen_at key."""
+        data = self._make_cached_role_dict()
+        del data["last_seen_at"]
+        cached = CachedRole.from_dict(data)
+        assert cached.last_seen_at is None
+
+    def test_last_seen_at_already_datetime(self):
+        """from_dict handles last_seen_at as datetime object."""
+        now = datetime.now(UTC)
+        data = self._make_cached_role_dict(last_seen_at=now)
+        cached = CachedRole.from_dict(data)
+        assert cached.last_seen_at == now
+
+    def test_deleted_status(self):
+        """from_dict handles deleted status."""
+        data = self._make_cached_role_dict(status="deleted")
+        cached = CachedRole.from_dict(data)
+        assert cached.status == RoleStatus.DELETED
+
+    def test_to_dict_roundtrip(self):
+        """to_dict -> from_dict roundtrip preserves data."""
+        original_data = self._make_cached_role_dict()
+        cached = CachedRole.from_dict(original_data)
+        exported = cached.to_dict()
+        restored = CachedRole.from_dict(exported)
+
+        assert restored.role_id == cached.role_id
+        assert restored.role_name == cached.role_name
+        assert restored.status == cached.status
+
+
+# =============================================================================
+# CacheMetadata Validation Edge Cases
+# =============================================================================
+
+
+class TestCacheMetadataEdgeCases:
+    """Edge case tests for CacheMetadata.is_valid_for method."""
+
+    def test_version_mismatch_returns_false(self):
+        """is_valid_for returns False on version mismatch."""
+        meta = CacheMetadata(version="old-version", roles_count=10, operations_count=100)
+        assert not meta.is_valid_for(roles_count=10, operations_count=100)
+
+    def test_current_version_valid(self):
+        """is_valid_for returns True with current version and matching counts."""
+        meta = CacheMetadata(
+            version=CACHE_VERSION,
+            roles_count=10,
+            operations_count=100,
+        )
+        assert meta.is_valid_for(roles_count=10, operations_count=100)
+
+    def test_roles_count_mismatch_returns_false(self):
+        """is_valid_for returns False when roles count doesn't match."""
+        meta = CacheMetadata(version=CACHE_VERSION, roles_count=10, operations_count=100)
+        assert not meta.is_valid_for(roles_count=15, operations_count=100)
+
+    def test_operations_count_mismatch_returns_false(self):
+        """is_valid_for returns False when operations count doesn't match."""
+        meta = CacheMetadata(version=CACHE_VERSION, roles_count=10, operations_count=100)
+        assert not meta.is_valid_for(roles_count=10, operations_count=200)
+
+    def test_hash_mismatch_returns_false(self):
+        """is_valid_for returns False on hash mismatch."""
+        meta = CacheMetadata(
+            version=CACHE_VERSION,
+            roles_count=10,
+            operations_count=100,
+            roles_hash="abc123",
+        )
+        assert not meta.is_valid_for(roles_count=10, operations_count=100, roles_hash="xyz789")
+
+    def test_operations_hash_mismatch_returns_false(self):
+        """is_valid_for returns False on operations hash mismatch."""
+        meta = CacheMetadata(
+            version=CACHE_VERSION,
+            roles_count=10,
+            operations_count=100,
+            operations_hash="abc123",
+        )
+        assert not meta.is_valid_for(roles_count=10, operations_count=100, operations_hash="xyz789")
+
+    def test_empty_hashes_ignored(self):
+        """is_valid_for ignores empty hash strings."""
+        meta = CacheMetadata(
+            version=CACHE_VERSION,
+            roles_count=10,
+            operations_count=100,
+            roles_hash="",  # Empty
+        )
+        # Empty hashes on either side should not cause mismatch
+        assert meta.is_valid_for(roles_count=10, operations_count=100, roles_hash="")
+        assert meta.is_valid_for(roles_count=10, operations_count=100, roles_hash="anything")

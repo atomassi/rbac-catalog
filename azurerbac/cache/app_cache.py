@@ -7,11 +7,12 @@ import logging
 import threading
 import time
 from dataclasses import replace
-from typing import Any, Self
+from typing import TYPE_CHECKING, Any, Self
 
 from azurerbac.cache.models import (
     CACHE_VERSION,
     CacheData,
+    CachedRole,
     build_indexes,
 )
 from azurerbac.cache.persistence import (
@@ -21,6 +22,12 @@ from azurerbac.cache.persistence import (
 )
 from azurerbac.core.constants import DEFAULT_SEARCH_LIMIT
 from azurerbac.telemetry import track_cache_hit
+
+if TYPE_CHECKING:
+    from azurerbac.azure.models import OperationData
+
+if TYPE_CHECKING:
+    from azurerbac.azure.models import OperationData, RoleDefinition
 
 logger = logging.getLogger(__name__)
 
@@ -132,17 +139,24 @@ class AppCache:
     # Convenience accessors
     # ─────────────────────────────────────────────────────────────────────────
 
-    def get_role_by_id(self, role_id: str) -> dict | None:
-        """Get a role by ID."""
+    def get_role_by_id(self, role_id: str) -> CachedRole | None:
+        """Get a cached role by ID.
+
+        Returns CachedRole which contains both the RoleDefinition and DB metadata.
+        """
         result = self._cache.roles_by_id.get(role_id)
         track_cache_hit("role", result is not None, role_id)
         return result
 
-    def get_all_role_jsons(self) -> list[dict]:
-        """Get all role JSONs."""
-        return self._cache.get_role_jsons()
+    def get_all_roles(self) -> list[RoleDefinition]:
+        """Get all roles as RoleDefinition objects."""
+        return self._cache.get_role_definitions()
 
-    def get_all_operations(self) -> list[dict]:
+    def get_role_definition_by_id(self, role_id: str) -> RoleDefinition | None:
+        """Get a role as RoleDefinition by ID."""
+        return self._cache.get_role_definition_by_id(role_id)
+
+    def get_all_operations(self) -> list[OperationData]:
         """Get all operations."""
         return self._cache.all_operations
 
@@ -214,7 +228,7 @@ class AppCache:
     # Build cache from raw data
     # ─────────────────────────────────────────────────────────────────────────
 
-    def build_from_operations(self, operations: list[dict]) -> None:
+    def build_from_operations(self, operations: list[OperationData]) -> None:
         """Build cache with new operations, preserving other data."""
         ops_by_name_lower, ops_by_prefix = build_indexes(operations)
         self._cache = replace(
@@ -224,9 +238,9 @@ class AppCache:
             ops_by_prefix=ops_by_prefix,
         )
 
-    def build_from_roles(self, roles: list[dict]) -> None:
+    def build_from_roles(self, roles: list[CachedRole]) -> None:
         """Build cache with new roles, preserving other data."""
-        roles_by_id = {r["role_id"]: r for r in roles}
+        roles_by_id = {r.role_id: r for r in roles}
         self._cache = replace(self._cache, roles_by_id=roles_by_id)
         logger.info("Built roles index: %d roles", len(roles_by_id))
 
@@ -237,15 +251,12 @@ class AppCache:
     def set_metadata(
         self,
         *,
-        operations_for_recommender: list[dict] | None = None,
         unique_providers: list[str] | None = None,
         last_scan: Any = None,
         first_scan: Any = None,
     ) -> None:
         """Set metadata fields."""
         updates = {}
-        if operations_for_recommender is not None:
-            updates["operations_for_recommender"] = operations_for_recommender
         if unique_providers is not None:
             updates["unique_providers"] = unique_providers
         if last_scan is not None:
@@ -261,7 +272,7 @@ class AppCache:
 
     def search_operations(
         self, query: str, limit: int = DEFAULT_SEARCH_LIMIT, is_wildcard: bool = False
-    ) -> list[dict]:
+    ) -> list[OperationData]:
         """Search operations using pre-built indexes."""
         cache = self._cache
         if not cache.ops_by_name_lower:
@@ -275,21 +286,21 @@ class AppCache:
                 source = cache.ops_by_prefix.get(prefix, list(cache.ops_by_name_lower.values()))
             else:
                 source = list(cache.ops_by_name_lower.values())
-            matching = [op for op in source if fnmatch.fnmatch(op["name"].lower(), q_lower)]
+            matching = [op for op in source if fnmatch.fnmatch(op.name.lower(), q_lower)]
         else:
             matching = [
                 op
                 for op in cache.ops_by_name_lower.values()
                 if (
-                    q_lower in op["name"].lower()
-                    or q_lower in (op.get("display_name") or "").lower()
-                    or q_lower in (op.get("description") or "").lower()
-                    or q_lower in (op.get("provider_display_name") or "").lower()
-                    or q_lower in (op.get("resource_type_display_name") or "").lower()
+                    q_lower in op.name.lower()
+                    or q_lower in (op.display_name or "").lower()
+                    or q_lower in (op.description or "").lower()
+                    or q_lower in (op.provider_display_name or "").lower()
+                    or q_lower in (op.resource_type_display_name or "").lower()
                 )
             ]
 
-        matching.sort(key=lambda x: x["name"])
+        matching.sort(key=lambda x: x.name)
         return matching[:limit]
 
     def count_wildcard_matches(self, pattern: str, is_data_action: bool = False) -> int:
@@ -306,7 +317,7 @@ class AppCache:
         return sum(
             1
             for op in cache.all_operations
-            if op.get("is_data_action", False) == is_data_action and regex.match(op["name"])
+            if op.is_data_action == is_data_action and regex.match(op.name)
         )
 
     def invalidate_all(self) -> None:
@@ -325,6 +336,9 @@ class AppCache:
     def needs_reload_from_disk(self, skip_interval_check: bool = False) -> bool:
         """Check if disk cache was updated by worker.
 
+        At startup, any stale cache file is deleted. So any cache file that
+        exists must have been created by the worker during this session.
+
         Args:
             skip_interval_check: If True, skip the throttle interval check.
                 Used for double-checking after acquiring lock.
@@ -337,9 +351,16 @@ class AppCache:
 
         current_mtime = get_cache_file_mtime()
 
-        if current_mtime is None or self._loaded_cache_mtime is None:
+        # No cache file on disk
+        if current_mtime is None:
             return False
 
+        # Cache file exists but we haven't loaded any yet (worker created it)
+        if self._loaded_cache_mtime is None:
+            logger.info("New cache file detected from worker (mtime: %s)", current_mtime)
+            return True
+
+        # Cache file is newer than what we loaded
         if current_mtime > self._loaded_cache_mtime:
             logger.info(
                 "Disk cache updated (mtime: %s > %s)",

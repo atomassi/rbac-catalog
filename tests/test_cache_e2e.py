@@ -19,8 +19,10 @@ from unittest.mock import patch
 
 import pytest
 
+from azurerbac.azure.models import OperationData, RoleDefinition
 from azurerbac.cache import (
     CacheData,
+    CachedRole,
     CacheMetadata,
     app_cache,
     clear_computed_caches,
@@ -32,6 +34,7 @@ from azurerbac.cache import (
     save_cache_to_disk,
 )
 from azurerbac.cache.models import CACHE_VERSION
+from azurerbac.core.constants import RoleStatus
 
 
 @pytest.fixture
@@ -98,25 +101,21 @@ def clean_cache():
     clear_computed_caches()
 
 
-def build_roles_by_id(roles: list[dict]) -> dict:
+def build_roles_by_id(roles: list[RoleDefinition]) -> dict[str, CachedRole]:
     """Helper to build roles_by_id index from role list."""
     return {
-        r["name"]: {
-            "role_id": r["name"],
-            "role_name": r["properties"]["roleName"],
-            "role_type": r["properties"].get("type", "BuiltInRole"),
-            "status": "active",
-            "updated_on": None,
-            "last_seen_at": None,
-            "role_json": r,
-        }
+        r.role_id: CachedRole(
+            definition=r,
+            status=RoleStatus.ACTIVE,
+            last_seen_at=None,
+        )
         for r in roles
     }
 
 
 def build_complete_cache(
-    roles: list[dict],
-    operations: list[dict],
+    roles: list[RoleDefinition],
+    operations: list[OperationData],
     change_events: list[dict] | None = None,
 ) -> CacheData:
     """Helper to build a complete CacheData with all computed fields."""
@@ -163,7 +162,6 @@ class TestWorkerRefreshFlow:
             assert len(cache_data.all_change_events) == len(sample_change_events)
             assert len(cache_data.role_coverage) == len(sample_roles)
             assert len(cache_data.role_net_permissions) == len(sample_roles)
-            assert len(cache_data.operations_for_recommender) == len(sample_operations)
             assert len(cache_data.unique_providers) > 0
 
             # Save to disk
@@ -203,10 +201,13 @@ class TestWorkerRefreshFlow:
         """Web process detects worker disk update and reloads cache."""
         with patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_cache_dir):
             # Initial state - web has old cache
+            old_role_def = RoleDefinition.model_validate({"name": "old-role", "properties": {}})
             old_cache = CacheData(
                 metadata=CacheMetadata(roles_count=1, operations_count=1),
-                all_operations=[{"name": "old-op", "is_data_action": False}],
-                roles_by_id={"old-role": {"role_id": "old-role", "role_json": {}}},
+                all_operations=[OperationData(name="old-op", is_data_action=False)],
+                roles_by_id={
+                    "old-role": CachedRole(definition=old_role_def, status=RoleStatus.ACTIVE)
+                },
             )
             app_cache.swap(old_cache)
             app_cache._loaded_cache_mtime = 1000.0
@@ -233,7 +234,7 @@ class TestWorkerRefreshFlow:
         """Reload is atomic - readers never see partial state."""
         with patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_cache_dir):
             # Setup initial cache
-            old_ops = [{"name": "old-op", "is_data_action": False}]
+            old_ops = [OperationData(name="old-op", is_data_action=False)]
             app_cache.build_from_operations(old_ops)
             app_cache._loaded_cache_mtime = 1000.0
             app_cache._last_cache_check = 0
@@ -313,11 +314,11 @@ class TestPeriodicWebRefreshFlow:
         first_coverage = app_cache.get_role_coverage("reader-role-id")
 
         # Simulate 1 hour later - periodic refresh uses data from cache
-        role_jsons = app_cache.get_all_role_jsons()
+        role_definitions = app_cache.cache.get_role_definitions()
         all_ops = app_cache.cache.all_operations
 
         # Recompute
-        precompute_all_caches(role_jsons, all_ops)
+        precompute_all_caches(role_definitions, all_ops)
         second_coverage = app_cache.get_role_coverage("reader-role-id")
 
         # Results should be identical
@@ -504,7 +505,6 @@ class TestCacheVersionFormat:
         assert len(cache_data.roles_by_id) == len(sample_roles)
 
         # Derived data
-        assert len(cache_data.operations_for_recommender) == len(sample_operations)
         assert len(cache_data.unique_providers) > 0
 
         # Computed data
@@ -638,29 +638,19 @@ class TestDataConsistency:
         for role_id in cache_data.roles_by_id:
             assert role_id in cache_data.role_net_permissions
 
-    def test_operations_for_recommender_matches_all_operations(
-        self, sample_roles, sample_operations
-    ):
-        """operations_for_recommender has same count as all_operations."""
-        cache_data = build_complete_cache(sample_roles, sample_operations)
-
-        assert len(cache_data.operations_for_recommender) == len(sample_operations)
-
     def test_unique_providers_extracted_correctly(self, sample_roles, sample_operations):
         """unique_providers contains all providers from operations."""
         cache_data = build_complete_cache(sample_roles, sample_operations)
 
         expected_providers = {
-            op["provider_display_name"]
-            for op in sample_operations
-            if op.get("provider_display_name")
+            op.provider_display_name for op in sample_operations if op.provider_display_name
         }
 
         assert set(cache_data.unique_providers) == expected_providers
 
     def test_no_role_data_pollution_between_roles(self, sample_operations):
         """One role's computed data doesn't pollute another role's cache."""
-        roles = [
+        role_dicts = [
             {
                 "name": "reader",
                 "properties": {
@@ -692,6 +682,7 @@ class TestDataConsistency:
                 },
             },
         ]
+        roles = [RoleDefinition.model_validate(r) for r in role_dicts]
 
         cache_data = build_complete_cache(roles, sample_operations)
 
@@ -766,7 +757,9 @@ class TestInvalidationFlow:
         self, temp_cache_dir, sample_roles, sample_operations
     ):
         """delete_cache_file removes the disk cache file."""
-        with (patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_cache_dir),):
+        with (
+            patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_cache_dir),
+        ):
             # Save cache
             cache_data = build_complete_cache(sample_roles, sample_operations)
             save_cache_to_disk(cache_data)
@@ -861,14 +854,14 @@ class TestFullLifecycleE2E:
             # === PHASE 2: Worker Adds New Operation ===
             new_operations = [
                 *sample_operations,
-                {
-                    "name": "Microsoft.NewProvider/resources/read",
-                    "display_name": "Read New Resource",
-                    "description": "Reads new resource",
-                    "provider_display_name": "Microsoft NewProvider",
-                    "resource_type_display_name": "Resources",
-                    "is_data_action": False,
-                },
+                OperationData(
+                    name="Microsoft.NewProvider/resources/read",
+                    display_name="Read New Resource",
+                    description="Reads new resource",
+                    provider_display_name="Microsoft NewProvider",
+                    resource_type_display_name="Resources",
+                    is_data_action=False,
+                ),
             ]
 
             # Worker builds and saves complete cache
@@ -892,10 +885,10 @@ class TestFullLifecycleE2E:
             assert any("newprovider" in op.lower() for op in reload_ops)
 
             # === PHASE 4: Periodic Refresh ===
-            role_jsons = app_cache.get_all_role_jsons()
+            role_definitions = app_cache.cache.get_role_definitions()
             all_ops = app_cache.cache.all_operations
 
-            precompute_all_caches(role_jsons, all_ops)
+            precompute_all_caches(role_definitions, all_ops)
 
             # Coverage should be unchanged
             periodic_coverage = app_cache.get_role_coverage("reader-role-id")
@@ -965,7 +958,7 @@ class TestStartupCacheFlow:
         """Verify precompute_all_caches populates all computed data."""
         # Build source data into the singleton cache
         app_cache.build_from_operations(sample_operations)
-        roles_by_id = {r["name"]: {"role_id": r["name"], "role_json": r} for r in sample_roles}
+        roles_by_id = build_roles_by_id(sample_roles)
         app_cache._cache = CacheData(
             all_operations=sample_operations,
             roles_by_id=roles_by_id,
@@ -991,7 +984,7 @@ class TestStartupCacheFlow:
         """Verify precompute uses atomic swap pattern."""
         # Set up initial data
         app_cache.build_from_operations(sample_operations)
-        roles_by_id = {r["name"]: {"role_id": r["name"], "role_json": r} for r in sample_roles}
+        roles_by_id = build_roles_by_id(sample_roles)
         app_cache._cache = CacheData(
             all_operations=sample_operations,
             roles_by_id=roles_by_id,
@@ -1019,7 +1012,7 @@ class TestStartupCacheFlow:
             app_cache.build_from_operations(sample_operations)
 
             # Build roles index
-            roles_by_id = {r["name"]: {"role_id": r["name"], "role_json": r} for r in sample_roles}
+            roles_by_id = build_roles_by_id(sample_roles)
             app_cache._cache = CacheData(
                 all_operations=sample_operations,
                 roles_by_id=roles_by_id,
@@ -1050,7 +1043,7 @@ class TestWorkerUpdateFlow:
             roles_hash = compute_roles_hash(sample_roles)
             ops_hash = compute_operations_hash(sample_operations)
 
-            roles_by_id = {r["name"]: {"role_id": r["name"], "role_json": r} for r in sample_roles}
+            roles_by_id = build_roles_by_id(sample_roles)
 
             data = CacheData(
                 metadata=CacheMetadata(
@@ -1077,7 +1070,7 @@ class TestWorkerUpdateFlow:
             app_cache._last_cache_check = 0  # Force check
 
             # Worker saves cache
-            roles_by_id = {r["name"]: {"role_id": r["name"], "role_json": r} for r in sample_roles}
+            roles_by_id = build_roles_by_id(sample_roles)
             data = CacheData(
                 metadata=CacheMetadata(
                     roles_count=len(sample_roles),
@@ -1106,7 +1099,7 @@ class TestWorkerUpdateFlow:
             app_cache._last_cache_check = 0
 
             # Save cache to disk with precomputed data
-            roles_by_id = {r["name"]: {"role_id": r["name"], "role_json": r} for r in sample_roles}
+            roles_by_id = build_roles_by_id(sample_roles)
             precomputed_role_coverage = {"reader-role-id": ({"op1"}, {"op2"})}
             data = CacheData(
                 metadata=CacheMetadata(
@@ -1115,10 +1108,6 @@ class TestWorkerUpdateFlow:
                 ),
                 roles_by_id=roles_by_id,
                 all_operations=sample_operations,
-                operations_for_recommender=[
-                    {"name": op["name"], "is_data_action": op["is_data_action"]}
-                    for op in sample_operations
-                ],
                 unique_providers=["Microsoft.Storage", "Microsoft.Compute"],
                 role_coverage=precomputed_role_coverage,
             )
@@ -1141,11 +1130,11 @@ class TestWorkerUpdateFlow:
 
             # Set initial data
             app_cache._cache = CacheData(
-                all_operations=[{"name": "old-op", "is_data_action": False}]
+                all_operations=[OperationData(name="old-op", is_data_action=False)]
             )
 
             # Save new cache to disk
-            roles_by_id = {r["name"]: {"role_id": r["name"], "role_json": r} for r in sample_roles}
+            roles_by_id = build_roles_by_id(sample_roles)
             data = CacheData(
                 metadata=CacheMetadata(
                     roles_count=len(sample_roles),
@@ -1153,7 +1142,6 @@ class TestWorkerUpdateFlow:
                 ),
                 roles_by_id=roles_by_id,
                 all_operations=sample_operations,
-                operations_for_recommender=[],
                 unique_providers=[],
             )
             save_cache_to_disk(data)
@@ -1183,7 +1171,7 @@ class TestPeriodicRefreshFlow:
         """Verify periodic refresh recomputes all caches."""
         # Initial setup
         app_cache.build_from_operations(sample_operations)
-        roles_by_id = {r["name"]: {"role_id": r["name"], "role_json": r} for r in sample_roles}
+        roles_by_id = build_roles_by_id(sample_roles)
         app_cache._cache = CacheData(
             all_operations=sample_operations,
             roles_by_id=roles_by_id,
@@ -1209,7 +1197,7 @@ class TestPeriodicRefreshFlow:
         """Verify periodic refresh uses data from current cache, not stale data."""
         # Setup with sample data
         app_cache.build_from_operations(sample_operations)
-        roles_by_id = {r["name"]: {"role_id": r["name"], "role_json": r} for r in sample_roles}
+        roles_by_id = build_roles_by_id(sample_roles)
         app_cache._cache = CacheData(
             all_operations=sample_operations,
             roles_by_id=roles_by_id,
@@ -1218,14 +1206,14 @@ class TestPeriodicRefreshFlow:
         )
 
         # Get role JSONs from cache (simulates what periodic refresh does)
-        role_jsons = app_cache.get_all_role_jsons()
+        role_definitions = app_cache.cache.get_role_definitions()
         all_ops = app_cache.cache.all_operations
 
-        assert len(role_jsons) == len(sample_roles)
+        assert len(role_definitions) == len(sample_roles)
         assert len(all_ops) == len(sample_operations)
 
         # Run precompute with cache data
-        precompute_all_caches(role_jsons, all_ops)
+        precompute_all_caches(role_definitions, all_ops)
 
         # Verify computed data is correct
         coverage = app_cache.get_role_coverage("reader-role-id")
@@ -1244,7 +1232,7 @@ class TestInvalidationAfterDataChange:
         """Verify clear_computed_caches removes computed fields but preserves source data."""
         # Setup with source and computed data
         app_cache.build_from_operations(sample_operations)
-        roles_by_id = {r["name"]: {"role_id": r["name"], "role_json": r} for r in sample_roles}
+        roles_by_id = build_roles_by_id(sample_roles)
         app_cache._cache = CacheData(
             all_operations=sample_operations,
             roles_by_id=roles_by_id,
@@ -1272,7 +1260,7 @@ class TestInvalidationAfterDataChange:
         """Verify invalidate_all clears all caches including disk."""
         with patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_cache_dir):
             # Save to disk
-            roles_by_id = {r["name"]: {"role_id": r["name"], "role_json": r} for r in sample_roles}
+            roles_by_id = build_roles_by_id(sample_roles)
             data = CacheData(
                 metadata=CacheMetadata(
                     roles_count=len(sample_roles),
@@ -1330,7 +1318,7 @@ class TestCacheLifecycleE2E:
             # === PHASE 1: Startup ===
             # Build from "database"
             app_cache.build_from_operations(sample_operations)
-            roles_by_id = {r["name"]: {"role_id": r["name"], "role_json": r} for r in sample_roles}
+            roles_by_id = build_roles_by_id(sample_roles)
             app_cache._cache = CacheData(
                 all_operations=sample_operations,
                 roles_by_id=roles_by_id,
@@ -1350,14 +1338,12 @@ class TestCacheLifecycleE2E:
             # Worker adds a new operation
             updated_operations = [
                 *sample_operations,
-                {"name": "Microsoft.NewService/resources/read", "is_data_action": False},
+                OperationData(name="Microsoft.NewService/resources/read", is_data_action=False),
             ]
 
             # Worker precomputes and saves complete cache to disk
             # (In real system, rebuild_cache does this)
-            roles_by_id_for_save = {
-                r["name"]: {"role_id": r["name"], "role_json": r} for r in sample_roles
-            }
+            roles_by_id_for_save = build_roles_by_id(sample_roles)
             # Precompute using worker's data, but don't swap into our memory
             worker_cache = precompute_all_caches(
                 sample_roles,
@@ -1389,10 +1375,10 @@ class TestCacheLifecycleE2E:
 
             # === PHASE 4: Periodic Refresh ===
             # Simulate 1 hour later, periodic refresh
-            role_jsons = app_cache.get_all_role_jsons()
+            role_definitions = app_cache.cache.get_role_definitions()
             all_ops = app_cache.cache.all_operations
 
-            precompute_all_caches(role_jsons, all_ops)
+            precompute_all_caches(role_definitions, all_ops)
 
             # Coverage should be unchanged
             coverage_after_periodic = app_cache.get_role_coverage("reader-role-id")
@@ -1403,7 +1389,7 @@ class TestCacheLifecycleE2E:
         """Verify data remains consistent across multiple refreshes."""
         # Initial setup
         app_cache.build_from_operations(sample_operations)
-        roles_by_id = {r["name"]: {"role_id": r["name"], "role_json": r} for r in sample_roles}
+        roles_by_id = build_roles_by_id(sample_roles)
         app_cache._cache = CacheData(
             all_operations=sample_operations,
             roles_by_id=roles_by_id,
@@ -1425,7 +1411,7 @@ class TestCacheLifecycleE2E:
     def test_no_cache_pollution_across_roles(self, sample_operations):
         """Verify one role's data doesn't pollute another role's cache."""
         # Two roles with different permissions
-        roles = [
+        role_dicts = [
             {
                 "name": "reader-role-id",
                 "properties": {
@@ -1457,9 +1443,10 @@ class TestCacheLifecycleE2E:
                 },
             },
         ]
+        roles = [RoleDefinition.model_validate(r) for r in role_dicts]
 
         app_cache.build_from_operations(sample_operations)
-        roles_by_id = {r["name"]: {"role_id": r["name"], "role_json": r} for r in roles}
+        roles_by_id = {r.role_id: {"role_id": r.role_id, "role_json": r.to_dict()} for r in roles}
         app_cache._cache = CacheData(
             all_operations=sample_operations,
             roles_by_id=roles_by_id,
@@ -1492,7 +1479,7 @@ class TestCacheLifecycleE2E:
         """Test the worker flow: invalidate -> rebuild -> web reload."""
         # Setup initial state
         app_cache.build_from_operations(sample_operations)
-        roles_by_id = {r["name"]: {"role_id": r["name"], "role_json": r} for r in sample_roles}
+        roles_by_id = build_roles_by_id(sample_roles)
         app_cache._cache = CacheData(
             all_operations=sample_operations,
             roles_by_id=roles_by_id,

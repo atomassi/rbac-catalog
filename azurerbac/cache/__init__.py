@@ -4,6 +4,7 @@ from azurerbac.cache.app_cache import AppCache
 from azurerbac.cache.models import (
     CACHE_VERSION,
     CacheData,
+    CachedRole,
     CacheMetadata,
     build_indexes,
     compute_operations_hash,
@@ -39,6 +40,7 @@ __all__ = [
     "AppCache",
     "CacheData",
     "CacheMetadata",
+    "CachedRole",
     "app_cache",
     "build_indexes",
     "build_operations_prefix_index",

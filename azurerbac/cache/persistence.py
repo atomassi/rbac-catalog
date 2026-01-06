@@ -68,6 +68,30 @@ def save_cache_to_disk(data: CacheData) -> bool:
         from azurerbac.cache.serialization import packb
 
         data_dict = asdict(data)
+
+        # Convert CachedRole objects to dicts for serialization
+        # asdict doesn't handle nested dataclasses with custom to_dict()
+        if data.roles_by_id:
+            data_dict["roles_by_id"] = {
+                role_id: role.to_dict() for role_id, role in data.roles_by_id.items()
+            }
+
+        # Convert OperationData Pydantic models to dicts for serialization
+        if data.all_operations:
+            data_dict["all_operations"] = [op.to_dict() for op in data.all_operations]
+
+        # Convert ops_by_name_lower (OperationData values) to dicts
+        if data.ops_by_name_lower:
+            data_dict["ops_by_name_lower"] = {
+                k: v.to_dict() for k, v in data.ops_by_name_lower.items()
+            }
+
+        # Convert ops_by_prefix (lists of OperationData) to lists of dicts
+        if data.ops_by_prefix:
+            data_dict["ops_by_prefix"] = {
+                k: [op.to_dict() for op in v] for k, v in data.ops_by_prefix.items()
+            }
+
         packed = packb(data_dict)
 
         with open(temp_file, "wb") as f:
@@ -100,10 +124,35 @@ def load_cache_from_disk() -> CacheData | None:
         data_dict = unpackb(packed)
 
         # Reconstruct dataclass from dict
-        from azurerbac.cache.models import CacheData, CacheMetadata
+        from azurerbac.azure.models import OperationData
+        from azurerbac.cache.models import CacheData, CachedRole, CacheMetadata
 
         metadata_dict = data_dict.pop("metadata", {})
         metadata = CacheMetadata(**metadata_dict)
+
+        # Convert roles_by_id dicts back to CachedRole objects
+        if roles_by_id_raw := data_dict.get("roles_by_id"):
+            data_dict["roles_by_id"] = {
+                role_id: CachedRole.from_dict(role_data)
+                for role_id, role_data in roles_by_id_raw.items()
+            }
+
+        # Convert all_operations dicts back to OperationData objects
+        if ops_raw := data_dict.get("all_operations"):
+            data_dict["all_operations"] = [OperationData.model_validate(op) for op in ops_raw]
+
+        # Convert ops_by_name_lower dicts back to OperationData objects
+        if ops_by_name_raw := data_dict.get("ops_by_name_lower"):
+            data_dict["ops_by_name_lower"] = {
+                k: OperationData.model_validate(v) for k, v in ops_by_name_raw.items()
+            }
+
+        # Convert ops_by_prefix lists of dicts back to lists of OperationData
+        if ops_by_prefix_raw := data_dict.get("ops_by_prefix"):
+            data_dict["ops_by_prefix"] = {
+                k: [OperationData.model_validate(op) for op in v]
+                for k, v in ops_by_prefix_raw.items()
+            }
 
         # Post-process fields with tuple values
         # role_coverage: dict[str, tuple[set, set]] - values are tuples of sets

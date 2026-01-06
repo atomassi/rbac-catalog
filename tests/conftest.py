@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import os
 from collections.abc import AsyncGenerator, Generator
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 # Clear Application Insights connection string to prevent OpenTelemetry
@@ -31,7 +30,10 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
+from azurerbac.azure.models import OperationData, RoleDefinition
+from azurerbac.cache.models import CachedRole
 from azurerbac.core import Base
+from azurerbac.core.constants import RoleStatus
 
 # =============================================================================
 # Settings Fixtures
@@ -323,7 +325,7 @@ def operation_names() -> set[str]:
 
 
 @pytest.fixture
-def sample_operations() -> list[dict[str, Any]]:
+def sample_operations() -> list[OperationData]:
     """Comprehensive sample operations for role matching and cache tests.
 
     Includes control plane and data plane operations with full metadata.
@@ -331,134 +333,134 @@ def sample_operations() -> list[dict[str, Any]]:
     need a simpler format.
 
     Returns:
-        List of operation dicts with name, is_data_action, and display fields.
+        List of OperationData models with name, is_data_action, and display fields.
     """
     return [
         # Control plane - Storage
-        {
-            "name": "Microsoft.Storage/storageAccounts/read",
-            "display_name": "Get Storage Account",
-            "description": "Returns storage account details",
-            "provider_display_name": "Microsoft Storage",
-            "resource_type_display_name": "Storage Accounts",
-            "is_data_action": False,
-        },
-        {
-            "name": "Microsoft.Storage/storageAccounts/write",
-            "display_name": "Create Storage Account",
-            "description": "Creates a storage account",
-            "provider_display_name": "Microsoft Storage",
-            "resource_type_display_name": "Storage Accounts",
-            "is_data_action": False,
-        },
-        {
-            "name": "Microsoft.Storage/storageAccounts/delete",
-            "display_name": "Delete Storage Account",
-            "description": "Deletes a storage account",
-            "provider_display_name": "Microsoft Storage",
-            "resource_type_display_name": "Storage Accounts",
-            "is_data_action": False,
-        },
+        OperationData(
+            name="Microsoft.Storage/storageAccounts/read",
+            display_name="Get Storage Account",
+            description="Returns storage account details",
+            provider_display_name="Microsoft Storage",
+            resource_type_display_name="Storage Accounts",
+            is_data_action=False,
+        ),
+        OperationData(
+            name="Microsoft.Storage/storageAccounts/write",
+            display_name="Create Storage Account",
+            description="Creates a storage account",
+            provider_display_name="Microsoft Storage",
+            resource_type_display_name="Storage Accounts",
+            is_data_action=False,
+        ),
+        OperationData(
+            name="Microsoft.Storage/storageAccounts/delete",
+            display_name="Delete Storage Account",
+            description="Deletes a storage account",
+            provider_display_name="Microsoft Storage",
+            resource_type_display_name="Storage Accounts",
+            is_data_action=False,
+        ),
         # Control plane - Compute
-        {
-            "name": "Microsoft.Compute/virtualMachines/read",
-            "display_name": "Get Virtual Machine",
-            "description": "Returns VM details",
-            "provider_display_name": "Microsoft Compute",
-            "resource_type_display_name": "Virtual Machines",
-            "is_data_action": False,
-        },
-        {
-            "name": "Microsoft.Compute/virtualMachines/write",
-            "display_name": "Create Virtual Machine",
-            "description": "Creates a VM",
-            "provider_display_name": "Microsoft Compute",
-            "resource_type_display_name": "Virtual Machines",
-            "is_data_action": False,
-        },
-        {
-            "name": "Microsoft.Compute/virtualMachines/delete",
-            "display_name": "Delete Virtual Machine",
-            "description": "Deletes a VM",
-            "provider_display_name": "Microsoft Compute",
-            "resource_type_display_name": "Virtual Machines",
-            "is_data_action": False,
-        },
+        OperationData(
+            name="Microsoft.Compute/virtualMachines/read",
+            display_name="Get Virtual Machine",
+            description="Returns VM details",
+            provider_display_name="Microsoft Compute",
+            resource_type_display_name="Virtual Machines",
+            is_data_action=False,
+        ),
+        OperationData(
+            name="Microsoft.Compute/virtualMachines/write",
+            display_name="Create Virtual Machine",
+            description="Creates a VM",
+            provider_display_name="Microsoft Compute",
+            resource_type_display_name="Virtual Machines",
+            is_data_action=False,
+        ),
+        OperationData(
+            name="Microsoft.Compute/virtualMachines/delete",
+            display_name="Delete Virtual Machine",
+            description="Deletes a VM",
+            provider_display_name="Microsoft Compute",
+            resource_type_display_name="Virtual Machines",
+            is_data_action=False,
+        ),
         # Control plane - Authorization (for testing notActions exclusions)
-        {
-            "name": "Microsoft.Authorization/roleAssignments/read",
-            "display_name": "Get Role Assignment",
-            "description": "Returns role assignment",
-            "provider_display_name": "Microsoft Authorization",
-            "resource_type_display_name": "Role Assignments",
-            "is_data_action": False,
-        },
-        {
-            "name": "Microsoft.Authorization/roleAssignments/write",
-            "display_name": "Create Role Assignment",
-            "description": "Creates a role assignment",
-            "provider_display_name": "Microsoft Authorization",
-            "resource_type_display_name": "Role Assignments",
-            "is_data_action": False,
-        },
+        OperationData(
+            name="Microsoft.Authorization/roleAssignments/read",
+            display_name="Get Role Assignment",
+            description="Returns role assignment",
+            provider_display_name="Microsoft Authorization",
+            resource_type_display_name="Role Assignments",
+            is_data_action=False,
+        ),
+        OperationData(
+            name="Microsoft.Authorization/roleAssignments/write",
+            display_name="Create Role Assignment",
+            description="Creates a role assignment",
+            provider_display_name="Microsoft Authorization",
+            resource_type_display_name="Role Assignments",
+            is_data_action=False,
+        ),
         # Control plane - Network
-        {
-            "name": "Microsoft.Network/virtualNetworks/read",
-            "display_name": "Get Virtual Network",
-            "description": "Returns virtual network details",
-            "provider_display_name": "Microsoft Network",
-            "resource_type_display_name": "Virtual Networks",
-            "is_data_action": False,
-        },
+        OperationData(
+            name="Microsoft.Network/virtualNetworks/read",
+            display_name="Get Virtual Network",
+            description="Returns virtual network details",
+            provider_display_name="Microsoft Network",
+            resource_type_display_name="Virtual Networks",
+            is_data_action=False,
+        ),
         # Control plane - KeyVault
-        {
-            "name": "Microsoft.KeyVault/vaults/read",
-            "display_name": "Get Key Vault",
-            "description": "Returns key vault details",
-            "provider_display_name": "Microsoft KeyVault",
-            "resource_type_display_name": "Vaults",
-            "is_data_action": False,
-        },
+        OperationData(
+            name="Microsoft.KeyVault/vaults/read",
+            display_name="Get Key Vault",
+            description="Returns key vault details",
+            provider_display_name="Microsoft KeyVault",
+            resource_type_display_name="Vaults",
+            is_data_action=False,
+        ),
         # Data plane - Storage blobs
-        {
-            "name": "Microsoft.Storage/storageAccounts/blobServices/containers/blobs/read",
-            "display_name": "Read Blob",
-            "description": "Reads blob data",
-            "provider_display_name": "Microsoft Storage",
-            "resource_type_display_name": "Blobs",
-            "is_data_action": True,
-        },
-        {
-            "name": "Microsoft.Storage/storageAccounts/blobServices/containers/blobs/write",
-            "display_name": "Write Blob",
-            "description": "Writes blob data",
-            "provider_display_name": "Microsoft Storage",
-            "resource_type_display_name": "Blobs",
-            "is_data_action": True,
-        },
+        OperationData(
+            name="Microsoft.Storage/storageAccounts/blobServices/containers/blobs/read",
+            display_name="Read Blob",
+            description="Reads blob data",
+            provider_display_name="Microsoft Storage",
+            resource_type_display_name="Blobs",
+            is_data_action=True,
+        ),
+        OperationData(
+            name="Microsoft.Storage/storageAccounts/blobServices/containers/blobs/write",
+            display_name="Write Blob",
+            description="Writes blob data",
+            provider_display_name="Microsoft Storage",
+            resource_type_display_name="Blobs",
+            is_data_action=True,
+        ),
         # Data plane - KeyVault secrets
-        {
-            "name": "Microsoft.KeyVault/vaults/secrets/read",
-            "display_name": "Read Secret",
-            "description": "Reads secret value",
-            "provider_display_name": "Microsoft Key Vault",
-            "resource_type_display_name": "Secrets",
-            "is_data_action": True,
-        },
+        OperationData(
+            name="Microsoft.KeyVault/vaults/secrets/read",
+            display_name="Read Secret",
+            description="Reads secret value",
+            provider_display_name="Microsoft Key Vault",
+            resource_type_display_name="Secrets",
+            is_data_action=True,
+        ),
     ]
 
 
 @pytest.fixture
-def large_operations() -> list[dict[str, Any]]:
+def large_operations() -> list[OperationData]:
     """Large set of operations to simulate production data volume.
 
     Generates ~500 control plane operations and ~75 data plane operations
     across 10 providers, useful for cache and performance testing.
 
     Returns:
-        List of operation dicts with name and is_data_action fields.
+        List of OperationData objects with name and is_data_action fields.
     """
-    ops: list[dict[str, Any]] = []
+    ops: list[OperationData] = []
     providers = [
         "Microsoft.Storage",
         "Microsoft.Compute",
@@ -487,7 +489,7 @@ def large_operations() -> list[dict[str, Any]]:
 
     # Control plane operations
     ops.extend(
-        {"name": f"{provider}/{resource}/{action}", "is_data_action": False}
+        OperationData(name=f"{provider}/{resource}/{action}", is_data_action=False)
         for provider in providers
         for resource in resources
         for action in actions
@@ -498,7 +500,7 @@ def large_operations() -> list[dict[str, Any]]:
     data_resources = ["blobs", "secrets", "keys", "messages", "queues"]
 
     ops.extend(
-        {"name": f"{provider}/data/{resource}/{action}", "is_data_action": True}
+        OperationData(name=f"{provider}/data/{resource}/{action}", is_data_action=True)
         for provider in data_providers
         for resource in data_resources
         for action in actions
@@ -508,7 +510,7 @@ def large_operations() -> list[dict[str, Any]]:
 
 
 @pytest.fixture
-def sample_roles() -> list[dict[str, Any]]:
+def sample_roles() -> list[RoleDefinition]:
     """Sample Azure RBAC role definitions for testing.
 
     Provides a comprehensive set of roles with varying permission patterns:
@@ -520,9 +522,9 @@ def sample_roles() -> list[dict[str, Any]]:
     - Conditional Access: Permissions with conditions
 
     Returns:
-        List of role definition dicts matching Azure API structure.
+        List of RoleDefinition objects matching Azure API structure.
     """
-    return [
+    role_dicts = [
         {
             "name": "reader-role-id",
             "properties": {
@@ -627,44 +629,43 @@ def sample_roles() -> list[dict[str, Any]]:
             },
         },
     ]
+    return [RoleDefinition.model_validate(r) for r in role_dicts]
 
 
 @pytest.fixture
-def sample_roles_db_format() -> list[dict[str, Any]]:
-    """Sample roles in database/cache format for preload_cache testing.
+def sample_roles_db_format() -> list[CachedRole]:
+    """Sample roles in CachedRole format for cache testing.
 
     Returns:
-        List of role dicts as stored in database with role_json nested.
+        List of CachedRole objects as used in the cache.
     """
+    role1_def = RoleDefinition.model_validate(
+        {
+            "name": "role-1",
+            "properties": {
+                "roleName": "Reader",
+                "permissions": [{"actions": ["*/read"], "notActions": []}],
+            },
+        }
+    )
+    role2_def = RoleDefinition.model_validate(
+        {
+            "name": "role-2",
+            "properties": {
+                "roleName": "Contributor",
+                "permissions": [{"actions": ["*"], "notActions": []}],
+            },
+        }
+    )
     return [
-        {
-            "role_id": "role-1",
-            "role_name": "Reader",
-            "role_type": "BuiltInRole",
-            "status": "active",
-            "updated_on": None,
-            "last_seen_at": None,
-            "role_json": {
-                "name": "role-1",
-                "properties": {
-                    "roleName": "Reader",
-                    "permissions": [{"actions": ["*/read"], "notActions": []}],
-                },
-            },
-        },
-        {
-            "role_id": "role-2",
-            "role_name": "Contributor",
-            "role_type": "BuiltInRole",
-            "status": "active",
-            "updated_on": None,
-            "last_seen_at": None,
-            "role_json": {
-                "name": "role-2",
-                "properties": {
-                    "roleName": "Contributor",
-                    "permissions": [{"actions": ["*"], "notActions": []}],
-                },
-            },
-        },
+        CachedRole(
+            definition=role1_def,
+            status=RoleStatus.ACTIVE,
+            last_seen_at=None,
+        ),
+        CachedRole(
+            definition=role2_def,
+            status=RoleStatus.ACTIVE,
+            last_seen_at=None,
+        ),
     ]

@@ -5,6 +5,7 @@ Covers: pattern matching, action types, notActions, high privilege roles, sortin
 
 import pytest
 
+from azurerbac.azure.models import RoleDefinition
 from azurerbac.core.patterns import matches_pattern, pattern_to_regex
 from azurerbac.matching import recommend_roles
 from azurerbac.matching.role_matching import (
@@ -24,9 +25,9 @@ def make_role(
     not_actions: list | None = None,
     data_actions: list | None = None,
     not_data_actions: list | None = None,
-) -> dict:
-    """Helper to create a role definition."""
-    return {
+) -> RoleDefinition:
+    """Helper to create a RoleDefinition object for testing."""
+    role_dict = {
         "name": role_id,
         "properties": {
             "roleName": name,
@@ -42,6 +43,7 @@ def make_role(
             ],
         },
     }
+    return RoleDefinition.model_validate(role_dict)
 
 
 # =============================================================================

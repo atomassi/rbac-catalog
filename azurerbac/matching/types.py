@@ -7,6 +7,10 @@ eliminating data clumps and providing type-safe operations.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from azurerbac.azure.models import OperationData
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,10 +55,17 @@ class OperationSets:
     data_cache_key: int
 
     @classmethod
-    def from_operations(cls, operations: list[dict]) -> OperationSets:
-        """Build from a list of operation dicts."""
-        control = frozenset(op["name"] for op in operations if not op.get("is_data_action"))
-        data = frozenset(op["name"] for op in operations if op.get("is_data_action"))
+    def from_operations(cls, operations: list[OperationData]) -> OperationSets:
+        """Build from a list of OperationData models.
+
+        Args:
+            operations: List of OperationData objects.
+
+        Returns:
+            OperationSets with control and data plane operations separated.
+        """
+        control = frozenset(op.name for op in operations if not op.is_data_action)
+        data = frozenset(op.name for op in operations if op.is_data_action)
         return cls(
             all_control=control,
             all_data=data,

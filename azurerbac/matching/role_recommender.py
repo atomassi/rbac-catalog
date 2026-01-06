@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from azurerbac.azure.models import OperationData, RoleDefinition
 from azurerbac.core import HIGH_PRIVILEGE_ROLES
 from azurerbac.matching.recommendation_service import (
     RoleEvaluationContext,
@@ -70,8 +71,8 @@ class RoleMatch:
 
 def recommend_roles(
     requested_operations: list[str],
-    roles: list[dict[str, Any]],
-    all_operations: list[dict[str, Any]],
+    roles: list[RoleDefinition],
+    all_operations: list[OperationData],
     max_results: int | None = None,
     requested_ops_data_flags: dict[str, bool] | None = None,
 ) -> list[RoleMatch]:
@@ -82,7 +83,7 @@ def recommend_roles(
 
     Args:
         requested_operations: List of operation names the user needs
-        roles: List of role definitions (from Role.role_json)
+        roles: List of RoleDefinition objects
         all_operations: List of all known operations
         max_results: Maximum number of results to return
         requested_ops_data_flags: Optional explicit is_data_action flags

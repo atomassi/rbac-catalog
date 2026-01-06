@@ -9,17 +9,8 @@ from __future__ import annotations
 import logging
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, field
-from typing import Any
 
-from azurerbac.azure.roles import (
-    extract_permission_lists,
-    get_permission_actions,
-    get_permission_condition,
-    get_role_id,
-    get_role_name,
-    get_role_properties,
-    has_any_condition,
-)
+from azurerbac.azure.models import OperationData, Permission, RoleDefinition
 from azurerbac.cache import app_cache
 from azurerbac.core.constants import DEFAULT_SEARCH_LIMIT
 from azurerbac.core.patterns import is_wildcard_pattern
@@ -48,7 +39,7 @@ class RoleEvaluationContext:
     role_id: str
     role_name: str
     description: str
-    permissions: list[dict[str, Any]]
+    permissions: list[Permission]
     matched_ops: set[str] = field(default_factory=set)
     wildcard_partial_coverage: dict[WildcardKey, PartialCoverageInfo] = field(default_factory=dict)
     fully_covered_wildcards: set[WildcardKey] = field(default_factory=set)
@@ -69,13 +60,13 @@ class RoleRecommendationService:
 
     def __init__(
         self,
-        all_operations: list[dict[str, Any]],
+        all_operations: list[OperationData],
         requested_ops_data_flags: dict[str, bool] | None = None,
     ) -> None:
         """Initialize the service with operation data.
 
         Args:
-            all_operations: List of all known operations
+            all_operations: List of all known operations as OperationData objects
             requested_ops_data_flags: Optional explicit is_data_action flags
         """
         self.op_sets = OperationSets.from_operations(all_operations)
@@ -229,8 +220,8 @@ class RoleRecommendationService:
             ctx, classified.data_wildcards, self.data_wildcard_ops, role_data_ops, "data"
         )
 
-        # Check for conditions
-        ctx.has_conditions = has_any_condition(ctx.permissions)
+        # Check for conditions using Permission model property
+        ctx.has_conditions = any(p.has_condition for p in ctx.permissions)
 
     def evaluate_role_slow_path(
         self,
@@ -243,8 +234,11 @@ class RoleRecommendationService:
         Used when full cache is not available.
         """
         for perm in ctx.permissions:
-            actions, not_actions, data_actions, not_data_actions = get_permission_actions(perm)
-            perm_has_condition = bool(get_permission_condition(perm))
+            actions = perm.actions
+            not_actions = perm.not_actions
+            data_actions = perm.data_actions
+            not_data_actions = perm.not_data_actions
+            perm_has_condition = perm.has_condition
 
             # Check explicit control operations
             for op in classified.control:
@@ -413,13 +407,22 @@ class RoleRecommendationService:
         return count
 
     def _extract_permission_lists(
-        self, permissions: list[dict]
+        self, permissions: list[Permission]
     ) -> tuple[list[str], list[str], list[str], list[str]]:
         """Extract all permission lists from role permissions.
 
-        Delegates to shared azure.roles.extract_permission_lists.
+        Aggregates all action lists from Permission objects.
         """
-        return extract_permission_lists(permissions)
+        actions: list[str] = []
+        not_actions: list[str] = []
+        data_actions: list[str] = []
+        not_data_actions: list[str] = []
+        for perm in permissions:
+            actions.extend(perm.actions)
+            not_actions.extend(perm.not_actions)
+            data_actions.extend(perm.data_actions)
+            not_data_actions.extend(perm.not_data_actions)
+        return actions, not_actions, data_actions, not_data_actions
 
     def calculate_permissions_count(
         self,
@@ -438,13 +441,17 @@ class RoleRecommendationService:
         data_count = 0
 
         for perm in ctx.permissions:
-            actions, not_actions, data_actions, not_data_actions = get_permission_actions(perm)
-
             control_count += count_net_permissions(
-                actions, not_actions, self.op_sets.all_control, self.op_sets.control_cache_key
+                perm.actions,
+                perm.not_actions,
+                self.op_sets.all_control,
+                self.op_sets.control_cache_key,
             )
             data_count += count_net_permissions(
-                data_actions, not_data_actions, self.op_sets.all_data, self.op_sets.data_cache_key
+                perm.data_actions,
+                perm.not_data_actions,
+                self.op_sets.all_data,
+                self.op_sets.data_cache_key,
             )
 
         return control_count, data_count
@@ -588,20 +595,19 @@ class RoleRecommendationService:
             if pattern not in ctx.matched_ops and covered > 0:
                 ctx.matched_ops.add(pattern)
 
-    def is_builtin_role(self, role: dict[str, Any]) -> bool:
+    def is_builtin_role(self, role: RoleDefinition) -> bool:
         """Check if a role is a built-in role."""
-        return get_role_properties(role).get("type") == "BuiltInRole"
+        return role.is_builtin
 
-    def extract_role_info(self, role: dict[str, Any]) -> tuple[str, str, str, list[dict[str, Any]]]:
-        """Extract role information from a role dict.
+    def extract_role_info(self, role: RoleDefinition) -> tuple[str, str, str, list[Permission]]:
+        """Extract role information from a RoleDefinition.
 
         Returns:
             Tuple of (role_id, role_name, description, permissions)
         """
-        props = get_role_properties(role)
         return (
-            get_role_id(role),
-            get_role_name(role),
-            props.get("description", ""),
-            props.get("permissions", []),
+            role.role_id,
+            role.role_name,
+            role.description,
+            role.properties.permissions,
         )

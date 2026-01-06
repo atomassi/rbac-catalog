@@ -127,9 +127,9 @@ async def api_recommend_roles(
     requested_ops, data_flags = request.parse_operations()
 
     # Get data from cache (preloaded at startup)
-    role_jsons, all_operations = await asyncio.gather(
-        deps.get_all_role_jsons(),
-        deps.get_operations_for_recommender(),
+    roles, all_operations = await asyncio.gather(
+        deps.get_all_roles(),
+        deps.get_all_operations(),
     )
 
     # Run CPU-bound recommendation in thread pool to avoid blocking event loop
@@ -139,7 +139,7 @@ async def api_recommend_roles(
         partial(
             recommend_roles,
             requested_ops,
-            role_jsons,
+            roles,
             all_operations,
             requested_ops_data_flags=data_flags,
         ),
@@ -198,7 +198,7 @@ async def ai_recommend_endpoint(
         else RecommenderMode.LLM.value
     )
     top_k = clamp(body.top_k, 1, MAX_TOP_K)
-    role_jsons = await deps.get_all_role_jsons()
+    roles = await deps.get_all_roles()
 
     # ─── Execute AI Recommendation ────────────────────────────────────────────
     # Run CPU-bound AI recommendation in thread pool to avoid blocking event loop
@@ -209,7 +209,7 @@ async def ai_recommend_endpoint(
             partial(
                 ai_recommend_roles,
                 query=query,
-                roles=role_jsons,
+                roles=roles,
                 top_k=top_k,
                 requested_mode=requested_mode,
             ),

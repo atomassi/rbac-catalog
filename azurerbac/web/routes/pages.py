@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import uuid
 from typing import Annotated, Final
@@ -11,7 +10,6 @@ from urllib.parse import unquote
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
-from azurerbac.azure.roles import get_role_name
 from azurerbac.web.constants import (
     DEFAULT_DAYS,
     DEFAULT_LIMIT,
@@ -21,7 +19,6 @@ from azurerbac.web.constants import (
     MAX_ROLE_EVENTS,
 )
 from azurerbac.web.dependencies import PagesDeps, get_pages_deps
-from azurerbac.web.filters import remove_is_service_role
 from azurerbac.web.services.pages import (
     OperationSearchParams,
     build_role_redirect_url,
@@ -34,7 +31,7 @@ from azurerbac.web.services.pages import (
     get_unique_providers,
     sort_operations,
 )
-from azurerbac.web.utils import clamp, slugify
+from azurerbac.web.utils import clamp, role_json_pretty, slugify
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +61,7 @@ async def role_detail(
         return deps.templates.TemplateResponse(request, "404.html", status_code=404)
 
     # Get role from cache or database
-    role, role_json, events_raw, first_scan = await get_role_from_cache_or_db(
+    role, role_def, events_raw, first_scan = await get_role_from_cache_or_db(
         deps.app_cache,
         deps.SessionLocal,
         deps.Role,
@@ -77,9 +74,7 @@ async def role_detail(
         return deps.templates.TemplateResponse(request, "404.html", status_code=404)
 
     # SEO: Validate slug and redirect if necessary
-    role_name = getattr(role, "role_name", "")
-    if not role_name and isinstance(role_json, dict):
-        role_name = get_role_name(role_json) or role_json.get("roleName", "")
+    role_name = getattr(role, "role_name", "") or (role_def.role_name if role_def else "")
     expected_slug = slugify(role_name)
 
     if slug != expected_slug:
@@ -98,12 +93,14 @@ async def role_detail(
         return RedirectResponse(url=url, status_code=301)
 
     # Enrich events with processed diff_json
-    enriched = [enrich_event_with_diff(ev, remove_is_service_role) for ev in events_raw]
+    enriched = [enrich_event_with_diff(ev) for ev in events_raw]
 
-    # Prepare response data
-    display_json = remove_is_service_role(role_json)
+    # Use RoleDefinition for clean output (excludes isServiceRole)
+    display_json = role_def.to_dict() if role_def else {}
     all_ops = await deps.get_all_operations()
-    effective_perms = compute_role_effective_permissions(role_json, all_ops, deps.app_cache)
+    effective_perms = (
+        compute_role_effective_permissions(role_def, all_ops, deps.app_cache) if role_def else {}
+    )
 
     return deps.templates.TemplateResponse(
         request,
@@ -112,7 +109,7 @@ async def role_detail(
             "role": role,
             "events": enriched,
             "first_scan": first_scan,
-            "role_json_pretty": json.dumps(display_json, indent=2, sort_keys=False, default=str),
+            "role_json_pretty": role_json_pretty(display_json),
             "effective_perms": effective_perms,
             "q": q,
             "page": page,
@@ -143,8 +140,9 @@ async def operations_list(
     page_size = clamp(limit, 1, MAX_PAGE_SIZE)
     page = clamp(page, 1, MAX_PAGE_NUMBER)
 
-    # Get all operations from cache
-    all_operations = await deps.get_all_operations()
+    # Get all operations from cache and convert to dicts for filtering/sorting
+    all_operations_raw = await deps.get_all_operations()
+    all_operations = [op.to_dict() for op in all_operations_raw]
     total_operations = len(all_operations)
 
     # Get unique providers for filter dropdown
@@ -250,7 +248,7 @@ async def operation_detail(
 
     # Find roles that allow this operation
     allowing_roles = get_roles_allowing_operation(
-        operation["name"], operation.get("is_data_action", False), deps.app_cache
+        operation.name, operation.is_data_action, deps.app_cache
     )
 
     return deps.templates.TemplateResponse(

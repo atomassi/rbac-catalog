@@ -7,7 +7,6 @@ from azurerbac.web.filters import (
     format_date,
     format_datetime,
     full_json_diff,
-    remove_is_service_role,
 )
 
 
@@ -189,72 +188,6 @@ class TestFormatDate:
         result = format_date(d_obj)
 
         assert result == "2024-06-15"
-
-
-class TestRemoveIsServiceRole:
-    """Tests for removing isServiceRole from display."""
-
-    def test_removes_from_top_level(self):
-        """Test removal from top-level dict."""
-        obj = {"roleName": "Reader", "isServiceRole": False}
-        result = remove_is_service_role(obj)
-
-        assert "isServiceRole" not in result
-        assert result["roleName"] == "Reader"
-
-    def test_removes_from_nested_dict(self):
-        """Test removal from nested dict."""
-        obj = {
-            "properties": {
-                "roleName": "Reader",
-                "isServiceRole": False,
-            }
-        }
-        result = remove_is_service_role(obj)
-
-        assert "isServiceRole" not in result["properties"]
-        assert result["properties"]["roleName"] == "Reader"
-
-    def test_removes_from_list_items(self):
-        """Test removal from items in a list."""
-        obj = [
-            {"roleName": "Reader", "isServiceRole": False},
-            {"roleName": "Writer", "isServiceRole": True},
-        ]
-        result = remove_is_service_role(obj)
-
-        assert "isServiceRole" not in result[0]
-        assert "isServiceRole" not in result[1]
-
-    @pytest.mark.parametrize(
-        "input_val,expected",
-        [
-            ("string", "string"),
-            (123, 123),
-            (True, True),
-            (None, None),
-        ],
-    )
-    def test_handles_primitive_values(self, input_val, expected):
-        """Test that primitive values are returned unchanged."""
-        assert remove_is_service_role(input_val) == expected
-
-    def test_deeply_nested_removal(self):
-        """Test removal in deeply nested structure."""
-        obj = {
-            "level1": {
-                "level2": {
-                    "level3": {
-                        "isServiceRole": True,
-                        "other": "value",
-                    }
-                }
-            }
-        }
-        result = remove_is_service_role(obj)
-
-        assert "isServiceRole" not in result["level1"]["level2"]["level3"]
-        assert result["level1"]["level2"]["level3"]["other"] == "value"
 
 
 """Additional tests for web/utils.py module."""

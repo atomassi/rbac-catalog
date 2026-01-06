@@ -42,10 +42,8 @@ class APIDeps(BaseDeps):
     Inherits app_cache and SessionLocal from BaseDeps.
     """
 
-    Role: Any  # SQLAlchemy model class
     get_all_operations: Callable
-    get_all_role_jsons: Callable
-    get_operations_for_recommender: Callable
+    get_all_roles: Callable  # Returns list[RoleDefinition]
 
 
 @dataclass(slots=True)

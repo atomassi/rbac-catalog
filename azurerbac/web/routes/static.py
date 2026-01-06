@@ -194,7 +194,7 @@ async def sitemap_xml(request: Request) -> Response:
     # Get operations from cache
     all_operations = app_cache.get_all_operations()
     for op in all_operations:
-        op_name = op.get("name", "")
+        op_name = op.name
         if op_name:
             # URL encode the operation name for the sitemap
             # Keep "/" unencoded since it's part of the URL path structure

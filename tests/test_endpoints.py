@@ -72,13 +72,8 @@ async def test_client(async_session_maker):
             cache=app_module.app_cache, session_factory=test_session_maker
         )
 
-    async def test_get_all_role_jsons():
-        return await app_module.get_all_role_jsons(
-            cache=app_module.app_cache, session_factory=test_session_maker
-        )
-
-    async def test_get_operations_for_recommender():
-        return await app_module.get_operations_for_recommender(
+    async def test_get_all_roles():
+        return await app_module.get_all_roles(
             cache=app_module.app_cache, session_factory=test_session_maker
         )
 
@@ -86,10 +81,8 @@ async def test_client(async_session_maker):
     test_api_deps = APIDeps(
         app_cache=app_module.app_cache,
         SessionLocal=test_session_maker,
-        Role=Role,
         get_all_operations=test_get_all_operations,
-        get_all_role_jsons=test_get_all_role_jsons,
-        get_operations_for_recommender=test_get_operations_for_recommender,
+        get_all_roles=test_get_all_roles,
     )
 
     # Create test DashboardDeps with test session

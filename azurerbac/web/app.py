@@ -61,8 +61,7 @@ from azurerbac.web.routes import pages as pages_routes
 from azurerbac.web.routes import static as static_routes
 from azurerbac.web.services.cache import (
     get_all_operations,
-    get_all_role_jsons,
-    get_operations_for_recommender,
+    get_all_roles,
 )
 from azurerbac.web.services.startup import (
     cache_refresh_task,
@@ -172,10 +171,8 @@ app.state.session_local = SessionLocal
 app.state.api_deps = APIDeps(
     app_cache=app_cache,
     SessionLocal=SessionLocal,
-    Role=Role,
     get_all_operations=get_all_operations,
-    get_all_role_jsons=get_all_role_jsons,
-    get_operations_for_recommender=get_operations_for_recommender,
+    get_all_roles=get_all_roles,
 )
 
 app.state.dashboard_deps = DashboardDeps(

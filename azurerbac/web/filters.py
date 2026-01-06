@@ -156,12 +156,3 @@ def format_date(value: Any) -> str:
     if (dt_obj := _parse_datetime_value(value)) is not None:
         return dt_obj.strftime("%Y-%m-%d")
     return str(value) if value is not None else ""
-
-
-def remove_is_service_role(obj: Any) -> Any:
-    """Recursively remove isServiceRole from a JSON object for display purposes."""
-    if isinstance(obj, dict):
-        return {k: remove_is_service_role(v) for k, v in obj.items() if k != "isServiceRole"}
-    if isinstance(obj, list):
-        return [remove_is_service_role(item) for item in obj]
-    return obj

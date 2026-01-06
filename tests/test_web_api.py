@@ -6,6 +6,34 @@ from unittest.mock import patch
 
 import pytest
 
+from azurerbac.azure.models import OperationData, Permission, RoleDefinition, RoleProperties
+from azurerbac.cache.models import CachedRole
+from azurerbac.core.constants import RoleStatus
+
+
+def _make_cached_role(
+    role_id: str, role_name: str, status: RoleStatus = RoleStatus.ACTIVE
+) -> CachedRole:
+    """Create a CachedRole for testing."""
+    definition = RoleDefinition(
+        name=role_id,
+        id=f"/providers/Microsoft.Authorization/roleDefinitions/{role_id}",
+        type="Microsoft.Authorization/roleDefinitions",
+        properties=RoleProperties(
+            role_name=role_name,
+            type="BuiltInRole",
+            description=f"Test role: {role_name}",
+            permissions=[
+                Permission(actions=["*"], not_actions=[], data_actions=[], not_data_actions=[])
+            ],
+            assignable_scopes=["/"],
+        ),
+    )
+    return CachedRole(
+        definition=definition,
+        status=status,
+    )
+
 
 class TestAppCache:
     """Tests for AppCache class."""
@@ -86,7 +114,7 @@ class TestOperationsIndex:
         results = cache.search_operations("virtualMachines", limit=10)
 
         assert len(results) == 3  # read, write, delete
-        assert all("virtualMachines" in r["name"] for r in results)
+        assert all("virtualMachines" in r.name for r in results)
 
     def test_search_operations_wildcard(self, sample_operations):
         """Test wildcard search."""
@@ -98,7 +126,7 @@ class TestOperationsIndex:
         results = cache.search_operations("microsoft.compute/*/read", limit=10, is_wildcard=True)
 
         assert len(results) == 1
-        assert results[0]["name"] == "Microsoft.Compute/virtualMachines/read"
+        assert results[0].name == "Microsoft.Compute/virtualMachines/read"
 
     def test_search_operations_case_insensitive(self, sample_operations):
         """Test that search is case insensitive."""
@@ -120,7 +148,7 @@ class TestOperationsIndex:
 
         results = cache.search_operations("Get Virtual", limit=10)
 
-        assert any("read" in r["name"].lower() for r in results)
+        assert any("read" in r.name.lower() for r in results)
 
     def test_search_operations_limit(self, sample_operations):
         """Test search respects limit."""
@@ -339,7 +367,7 @@ class TestUniqueProvidersCaching:
         # Compute and cache unique_providers
         providers = set()
         for op in sample_operations:
-            provider = op.get("provider_display_name")
+            provider = op.provider_display_name
             if provider:
                 providers.add(provider)
         expected = sorted(providers, key=str.casefold)
@@ -593,25 +621,24 @@ class TestRoleCoverageRaceCondition:
 
         # Set up mock operations
         sample_operations = [
-            {"name": "Microsoft.Storage/storageAccounts/read", "is_data_action": False},
-            {"name": "Microsoft.Storage/storageAccounts/write", "is_data_action": False},
+            OperationData(name="Microsoft.Storage/storageAccounts/read", is_data_action=False),
+            OperationData(name="Microsoft.Storage/storageAccounts/write", is_data_action=False),
         ]
 
         # Clear any stale cache
         clear_computed_caches()
 
-        # CORRECT order: precompute FIRST, then set data.roles_by_id
-        precompute_all_caches([mock_role_json], sample_operations)
+        role_definition = RoleDefinition.model_validate(mock_role_json)
 
-        # Set data.roles_by_id (no TTL) - this is the source of truth for get_all_role_jsons()
+        # CORRECT order: precompute FIRST, then set data.roles_by_id
+        precompute_all_caches([role_definition], sample_operations)
+
+        # Set data.roles_by_id (no TTL) - source of truth for cache.get_role_definitions()
         app_cache.cache.roles_by_id = {
-            "test-reader-role": {
-                "role_id": "test-reader-role",
-                "role_name": "Test Reader",
-                "role_type": "BuiltInRole",
-                "status": "active",
-                "role_json": mock_role_json,
-            }
+            "test-reader-role": CachedRole(
+                definition=role_definition,
+                status=RoleStatus.ACTIVE,
+            )
         }
 
         # Now call get_roles_allowing_operation with the global app_cache
@@ -649,7 +676,7 @@ class TestRoleCoverageRaceCondition:
             metadata=CacheMetadata(roles_count=1, operations_count=1),
             all_operations=[{"name": "Microsoft.Test/read", "is_data_action": False}],
             roles_by_id={
-                "role-1": {"role_id": "role-1", "role_json": {"name": "role-1", "properties": {}}}
+                "role-1": _make_cached_role("role-1", "Test Role"),
             },
             role_coverage=precomputed_coverage,
         )
@@ -670,7 +697,7 @@ class TestRoleCoverageRaceCondition:
     def test_roles_allowing_uses_roles_by_id_as_source_of_truth(self):
         """Verify roles_allowing uses data.roles_by_id as the source of truth.
 
-        This tests that get_roles_allowing_operation uses get_all_role_jsons()
+        This tests that get_roles_allowing_operation uses get_all_roles()
         which derives from data.roles_by_id, ensuring consistent data access.
         """
         from azurerbac.cache import app_cache, clear_computed_caches, precompute_all_caches
@@ -695,29 +722,28 @@ class TestRoleCoverageRaceCondition:
 
         # Set up mock operations
         sample_operations = [
-            {"name": "Microsoft.Storage/storageAccounts/read", "is_data_action": False},
+            OperationData(name="Microsoft.Storage/storageAccounts/read", is_data_action=False),
         ]
 
         # Clear any stale cache
         clear_computed_caches()
 
+        role_definition = RoleDefinition.model_validate(mock_role_json)
+
         # Precompute coverage cache
-        precompute_all_caches([mock_role_json], sample_operations)
+        precompute_all_caches([role_definition], sample_operations)
 
         # Set up data.roles_by_id directly (source of truth)
         app_cache.cache.roles_by_id = {
-            "test-reader-role": {
-                "role_id": "test-reader-role",
-                "role_name": "Test Reader",
-                "role_type": "BuiltInRole",
-                "status": "active",
-                "role_json": mock_role_json,
-            }
+            "test-reader-role": CachedRole(
+                definition=role_definition,
+                status=RoleStatus.ACTIVE,
+            )
         }
 
-        # Verify get_all_role_jsons() derives from data.roles_by_id
-        role_jsons = app_cache.get_all_role_jsons()
-        assert len(role_jsons) == 1
+        # Verify cache.get_role_definitions() derives from data.roles_by_id
+        role_definitions = app_cache.cache.get_role_definitions()
+        assert len(role_definitions) == 1
 
         # Now call get_roles_allowing_operation - should work!
         result = get_roles_allowing_operation(

@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import re
-from typing import Final
+from typing import Any, Final
 
 _SLUG_PATTERN: Final = re.compile(r"[^a-z0-9]+")
 
@@ -22,3 +23,12 @@ def clamp(value: int, min_val: int, max_val: int) -> int:
         clamp(page, 1, MAX_PAGE_NUMBER)  # Ensures 1 <= page <= MAX_PAGE_NUMBER
     """
     return max(min_val, min(value, max_val))
+
+
+def role_json_pretty(role: dict[str, Any]) -> str:
+    """Pretty-print role JSON.
+
+    The dict is expected to come from RoleDefinition.to_dict() which already
+    produces the correct field ordering. Just serialize it.
+    """
+    return json.dumps(role, indent=2, default=str)

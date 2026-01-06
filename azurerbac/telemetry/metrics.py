@@ -8,12 +8,18 @@ Query example: customMetrics | where name == "startup_duration_seconds"
 
 Usage:
     from azurerbac.telemetry import track_metric, track_cache_stats
+    from azurerbac.telemetry.timers import TimedDbQuery, TimedOperation
 
     # Track a single metric
     track_metric("cache_hit_rate", 0.95, {"cache_type": "roles"})
 
     # Track cache statistics
     track_cache_stats(app_cache)
+
+    # Time a database query
+    async with TimedDbQuery("fetch_roles") as timer:
+        result = await session.execute(select(Role))
+        timer.rows = len(result.scalars().all())
 
 OpenTelemetry provides:
 - Histograms with percentiles (p50, p95, p99) for durations
@@ -24,10 +30,7 @@ OpenTelemetry provides:
 from __future__ import annotations
 
 import logging
-import time
-from abc import ABC, abstractmethod
-from types import TracebackType
-from typing import TYPE_CHECKING, Any, Self
+from typing import TYPE_CHECKING, Any
 
 from azurerbac.settings import Settings, is_running_in_azure
 from azurerbac.telemetry.sender import MetricsSender
@@ -37,46 +40,22 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-
-class BaseTimer(ABC):
-    """Abstract base class for timing context managers.
-
-    Eliminates duplication between TimedDbQuery and TimedOperation.
-    Subclasses implement _on_exit to handle timing results.
-    """
-
-    __slots__ = ("_start_time",)
-
-    def __init__(self) -> None:
-        self._start_time: float = 0
-
-    def __enter__(self) -> Self:
-        self._start_time = time.time()
-        return self
-
-    def __exit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc_val: BaseException | None,
-        exc_tb: TracebackType | None,
-    ) -> None:
-        self._on_exit(time.time() - self._start_time, exc_type)
-
-    async def __aenter__(self) -> Self:
-        self._start_time = time.time()
-        return self
-
-    async def __aexit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc_val: BaseException | None,
-        exc_tb: TracebackType | None,
-    ) -> None:
-        self._on_exit(time.time() - self._start_time, exc_type)
-
-    @abstractmethod
-    def _on_exit(self, elapsed: float, exc_type: type[BaseException] | None) -> None:
-        """Handle timing result. Called on both sync and async exit."""
+__all__ = [
+    "flush_metrics",
+    "track_cache_hit",
+    "track_cache_refresh",
+    "track_cache_refresh_failure",
+    "track_cache_stats",
+    "track_db_query",
+    "track_duration",
+    "track_event",
+    "track_gauge",
+    "track_metric",
+    "track_operations_scan",
+    "track_role_scan",
+    "track_startup",
+    "track_worker_result",
+]
 
 
 def _metrics_enabled() -> bool:
@@ -198,6 +177,7 @@ def track_cache_stats(app_cache: AppCache) -> None:
         app_cache: The AppCache instance to get stats from.
     """
     if not _metrics_enabled():
+        logger.debug("Skipping track_cache_stats: metrics disabled")
         return
 
     try:
@@ -218,6 +198,7 @@ def track_startup(duration_seconds: float, roles_count: int, operations_count: i
         operations_count: Number of operations loaded
     """
     if not _metrics_enabled():
+        logger.debug("Skipping track_startup: metrics disabled")
         return
 
     try:
@@ -248,6 +229,7 @@ def track_cache_refresh(
         operations_count: Number of operations after refresh
     """
     if not _metrics_enabled():
+        logger.debug("Skipping track_cache_refresh: metrics disabled")
         return
 
     try:
@@ -280,6 +262,7 @@ def track_role_scan(
         roles_deleted: Roles marked as deleted
     """
     if not _metrics_enabled():
+        logger.debug("Skipping track_role_scan: metrics disabled")
         return
 
     try:
@@ -308,6 +291,7 @@ def track_operations_scan(duration_seconds: float, operations_count: int) -> Non
         operations_count: Total operations fetched
     """
     if not _metrics_enabled():
+        logger.debug("Skipping track_operations_scan: metrics disabled")
         return
 
     try:
@@ -355,6 +339,7 @@ def track_worker_result(
     logger.info(", ".join(parts))
 
     if not _metrics_enabled():
+        logger.debug("Skipping track_worker_result: metrics disabled")
         return
 
     try:
@@ -403,6 +388,7 @@ def track_db_query(
     logger.debug("DB query: %s (%.3fs)%s", query_name, duration_seconds, rows_str)
 
     if not _metrics_enabled():
+        logger.debug("Skipping track_db_query: metrics disabled")
         return
 
     try:
@@ -437,6 +423,7 @@ def track_cache_hit(
     logger.debug("Cache %s: %s%s", hit_str, cache_type, key_str)
 
     if not _metrics_enabled():
+        logger.debug("Skipping track_cache_hit: metrics disabled")
         return
 
     try:
@@ -468,65 +455,10 @@ def track_cache_refresh_failure(
     logger.warning("Cache refresh failed (%s): %s", source, reason)
 
     if not _metrics_enabled():
+        logger.debug("Skipping track_cache_refresh_failure: metrics disabled")
         return
 
     try:
         track_event("cache_refresh_failure", {"source": source, "reason": reason})
     except Exception as e:
         logger.exception("Failed to track cache refresh failure: %s", e)
-
-
-class TimedDbQuery(BaseTimer):
-    """Context manager for timing database queries and tracking metrics.
-
-    Usage:
-        async with TimedDbQuery("fetch_roles") as timer:
-            result = await session.execute(select(Role))
-            rows = result.scalars().all()
-            timer.rows = len(rows)
-
-    Or simpler (without row count):
-        with TimedDbQuery("fetch_roles"):
-            result = await session.execute(select(Role))
-    """
-
-    __slots__ = ("query_name", "rows")
-
-    def __init__(self, query_name: str) -> None:
-        super().__init__()
-        self.query_name = query_name
-        self.rows: int | None = None
-
-    def _on_exit(self, elapsed: float, exc_type: type[BaseException] | None) -> None:
-        track_db_query(self.query_name, elapsed, self.rows)
-
-
-class TimedOperation(BaseTimer):
-    """Context manager for timing any operation with debug logging.
-
-    Usage:
-        with TimedOperation("computing role coverage", logger):
-            # expensive computation
-            pass
-
-    Logs at DEBUG level when entering and exiting, with elapsed time.
-    """
-
-    __slots__ = ("log", "operation_name")
-
-    def __init__(self, operation_name: str, log: logging.Logger | None = None) -> None:
-        super().__init__()
-        self.operation_name = operation_name
-        self.log = log or logger
-
-    def __enter__(self) -> Self:
-        self.log.debug("Starting: %s", self.operation_name)
-        return super().__enter__()
-
-    async def __aenter__(self) -> Self:
-        self.log.debug("Starting: %s", self.operation_name)
-        return await super().__aenter__()
-
-    def _on_exit(self, elapsed: float, exc_type: type[BaseException] | None) -> None:
-        status = "Failed" if exc_type else "Completed"
-        self.log.debug("%s: %s (%.3fs)", status, self.operation_name, elapsed)

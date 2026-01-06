@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 import datetime as dt
+import logging
 from collections.abc import Callable
 from typing import Any, Final, NamedTuple
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from azurerbac.backgroundjobs.utils import rebuild_cache_if_needed
+from azurerbac.cache import invalidate_and_rebuild_cache
 from azurerbac.core import Operation, OperationScanStatus, utcnow
+
+logger = logging.getLogger(__name__)
 
 
 class FieldMapping(NamedTuple):
@@ -122,12 +125,8 @@ async def apply_operations_scan(session: AsyncSession, operations: list[dict]) -
 
     # Invalidate and rebuild cache if new operations were added
     if created > 0:
-        await rebuild_cache_if_needed(
-            session,
-            reason="new operations added",
-            logger_name="azurerbac.operations_monitor",
-            created=created,
-        )
+        logger.info("New operations added: %d, triggering cache rebuild", created)
+        await invalidate_and_rebuild_cache(session)
 
     return {
         "created": created,

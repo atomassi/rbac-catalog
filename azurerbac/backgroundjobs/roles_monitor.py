@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import datetime as dt
+import logging
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from azurerbac.backgroundjobs.utils import parse_azure_date, rebuild_cache_if_needed
+from azurerbac.backgroundjobs.utils import parse_azure_date
+from azurerbac.cache import invalidate_and_rebuild_cache
 from azurerbac.core import (
     EventType,
     Role,
@@ -17,6 +19,8 @@ from azurerbac.core import (
     utcnow,
 )
 from azurerbac.core.diffing import diff_roles, diff_summary
+
+logger = logging.getLogger(__name__)
 
 # Type alias for parsed role data
 type RoleData = tuple[str, str, str | None, dt.datetime | None, dt.datetime | None]
@@ -241,14 +245,13 @@ async def apply_role_scan(session: AsyncSession, roles: list[dict]) -> dict:
 
     changes = created + updated + deleted_count
     if changes > 0:
-        await rebuild_cache_if_needed(
-            session,
-            reason="roles changed",
-            logger_name="azurerbac.backgroundjobs",
-            created=created,
-            updated=updated,
-            deleted=deleted_count,
+        logger.info(
+            "Roles changed (created=%d, updated=%d, deleted=%d), triggering cache rebuild",
+            created,
+            updated,
+            deleted_count,
         )
+        await invalidate_and_rebuild_cache(session)
 
     return {
         "created": created,

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import threading
-from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -218,30 +217,18 @@ async def rebuild_cache(
         _rebuild_lock.release()
 
 
-async def invalidate_and_rebuild_cache(
-    session: AsyncSession,
-    reason: str,
-    logger_name: str = "azurerbac.cache",
-    update_in_memory: bool = False,
-    **kwargs: Any,
-) -> bool:
-    """Invalidate the cache and rebuild it from the database.
+async def invalidate_and_rebuild_cache(session: AsyncSession) -> bool:
+    """Invalidate and rebuild cache from database.
 
-    This is typically called by the worker process after detecting changes.
-    The worker saves to disk; web app processes will reload via disk mtime check.
+    Called by worker process after detecting role/operation changes.
+    Deletes cache file and rebuilds from DB. Web processes reload via mtime check.
 
     Args:
         session: SQLAlchemy async session to use for queries
-        reason: Human-readable reason for invalidation (for logging)
-        logger_name: Logger name to use for log messages
-        update_in_memory: If True, also update the in-memory app_cache.
-            Default False since worker process doesn't serve web requests.
-        **kwargs: Additional context to log (e.g., created=5, updated=2)
 
     Returns:
         True if cache was rebuilt successfully, False otherwise
     """
-    log = logging.getLogger(logger_name)
-    log.info(f"Invalidating cache: {reason} - {kwargs}")
+    logger.info("Invalidating and rebuilding cache")
     delete_cache_file()
-    return await rebuild_cache(session, logger_name, update_in_memory=update_in_memory)
+    return await rebuild_cache(session, update_in_memory=False)

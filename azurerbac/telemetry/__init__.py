@@ -1,9 +1,7 @@
 """Telemetry module: Application Insights metrics and logging."""
 
-from .logging import WorkerOperationContext, configure_logging, get_logger
+from .logging import configure_logging, get_logger
 from .metrics import (
-    TimedDbQuery,
-    TimedOperation,
     flush_metrics,
     track_cache_hit,
     track_cache_refresh,
@@ -19,6 +17,8 @@ from .metrics import (
     track_startup,
     track_worker_result,
 )
+from .timers import TimedDbQuery, TimedOperation
+from .tracing import WorkerOperationContext
 
 __all__ = [
     "TimedDbQuery",

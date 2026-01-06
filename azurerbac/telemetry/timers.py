@@ -1,0 +1,126 @@
+"""Timing utilities for metrics and debugging.
+
+Provides context managers for timing operations with optional metric tracking.
+
+Usage:
+    from azurerbac.telemetry.timers import TimedDbQuery, TimedOperation
+
+    # Track database query duration
+    async with TimedDbQuery("fetch_roles") as timer:
+        result = await session.execute(select(Role))
+        timer.rows = len(result.scalars().all())
+
+    # Debug timing for any operation
+    with TimedOperation("computing role coverage", logger):
+        expensive_computation()
+"""
+
+from __future__ import annotations
+
+import logging
+import time
+from abc import ABC, abstractmethod
+from types import TracebackType
+from typing import Self
+
+logger = logging.getLogger(__name__)
+
+
+class BaseTimer(ABC):
+    """Abstract base class for timing context managers.
+
+    Eliminates duplication between TimedDbQuery and TimedOperation.
+    Subclasses implement _on_exit to handle timing results.
+    """
+
+    __slots__ = ("_start_time",)
+
+    def __init__(self) -> None:
+        self._start_time: float = 0
+
+    def __enter__(self) -> Self:
+        self._start_time = time.time()
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
+        self._on_exit(time.time() - self._start_time, exc_type)
+
+    async def __aenter__(self) -> Self:
+        self._start_time = time.time()
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
+        self._on_exit(time.time() - self._start_time, exc_type)
+
+    @abstractmethod
+    def _on_exit(self, elapsed: float, exc_type: type[BaseException] | None) -> None:
+        """Handle timing result. Called on both sync and async exit."""
+
+
+class TimedDbQuery(BaseTimer):
+    """Context manager for timing database queries and tracking metrics.
+
+    Usage:
+        async with TimedDbQuery("fetch_roles") as timer:
+            result = await session.execute(select(Role))
+            rows = result.scalars().all()
+            timer.rows = len(rows)
+
+    Or simpler (without row count):
+        with TimedDbQuery("fetch_roles"):
+            result = await session.execute(select(Role))
+    """
+
+    __slots__ = ("query_name", "rows")
+
+    def __init__(self, query_name: str) -> None:
+        super().__init__()
+        self.query_name = query_name
+        self.rows: int | None = None
+
+    def _on_exit(self, elapsed: float, exc_type: type[BaseException] | None) -> None:
+        # Import here to avoid circular dependency
+        from azurerbac.telemetry.metrics import track_db_query
+
+        track_db_query(self.query_name, elapsed, self.rows)
+
+
+class TimedOperation(BaseTimer):
+    """Context manager for timing any operation with debug logging.
+
+    Usage:
+        with TimedOperation("computing role coverage", logger):
+            # expensive computation
+            pass
+
+    Logs at DEBUG level when entering and exiting, with elapsed time.
+    """
+
+    __slots__ = ("log", "operation_name")
+
+    def __init__(self, operation_name: str, log: logging.Logger | None = None) -> None:
+        super().__init__()
+        self.operation_name = operation_name
+        self.log = log or logger
+
+    def __enter__(self) -> Self:
+        self.log.debug("Starting: %s", self.operation_name)
+        return super().__enter__()
+
+    async def __aenter__(self) -> Self:
+        self.log.debug("Starting: %s", self.operation_name)
+        return await super().__aenter__()
+
+    def _on_exit(self, elapsed: float, exc_type: type[BaseException] | None) -> None:
+        status = "Failed" if exc_type else "Completed"
+        self.log.debug("%s: %s (%.3fs)", status, self.operation_name, elapsed)

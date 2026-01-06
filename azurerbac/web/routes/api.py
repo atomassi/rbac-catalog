@@ -201,12 +201,18 @@ async def ai_recommend_endpoint(
     role_jsons = await deps.get_all_role_jsons()
 
     # ─── Execute AI Recommendation ────────────────────────────────────────────
+    # Run CPU-bound AI recommendation in thread pool to avoid blocking event loop
     try:
-        recommendations, actual_mode = await _execute_ai_recommendation(
-            query=query,
-            role_jsons=role_jsons,
-            top_k=top_k,
-            requested_mode=requested_mode,
+        loop = asyncio.get_running_loop()
+        recommendations, actual_mode = await loop.run_in_executor(
+            None,
+            partial(
+                ai_recommend_roles,
+                query=query,
+                roles=role_jsons,
+                top_k=top_k,
+                requested_mode=requested_mode,
+            ),
         )
     except EngineNotAvailableError as e:
         logger.warning("Engine not available: mode=%s missing=%s", e.mode, e.missing_components)
@@ -235,35 +241,4 @@ async def ai_recommend_endpoint(
         recommendations=recommendations,
         total=len(recommendations),
         engine=AIEngineInfo(mode=actual_mode, fallback=actual_mode != requested_mode),
-    )
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Private Helpers (Single Responsibility)
-# ─────────────────────────────────────────────────────────────────────────────
-async def _execute_ai_recommendation(
-    query: str,
-    role_jsons: list[dict],
-    top_k: int,
-    requested_mode: str,
-) -> tuple[list, str]:
-    """Execute AI recommendation in thread pool for CPU-bound engines.
-
-    Returns:
-        Tuple of (recommendations_list, actual_mode_used)
-
-    Raises:
-        EngineNotAvailableError: If the requested engine is not available
-        ColBERTInitializationError: If ColBERT fails to initialize
-    """
-    loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(
-        None,
-        partial(
-            ai_recommend_roles,
-            query=query,
-            roles=role_jsons,
-            top_k=top_k,
-            requested_mode=requested_mode,
-        ),
     )

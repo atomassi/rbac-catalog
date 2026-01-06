@@ -6,70 +6,59 @@ import logging
 from typing import Any, Final
 
 from azurerbac.azure.http import authenticated_management_async_client, management_url
+from azurerbac.azure.models import OperationData
 
 logger = logging.getLogger("azurerbac.azure_operations")
 
 _API_VERSION: Final = "2018-01-01-preview"
 
 
-def _flatten_provider_operations_payload(data: dict[str, Any]) -> list[dict[str, Any]]:
-    """Flatten Azure providerOperations payload into operation rows.
+def _flatten_provider_operations_payload(data: dict[str, Any]) -> list[OperationData]:
+    """Flatten Azure providerOperations payload into OperationData models.
 
     This is a pure transformation helper so it can be unit-tested without
     making network calls.
     """
-    operations: list[dict[str, Any]] = []
+    operations: list[OperationData] = []
     for provider in data.get("value", []) or []:
         provider_display_name = provider.get("displayName", "")
 
-        # Provider-level operations
-        operations.extend(
-            {
-                "name": op.get("name", ""),
-                "provider_display_name": provider_display_name,
-                "resource_type": None,
-                "resource_type_display_name": None,
-                "display_name": op.get("displayName"),
-                "description": op.get("description"),
-                "origin": op.get("origin"),
-                "is_data_action": op.get("isDataAction", False),
-                "operation_json": op,
-            }
-            for op in provider.get("operations", []) or []
-        )
+        # Provider-level operations (no resource type)
+        for op in provider.get("operations", []) or []:
+            operations.append(
+                OperationData.from_azure(
+                    op,
+                    provider_display_name=provider_display_name,
+                )
+            )
 
         # Resource type operations
         for rt in provider.get("resourceTypes", []) or []:
             resource_type_name = rt.get("name", "")
             resource_type_display_name = rt.get("displayName", "")
 
-            operations.extend(
-                {
-                    "name": op.get("name", ""),
-                    "provider_display_name": provider_display_name,
-                    "resource_type": resource_type_name,
-                    "resource_type_display_name": resource_type_display_name,
-                    "display_name": op.get("displayName"),
-                    "description": op.get("description"),
-                    "origin": op.get("origin"),
-                    "is_data_action": op.get("isDataAction", False),
-                    "operation_json": op,
-                }
-                for op in rt.get("operations", []) or []
-            )
+            for op in rt.get("operations", []) or []:
+                operations.append(
+                    OperationData.from_azure(
+                        op,
+                        provider_display_name=provider_display_name,
+                        resource_type=resource_type_name,
+                        resource_type_display_name=resource_type_display_name,
+                    )
+                )
 
     return operations
 
 
-async def fetch_provider_operations() -> list[dict[str, Any]]:
+async def fetch_provider_operations() -> list[OperationData]:
     """Fetch all provider operations from Azure.
 
     Calls: GET https://management.azure.com/providers/Microsoft.Authorization/providerOperations
            ?api-version=2018-01-01-preview&$expand=resourceTypes
 
-    Returns a flattened list of operations with provider and resource type context.
+    Returns a list of OperationData models with provider and resource type context.
     """
-    operations: list[dict[str, Any]] = []
+    operations: list[OperationData] = []
 
     url = management_url("/providers/Microsoft.Authorization/providerOperations")
     params = {"api-version": _API_VERSION, "$expand": "resourceTypes"}

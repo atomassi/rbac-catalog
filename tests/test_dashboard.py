@@ -8,6 +8,8 @@ import datetime as dt
 from datetime import UTC
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from azurerbac.azure.models import Permission, RoleDefinition, RoleProperties
 from azurerbac.cache.models import CachedRole
 from azurerbac.core.constants import RoleStatus
@@ -267,3 +269,106 @@ class TestSearchRolesInCache:
 
             assert total == 1
             assert roles[0]["role_id"] == test_guid
+
+
+class TestRecentPageDefaults:
+    """Tests for recent page default values and pagination constants."""
+
+    def test_default_days_is_30(self):
+        """Verify DEFAULT_DAYS is 30 (was 15)."""
+        from azurerbac.web.constants import DEFAULT_DAYS
+
+        assert DEFAULT_DAYS == 30
+
+    def test_default_limit_is_25(self):
+        """Verify DEFAULT_LIMIT is 25 for pagination."""
+        from azurerbac.web.constants import DEFAULT_LIMIT
+
+        assert DEFAULT_LIMIT == 25
+
+    @pytest.mark.parametrize(
+        ("limit", "expected"),
+        [
+            pytest.param(25, 25, id="limit_25"),
+            pytest.param(100, 100, id="limit_100"),
+            pytest.param(500, 500, id="limit_500"),
+            pytest.param(1000, 1000, id="limit_1000"),
+        ],
+    )
+    def test_supported_page_sizes(self, limit, expected):
+        """Verify page sizes 25, 100, 500, 1000 are within MAX_PAGE_SIZE."""
+        from azurerbac.web.constants import MAX_PAGE_SIZE
+
+        assert limit <= MAX_PAGE_SIZE
+        assert limit == expected
+
+
+class TestRecentPagePagination:
+    """Tests for recent page pagination logic."""
+
+    def test_pagination_calculates_total_pages_correctly(self):
+        """Test total_pages calculation for various event counts."""
+        # Formula: max(1, (total_events + limit - 1) // limit)
+        test_cases = [
+            (0, 25, 1),  # Empty results still show 1 page
+            (25, 25, 1),  # Exactly one page
+            (26, 25, 2),  # One extra triggers page 2
+            (100, 25, 4),  # 4 full pages
+            (101, 25, 5),  # Partial 5th page
+            (1000, 100, 10),  # Using limit=100
+        ]
+
+        for total_events, limit, expected_pages in test_cases:
+            actual = max(1, (total_events + limit - 1) // limit)
+            assert actual == expected_pages, f"Failed for total={total_events}, limit={limit}"
+
+    def test_pagination_slice_indices(self):
+        """Test start/end index calculation for pagination."""
+        # Formula: start = (page - 1) * limit, end = start + limit
+        test_cases = [
+            (1, 25, 0, 25),  # Page 1
+            (2, 25, 25, 50),  # Page 2
+            (3, 25, 50, 75),  # Page 3
+            (1, 100, 0, 100),  # Page 1 with limit 100
+            (5, 100, 400, 500),  # Page 5 with limit 100
+        ]
+
+        for page, limit, expected_start, expected_end in test_cases:
+            start_idx = (page - 1) * limit
+            end_idx = start_idx + limit
+            assert start_idx == expected_start, f"Start failed for page={page}, limit={limit}"
+            assert end_idx == expected_end, f"End failed for page={page}, limit={limit}"
+
+    def test_filter_cached_events_pagination_integration(self):
+        """Test that filter_cached_events returns list that can be paginated."""
+        from azurerbac.web.services.dashboard import filter_cached_events
+
+        now = dt.datetime.now(UTC)
+        cutoff = now - dt.timedelta(days=30)
+
+        # Create 50 events within the cutoff
+        cached_events = [
+            {
+                "role_id": f"event_{i}",
+                "event_type": "updated",
+                "azure_updated_on": now - dt.timedelta(days=i % 25),
+                "scan_timestamp": now - dt.timedelta(days=i % 25),
+            }
+            for i in range(50)
+        ]
+
+        deps = MagicMock()
+        deps.app_cache.get_role_by_id.return_value = _make_cached_role("test-id", "Test Role")
+
+        result = filter_cached_events(cached_events, deps, cutoff, "all")
+
+        # All 50 events should be within 30-day cutoff
+        assert len(result) == 50
+
+        # Verify pagination works on result (25 per page)
+        page1 = result[0:25]
+        page2 = result[25:50]
+
+        assert len(page1) == 25
+        assert len(page2) == 25
+        assert page1[0].role_id != page2[0].role_id

@@ -31,9 +31,9 @@ def make_role(
     name: str,
     description: str,
     actions: list[str],
-    not_actions: list[str] = None,
-    data_actions: list[str] = None,
-    condition: str = None,
+    not_actions: list[str] | None = None,
+    data_actions: list[str] | None = None,
+    condition: str | None = None,
 ) -> dict:
     """Helper to create a role definition."""
     permission = {
@@ -114,7 +114,11 @@ CONDITIONAL_ROLES = [
         "User Access Administrator",
         "Lets you manage user access to Azure resources.",
         actions=["*/read", "Microsoft.Authorization/*", "Microsoft.Support/*"],
-        condition="((!(ActionMatches{'Microsoft.Authorization/roleAssignments/write'})) OR (@Request[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {acdd72a7-3385-48ef-bd42-f606fba81ae7}))",
+        condition=(
+            "((!(ActionMatches{'Microsoft.Authorization/roleAssignments/write'})) OR "
+            "(@Request[Microsoft.Authorization/roleAssignments:RoleDefinitionId] "
+            "ForAnyOfAnyValues:GuidEquals {acdd72a7-3385-48ef-bd42-f606fba81ae7}))"
+        ),
     ),
     make_role(
         "b24988ac-6180-42a0-ab88-20f7382dd24d",
@@ -135,7 +139,11 @@ CONDITIONAL_ROLES = [
             "Microsoft.Authorization/roleAssignments/write",
             "Microsoft.Authorization/roleDefinitions/read",
         ],
-        condition="((!(ActionMatches{'Microsoft.Authorization/roleAssignments/write'})) OR (@Request[Microsoft.Authorization/roleAssignments:PrincipalType] StringEqualsIgnoreCase 'ServicePrincipal'))",
+        condition=(
+            "((!(ActionMatches{'Microsoft.Authorization/roleAssignments/write'})) OR "
+            "(@Request[Microsoft.Authorization/roleAssignments:PrincipalType] "
+            "StringEqualsIgnoreCase 'ServicePrincipal'))"
+        ),
     ),
 ]
 
@@ -257,7 +265,7 @@ for i, (name, action) in enumerate(RBAC_ROLE_TEMPLATES):
                 action,
                 "Microsoft.Authorization/roleAssignments/read",
                 "Microsoft.Authorization/roleAssignments/write",
-                "Microsoft.Authorization/roleAssignments/delete",  # This is what the test checks for
+                "Microsoft.Authorization/roleAssignments/delete",
                 "Microsoft.Resources/subscriptions/resourceGroups/read",
             ],
         )
@@ -388,7 +396,7 @@ def make_operation_display_fields(name: str, resource: str) -> tuple[str, str]:
 
 async def seed_database(db_url: str) -> None:
     """Seed the database with test data."""
-    print(f"Seeding database: {db_url}")
+    print(f"Seeding database: {db_url}")  # noqa: T201
 
     engine = create_async_engine(db_url, echo=False)
 
@@ -414,9 +422,7 @@ async def seed_database(db_url: str) -> None:
                 role_name=role_data["name"],
                 event_type="created",
                 role_json=role_data["role_json"],
-                azure_updated_on=datetime.fromisoformat(azure_updated.replace("Z", "+00:00"))
-                if azure_updated
-                else None,
+                azure_updated_on=datetime.fromisoformat(azure_updated) if azure_updated else None,
                 diff_json={},
                 summary="<root>",
             )
@@ -446,10 +452,11 @@ async def seed_database(db_url: str) -> None:
         await session.commit()
 
     await engine.dispose()
-    print(f"✓ Seeded {len(TEST_ROLES)} roles and {len(TEST_OPERATIONS)} operations")
+    print(f"✓ Seeded {len(TEST_ROLES)} roles and {len(TEST_OPERATIONS)} operations")  # noqa: T201
 
 
-async def main():
+async def main() -> None:
+    """Run the seed script."""
     db_url = os.environ.get("DB_CONNECTION_STRING", "sqlite+aiosqlite:///:memory:")
     await seed_database(db_url)
 

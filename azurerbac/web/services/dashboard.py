@@ -39,11 +39,13 @@ class SortField(StrEnum):
 
 
 # Sort key functions for enriched roles (maps SortField -> sort key function)
+# For UPDATED, use a minimum datetime for None values to ensure consistent comparison
+_MIN_DATETIME: Final[dt.datetime] = dt.datetime.min.replace(tzinfo=dt.UTC)
 _ROLE_SORT_KEYS: Final[dict[str, Callable[[dict], Any]]] = {
     SortField.ACTIONS: lambda r: r.get("actions_count", 0),
     SortField.DATA_ACTIONS: lambda r: r.get("data_actions_count", 0),
     SortField.ID: lambda r: (r.get("role_id") or "").lower(),
-    SortField.UPDATED: lambda r: r.get("updated_on") or "",
+    SortField.UPDATED: lambda r: r.get("updated_on") or _MIN_DATETIME,
     SortField.NAME: lambda r: (r.get("role_name") or "").lower(),
 }
 

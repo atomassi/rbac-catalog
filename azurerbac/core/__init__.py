@@ -18,7 +18,7 @@ from .patterns import (
 )
 from .schema import ensure_db
 from .singleton import ThreadSafeSingleton
-from .utils import ensure_utc, ensure_utc_or_min, normalize_uuid_or_none, utcnow
+from .utils import ensure_utc, ensure_utc_or_min, format_iso_z, normalize_uuid_or_none, utcnow
 
 __all__ = [
     "HIGH_PRIVILEGE_ROLES",
@@ -37,6 +37,7 @@ __all__ = [
     "ensure_db",
     "ensure_utc",
     "ensure_utc_or_min",
+    "format_iso_z",
     "is_wildcard_pattern",
     "matches_pattern",
     "normalize_uuid_or_none",

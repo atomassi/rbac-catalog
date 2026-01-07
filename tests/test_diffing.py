@@ -205,3 +205,24 @@ def test_condition_change_detected(test_id):
     d = diff_roles(_to_model(old_dict), _to_model(new_dict))
     assert d["changed"] is True
     assert any(c["path"] == "properties.permissions" for c in d["changes"])
+
+
+def test_diff_timestamps_use_z_suffix():
+    """Verify that diff output uses 'Z' suffix format for timestamps."""
+    old_dict = _reader_role_dict()
+    new_dict = copy.deepcopy(old_dict)
+    # Change updatedOn to trigger a diff
+    new_dict["properties"]["updatedOn"] = "2025-12-17T09:58:12.949Z"
+
+    d = diff_roles(_to_model(old_dict), _to_model(new_dict))
+
+    # Find the updatedOn change
+    updated_change = next(c for c in d["changes"] if c["path"] == "properties.updatedOn")
+
+    # Both from and to should use Z suffix (not +00:00)
+    assert updated_change["from"].endswith(
+        "Z"
+    ), f"Expected 'Z' suffix, got: {updated_change['from']}"
+    assert updated_change["to"].endswith("Z"), f"Expected 'Z' suffix, got: {updated_change['to']}"
+    assert "+00:00" not in updated_change["from"]
+    assert "+00:00" not in updated_change["to"]

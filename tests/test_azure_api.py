@@ -770,8 +770,9 @@ class TestRoleDefinitionToDict:
         assert props["type"] == "BuiltInRole"
         assert props["assignableScopes"] == ["/"]
         assert len(props["permissions"]) == 1
-        assert props["createdOn"] == "2024-01-01T00:00:00+00:00"
-        assert props["updatedOn"] == "2024-06-01T00:00:00+00:00"
+        # Timestamps should use Z suffix with milliseconds precision (Azure format)
+        assert props["createdOn"] == "2024-01-01T00:00:00.000Z"
+        assert props["updatedOn"] == "2024-06-01T00:00:00.000Z"
 
     def test_to_dict_permission_values(self, sample_role):
         """to_dict correctly preserves permission values."""
@@ -781,6 +782,43 @@ class TestRoleDefinitionToDict:
         assert perm["notActions"] == []
         assert perm["dataActions"] == ["Microsoft.Test/data/read"]
         assert perm["notDataActions"] == []
+
+    def test_to_dict_timestamps_use_z_suffix(self, sample_role):
+        """to_dict timestamps use 'Z' suffix matching Azure API format."""
+        result = sample_role.to_dict()
+        props = result["properties"]
+
+        # Both timestamps should use Z suffix (not +00:00)
+        assert props["createdOn"].endswith("Z"), f"Expected Z suffix: {props['createdOn']}"
+        assert props["updatedOn"].endswith("Z"), f"Expected Z suffix: {props['updatedOn']}"
+        assert "+00:00" not in props["createdOn"]
+        assert "+00:00" not in props["updatedOn"]
+
+    def test_to_dict_timestamps_with_microseconds(self):
+        """to_dict handles timestamps with microseconds correctly."""
+
+        role = RoleDefinition.model_validate(
+            {
+                "id": "/providers/Microsoft.Authorization/roleDefinitions/test-id",
+                "name": "test-id",
+                "type": "Microsoft.Authorization/roleDefinitions",
+                "properties": {
+                    "roleName": "Test",
+                    "type": "BuiltInRole",
+                    "description": "",
+                    "assignableScopes": ["/"],
+                    "permissions": [],
+                    "createdOn": "2025-12-17T09:58:12.949Z",
+                    "updatedOn": "2025-12-17T09:58:12.949Z",
+                },
+            }
+        )
+        result = role.to_dict()
+        props = result["properties"]
+
+        # Should preserve microseconds and use Z suffix
+        assert props["createdOn"] == "2025-12-17T09:58:12.949Z"
+        assert props["updatedOn"] == "2025-12-17T09:58:12.949Z"
 
 
 class TestRolePropertiesEdgeCases:

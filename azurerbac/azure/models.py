@@ -7,6 +7,8 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from azurerbac.core.utils import format_iso_z
+
 # Mapping of lowercase field names to canonical Python attribute names
 _PERMISSION_FIELD_MAP = {
     "actions": "actions",
@@ -258,13 +260,13 @@ class RoleDefinition(BaseModel):
             "properties": {
                 "assignableScopes": props.assignable_scopes,
                 "createdBy": props.created_by,
-                "createdOn": props.created_on.isoformat() if props.created_on else None,
+                "createdOn": format_iso_z(props.created_on),
                 "description": props.description,
                 "permissions": [p.to_dict() for p in props.permissions],
                 "roleName": props.role_name,
                 "type": props.type,
                 "updatedBy": props.updated_by,
-                "updatedOn": props.updated_on.isoformat() if props.updated_on else None,
+                "updatedOn": format_iso_z(props.updated_on),
             },
             "type": self.type,
         }

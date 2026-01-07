@@ -43,16 +43,22 @@ async def recent_changes(
     q: str | None = None,
     days: int = DEFAULT_DAYS,
     event_type: str = "all",
+    page: int = DEFAULT_PAGE,
+    limit: int = DEFAULT_LIMIT,
     ai: int | None = None,
 ) -> Response:
     """Recent changes page - shows recent role changes."""
-    logger.info("Dashboard /recent: days=%d event_type=%s", days, event_type)
+    logger.info(
+        "Dashboard /recent: days=%d event_type=%s page=%d limit=%d", days, event_type, page, limit
+    )
     return await _render_recent(
         request=request,
         deps=deps,
         q=q,
         days=days,
         event_type=event_type,
+        page=page,
+        limit=limit,
         ai=ai,
     )
 
@@ -97,6 +103,8 @@ async def _render_recent(
     q: str | None = None,
     days: int = DEFAULT_DAYS,
     event_type: str = "all",
+    page: int = DEFAULT_PAGE,
+    limit: int = DEFAULT_LIMIT,
     ai: int | None = None,
 ) -> Response:
     """Render the recent changes page."""
@@ -112,6 +120,8 @@ async def _render_recent(
     # Get common data
     common = await get_common_dashboard_data(deps)
     days = clamp(days, 1, MAX_DAYS)
+    page = clamp(page, 1, MAX_PAGE_NUMBER)
+    limit = clamp(limit, 1, MAX_PAGE_SIZE)
 
     events = []
     cutoff = dt.datetime.now(dt.UTC) - dt.timedelta(days=days)
@@ -128,11 +138,20 @@ async def _render_recent(
             session, deps, common["last_scan"], common["first_scan"]
         )
 
+    # Pagination: calculate total and slice
+    total_events = len(events)
+    total_pages = max(1, (total_events + limit - 1) // limit)
+    page = min(page, total_pages)  # Clamp to available pages
+    start_idx = (page - 1) * limit
+    end_idx = start_idx + limit
+    paginated_events = events[start_idx:end_idx]
+
     return deps.templates.TemplateResponse(
         request,
         "index.html",
         {
-            "events": events,
+            "events": paginated_events,
+            "total_events": total_events,
             "roles": [],
             "total_roles": common["total_roles"] or 0,
             "total_operations": common["total_operations"] or 0,
@@ -140,9 +159,9 @@ async def _render_recent(
             "first_scan": first_scan,
             "q": q,
             "tab": "recent",
-            "page": DEFAULT_PAGE,
-            "limit": DEFAULT_LIMIT,
-            "total_pages": 1,
+            "page": page,
+            "limit": limit,
+            "total_pages": total_pages,
             "days": days,
             "sort": "name",
             "order": "asc",

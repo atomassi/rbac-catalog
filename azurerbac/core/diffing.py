@@ -4,6 +4,7 @@ from collections.abc import Iterable
 from typing import Any
 
 from azurerbac.azure.models import RoleDefinition
+from azurerbac.core.utils import format_iso_z
 
 # Fields that are tracked but don't constitute a "real" change on their own
 METADATA_ONLY_FIELDS = frozenset(
@@ -64,11 +65,11 @@ def diff_roles(old: RoleDefinition | None, new: RoleDefinition | None) -> dict:
     add("properties.type", oldp.type, newp.type)
 
     # Metadata fields - tracked but don't count as "real" changes on their own
-    # Serialize to ISO string for JSON compatibility
-    old_updated = oldp.updated_on.isoformat() if oldp.updated_on else None
-    new_updated = newp.updated_on.isoformat() if newp.updated_on else None
-    old_created = oldp.created_on.isoformat() if oldp.created_on else None
-    new_created = newp.created_on.isoformat() if newp.created_on else None
+    # Serialize to ISO string with Z suffix for JSON compatibility
+    old_updated = format_iso_z(oldp.updated_on)
+    new_updated = format_iso_z(newp.updated_on)
+    old_created = format_iso_z(oldp.created_on)
+    new_created = format_iso_z(newp.created_on)
     add("properties.updatedOn", old_updated, new_updated)
     add("properties.updatedBy", oldp.updated_by, newp.updated_by)
     add("properties.createdOn", old_created, new_created)

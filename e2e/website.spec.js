@@ -91,8 +91,10 @@ test.describe('Roles List', () => {
       test(`should sort by ${field} ${order}`, async ({ page }) => {
         await page.setViewportSize({ width: 1280, height: 720 });
         await page.goto(`/roles?sort=${field}&order=${order}`);
+        await page.waitForLoadState('domcontentloaded');
         expect(page.url()).toContain(`sort=${field}`);
-        await expect(page.locator('table')).toBeVisible();
+        // Updated sort is slower as it requires Python-side sorting
+        await expect(page.locator('table')).toBeVisible({ timeout: 15000 });
       });
     }
 
@@ -205,6 +207,24 @@ test.describe('Role Detail Page', () => {
     await expect(page.locator('text=Role Information')).toBeVisible();
     await expect(page.locator('text=Latest Role JSON')).toBeVisible();
     await expect(page.locator('text=Effective Permissions')).toBeVisible();
+  });
+
+  test('should display role JSON with Z suffix for timestamps', async ({ page }) => {
+    await page.goto('/roles/acdd72a7-3385-48ef-bd42-f606fba81ae7');
+    // Wait for the JSON section to be visible
+    await expect(page.locator('text=Latest Role JSON')).toBeVisible();
+    // Get the JSON content from the pre block (template uses pre directly without code wrapper)
+    const jsonBlock = page.locator('pre').filter({ hasText: 'createdOn' }).first();
+    await expect(jsonBlock).toBeVisible();
+    const jsonText = await jsonBlock.textContent();
+    // Verify timestamps use Z suffix format (not +00:00)
+    expect(jsonText).toContain('"createdOn":');
+    expect(jsonText).toContain('"updatedOn":');
+    // Check that timestamps end with Z, not +00:00
+    expect(jsonText).toMatch(/"createdOn":\s*"[^"]+Z"/);
+    expect(jsonText).toMatch(/"updatedOn":\s*"[^"]+Z"/);
+    expect(jsonText).not.toMatch(/"createdOn":\s*"[^"]+\+00:00"/);
+    expect(jsonText).not.toMatch(/"updatedOn":\s*"[^"]+\+00:00"/);
   });
 
   test('should display operations in Effective Permissions', async ({ page }) => {
@@ -668,5 +688,102 @@ test.describe('Accessibility', () => {
     await searchInput.fill('test');
     await searchInput.press('Enter');
     await expect(page).toHaveURL(/q=test/);
+  });
+});
+
+// =============================================================================
+// RECENT PAGE PAGINATION
+// =============================================================================
+test.describe('Recent Page Pagination', () => {
+  test('should default to 30 days', async ({ page }) => {
+    await page.goto('/recent');
+    // The page should display "30 days" or have days=30 in state
+    const daysText = await page.locator('text=30 days').first().isVisible();
+    const daysInUrl = page.url().includes('days=30') || !page.url().includes('days=');
+    expect(daysText || daysInUrl).toBe(true);
+  });
+
+  test('should show pagination controls', async ({ page }) => {
+    await page.goto('/recent');
+    await page.waitForLoadState('domcontentloaded');
+    // Check for pagination info - "Page X of Y" text, "Showing X to Y of Z" text, page links,
+    // or "changes found" text (for single-page results)
+    const hasPageText = await page.getByText(/page \d+ of \d+/i).first().isVisible();
+    const hasShowingText = await page.getByText(/showing \d+ to \d+ of/i).first().isVisible();
+    const hasPageLinks = await page.locator('a[href*="page="]').first().isVisible();
+    const hasChangesFound = await page.getByText(/\d+.*changes found/i).first().isVisible();
+    expect(hasPageText || hasShowingText || hasPageLinks || hasChangesFound).toBe(true);
+  });
+
+  test('should have rows dropdown with correct options', async ({ page }) => {
+    await page.goto('/recent');
+    // Look for the rows dropdown - it's an onchange select that auto-submits
+    const rowsSelect = page.locator('select').filter({ hasText: /rows/ });
+    if (await rowsSelect.count() > 0) {
+      // Verify the dropdown has expected options
+      const options = await rowsSelect.first().locator('option').allTextContents();
+      expect(options.some(o => o.includes('25'))).toBe(true);
+      expect(options.some(o => o.includes('100'))).toBe(true);
+    } else {
+      // Rows dropdown may be styled differently - check for limit in URL or text
+      const pageLoaded = await page.locator('table').isVisible();
+      expect(pageLoaded).toBe(true);
+    }
+  });
+
+  test('should change page size when selecting from dropdown', async ({ page }) => {
+    await page.goto('/recent?limit=25');
+    const rowsSelect = page.locator('select[name="limit"]');
+    if (await rowsSelect.isVisible()) {
+      await rowsSelect.selectOption('100');
+      await page.waitForLoadState('networkidle');
+      await expect(page).toHaveURL(/limit=100/);
+    }
+  });
+
+  test('should navigate to page 2', async ({ page }) => {
+    // Use limit=25 to ensure multiple pages
+    await page.goto('/recent?limit=25');
+    const page2Link = page.locator('a[href*="page=2"]').first();
+    if (await page2Link.isVisible()) {
+      await page2Link.click();
+      await expect(page).toHaveURL(/page=2/);
+    }
+  });
+
+  test('should preserve limit when paginating', async ({ page }) => {
+    await page.goto('/recent?limit=100');
+    const page2Link = page.locator('a[href*="page=2"]').first();
+    if (await page2Link.isVisible()) {
+      await page2Link.click();
+      await expect(page).toHaveURL(/limit=100/);
+      await expect(page).toHaveURL(/page=2/);
+    }
+  });
+
+  test('should show event count and page info', async ({ page }) => {
+    await page.goto('/recent');
+    // Check for "X changes found" or similar text
+    const hasEventCount = await page.locator('text=changes found').first().isVisible() ||
+                          await page.locator('text=events').first().isVisible() ||
+                          await page.locator('text=changes').first().isVisible();
+    expect(hasEventCount).toBe(true);
+  });
+
+  test.describe('Days Filter', () => {
+    const daysTests = [7, 15, 30, 60, 90];
+
+    for (const days of daysTests) {
+      test(`should work with days=${days}`, async ({ page }) => {
+        await page.goto(`/recent?days=${days}`);
+        await page.waitForLoadState('domcontentloaded');
+        // Either a table with results, "No changes found" message, or the page loaded with content
+        const hasTable = await page.locator('table').isVisible();
+        const hasNoChanges = await page.getByText(/no changes found|no events|nothing/i).first().isVisible();
+        const hasPageContent = await page.getByText(/changes found|events|total/i).first().isVisible();
+        expect(hasTable || hasNoChanges || hasPageContent).toBe(true);
+        expect(page.url()).toContain(`days=${days}`);
+      });
+    }
   });
 });

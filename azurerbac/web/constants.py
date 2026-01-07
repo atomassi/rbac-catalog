@@ -25,7 +25,7 @@ MAX_DAYS: Final = 365
 # Default values for pagination and filters
 DEFAULT_PAGE: Final = 1
 DEFAULT_LIMIT: Final = 25
-DEFAULT_DAYS: Final = 15
+DEFAULT_DAYS: Final = 30
 DEFAULT_FROM_PAGE: Final = "recent"
 
 # Query and search limits

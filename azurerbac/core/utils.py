@@ -46,3 +46,26 @@ def ensure_utc_or_min(d: dt.datetime | None) -> dt.datetime:
 def utcnow() -> dt.datetime:
     """Return current UTC datetime with timezone info."""
     return dt.datetime.now(dt.UTC)
+
+
+def format_iso_z(d: dt.datetime | None) -> str | None:
+    """Format datetime as ISO 8601 with 'Z' suffix for UTC.
+
+    Azure uses 'Z' suffix format: 2025-12-17T09:58:12.949Z
+    Python's isoformat() produces: 2025-12-17T09:58:12.949000+00:00
+
+    This function ensures consistent JSON output matching Azure's format.
+
+    Args:
+        d: Datetime to format (should be UTC timezone-aware)
+
+    Returns:
+        ISO 8601 string with 'Z' suffix, or None if input is None
+    """
+    if d is None:
+        return None
+    # Ensure UTC timezone
+    if d.tzinfo is None:
+        d = d.replace(tzinfo=dt.UTC)
+    # Format with milliseconds precision and Z suffix (matching Azure format)
+    return d.isoformat(timespec="milliseconds").replace("+00:00", "Z")

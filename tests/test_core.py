@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime as dt
 import logging
 import os
 import tempfile
@@ -643,3 +644,49 @@ class TestUtils:
         aware = dt.datetime(2023, 1, 15, 12, 30, 0, tzinfo=dt.UTC)
         result = ensure_utc_or_min(aware)
         assert result == aware
+
+    # format_iso_z parametrized tests
+    @pytest.mark.parametrize(
+        ("input_dt", "expected"),
+        [
+            pytest.param(None, None, id="none_returns_none"),
+            pytest.param(
+                dt.datetime(2025, 12, 17, 9, 58, 12, 949000, tzinfo=dt.UTC),
+                "2025-12-17T09:58:12.949Z",
+                id="utc_aware_datetime",
+            ),
+            pytest.param(
+                dt.datetime(2025, 12, 17, 9, 58, 12, 949000),
+                "2025-12-17T09:58:12.949Z",
+                id="naive_datetime_gets_utc",
+            ),
+            pytest.param(
+                dt.datetime(2025, 12, 17, 9, 58, 12, tzinfo=dt.UTC),
+                "2025-12-17T09:58:12.000Z",
+                id="zero_microseconds",
+            ),
+            pytest.param(
+                dt.datetime(2025, 12, 17, 9, 58, 12, 123456, tzinfo=dt.UTC),
+                "2025-12-17T09:58:12.123Z",
+                id="microseconds_truncated_to_milliseconds",
+            ),
+        ],
+    )
+    def test_format_iso_z(self, input_dt, expected):
+        """Test format_iso_z produces ISO 8601 with 'Z' suffix and milliseconds precision."""
+        from azurerbac.core.utils import format_iso_z
+
+        assert format_iso_z(input_dt) == expected
+
+    def test_format_iso_z_replaces_plus_suffix(self):
+        """Test format_iso_z correctly replaces +00:00 with Z."""
+        from azurerbac.core.utils import format_iso_z
+
+        aware = dt.datetime(2025, 12, 17, 9, 58, 12, 949000, tzinfo=dt.UTC)
+        # Verify isoformat produces +00:00
+        assert aware.isoformat().endswith("+00:00")
+        # Verify format_iso_z produces Z
+        result = format_iso_z(aware)
+        assert result is not None
+        assert result.endswith("Z")
+        assert "+00:00" not in result

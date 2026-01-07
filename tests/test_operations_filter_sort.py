@@ -101,45 +101,27 @@ def mock_app_cache() -> MagicMock:
 class TestOperationMatchesSearch:
     """Tests for operation_matches_search function."""
 
-    def test_matches_name(self, sample_operations: list[dict]):
-        """Test matching on operation name."""
-        op = sample_operations[0]
-        assert operation_matches_search(op, "virtualmachines") is True
-        assert operation_matches_search(op, "compute") is True
-        assert operation_matches_search(op, "storage") is False
-
-    def test_matches_display_name(self, sample_operations: list[dict]):
-        """Test matching on display name."""
-        op = sample_operations[0]
-        assert operation_matches_search(op, "read virtual") is True
-        assert operation_matches_search(op, "delete") is False
-
-    def test_matches_description(self, sample_operations: list[dict]):
-        """Test matching on description."""
-        op = sample_operations[0]
-        assert operation_matches_search(op, "allows reading") is True
-        assert operation_matches_search(op, "allows deleting") is False
-
-    def test_matches_provider(self, sample_operations: list[dict]):
-        """Test matching on provider display name."""
-        op = sample_operations[0]
-        assert operation_matches_search(op, "microsoft compute") is True
-        assert operation_matches_search(op, "microsoft storage") is False
-
-    def test_matches_resource_type(self, sample_operations: list[dict]):
-        """Test matching on resource type display name."""
-        op = sample_operations[0]
-        assert operation_matches_search(op, "virtual machines") is True
-        assert operation_matches_search(op, "blobs") is False
-
-    def test_case_insensitive(self, sample_operations: list[dict]):
-        """Test that matching is case insensitive (query must be lowercase)."""
-        op = sample_operations[0]
-        # Note: query_lower parameter must be lowercase - the caller lowercases it
-        assert operation_matches_search(op, "virtualmachines") is True
-        assert operation_matches_search(op, "virtual machines") is True
-        # The function matches against lowercased operation fields
-        assert operation_matches_search(op, "microsoft.compute") is True
+    @pytest.mark.parametrize(
+        ("query", "expected"),
+        [
+            pytest.param("virtualmachines", True, id="name_match"),
+            pytest.param("compute", True, id="name_provider"),
+            pytest.param("read virtual", True, id="display_name_match"),
+            pytest.param("allows reading", True, id="description_match"),
+            pytest.param("microsoft compute", True, id="provider_match"),
+            pytest.param("virtual machines", True, id="resource_type_match"),
+            pytest.param("microsoft.compute", True, id="case_insensitive"),
+            pytest.param("storage", False, id="no_match_storage"),
+            pytest.param("delete", False, id="no_match_delete"),
+            pytest.param("blobs", False, id="no_match_blobs"),
+        ],
+    )
+    def test_operation_matches_search(
+        self, sample_operations: list[dict], query: str, expected: bool
+    ):
+        """Test operation matching against various search queries."""
+        op = sample_operations[0]  # Microsoft.Compute/virtualMachines/read
+        assert operation_matches_search(op, query) is expected
 
     def test_handles_none_fields(self):
         """Test that None fields don't cause errors."""
@@ -175,19 +157,21 @@ class TestFilterOperations:
         result = filter_operations(sample_operations, params)
         assert len(result) == 4  # All have "read" in name or description
 
-    def test_is_data_action_filter_true(self, sample_operations: list[dict]):
-        """Test filtering for data actions only."""
-        params = OperationSearchParams(is_data_action=True)
+    @pytest.mark.parametrize(
+        ("is_data_action", "expected_count"),
+        [
+            pytest.param(True, 2, id="data_actions_only"),
+            pytest.param(False, 2, id="control_plane_only"),
+        ],
+    )
+    def test_is_data_action_filter(
+        self, sample_operations: list[dict], is_data_action: bool, expected_count: int
+    ):
+        """Test filtering by data action type."""
+        params = OperationSearchParams(is_data_action=is_data_action)
         result = filter_operations(sample_operations, params)
-        assert len(result) == 2
-        assert all(op["is_data_action"] for op in result)
-
-    def test_is_data_action_filter_false(self, sample_operations: list[dict]):
-        """Test filtering for control plane actions only."""
-        params = OperationSearchParams(is_data_action=False)
-        result = filter_operations(sample_operations, params)
-        assert len(result) == 2
-        assert all(not op["is_data_action"] for op in result)
+        assert len(result) == expected_count
+        assert all(op["is_data_action"] == is_data_action for op in result)
 
     def test_provider_filter(self, sample_operations: list[dict]):
         """Test filtering by provider."""
@@ -221,26 +205,28 @@ class TestFilterOperations:
 class TestSortOperations:
     """Tests for sort_operations function."""
 
-    def test_sort_by_name_asc(self, sample_operations: list[dict], mock_app_cache: MagicMock):
-        """Test sorting by name ascending."""
+    @pytest.mark.parametrize(
+        ("sort_field", "order", "key_field"),
+        [
+            pytest.param("name", "asc", "name", id="name_asc"),
+            pytest.param("name", "desc", "name", id="name_desc"),
+            pytest.param("provider", "asc", "provider_display_name", id="provider_asc"),
+        ],
+    )
+    def test_sort_by_field(
+        self,
+        sample_operations: list[dict],
+        mock_app_cache: MagicMock,
+        sort_field: str,
+        order: str,
+        key_field: str,
+    ):
+        """Test sorting by various fields."""
         ops = sample_operations.copy()
-        sort_operations(ops, "name", "asc", mock_app_cache)
-        names = [op["name"] for op in ops]
-        assert names == sorted(names, key=str.lower)
-
-    def test_sort_by_name_desc(self, sample_operations: list[dict], mock_app_cache: MagicMock):
-        """Test sorting by name descending."""
-        ops = sample_operations.copy()
-        sort_operations(ops, "name", "desc", mock_app_cache)
-        names = [op["name"] for op in ops]
-        assert names == sorted(names, key=str.lower, reverse=True)
-
-    def test_sort_by_provider_asc(self, sample_operations: list[dict], mock_app_cache: MagicMock):
-        """Test sorting by provider ascending."""
-        ops = sample_operations.copy()
-        sort_operations(ops, "provider", "asc", mock_app_cache)
-        providers = [op["provider_display_name"] for op in ops]
-        assert providers == sorted(providers, key=str.lower)
+        sort_operations(ops, sort_field, order, mock_app_cache)
+        values = [op[key_field] for op in ops]
+        expected = sorted(values, key=str.lower, reverse=(order == "desc"))
+        assert values == expected
 
     def test_sort_by_type_asc(self, sample_operations: list[dict], mock_app_cache: MagicMock):
         """Test sorting by type (data action) ascending."""
@@ -251,22 +237,24 @@ class TestSortOperations:
         assert types[:2] == [False, False]
         assert types[2:] == [True, True]
 
-    def test_sort_by_roles_asc(self, sample_operations: list[dict], mock_app_cache: MagicMock):
-        """Test sorting by role count ascending."""
+    @pytest.mark.parametrize(
+        "order",
+        [
+            pytest.param("asc", id="roles_asc"),
+            pytest.param("desc", id="roles_desc"),
+        ],
+    )
+    def test_sort_by_roles(
+        self, sample_operations: list[dict], mock_app_cache: MagicMock, order: str
+    ):
+        """Test sorting by role count."""
         ops = sample_operations.copy()
-        sort_operations(ops, "roles", "asc", mock_app_cache)
+        sort_operations(ops, "roles", order, mock_app_cache)
         # Check role_count was added
         assert all("role_count" in op for op in ops)
         # Check sorting
         counts = [op["role_count"] for op in ops]
-        assert counts == sorted(counts)
-
-    def test_sort_by_roles_desc(self, sample_operations: list[dict], mock_app_cache: MagicMock):
-        """Test sorting by role count descending."""
-        ops = sample_operations.copy()
-        sort_operations(ops, "roles", "desc", mock_app_cache)
-        counts = [op["role_count"] for op in ops]
-        assert counts == sorted(counts, reverse=True)
+        assert counts == sorted(counts, reverse=(order == "desc"))
 
     def test_unknown_sort_defaults_to_name(
         self, sample_operations: list[dict], mock_app_cache: MagicMock

@@ -46,16 +46,20 @@ def test_no_change_returns_changed_false():
     assert diff_summary(d) == "No changes"
 
 
-def test_created_role_has_root_diff():
+@pytest.mark.parametrize(
+    ("old_role", "new_role"),
+    [
+        pytest.param(None, "_model", id="created_role"),
+        pytest.param("_model", None, id="deleted_role"),
+    ],
+)
+def test_created_or_deleted_role_has_root_diff(old_role: str | None, new_role: str | None):
+    """Created or deleted roles should have a root-level diff."""
     role_dict = _reader_role_dict()
-    d = diff_roles(None, _to_model(role_dict))
-    assert d["changed"] is True
-    assert d["changes"][0]["path"] == "<root>"
-
-
-def test_deleted_role_has_root_diff():
-    role_dict = _reader_role_dict()
-    d = diff_roles(_to_model(role_dict), None)
+    model = _to_model(role_dict)
+    old = model if old_role == "_model" else None
+    new = model if new_role == "_model" else None
+    d = diff_roles(old, new)
     assert d["changed"] is True
     assert d["changes"][0]["path"] == "<root>"
 

@@ -398,8 +398,33 @@ class TestLoggingSetup:
 class TestCredentialFilter:
     """Tests for credential filtering in logs."""
 
-    def test_credential_filter_redacts_bearer_token(self):
-        """Test that Bearer tokens are redacted from logs."""
+    @pytest.mark.parametrize(
+        ("message", "sensitive_text"),
+        [
+            pytest.param(
+                "Request with Bearer token123abc",
+                "token123abc",
+                id="bearer_token",
+            ),
+            pytest.param(
+                "Connection string with password=secret123",
+                "secret123",
+                id="password",
+            ),
+            pytest.param(
+                "Using api_key=myapikey123",
+                "myapikey123",
+                id="api_key",
+            ),
+            pytest.param(
+                "Has BEARER TOKEN123 uppercase",
+                "TOKEN123",
+                id="bearer_uppercase",
+            ),
+        ],
+    )
+    def test_credential_filter_redacts_sensitive_data(self, message, sensitive_text):
+        """Test that sensitive data (tokens, passwords, API keys) are redacted from logs."""
         import azurerbac.telemetry.logging as logging_module
 
         filter_instance = logging_module._CredentialFilter()
@@ -408,49 +433,13 @@ class TestCredentialFilter:
             level=logging.INFO,
             pathname="",
             lineno=0,
-            msg="Request with Bearer token123abc",
+            msg=message,
             args=(),
             exc_info=None,
         )
         filter_instance.filter(record)
         assert "[REDACTED" in record.msg
-        assert "token123abc" not in record.msg
-
-    def test_credential_filter_redacts_password(self):
-        """Test that passwords are redacted from logs."""
-        import azurerbac.telemetry.logging as logging_module
-
-        filter_instance = logging_module._CredentialFilter()
-        record = logging.LogRecord(
-            name="test",
-            level=logging.INFO,
-            pathname="",
-            lineno=0,
-            msg="Connection string with password=secret123",
-            args=(),
-            exc_info=None,
-        )
-        filter_instance.filter(record)
-        assert "[REDACTED" in record.msg
-        assert "secret123" not in record.msg
-
-    def test_credential_filter_redacts_api_key(self):
-        """Test that API keys are redacted from logs."""
-        import azurerbac.telemetry.logging as logging_module
-
-        filter_instance = logging_module._CredentialFilter()
-        record = logging.LogRecord(
-            name="test",
-            level=logging.INFO,
-            pathname="",
-            lineno=0,
-            msg="Using api_key=myapikey123",
-            args=(),
-            exc_info=None,
-        )
-        filter_instance.filter(record)
-        assert "[REDACTED" in record.msg
-        assert "myapikey123" not in record.msg
+        assert sensitive_text not in record.msg
 
     def test_credential_filter_passes_normal_messages(self):
         """Test that normal messages are not modified."""
@@ -469,23 +458,6 @@ class TestCredentialFilter:
         )
         filter_instance.filter(record)
         assert record.msg == original_msg
-
-    def test_credential_filter_case_insensitive(self):
-        """Test that credential filter is case-insensitive."""
-        import azurerbac.telemetry.logging as logging_module
-
-        filter_instance = logging_module._CredentialFilter()
-        record = logging.LogRecord(
-            name="test",
-            level=logging.INFO,
-            pathname="",
-            lineno=0,
-            msg="Has BEARER TOKEN123 uppercase",
-            args=(),
-            exc_info=None,
-        )
-        filter_instance.filter(record)
-        assert "[REDACTED" in record.msg
 
 
 class TestLoggingEdgeCases:
@@ -575,61 +547,64 @@ class TestConfigIntegration:
 class TestUtils:
     """Tests for core.utils module."""
 
-    def test_normalize_uuid_or_none_valid_uuid(self):
-        """Test normalize_uuid_or_none with valid UUIDs."""
+    @pytest.mark.parametrize(
+        ("input_uuid", "expected"),
+        [
+            pytest.param(
+                "550e8400-e29b-41d4-a716-446655440000",
+                "550e8400-e29b-41d4-a716-446655440000",
+                id="standard_format",
+            ),
+            pytest.param(
+                "550E8400-E29B-41D4-A716-446655440000",
+                "550e8400-e29b-41d4-a716-446655440000",
+                id="uppercase",
+            ),
+            pytest.param(
+                "  550e8400-e29b-41d4-a716-446655440000  ",
+                "550e8400-e29b-41d4-a716-446655440000",
+                id="with_whitespace",
+            ),
+            pytest.param("not-a-uuid", None, id="invalid_string"),
+            pytest.param("12345", None, id="short_string"),
+            pytest.param("", None, id="empty_string"),
+        ],
+    )
+    def test_normalize_uuid_or_none(self, input_uuid, expected):
+        """Test normalize_uuid_or_none with various inputs."""
         from azurerbac.core.utils import normalize_uuid_or_none
 
-        # Standard format
-        result = normalize_uuid_or_none("550e8400-e29b-41d4-a716-446655440000")
-        assert result == "550e8400-e29b-41d4-a716-446655440000"
+        assert normalize_uuid_or_none(input_uuid) == expected
 
-        # Uppercase
-        result = normalize_uuid_or_none("550E8400-E29B-41D4-A716-446655440000")
-        assert result == "550e8400-e29b-41d4-a716-446655440000"
-
-        # With whitespace
-        result = normalize_uuid_or_none("  550e8400-e29b-41d4-a716-446655440000  ")
-        assert result == "550e8400-e29b-41d4-a716-446655440000"
-
-    def test_normalize_uuid_or_none_invalid(self):
-        """Test normalize_uuid_or_none with invalid inputs."""
-        from azurerbac.core.utils import normalize_uuid_or_none
-
-        assert normalize_uuid_or_none("not-a-uuid") is None
-        assert normalize_uuid_or_none("12345") is None
-        assert normalize_uuid_or_none("") is None
-
-    def test_ensure_utc_with_none(self):
-        """Test ensure_utc with None input."""
+    @pytest.mark.parametrize(
+        ("input_dt", "expected_tzinfo"),
+        [
+            pytest.param(None, None, id="none_input"),
+            pytest.param(
+                dt.datetime(2023, 1, 15, 12, 30, 0),
+                dt.UTC,
+                id="naive_datetime",
+            ),
+            pytest.param(
+                dt.datetime(2023, 1, 15, 12, 30, 0, tzinfo=dt.UTC),
+                dt.UTC,
+                id="aware_datetime",
+            ),
+        ],
+    )
+    def test_ensure_utc(self, input_dt, expected_tzinfo):
+        """Test ensure_utc with various inputs."""
         from azurerbac.core.utils import ensure_utc
 
-        assert ensure_utc(None) is None
-
-    def test_ensure_utc_with_naive_datetime(self):
-        """Test ensure_utc with naive datetime."""
-        import datetime as dt
-
-        from azurerbac.core.utils import ensure_utc
-
-        naive = dt.datetime(2023, 1, 15, 12, 30, 0)
-        result = ensure_utc(naive)
-        assert result is not None
-        assert result.tzinfo == dt.UTC
-
-    def test_ensure_utc_with_aware_datetime(self):
-        """Test ensure_utc with already aware datetime."""
-        import datetime as dt
-
-        from azurerbac.core.utils import ensure_utc
-
-        aware = dt.datetime(2023, 1, 15, 12, 30, 0, tzinfo=dt.UTC)
-        result = ensure_utc(aware)
-        assert result is aware  # Should return same object
+        result = ensure_utc(input_dt)
+        if input_dt is None:
+            assert result is None
+        else:
+            assert result is not None
+            assert result.tzinfo == expected_tzinfo
 
     def test_ensure_utc_or_min_with_none(self):
         """Test ensure_utc_or_min returns datetime.min for None."""
-        import datetime as dt
-
         from azurerbac.core.utils import ensure_utc_or_min
 
         result = ensure_utc_or_min(None)
@@ -637,8 +612,6 @@ class TestUtils:
 
     def test_ensure_utc_or_min_with_datetime(self):
         """Test ensure_utc_or_min preserves datetime."""
-        import datetime as dt
-
         from azurerbac.core.utils import ensure_utc_or_min
 
         aware = dt.datetime(2023, 1, 15, 12, 30, 0, tzinfo=dt.UTC)

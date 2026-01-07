@@ -88,25 +88,21 @@ class TestSecurityHeaders:
     """Tests for add_security_headers middleware."""
 
     @pytest.mark.asyncio
-    async def test_x_frame_options_header(self, test_client):
-        """Test that X-Frame-Options is set to DENY."""
+    @pytest.mark.parametrize(
+        ("header_name", "expected_value"),
+        [
+            pytest.param("x-frame-options", "DENY", id="x_frame_options"),
+            pytest.param(
+                "referrer-policy", "strict-origin-when-cross-origin", id="referrer_policy"
+            ),
+            pytest.param("x-xss-protection", "1; mode=block", id="xss_protection"),
+        ],
+    )
+    async def test_security_header_value(self, test_client, header_name: str, expected_value: str):
+        """Test that security headers have correct values."""
         client, _ = test_client
         response = await client.get("/recent")
-        assert response.headers.get("x-frame-options") == "DENY"
-
-    @pytest.mark.asyncio
-    async def test_referrer_policy_header(self, test_client):
-        """Test that Referrer-Policy is set correctly."""
-        client, _ = test_client
-        response = await client.get("/recent")
-        assert response.headers.get("referrer-policy") == "strict-origin-when-cross-origin"
-
-    @pytest.mark.asyncio
-    async def test_xss_protection_header(self, test_client):
-        """Test that X-XSS-Protection is set."""
-        client, _ = test_client
-        response = await client.get("/recent")
-        assert response.headers.get("x-xss-protection") == "1; mode=block"
+        assert response.headers.get(header_name) == expected_value
 
     @pytest.mark.asyncio
     async def test_content_security_policy_header(self, test_client):
@@ -128,29 +124,23 @@ class TestSecurityHeaders:
         assert "microphone=()" in permissions
 
     @pytest.mark.asyncio
-    async def test_api_endpoints_have_noindex_header(self, test_client):
-        """Test that API endpoints have X-Robots-Tag noindex."""
+    @pytest.mark.parametrize(
+        ("path", "should_have_noindex"),
+        [
+            pytest.param("/api/search/operations", True, id="api_endpoint"),
+            pytest.param("/healthz", True, id="healthz"),
+            pytest.param("/recent", False, id="regular_page"),
+        ],
+    )
+    async def test_noindex_header(self, test_client, path: str, should_have_noindex: bool):
+        """Test X-Robots-Tag noindex header on different endpoints."""
         client, _ = test_client
-        response = await client.get("/api/search/operations")
+        response = await client.get(path)
         robots_tag = response.headers.get("x-robots-tag", "")
-        assert "noindex" in robots_tag
-
-    @pytest.mark.asyncio
-    async def test_healthz_has_noindex_header(self, test_client):
-        """Test that healthz endpoint has X-Robots-Tag noindex."""
-        client, _ = test_client
-        response = await client.get("/healthz")
-        robots_tag = response.headers.get("x-robots-tag", "")
-        assert "noindex" in robots_tag
-
-    @pytest.mark.asyncio
-    async def test_regular_pages_no_noindex_header(self, test_client):
-        """Test that regular pages do NOT have X-Robots-Tag noindex."""
-        client, _ = test_client
-        response = await client.get("/recent")
-        robots_tag = response.headers.get("x-robots-tag", "")
-        # Regular pages should be indexable
-        assert "noindex" not in robots_tag
+        if should_have_noindex:
+            assert "noindex" in robots_tag
+        else:
+            assert "noindex" not in robots_tag
 
 
 # =============================================================================
@@ -162,75 +152,69 @@ class TestDomainRedirect:
     """Tests for redirect_old_domain middleware."""
 
     @pytest.mark.asyncio
-    async def test_old_appservice_domain_redirects(self, test_client):
-        """Test redirect from old App Service domain."""
+    @pytest.mark.parametrize(
+        ("host_header", "header_name"),
+        [
+            pytest.param(
+                "azurerbac-builtinroles.azurewebsites.net",
+                "x-forwarded-host",
+                id="old_appservice_domain",
+            ),
+            pytest.param(
+                "azurerbac-builtinroles-atgjgtc9a9exbahe.z02.azurefd.net",
+                "x-forwarded-host",
+                id="old_frontdoor_domain",
+            ),
+        ],
+    )
+    async def test_old_domains_redirect(self, test_client, host_header: str, header_name: str):
+        """Test that old domains redirect to new domain."""
         client, _ = test_client
         response = await client.get(
             "/recent",
-            headers={"x-forwarded-host": "azurerbac-builtinroles.azurewebsites.net"},
+            headers={header_name: host_header},
             follow_redirects=False,
         )
         assert response.status_code == 301
         assert NEW_DOMAIN in response.headers.get("location", "")
 
     @pytest.mark.asyncio
-    async def test_old_frontdoor_domain_redirects(self, test_client):
-        """Test redirect from old Front Door domain."""
+    @pytest.mark.parametrize(
+        ("path", "query", "expected_in_location"),
+        [
+            pytest.param("/roles/test-role", "", "/roles/test-role", id="preserves_path"),
+            pytest.param("/roles", "page=2&limit=25", "page=2", id="preserves_query"),
+        ],
+    )
+    async def test_redirect_preserves_url_parts(
+        self, test_client, path: str, query: str, expected_in_location: str
+    ):
+        """Test that redirect preserves path and query string."""
         client, _ = test_client
+        url = f"{path}?{query}" if query else path
         response = await client.get(
-            "/recent",
-            headers={"x-forwarded-host": "azurerbac-builtinroles-atgjgtc9a9exbahe.z02.azurefd.net"},
-            follow_redirects=False,
-        )
-        assert response.status_code == 301
-        assert NEW_DOMAIN in response.headers.get("location", "")
-
-    @pytest.mark.asyncio
-    async def test_redirect_preserves_path(self, test_client):
-        """Test that redirect preserves the request path."""
-        client, _ = test_client
-        response = await client.get(
-            "/roles/test-role",
+            url,
             headers={"x-forwarded-host": "azurerbac-builtinroles.azurewebsites.net"},
             follow_redirects=False,
         )
         assert response.status_code == 301
         location = response.headers.get("location", "")
-        assert "/roles/test-role" in location
+        assert expected_in_location in location
 
     @pytest.mark.asyncio
-    async def test_redirect_preserves_query_string(self, test_client):
-        """Test that redirect preserves query parameters."""
-        client, _ = test_client
-        response = await client.get(
-            "/roles?page=2&limit=25",
-            headers={"x-forwarded-host": "azurerbac-builtinroles.azurewebsites.net"},
-            follow_redirects=False,
-        )
-        assert response.status_code == 301
-        location = response.headers.get("location", "")
-        assert "page=2" in location
-        assert "limit=25" in location
-
-    @pytest.mark.asyncio
-    async def test_canonical_domain_no_redirect(self, test_client):
-        """Test that requests to canonical domain are not redirected."""
+    @pytest.mark.parametrize(
+        ("headers",),
+        [
+            pytest.param({"x-forwarded-host": "rbac-catalog.dev"}, id="canonical_domain"),
+            pytest.param({"host": "localhost:8000"}, id="localhost"),
+        ],
+    )
+    async def test_allowed_domains_no_redirect(self, test_client, headers: dict):
+        """Test that canonical domain and localhost are not redirected."""
         client, _ = test_client
         response = await client.get(
             "/recent",
-            headers={"x-forwarded-host": "rbac-catalog.dev"},
-            follow_redirects=False,
-        )
-        # Should NOT be a redirect
-        assert response.status_code != 301
-
-    @pytest.mark.asyncio
-    async def test_localhost_no_redirect(self, test_client):
-        """Test that localhost requests are not redirected."""
-        client, _ = test_client
-        response = await client.get(
-            "/recent",
-            headers={"host": "localhost:8000"},
+            headers=headers,
             follow_redirects=False,
         )
         assert response.status_code != 301

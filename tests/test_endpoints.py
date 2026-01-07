@@ -317,77 +317,25 @@ class TestDashboardSorting:
     """
 
     @pytest.mark.asyncio
-    async def test_roles_sort_by_name_asc(self, test_client):
-        """Test sorting roles by name ascending (default)."""
+    @pytest.mark.parametrize(
+        ("sort_field", "order"),
+        [
+            pytest.param("name", "asc", id="name_asc"),
+            pytest.param("name", "desc", id="name_desc"),
+            pytest.param("id", "asc", id="id_asc"),
+            pytest.param("id", "desc", id="id_desc"),
+            pytest.param("updated", "asc", id="updated_asc"),
+            pytest.param("updated", "desc", id="updated_desc"),
+            pytest.param("actions", "asc", id="actions_asc"),
+            pytest.param("actions", "desc", id="actions_desc"),
+            pytest.param("data_actions", "asc", id="data_actions_asc"),
+            pytest.param("data_actions", "desc", id="data_actions_desc"),
+        ],
+    )
+    async def test_roles_sort_returns_200(self, test_client, sort_field, order):
+        """Test sorting roles by various fields and orders returns 200."""
         client, _ = test_client
-        response = await client.get("/roles?sort=name&order=asc")
-        assert response.status_code == 200
-
-    @pytest.mark.asyncio
-    async def test_roles_sort_by_name_desc(self, test_client):
-        """Test sorting roles by name descending."""
-        client, _ = test_client
-        response = await client.get("/roles?sort=name&order=desc")
-        assert response.status_code == 200
-
-    @pytest.mark.asyncio
-    async def test_roles_sort_by_id_asc(self, test_client):
-        """Test sorting roles by ID ascending."""
-        client, _ = test_client
-        response = await client.get("/roles?sort=id&order=asc")
-        assert response.status_code == 200
-
-    @pytest.mark.asyncio
-    async def test_roles_sort_by_id_desc(self, test_client):
-        """Test sorting roles by ID descending."""
-        client, _ = test_client
-        response = await client.get("/roles?sort=id&order=desc")
-        assert response.status_code == 200
-
-    @pytest.mark.asyncio
-    async def test_roles_sort_by_updated_asc(self, test_client):
-        """Test sorting roles by updated date ascending.
-
-        This was broken because Role.updated_on is a property, not a DB column.
-        The fix: needs_python_sort must include 'updated'.
-        """
-        client, _ = test_client
-        response = await client.get("/roles?sort=updated&order=asc")
-        assert response.status_code == 200
-
-    @pytest.mark.asyncio
-    async def test_roles_sort_by_updated_desc(self, test_client):
-        """Test sorting roles by updated date descending."""
-        client, _ = test_client
-        response = await client.get("/roles?sort=updated&order=desc")
-        assert response.status_code == 200
-
-    @pytest.mark.asyncio
-    async def test_roles_sort_by_actions_asc(self, test_client):
-        """Test sorting roles by actions count ascending."""
-        client, _ = test_client
-        response = await client.get("/roles?sort=actions&order=asc")
-        assert response.status_code == 200
-
-    @pytest.mark.asyncio
-    async def test_roles_sort_by_actions_desc(self, test_client):
-        """Test sorting roles by actions count descending."""
-        client, _ = test_client
-        response = await client.get("/roles?sort=actions&order=desc")
-        assert response.status_code == 200
-
-    @pytest.mark.asyncio
-    async def test_roles_sort_by_data_actions_asc(self, test_client):
-        """Test sorting roles by data actions count ascending."""
-        client, _ = test_client
-        response = await client.get("/roles?sort=data_actions&order=asc")
-        assert response.status_code == 200
-
-    @pytest.mark.asyncio
-    async def test_roles_sort_by_data_actions_desc(self, test_client):
-        """Test sorting roles by data actions count descending."""
-        client, _ = test_client
-        response = await client.get("/roles?sort=data_actions&order=desc")
+        response = await client.get(f"/roles?sort={sort_field}&order={order}")
         assert response.status_code == 200
 
     @pytest.mark.asyncio

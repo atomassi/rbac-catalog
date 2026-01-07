@@ -326,8 +326,18 @@ class TestRoleDefinitionDateTimeParsing:
         assert role.properties.updated_on.year == 2024
         assert role.properties.updated_on.month == 6
 
-    def test_empty_string_becomes_none(self):
-        """Empty string datetime values become None."""
+    @pytest.mark.parametrize(
+        ("created_on", "updated_on"),
+        [
+            pytest.param("", "", id="empty_string"),
+            pytest.param("not-a-date", "invalid-timestamp", id="invalid_string"),
+            pytest.param(None, None, id="null_value"),
+        ],
+    )
+    def test_invalid_or_empty_datetime_becomes_none(
+        self, created_on: str | None, updated_on: str | None
+    ):
+        """Empty, invalid, or null datetime values become None."""
         role = RoleDefinition.model_validate(
             {
                 "id": "/providers/Microsoft.Authorization/roleDefinitions/test",
@@ -339,50 +349,8 @@ class TestRoleDefinitionDateTimeParsing:
                     "description": "Test",
                     "assignableScopes": ["/"],
                     "permissions": [],
-                    "createdOn": "",
-                    "updatedOn": "",
-                },
-            }
-        )
-        assert role.properties.created_on is None
-        assert role.properties.updated_on is None
-
-    def test_invalid_string_becomes_none(self):
-        """Invalid datetime strings become None (no validation error)."""
-        role = RoleDefinition.model_validate(
-            {
-                "id": "/providers/Microsoft.Authorization/roleDefinitions/test",
-                "name": "test",
-                "type": "Microsoft.Authorization/roleDefinitions",
-                "properties": {
-                    "roleName": "Test",
-                    "type": "BuiltInRole",
-                    "description": "Test",
-                    "assignableScopes": ["/"],
-                    "permissions": [],
-                    "createdOn": "not-a-date",
-                    "updatedOn": "invalid-timestamp",
-                },
-            }
-        )
-        assert role.properties.created_on is None
-        assert role.properties.updated_on is None
-
-    def test_null_value_becomes_none(self):
-        """Null/None datetime values stay None."""
-        role = RoleDefinition.model_validate(
-            {
-                "id": "/providers/Microsoft.Authorization/roleDefinitions/test",
-                "name": "test",
-                "type": "Microsoft.Authorization/roleDefinitions",
-                "properties": {
-                    "roleName": "Test",
-                    "type": "BuiltInRole",
-                    "description": "Test",
-                    "assignableScopes": ["/"],
-                    "permissions": [],
-                    "createdOn": None,
-                    "updatedOn": None,
+                    "createdOn": created_on,
+                    "updatedOn": updated_on,
                 },
             }
         )

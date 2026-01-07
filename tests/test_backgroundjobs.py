@@ -57,6 +57,82 @@ class TestApplyRoleScan:
     """Tests for the main scan application logic."""
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("created_on", "updated_on", "expected_event_type"),
+        [
+            pytest.param(
+                "2024-01-15T10:00:00Z",
+                "2024-01-15T10:00:00Z",
+                "created",
+                id="truly_new_role",
+            ),
+            pytest.param(
+                "2020-01-01T00:00:00Z",
+                "2023-06-15T12:30:00Z",
+                "initial_scan",
+                id="preexisting_role",
+            ),
+        ],
+    )
+    async def test_event_type_based_on_timestamps(
+        self,
+        db_session,
+        created_on: str,
+        updated_on: str,
+        expected_event_type: str,
+    ):
+        """Test that event_type is determined by comparing created_on and updated_on timestamps.
+
+        - Truly new roles (created_on == updated_on) get 'created' event_type
+        - Pre-existing roles (created_on != updated_on) get 'initial_scan' event_type
+        """
+        roles = [
+            _make_role(
+                "test-role",
+                "Test Role",
+                created_on=created_on,
+                updated_on=updated_on,
+            )
+        ]
+
+        stats = await apply_role_scan(db_session, roles)
+
+        assert stats["created"] == 1
+
+        history = (await db_session.execute(select(RoleHistory))).scalars().all()
+        assert len(history) == 1
+        assert history[0].event_type == expected_event_type
+
+    @pytest.mark.asyncio
+    async def test_mixed_new_and_preexisting_roles(self, db_session):
+        """Test that a mix of truly new and pre-existing roles get correct event types."""
+        roles = [
+            # Truly new role (timestamps match)
+            _make_role(
+                "brand-new",
+                "Brand New",
+                created_on="2024-01-15T10:00:00Z",
+                updated_on="2024-01-15T10:00:00Z",
+            ),
+            # Pre-existing role (timestamps differ)
+            _make_role(
+                "pre-existing",
+                "Pre-existing",
+                created_on="2018-03-01T00:00:00Z",
+                updated_on="2023-11-20T15:45:00Z",
+            ),
+        ]
+
+        await apply_role_scan(db_session, roles)
+
+        history = (await db_session.execute(select(RoleHistory))).scalars().all()
+        assert len(history) == 2
+
+        event_types = {h.role_id: h.event_type for h in history}
+        assert event_types["brand-new"] == "created"
+        assert event_types["pre-existing"] == "initial_scan"
+
+    @pytest.mark.asyncio
     async def test_creates_new_roles(self, db_session):
         """Test that new roles are created with proper events and versions."""
         roles = [_make_role("role-1", "Reader"), _make_role("role-2", "Contributor")]
@@ -75,6 +151,7 @@ class TestApplyRoleScan:
         # Verify history entries created (combined events + versions)
         history = (await db_session.execute(select(RoleHistory))).scalars().all()
         assert len(history) == 2
+        # Default _make_role has created_on == updated_on, so these are "created"
         assert all(h.event_type == "created" for h in history)
         assert all(h.version_number == 1 for h in history)
 

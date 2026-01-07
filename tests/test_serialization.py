@@ -21,38 +21,22 @@ from azurerbac.cache.serialization import (
 class TestEncodeExt:
     """Tests for encode_ext function."""
 
-    def test_encode_set(self):
-        """Sets are encoded as ExtType with TAG_SET."""
-        result = encode_ext({1, 2, 3})
-        assert result.code == TAG_SET
-        # The data should be a packed list
+    @pytest.mark.parametrize(
+        ("value", "expected_tag"),
+        [
+            pytest.param({1, 2, 3}, TAG_SET, id="set"),
+            pytest.param(set(), TAG_SET, id="empty_set"),
+            pytest.param({"a", "b", "c"}, TAG_SET, id="set_with_strings"),
+            pytest.param((1, 2, 3), TAG_TUPLE, id="tuple"),
+            pytest.param((), TAG_TUPLE, id="empty_tuple"),
+            pytest.param((1, (2, 3), 4), TAG_TUPLE, id="nested_tuple"),
+        ],
+    )
+    def test_encode_collection_types(self, value, expected_tag: int):
+        """Sets and tuples are encoded with correct tags."""
+        result = encode_ext(value)
+        assert result.code == expected_tag
         assert isinstance(result.data, bytes)
-
-    def test_encode_empty_set(self):
-        """Empty sets are encoded correctly."""
-        result = encode_ext(set())
-        assert result.code == TAG_SET
-
-    def test_encode_set_with_strings(self):
-        """Sets with strings are encoded correctly."""
-        result = encode_ext({"a", "b", "c"})
-        assert result.code == TAG_SET
-
-    def test_encode_tuple(self):
-        """Tuples are encoded as ExtType with TAG_TUPLE."""
-        result = encode_ext((1, 2, 3))
-        assert result.code == TAG_TUPLE
-        assert isinstance(result.data, bytes)
-
-    def test_encode_empty_tuple(self):
-        """Empty tuples are encoded correctly."""
-        result = encode_ext(())
-        assert result.code == TAG_TUPLE
-
-    def test_encode_nested_tuple(self):
-        """Nested tuples are encoded correctly."""
-        result = encode_ext((1, (2, 3), 4))
-        assert result.code == TAG_TUPLE
 
     def test_encode_datetime(self):
         """Naive datetimes are normalized to UTC."""

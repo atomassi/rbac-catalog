@@ -179,52 +179,48 @@ class TestOperationsIndex:
 class TestCountWildcardMatches:
     """Tests for wildcard pattern matching count."""
 
-    def test_count_simple_wildcard(self, sample_operations):
-        """Test counting simple wildcard matches."""
+    @pytest.mark.parametrize(
+        ("pattern", "is_data_action", "expected_count", "description"),
+        [
+            pytest.param(
+                "Microsoft.Compute/*", False, 3, "read, write, delete", id="simple_wildcard"
+            ),
+            pytest.param(
+                "*", True, 3, "Storage blobs read/write + KeyVault secrets read", id="data_actions"
+            ),
+            pytest.param(
+                "*",
+                False,
+                10,
+                "3 Storage + 3 Compute + 2 Auth + 1 Network + 1 KeyVault",
+                id="control_plane",
+            ),
+            pytest.param(
+                "*/read",
+                False,
+                5,
+                "Storage, Compute, Auth, Network, KeyVault",
+                id="specific_pattern",
+            ),
+        ],
+    )
+    def test_count_wildcard_matches(
+        self,
+        sample_operations,
+        pattern: str,
+        is_data_action: bool,
+        expected_count: int,
+        description: str,
+    ):
+        """Test counting wildcard pattern matches."""
         from azurerbac.cache import AppCache
 
         cache = AppCache()
         cache.build_from_operations(sample_operations)
 
-        count = cache.count_wildcard_matches("Microsoft.Compute/*", is_data_action=False)
+        count = cache.count_wildcard_matches(pattern, is_data_action=is_data_action)
 
-        assert count == 3  # read, write, delete
-
-    def test_count_data_actions_only(self, sample_operations):
-        """Test counting data actions only."""
-        from azurerbac.cache import AppCache
-
-        cache = AppCache()
-        cache.build_from_operations(sample_operations)
-
-        count = cache.count_wildcard_matches("*", is_data_action=True)
-
-        # Data actions: Storage blobs read/write + KeyVault secrets read = 3
-        assert count == 3
-
-    def test_count_control_plane_only(self, sample_operations):
-        """Test counting control plane actions only."""
-        from azurerbac.cache import AppCache
-
-        cache = AppCache()
-        cache.build_from_operations(sample_operations)
-
-        count = cache.count_wildcard_matches("*", is_data_action=False)
-
-        # Control plane: 3 Storage + 3 Compute + 2 Auth + 1 Network + 1 KeyVault = 10
-        assert count == 10
-
-    def test_count_specific_pattern(self, sample_operations):
-        """Test counting specific pattern matches."""
-        from azurerbac.cache import AppCache
-
-        cache = AppCache()
-        cache.build_from_operations(sample_operations)
-
-        count = cache.count_wildcard_matches("*/read", is_data_action=False)
-
-        # Control plane reads: Storage, Compute, Auth, Network, KeyVault = 5
-        assert count == 5
+        assert count == expected_count
 
 
 class TestMatchesPattern:

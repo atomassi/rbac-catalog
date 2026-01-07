@@ -659,9 +659,16 @@ class TestCacheMetadata:
 class TestHashComputation:
     """Tests for hash computation functions."""
 
-    def test_compute_roles_hash_empty(self):
-        """Empty roles list produces a hash."""
-        result = compute_roles_hash([])
+    @pytest.mark.parametrize(
+        "hash_func",
+        [
+            pytest.param(compute_roles_hash, id="roles"),
+            pytest.param(compute_operations_hash, id="operations"),
+        ],
+    )
+    def test_hash_empty_list(self, hash_func):
+        """Empty list produces a valid hash."""
+        result = hash_func([])
         assert isinstance(result, str)
         assert len(result) == 32  # Full MD5 hex digest
 
@@ -696,12 +703,6 @@ class TestHashComputation:
         hash2 = compute_roles_hash(modified_roles)
 
         assert hash1 != hash2
-
-    def test_compute_operations_hash_empty(self):
-        """Empty operations list produces a hash."""
-        result = compute_operations_hash([])
-        assert isinstance(result, str)
-        assert len(result) == 32  # Full MD5 hex digest
 
     def test_compute_operations_hash_deterministic(self, operations_for_hashing):
         """Same operations produce same hash."""

@@ -13,23 +13,18 @@ from azurerbac.web.filters import (
 class TestDiffLines:
     """Tests for the diff_lines filter function."""
 
-    def test_from_to_diff_added_lines(self):
-        """Test diff showing added lines."""
-        change = {"from": None, "to": {"key": "value"}}
+    @pytest.mark.parametrize(
+        ("change", "expected_type"),
+        [
+            pytest.param({"from": None, "to": {"key": "value"}}, "added", id="added_lines"),
+            pytest.param({"from": {"key": "value"}, "to": None}, "removed", id="removed_lines"),
+        ],
+    )
+    def test_diff_single_type(self, change: dict, expected_type: str):
+        """Test diff showing only added or removed lines."""
         result = diff_lines(change)
-
-        # All lines should be added
         assert len(result) > 0
-        assert all(r["type"] == "added" for r in result)
-
-    def test_from_to_diff_removed_lines(self):
-        """Test diff showing removed lines."""
-        change = {"from": {"key": "value"}, "to": None}
-        result = diff_lines(change)
-
-        # All lines should be removed
-        assert len(result) > 0
-        assert all(r["type"] == "removed" for r in result)
+        assert all(r["type"] == expected_type for r in result)
 
     def test_from_to_diff_modified(self):
         """Test diff showing modifications."""
@@ -93,19 +88,18 @@ class TestFullJsonDiff:
         assert len(result) > 0
         assert all(r["type"] == "unchanged" for r in result)
 
-    def test_added_json(self):
-        """Test diff when before is None (creation)."""
-        result = full_json_diff(None, {"key": "value"})
-
+    @pytest.mark.parametrize(
+        ("before", "after", "expected_type"),
+        [
+            pytest.param(None, {"key": "value"}, "added", id="added_json"),
+            pytest.param({"key": "value"}, None, "removed", id="removed_json"),
+        ],
+    )
+    def test_single_type_diff(self, before, after, expected_type: str):
+        """Test diff when one side is None (creation or deletion)."""
+        result = full_json_diff(before, after)
         assert len(result) > 0
-        assert all(r["type"] == "added" for r in result)
-
-    def test_removed_json(self):
-        """Test diff when after is None (deletion)."""
-        result = full_json_diff({"key": "value"}, None)
-
-        assert len(result) > 0
-        assert all(r["type"] == "removed" for r in result)
+        assert all(r["type"] == expected_type for r in result)
 
     def test_both_none(self):
         """Test diff when both are None."""
@@ -196,19 +190,24 @@ class TestFormatDate:
 class TestWildcardToSqlLike:
     """Tests for wildcard_to_sql_like function."""
 
-    def test_star_converts_to_percent(self):
-        """Test that * converts to %."""
+    @pytest.mark.parametrize(
+        ("pattern", "expected"),
+        [
+            pytest.param("Microsoft.*", "Microsoft.%", id="star_to_percent"),
+            pytest.param("Microsoft.*/*/read", "Microsoft.%/%/read", id="multiple_wildcards"),
+            pytest.param(
+                "Microsoft.Compute/virtualMachines/read",
+                "Microsoft.Compute/virtualMachines/read",
+                id="no_wildcards",
+            ),
+        ],
+    )
+    def test_wildcard_conversion(self, pattern: str, expected: str):
+        """Test wildcard to SQL LIKE pattern conversion."""
         from azurerbac.core.patterns import wildcard_to_sql_like
 
-        result = wildcard_to_sql_like("Microsoft.*")
-        assert result == "Microsoft.%"
-
-    def test_multiple_wildcards(self):
-        """Test multiple wildcards in pattern."""
-        from azurerbac.core.patterns import wildcard_to_sql_like
-
-        result = wildcard_to_sql_like("Microsoft.*/*/read")
-        assert result == "Microsoft.%/%/read"
+        result = wildcard_to_sql_like(pattern)
+        assert result == expected
 
     def test_escapes_sql_percent(self):
         """Test that existing % is escaped."""
@@ -224,13 +223,6 @@ class TestWildcardToSqlLike:
         result = wildcard_to_sql_like("test_pattern")
         assert r"\_" in result
 
-    def test_no_wildcards_unchanged(self):
-        """Test pattern without wildcards."""
-        from azurerbac.core.patterns import wildcard_to_sql_like
-
-        result = wildcard_to_sql_like("Microsoft.Compute/virtualMachines/read")
-        assert result == "Microsoft.Compute/virtualMachines/read"
-
 
 class TestIsWildcardPattern:
     """Tests for is_wildcard_pattern function.
@@ -239,54 +231,44 @@ class TestIsWildcardPattern:
     The ? character is NOT an Azure RBAC wildcard.
     """
 
-    def test_star_is_wildcard(self):
-        """Test that * is detected as wildcard."""
+    @pytest.mark.parametrize(
+        ("pattern", "expected"),
+        [
+            pytest.param("Microsoft.*/read", True, id="star_is_wildcard"),
+            pytest.param("Microsoft.Compute?", False, id="question_mark_not_wildcard"),
+            pytest.param("Microsoft.Compute", False, id="no_wildcard"),
+            pytest.param("", False, id="empty_string"),
+        ],
+    )
+    def test_is_wildcard_pattern(self, pattern: str, expected: bool):
+        """Test wildcard pattern detection."""
         from azurerbac.core.patterns import is_wildcard_pattern
 
-        assert is_wildcard_pattern("Microsoft.*/read") is True
-
-    def test_question_mark_not_wildcard(self):
-        """Test that ? is NOT a wildcard in Azure RBAC patterns."""
-        from azurerbac.core.patterns import is_wildcard_pattern
-
-        # In Azure RBAC, only * is a wildcard - ? is just a regular character
-        assert is_wildcard_pattern("Microsoft.Compute?") is False
-
-    def test_no_wildcard(self):
-        """Test pattern without wildcards."""
-        from azurerbac.core.patterns import is_wildcard_pattern
-
-        assert is_wildcard_pattern("Microsoft.Compute") is False
-
-    def test_empty_string(self):
-        """Test empty string."""
-        from azurerbac.core.patterns import is_wildcard_pattern
-
-        assert is_wildcard_pattern("") is False
+        assert is_wildcard_pattern(pattern) is expected
 
 
 class TestSlugifyEdgeCases:
     """Additional edge case tests for slugify."""
 
-    def test_empty_string(self):
-        """Test slugify with empty string."""
+    @pytest.mark.parametrize(
+        ("input_str", "expected"),
+        [
+            pytest.param("", "", id="empty_string"),
+            pytest.param("@#$%^&", "", id="only_special_chars"),
+            pytest.param("hello    world", "hello-world", id="multiple_spaces"),
+            pytest.param("HELLO WORLD", "hello-world", id="uppercase_converted"),
+            pytest.param(
+                "Storage Blob Data Contributor",
+                "storage-blob-data-contributor",
+                id="azure_role_name",
+            ),
+        ],
+    )
+    def test_slugify_patterns(self, input_str: str, expected: str):
+        """Test slugify with various input patterns."""
         from azurerbac.web.utils import slugify
 
-        assert slugify("") == ""
-
-    def test_only_special_chars(self):
-        """Test slugify with only special characters."""
-        from azurerbac.web.utils import slugify
-
-        result = slugify("@#$%^&")
-        assert result == ""
-
-    def test_multiple_spaces(self):
-        """Test slugify with multiple spaces."""
-        from azurerbac.web.utils import slugify
-
-        result = slugify("hello    world")
-        assert result == "hello-world"
+        assert slugify(input_str) == expected
 
     def test_leading_trailing_dashes(self):
         """Test that leading/trailing dashes are stripped."""
@@ -295,20 +277,6 @@ class TestSlugifyEdgeCases:
         result = slugify("  hello  ")
         assert not result.startswith("-")
         assert not result.endswith("-")
-
-    def test_uppercase_converted(self):
-        """Test that uppercase is converted to lowercase."""
-        from azurerbac.web.utils import slugify
-
-        result = slugify("HELLO WORLD")
-        assert result == "hello-world"
-
-    def test_mixed_case_azure_role(self):
-        """Test slugifying typical Azure role name."""
-        from azurerbac.web.utils import slugify
-
-        result = slugify("Storage Blob Data Contributor")
-        assert result == "storage-blob-data-contributor"
 
     def test_parentheses_removed(self):
         """Test that parentheses are removed."""

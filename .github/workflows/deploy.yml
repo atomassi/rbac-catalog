@@ -51,8 +51,33 @@ jobs:
           MINOR=$(echo "$LATEST_TAG" | sed 's/^v//' | cut -d. -f2)
           PATCH=$(echo "$LATEST_TAG" | sed 's/^v//' | cut -d. -f3)
           NEW_PATCH=$((PATCH + 1))
+          COMPUTED_TAG="v${MAJOR}.${MINOR}.${NEW_PATCH}"
+          
+          # Check for base version override in .next-base-version file
+          if [ -f ".next-base-version" ]; then
+            BASE_VERSION=$(cat .next-base-version | tr -d '[:space:]')
+            # Ensure it starts with 'v'
+            [[ "$BASE_VERSION" != v* ]] && BASE_VERSION="v${BASE_VERSION}"
+            
+            # Compare versions: use base if it's greater than computed
+            BASE_MAJOR=$(echo "$BASE_VERSION" | sed 's/^v//' | cut -d. -f1)
+            BASE_MINOR=$(echo "$BASE_VERSION" | sed 's/^v//' | cut -d. -f2)
+            BASE_PATCH=$(echo "$BASE_VERSION" | sed 's/^v//' | cut -d. -f3)
+            
+            # Compare: base > computed means use base
+            if [ "$BASE_MAJOR" -gt "$MAJOR" ] || \
+               ([ "$BASE_MAJOR" -eq "$MAJOR" ] && [ "$BASE_MINOR" -gt "$MINOR" ]) || \
+               ([ "$BASE_MAJOR" -eq "$MAJOR" ] && [ "$BASE_MINOR" -eq "$MINOR" ] && [ "$BASE_PATCH" -gt "$NEW_PATCH" ]); then
+              NEW_TAG="$BASE_VERSION"
+              echo "📌 Using .next-base-version: $BASE_VERSION (computed was $COMPUTED_TAG)"
+            else
+              NEW_TAG="$COMPUTED_TAG"
+            fi
+          else
+            NEW_TAG="$COMPUTED_TAG"
+          fi
+          
           SHORT_SHA=$(git rev-parse --short HEAD)
-          NEW_TAG="v${MAJOR}.${MINOR}.${NEW_PATCH}"
           VERSION="${NEW_TAG}-${SHORT_SHA}"
           
           echo "latest_tag=$LATEST_TAG" >> $GITHUB_OUTPUT

@@ -1,19 +1,32 @@
+// @ts-check
+
 /**
  * Dark Mode Handler
  * - Auto-switches based on time of day (dark: 7PM-7AM)
  * - Respects system preference
  * - Allows manual toggle with localStorage persistence
+ *
+ * Manual control via browser console:
+ *   window.darkMode.toggle()  - Toggle dark/light
+ *   window.darkMode.enable()  - Force dark mode
+ *   window.darkMode.disable() - Force light mode
+ *   window.darkMode.auto()    - Reset to automatic
+ *   window.darkMode.isDark()  - Check current state
  */
 
 (function() {
     'use strict';
 
+    /** @type {string} */
     const STORAGE_KEY = 'darkMode';
+    /** @type {number} */
     const DARK_HOURS_START = 19; // 7 PM
+    /** @type {number} */
     const DARK_HOURS_END = 7;    // 7 AM
 
     /**
      * Check if current time is within dark hours (7PM - 7AM)
+     * @returns {boolean}
      */
     function isDarkHours() {
         const hour = new Date().getHours();
@@ -22,6 +35,7 @@
 
     /**
      * Check if system prefers dark mode
+     * @returns {boolean}
      */
     function systemPrefersDark() {
         return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -29,6 +43,7 @@
 
     /**
      * Get stored preference (null if not set)
+     * @returns {boolean | null}
      */
     function getStoredPreference() {
         try {
@@ -36,35 +51,40 @@
             if (stored === 'true') return true;
             if (stored === 'false') return false;
             return null;
-        } catch (e) {
+        } catch {
             return null;
         }
     }
 
     /**
      * Store preference
+     * @param {boolean} isDark
+     * @returns {void}
      */
     function setStoredPreference(isDark) {
         try {
             localStorage.setItem(STORAGE_KEY, isDark ? 'true' : 'false');
-        } catch (e) {
+        } catch {
             // localStorage not available
         }
     }
 
     /**
      * Clear stored preference (revert to auto)
+     * @returns {void}
      */
     function clearStoredPreference() {
         try {
             localStorage.removeItem(STORAGE_KEY);
-        } catch (e) {
+        } catch {
             // localStorage not available
         }
     }
 
     /**
      * Apply dark mode to document
+     * @param {boolean} isDark
+     * @returns {void}
      */
     function applyDarkMode(isDark) {
         if (isDark) {
@@ -77,6 +97,7 @@
 
     /**
      * Determine if dark mode should be active
+     * @returns {boolean}
      */
     function shouldBeDark() {
         const stored = getStoredPreference();
@@ -92,6 +113,8 @@
 
     /**
      * Update toggle button state
+     * @param {boolean} isDark
+     * @returns {void}
      */
     function updateToggleButton(isDark) {
         const toggle = document.getElementById('dark-mode-toggle');
@@ -118,6 +141,7 @@
 
     /**
      * Toggle dark mode and save preference
+     * @returns {void}
      */
     function toggleDarkMode() {
         const isDark = document.documentElement.classList.contains('dark');
@@ -128,6 +152,7 @@
 
     /**
      * Reset to auto mode
+     * @returns {void}
      */
     function resetToAuto() {
         clearStoredPreference();
@@ -136,6 +161,7 @@
 
     /**
      * Initialize dark mode
+     * @returns {void}
      */
     function init() {
         // Apply immediately to prevent flash
@@ -179,6 +205,7 @@
     }
 
     // Expose functions globally for manual control
+    // @ts-ignore - Extending window for global access
     window.darkMode = {
         toggle: toggleDarkMode,
         enable: function() { setStoredPreference(true); applyDarkMode(true); },

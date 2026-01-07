@@ -28,8 +28,14 @@ jobs:
         with:
           python-version: '3.12'
           cache: 'pip'
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
+        with:
+          node-version: '20'
+          cache: 'npm'
       - run: pip install -r requirements.txt pyright
       - run: pyright azurerbac/
+      - run: npm ci
+      - run: npm run check:js
 
   test:
     name: Unit Tests

@@ -1,14 +1,48 @@
+// @ts-check
+
 /**
  * Navigation state management using sessionStorage.
  * Stores temporary navigation context that shouldn't pollute URLs.
+ *
+ * Debug mode: To enable debug logs, run in browser console:
+ *   window.NavStateDebug = true
+ *
+ * @typedef {'recommend' | 'roles' | 'operations' | 'operation' | 'role' | 'recent'} BackTarget
+ *
+ * @typedef {Object} NavStateData
+ * @property {BackTarget} [back] - Where to navigate back to
+ * @property {string} [from_role_id] - Role ID to return to
+ * @property {string} [from_role_slug] - Role slug for URL
+ * @property {string} [from_role_name] - Role name for display
+ * @property {string} [from_operation] - Operation name to return to
+ * @property {string} [ai] - AI mode flag from state
+ *
+ * @typedef {Object} BackDefaults
+ * @property {BackTarget} [back] - Default back target
+ * @property {string} [ai] - Default AI mode
  */
+
 const NavState = {
+    /** @type {string} */
     KEY: 'azurerbac_nav_state',
+    /** @type {string} */
     AI_KEY: 'azurerbac_ai_mode',
 
     /**
+     * Log debug message if debug mode is enabled.
+     * @param {...any} args - Arguments to log
+     * @returns {void}
+     */
+    _log(...args) {
+        // @ts-ignore - NavStateDebug is set dynamically via browser console
+        if (window.NavStateDebug) {
+            console.log(...args);
+        }
+    },
+
+    /**
      * Get current navigation state from sessionStorage.
-     * @returns {Object} Navigation state object
+     * @returns {NavStateData} Navigation state object
      */
     get() {
         try {
@@ -21,11 +55,13 @@ const NavState = {
 
     /**
      * Update navigation state (merges with existing).
-     * @param {Object} updates - Key-value pairs to update
+     * @param {Partial<NavStateData>} updates - Key-value pairs to update
+     * @returns {void}
      */
     set(updates) {
         try {
             const current = this.get();
+            /** @type {Record<string, any>} */
             const merged = { ...current, ...updates };
             // Remove null/undefined values
             Object.keys(merged).forEach(k => {
@@ -41,6 +77,7 @@ const NavState = {
 
     /**
      * Clear all navigation state (but preserves AI mode).
+     * @returns {void}
      */
     clear() {
         try {
@@ -57,10 +94,9 @@ const NavState = {
     isAiMode() {
         try {
             const val = sessionStorage.getItem(this.AI_KEY);
-            console.log('[NavState.isAiMode] AI_KEY:', this.AI_KEY, 'value:', val);
+            this._log('[NavState.isAiMode] AI_KEY:', this.AI_KEY, 'value:', val);
             return val === '1';
-        } catch (e) {
-            console.error('[NavState.isAiMode] Error:', e);
+        } catch {
             return false;
         }
     },
@@ -70,17 +106,17 @@ const NavState = {
      * @param {boolean} enabled - Whether AI mode should be enabled
      */
     setAiMode(enabled) {
-        console.log('[NavState.setAiMode] Called with:', enabled);
+        this._log('[NavState.setAiMode] Called with:', enabled);
         try {
             if (enabled) {
                 sessionStorage.setItem(this.AI_KEY, '1');
-                console.log('[NavState.setAiMode] Set to 1, verify:', sessionStorage.getItem(this.AI_KEY));
+                this._log('[NavState.setAiMode] Set to 1, verify:', sessionStorage.getItem(this.AI_KEY));
             } else {
                 sessionStorage.removeItem(this.AI_KEY);
-                console.log('[NavState.setAiMode] Removed');
+                this._log('[NavState.setAiMode] Removed');
             }
-        } catch (e) {
-            console.error('[NavState.setAiMode] Error:', e);
+        } catch {
+            // sessionStorage not available
         }
     },
 
@@ -89,24 +125,26 @@ const NavState = {
      * If ai=1 is in URL, store it in sessionStorage.
      * Note: We don't remove ai=1 from URL as this can cause sessionStorage issues on refresh.
      * Call this on pages that support AI mode.
+     * @returns {void}
      */
     initAiModeFromUrl() {
         const urlParams = new URLSearchParams(window.location.search);
         const aiParam = urlParams.get('ai');
-        console.log('[NavState.initAiModeFromUrl] URL:', window.location.href, 'ai param:', aiParam);
+        this._log('[NavState.initAiModeFromUrl] URL:', window.location.href, 'ai param:', aiParam);
         if (aiParam === '1') {
             this.setAiMode(true);
             // Don't remove ai=1 from URL - causes sessionStorage to be cleared on refresh in some browsers
         } else {
-            console.log('[NavState.initAiModeFromUrl] No ai=1 in URL, current sessionStorage:', sessionStorage.getItem(this.AI_KEY));
+            this._log('[NavState.initAiModeFromUrl] No ai=1 in URL, current sessionStorage:', sessionStorage.getItem(this.AI_KEY));
         }
     },
 
     /**
      * Set "back" context when navigating to a detail page.
      * Call this before navigating to a role or operation detail.
-     * @param {string} backTo - Where to go back: 'recommend', 'roles', 'recent', 'operations'
-     * @param {Object} context - Additional context (ai_query, from_role_id, etc.)
+     * @param {BackTarget} backTo - Where to go back to
+     * @param {Partial<NavStateData>} [context] - Additional context (ai_query, from_role_id, etc.)
+     * @returns {void}
      */
     setBackContext(backTo, context = {}) {
         this.set({
@@ -118,7 +156,7 @@ const NavState = {
     /**
      * Get back URL based on stored navigation state.
      * Note: This does NOT clear the state - call consumeBackContext() after reading both URL and label.
-     * @param {Object} defaults - Default values if not in state
+     * @param {BackDefaults} [defaults] - Default values if not in state
      * @returns {string} URL to navigate back to
      */
     getBackUrl(defaults = {}) {
@@ -171,6 +209,7 @@ const NavState = {
     /**
      * Consume (clear) the back context after using it.
      * Call this after reading both URL and label for the back button.
+     * @returns {void}
      */
     consumeBackContext() {
         this.clear();
@@ -178,7 +217,7 @@ const NavState = {
 
     /**
      * Get label for back button based on stored state.
-     * @param {Object} defaults - Default values if not in state
+     * @param {BackDefaults} [defaults] - Default values if not in state
      * @returns {string} Label for the back button
      */
     getBackLabel(defaults = {}) {
@@ -205,4 +244,5 @@ const NavState = {
 };
 
 // Make available globally
+// @ts-ignore - Extending window for global access
 window.NavState = NavState;

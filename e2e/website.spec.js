@@ -211,11 +211,12 @@ test.describe('Role Detail Page', () => {
 
   test('should display role JSON with Z suffix for timestamps', async ({ page }) => {
     await page.goto('/roles/acdd72a7-3385-48ef-bd42-f606fba81ae7');
-    // Wait for the JSON section to be visible
+    // Wait for the JSON section header to be visible
     await expect(page.locator('text=Latest Role JSON')).toBeVisible();
-    // Get the JSON content from the pre block (template uses pre directly without code wrapper)
-    const jsonBlock = page.locator('pre').filter({ hasText: 'createdOn' }).first();
-    await expect(jsonBlock).toBeVisible();
+    // The JSON is in a dark-themed pre block - get its text content
+    const jsonBlock = page.locator('pre.text-slate-100').filter({ hasText: 'createdOn' }).first();
+    // Wait for content to load
+    await page.waitForTimeout(500);
     const jsonText = await jsonBlock.textContent();
     // Verify timestamps use Z suffix format (not +00:00)
     expect(jsonText).toContain('"createdOn":');
@@ -784,6 +785,56 @@ test.describe('Recent Page Pagination', () => {
         expect(hasTable || hasNoChanges || hasPageContent).toBe(true);
         expect(page.url()).toContain(`days=${days}`);
       });
+    }
+  });
+});
+
+// =============================================================================
+// RECENT CHANGES CONTENT (History)
+// =============================================================================
+test.describe('Recent Changes Content', () => {
+  test('should display history table with role changes', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.goto('/recent');
+    await page.waitForLoadState('domcontentloaded');
+    // The recent page should have a table with history entries
+    await expect(page.locator('table')).toBeVisible();
+  });
+
+  test('should display role names in history entries', async ({ page }) => {
+    await page.goto('/recent');
+    await page.waitForLoadState('domcontentloaded');
+    // Check for role names in the table (Reader or Contributor from our seed data)
+    const hasRoleNames = await page.locator('table').getByText(/Reader|Contributor|Owner|Storage/i).first().isVisible();
+    expect(hasRoleNames).toBe(true);
+  });
+
+  test('should have links to role detail pages from history', async ({ page }) => {
+    await page.goto('/recent');
+    await page.waitForLoadState('domcontentloaded');
+    // History entries should link to role detail pages
+    const roleLinks = page.locator('table a[href^="/roles/"]');
+    expect(await roleLinks.count()).toBeGreaterThan(0);
+  });
+
+  test('should display event type badges', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.goto('/recent');
+    await page.waitForLoadState('domcontentloaded');
+    // Look for event type indicators (initial_scan, created, updated, deleted)
+    const hasEventTypes = await page.getByText(/initial|created|updated|deleted/i).first().isVisible();
+    expect(hasEventTypes).toBe(true);
+  });
+
+  test('should filter by event type when dropdown exists', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.goto('/recent');
+    await page.waitForLoadState('domcontentloaded');
+    const eventTypeSelect = page.locator('select[name="event_type"]');
+    if (await eventTypeSelect.isVisible()) {
+      await eventTypeSelect.selectOption('updated');
+      await page.waitForLoadState('networkidle');
+      expect(page.url()).toContain('event_type=updated');
     }
   });
 });

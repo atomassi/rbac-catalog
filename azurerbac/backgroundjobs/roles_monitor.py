@@ -115,7 +115,12 @@ async def _handle_role_update(
     # Skip timestamp check if role was deleted - always process to reactivate
     # For active roles, skip if Azure timestamp hasn't changed
     is_deleted = snap.status == RoleStatus.DELETED
-    if not is_deleted and snap_updated_on and azure_updated_on and azure_updated_on <= snap_updated_on:
+    if (
+        not is_deleted
+        and snap_updated_on
+        and azure_updated_on
+        and azure_updated_on <= snap_updated_on
+    ):
         return None
 
     # Get old_json directly from current_version relationship (no query needed)

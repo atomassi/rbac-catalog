@@ -260,6 +260,33 @@ jobs:
             --target-slot production
           echo "🔄 Swapped staging to production"
 
+      - name: Notify IndexNow
+        continue-on-error: true
+        run: |
+          INDEXNOW_KEY="${{ secrets.INDEXNOW_KEY }}"
+          
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "https://api.indexnow.org/indexnow" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"host\": \"rbac-catalog.dev\",
+              \"key\": \"$INDEXNOW_KEY\",
+              \"keyLocation\": \"https://rbac-catalog.dev/$INDEXNOW_KEY.txt\",
+              \"urlList\": [
+                \"https://rbac-catalog.dev/roles\",
+                \"https://rbac-catalog.dev/operations\",
+                \"https://rbac-catalog.dev/recommend\",
+                \"https://rbac-catalog.dev/about\",
+                \"https://rbac-catalog.dev/recent\"
+              ]
+            }")
+
+          if [ "$RESPONSE" -eq 200 ] || [ "$RESPONSE" -eq 202 ]; then
+            echo "✅ IndexNow notified (HTTP $RESPONSE)"
+          else
+            echo "⚠️ IndexNow returned HTTP $RESPONSE"
+            exit 1
+          fi
+
       # Cleanup always runs, even if smoke tests fail
       - name: Stop staging slot
         if: always()

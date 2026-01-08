@@ -46,5 +46,8 @@ llama-index==0.14.10
 llama-index-core==0.14.10
 llama-parse==0.6.54
 
+# Retry logic
+tenacity==9.1.2
+
 # Serialization
 msgpack==1.1.2

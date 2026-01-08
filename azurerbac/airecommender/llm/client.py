@@ -9,6 +9,13 @@ import urllib.request
 from dataclasses import dataclass, field
 from typing import Final
 
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
+
 from azurerbac.airecommender.llm.json_repair import (
     extract_json_from_markdown,
     parse_json_with_repair,
@@ -32,6 +39,7 @@ def _get_ollama_model() -> str:
 # LLM generation constants
 DEFAULT_LLM_MAX_TOKENS: Final[int] = 200
 DEFAULT_LLM_TEMPERATURE: Final[float] = 0.3
+DEFAULT_TIMEOUT_SECONDS: Final[int] = 30
 
 # Confidence class to numeric mapping (percentage)
 CONFIDENCE_MAP: Final[dict[str, float]] = {
@@ -122,7 +130,7 @@ class OllamaClient:
         model: str | None = None,
         temperature: float = DEFAULT_LLM_TEMPERATURE,
     ) -> str | None:
-        """Generate text using Ollama API.
+        """Generate text using Ollama API with retry.
 
         Args:
             prompt: The prompt to send to the model
@@ -139,31 +147,47 @@ class OllamaClient:
         use_model = model or self.model
 
         try:
-            url = f"{self.base_url}/api/generate"
-            data = json.dumps(
-                {
-                    "model": use_model,
-                    "prompt": prompt,
-                    "stream": False,
-                    "options": {
-                        "num_predict": max_tokens,
-                        "temperature": temperature,
-                    },
-                }
-            ).encode("utf-8")
-
-            req = urllib.request.Request(url, data=data, method="POST")
-            req.add_header("Content-Type", "application/json")
-
-            # Longer timeout for larger models
-            timeout = 60 if model else 30
-            with urllib.request.urlopen(req, timeout=timeout) as response:
-                result = json.loads(response.read().decode())
-                return result.get("response", "").strip()
-
+            return self._generate_with_retry(
+                prompt, max_tokens, use_model, temperature, DEFAULT_TIMEOUT_SECONDS
+            )
         except Exception as e:
-            logger.debug("Ollama generation failed (%s): %s", use_model, e)
+            logger.warning("Ollama generation failed after retries: %s", e)
             return None
+
+    @retry(
+        retry=retry_if_exception_type(urllib.error.URLError),
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=1, max=8),
+        reraise=True,
+    )
+    def _generate_with_retry(
+        self,
+        prompt: str,
+        max_tokens: int,
+        model: str,
+        temperature: float,
+        timeout: int,
+    ) -> str:
+        """Internal method with retry decorator for Ollama API calls."""
+        url = f"{self.base_url}/api/generate"
+        data = json.dumps(
+            {
+                "model": model,
+                "prompt": prompt,
+                "stream": False,
+                "options": {
+                    "num_predict": max_tokens,
+                    "temperature": temperature,
+                },
+            }
+        ).encode("utf-8")
+
+        req = urllib.request.Request(url, data=data, method="POST")
+        req.add_header("Content-Type", "application/json")
+
+        with urllib.request.urlopen(req, timeout=timeout) as response:
+            result = json.loads(response.read().decode())
+            return result.get("response", "").strip()
 
     def set_known_role_names(self, role_names: list[str]) -> None:
         """Set known role names for fuzzy matching.

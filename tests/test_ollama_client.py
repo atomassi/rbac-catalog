@@ -1,5 +1,9 @@
 """Tests for OllamaClient methods."""
 
+import json
+import urllib.error
+from unittest.mock import MagicMock, patch
+
 import pytest
 
 from azurerbac.airecommender.llm.client import OllamaClient
@@ -9,6 +13,14 @@ from azurerbac.airecommender.llm.client import OllamaClient
 def client() -> OllamaClient:
     """Create an OllamaClient instance for testing."""
     return OllamaClient()
+
+
+@pytest.fixture
+def connected_client() -> OllamaClient:
+    """Create a connected OllamaClient for testing generate methods."""
+    client = OllamaClient()
+    client._connected = True
+    return client
 
 
 @pytest.fixture
@@ -330,3 +342,97 @@ class TestParseJsonWithRepair:
         assert result["role"] == "Storage Blob Data Contributor"
         assert result["confidence_class"] == "very_high"
         assert len(result["signals_matched"]) == 4
+
+
+# =============================================================================
+# Retry Logic Tests
+# =============================================================================
+
+
+class TestGenerateWithRetry:
+    """Tests for OllamaClient retry logic."""
+
+    def test_generate_returns_none_when_not_connected(self, client):
+        """Test that generate returns None when client is not connected."""
+        result = client.generate("test prompt")
+        assert result is None
+
+    def test_generate_success_first_try(self, connected_client):
+        """Test successful generation on first attempt."""
+        response_data = {"response": "test response"}
+
+        mock_response = MagicMock()
+        mock_response.read.return_value = json.dumps(response_data).encode()
+        mock_response.__enter__ = MagicMock(return_value=mock_response)
+        mock_response.__exit__ = MagicMock(return_value=False)
+
+        with patch("urllib.request.urlopen", return_value=mock_response):
+            result = connected_client.generate("test prompt")
+            assert result == "test response"
+
+    def test_generate_retries_on_url_error(self, connected_client):
+        """Test that URLError triggers retry and succeeds on second attempt."""
+        response_data = {"response": "success after retry"}
+
+        mock_response = MagicMock()
+        mock_response.read.return_value = json.dumps(response_data).encode()
+        mock_response.__enter__ = MagicMock(return_value=mock_response)
+        mock_response.__exit__ = MagicMock(return_value=False)
+
+        # First call raises URLError, second succeeds
+        with patch(
+            "urllib.request.urlopen",
+            side_effect=[urllib.error.URLError("connection failed"), mock_response],
+        ):
+            result = connected_client.generate("test prompt")
+            assert result == "success after retry"
+
+    def test_generate_exhausts_retries_returns_none(self, connected_client):
+        """Test that generate returns None after exhausting all retries."""
+        with patch(
+            "urllib.request.urlopen",
+            side_effect=urllib.error.URLError("connection failed"),
+        ):
+            result = connected_client.generate("test prompt")
+            assert result is None
+
+    def test_generate_uses_default_timeout(self, connected_client):
+        """Test that generate uses the default timeout constant."""
+        from azurerbac.airecommender.llm.client import DEFAULT_TIMEOUT_SECONDS
+
+        response_data = {"response": "test"}
+
+        mock_response = MagicMock()
+        mock_response.read.return_value = json.dumps(response_data).encode()
+        mock_response.__enter__ = MagicMock(return_value=mock_response)
+        mock_response.__exit__ = MagicMock(return_value=False)
+
+        with patch("urllib.request.urlopen", return_value=mock_response) as mock_urlopen:
+            connected_client.generate("test prompt")
+            _, kwargs = mock_urlopen.call_args
+            assert kwargs["timeout"] == DEFAULT_TIMEOUT_SECONDS
+
+    @pytest.mark.parametrize(
+        ("use_custom_model", "expected_model"),
+        [
+            pytest.param(None, "test-model", id="default_model"),
+            pytest.param("custom-model", "custom-model", id="custom_model"),
+        ],
+    )
+    def test_generate_uses_correct_model(self, connected_client, use_custom_model, expected_model):
+        """Test that generate uses correct model based on parameter."""
+        connected_client.model = "test-model"
+        response_data = {"response": "test"}
+
+        mock_response = MagicMock()
+        mock_response.read.return_value = json.dumps(response_data).encode()
+        mock_response.__enter__ = MagicMock(return_value=mock_response)
+        mock_response.__exit__ = MagicMock(return_value=False)
+
+        with patch("urllib.request.urlopen", return_value=mock_response) as mock_urlopen:
+            connected_client.generate("test prompt", model=use_custom_model)
+            # Verify model in request body
+            call_args = mock_urlopen.call_args
+            request = call_args[0][0]
+            body = json.loads(request.data.decode())
+            assert body["model"] == expected_model

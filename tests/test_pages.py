@@ -348,6 +348,7 @@ class TestGetUniqueProviders:
     @pytest.mark.asyncio
     async def test_computes_providers_when_not_cached(self):
         """Test computing providers when not cached."""
+        from azurerbac.azure.models import OperationData
         from azurerbac.web.services.pages import get_unique_providers
 
         app_cache = MagicMock()
@@ -355,9 +356,9 @@ class TestGetUniqueProviders:
 
         async def mock_get_all_operations():
             return [
-                {"name": "op1", "provider_display_name": "Microsoft.Compute"},
-                {"name": "op2", "provider_display_name": "Microsoft.Storage"},
-                {"name": "op3", "provider_display_name": "Microsoft.Compute"},  # Duplicate
+                OperationData(name="op1", provider_display_name="Microsoft.Compute"),
+                OperationData(name="op2", provider_display_name="Microsoft.Storage"),
+                OperationData(name="op3", provider_display_name="Microsoft.Compute"),  # Duplicate
             ]
 
         result = await get_unique_providers(app_cache, mock_get_all_operations)

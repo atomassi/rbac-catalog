@@ -6,9 +6,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from azurerbac.azure.models import OperationData
 from azurerbac.web.services.pages import (
     OperationSearchParams,
-    enrich_operations_with_role_counts,
     filter_operations,
     operation_matches_search,
     sort_operations,
@@ -26,22 +26,22 @@ def make_operation(
     provider_display_name: str = "",
     resource_type_display_name: str | None = None,
     is_data_action: bool = False,
-) -> dict:
-    """Create an operation dict for testing."""
-    return {
-        "name": name,
-        "display_name": display_name,
-        "description": description,
-        "origin": None,
-        "provider_display_name": provider_display_name,
-        "resource_type": None,
-        "resource_type_display_name": resource_type_display_name,
-        "is_data_action": is_data_action,
-    }
+) -> OperationData:
+    """Create an OperationData object for testing."""
+    return OperationData(
+        name=name,
+        display_name=display_name,
+        description=description,
+        origin=None,
+        provider_display_name=provider_display_name,
+        resource_type=None,
+        resource_type_display_name=resource_type_display_name,
+        is_data_action=is_data_action,
+    )
 
 
 @pytest.fixture
-def sample_operations() -> list[dict]:
+def sample_operations() -> list[OperationData]:
     """Sample operations for testing."""
     return [
         make_operation(
@@ -117,7 +117,7 @@ class TestOperationMatchesSearch:
         ],
     )
     def test_operation_matches_search(
-        self, sample_operations: list[dict], query: str, expected: bool
+        self, sample_operations: list[OperationData], query: str, expected: bool
     ):
         """Test operation matching against various search queries."""
         op = sample_operations[0]  # Microsoft.Compute/virtualMachines/read
@@ -138,20 +138,20 @@ class TestOperationMatchesSearch:
 class TestFilterOperations:
     """Tests for filter_operations function."""
 
-    def test_no_filters_returns_all(self, sample_operations: list[dict]):
+    def test_no_filters_returns_all(self, sample_operations: list[OperationData]):
         """Test that no filters returns all operations."""
         params = OperationSearchParams()
         result = filter_operations(sample_operations, params)
         assert len(result) == 4
 
-    def test_query_filter(self, sample_operations: list[dict]):
+    def test_query_filter(self, sample_operations: list[OperationData]):
         """Test filtering by search query."""
         params = OperationSearchParams(query="compute")
         result = filter_operations(sample_operations, params)
         assert len(result) == 1
-        assert result[0]["name"] == "Microsoft.Compute/virtualMachines/read"
+        assert result[0].name == "Microsoft.Compute/virtualMachines/read"
 
-    def test_query_filter_multiple_matches(self, sample_operations: list[dict]):
+    def test_query_filter_multiple_matches(self, sample_operations: list[OperationData]):
         """Test query matching multiple operations."""
         params = OperationSearchParams(query="read")
         result = filter_operations(sample_operations, params)
@@ -165,22 +165,22 @@ class TestFilterOperations:
         ],
     )
     def test_is_data_action_filter(
-        self, sample_operations: list[dict], is_data_action: bool, expected_count: int
+        self, sample_operations: list[OperationData], is_data_action: bool, expected_count: int
     ):
         """Test filtering by data action type."""
         params = OperationSearchParams(is_data_action=is_data_action)
         result = filter_operations(sample_operations, params)
         assert len(result) == expected_count
-        assert all(op["is_data_action"] == is_data_action for op in result)
+        assert all(op.is_data_action == is_data_action for op in result)
 
-    def test_provider_filter(self, sample_operations: list[dict]):
+    def test_provider_filter(self, sample_operations: list[OperationData]):
         """Test filtering by provider."""
         params = OperationSearchParams(provider="Microsoft Storage")
         result = filter_operations(sample_operations, params)
         assert len(result) == 1
-        assert result[0]["provider_display_name"] == "Microsoft Storage"
+        assert result[0].provider_display_name == "Microsoft Storage"
 
-    def test_combined_filters(self, sample_operations: list[dict]):
+    def test_combined_filters(self, sample_operations: list[OperationData]):
         """Test combining multiple filters."""
         params = OperationSearchParams(
             query="read",
@@ -188,9 +188,9 @@ class TestFilterOperations:
         )
         result = filter_operations(sample_operations, params)
         assert len(result) == 2
-        assert all(op["is_data_action"] for op in result)
+        assert all(op.is_data_action for op in result)
 
-    def test_no_matches_returns_empty(self, sample_operations: list[dict]):
+    def test_no_matches_returns_empty(self, sample_operations: list[OperationData]):
         """Test that no matches returns empty list."""
         params = OperationSearchParams(query="nonexistent")
         result = filter_operations(sample_operations, params)
@@ -206,34 +206,38 @@ class TestSortOperations:
     """Tests for sort_operations function."""
 
     @pytest.mark.parametrize(
-        ("sort_field", "order", "key_field"),
+        ("sort_field", "order"),
         [
-            pytest.param("name", "asc", "name", id="name_asc"),
-            pytest.param("name", "desc", "name", id="name_desc"),
-            pytest.param("provider", "asc", "provider_display_name", id="provider_asc"),
+            pytest.param("name", "asc", id="name_asc"),
+            pytest.param("name", "desc", id="name_desc"),
+            pytest.param("provider", "asc", id="provider_asc"),
         ],
     )
     def test_sort_by_field(
         self,
-        sample_operations: list[dict],
+        sample_operations: list[OperationData],
         mock_app_cache: MagicMock,
         sort_field: str,
         order: str,
-        key_field: str,
     ):
         """Test sorting by various fields."""
-        ops = sample_operations.copy()
-        sort_operations(ops, sort_field, order, mock_app_cache)
-        values = [op[key_field] for op in ops]
-        expected = sorted(values, key=str.lower, reverse=(order == "desc"))
+        result = sort_operations(sample_operations, sort_field, order, mock_app_cache)
+        # Result is list of (OperationData, role_count) tuples
+        if sort_field == "name":
+            values = [op.name for op, _ in result]
+            expected = sorted(values, key=str.lower, reverse=(order == "desc"))
+        else:  # provider
+            values = [op.provider_display_name or "" for op, _ in result]
+            expected = sorted(values, key=str.lower, reverse=(order == "desc"))
         assert values == expected
 
-    def test_sort_by_type_asc(self, sample_operations: list[dict], mock_app_cache: MagicMock):
+    def test_sort_by_type_asc(
+        self, sample_operations: list[OperationData], mock_app_cache: MagicMock
+    ):
         """Test sorting by type (data action) ascending."""
-        ops = sample_operations.copy()
-        sort_operations(ops, "type", "asc", mock_app_cache)
+        result = sort_operations(sample_operations, "type", "asc", mock_app_cache)
         # False comes before True
-        types = [op["is_data_action"] for op in ops]
+        types = [op.is_data_action for op, _ in result]
         assert types[:2] == [False, False]
         assert types[2:] == [True, True]
 
@@ -245,56 +249,18 @@ class TestSortOperations:
         ],
     )
     def test_sort_by_roles(
-        self, sample_operations: list[dict], mock_app_cache: MagicMock, order: str
+        self, sample_operations: list[OperationData], mock_app_cache: MagicMock, order: str
     ):
         """Test sorting by role count."""
-        ops = sample_operations.copy()
-        sort_operations(ops, "roles", order, mock_app_cache)
-        # Check role_count was added
-        assert all("role_count" in op for op in ops)
-        # Check sorting
-        counts = [op["role_count"] for op in ops]
+        result = sort_operations(sample_operations, "roles", order, mock_app_cache)
+        # Check sorting by role_count (second element of tuple)
+        counts = [role_count for _, role_count in result]
         assert counts == sorted(counts, reverse=(order == "desc"))
 
     def test_unknown_sort_defaults_to_name(
-        self, sample_operations: list[dict], mock_app_cache: MagicMock
+        self, sample_operations: list[OperationData], mock_app_cache: MagicMock
     ):
         """Test that unknown sort field defaults to name."""
-        ops = sample_operations.copy()
-        sort_operations(ops, "unknown", "asc", mock_app_cache)
-        names = [op["name"] for op in ops]
+        result = sort_operations(sample_operations, "unknown", "asc", mock_app_cache)
+        names = [op.name for op, _ in result]
         assert names == sorted(names, key=str.lower)
-
-
-# =============================================================================
-# enrich_operations_with_role_counts Tests
-# =============================================================================
-
-
-class TestEnrichOperationsWithRoleCounts:
-    """Tests for enrich_operations_with_role_counts function."""
-
-    def test_adds_role_count(self, sample_operations: list[dict], mock_app_cache: MagicMock):
-        """Test that role_count is added to operations."""
-        ops = sample_operations.copy()
-        enrich_operations_with_role_counts(ops, mock_app_cache)
-        assert all("role_count" in op for op in ops)
-
-    def test_correct_role_counts(self, sample_operations: list[dict], mock_app_cache: MagicMock):
-        """Test that role counts are correct."""
-        ops = sample_operations.copy()
-        enrich_operations_with_role_counts(ops, mock_app_cache)
-        assert ops[0]["role_count"] == 150  # Compute
-        assert ops[1]["role_count"] == 50  # Storage
-        assert ops[2]["role_count"] == 75  # KeyVault
-        assert ops[3]["role_count"] == 200  # Authorization
-
-    def test_skips_existing_role_count(
-        self, sample_operations: list[dict], mock_app_cache: MagicMock
-    ):
-        """Test that existing role_count is not overwritten."""
-        ops = sample_operations.copy()
-        ops[0]["role_count"] = 999
-        enrich_operations_with_role_counts(ops, mock_app_cache)
-        assert ops[0]["role_count"] == 999  # Not overwritten
-        assert ops[1]["role_count"] == 50  # Added

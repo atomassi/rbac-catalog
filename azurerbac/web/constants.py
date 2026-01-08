@@ -34,7 +34,7 @@ MAX_ROLE_EVENTS: Final = 200
 # API request validation thresholds
 MIN_SEARCH_CHARS: Final = 2
 MIN_AI_QUERY_CHARS: Final = 3
-MAX_QUERY_LENGTH: Final = 500
+MAX_QUERY_LENGTH: Final = 100
 MAX_SEARCH_LIMIT: Final = 500
 MAX_TOP_K: Final = 20
 

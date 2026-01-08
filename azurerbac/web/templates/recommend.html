@@ -414,7 +414,7 @@
                                     placeholder="e.g., read blobs, manage VMs..."
                                     class="w-full px-4 py-3 pr-16 border border-purple-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-base bg-white dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400 ai-query-input"
                                 >
-                                <span class="char-count absolute right-3 top-1/2 -translate-y-1/2 text-xs text-purple-400">0/500</span>
+                                <span class="char-count absolute right-3 top-1/2 -translate-y-1/2 text-xs text-purple-400">0/100</span>
                             </div>
                             <button 
                                 type="button"
@@ -435,7 +435,7 @@
                                     placeholder="e.g., I need to read storage blobs, manage virtual machines, access key vault secrets..."
                                     class="w-full px-4 py-2.5 pr-16 border border-purple-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-sm bg-white dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400 ai-query-input"
                                 >
-                                <span class="char-count absolute right-3 top-1/2 -translate-y-1/2 text-xs text-purple-400">0/500</span>
+                                <span class="char-count absolute right-3 top-1/2 -translate-y-1/2 text-xs text-purple-400">0/100</span>
                             </div>
                             <button 
                                 type="button"
@@ -726,10 +726,10 @@
             const count = text.length;
             
             charCounts.forEach(charCount => {
-                charCount.textContent = `${count}/500`;
+                charCount.textContent = `${count}/100`;
                 
                 // Visual feedback when approaching limit
-                if (count > 450) {
+                if (count > 90) {
                     charCount.classList.remove('text-purple-400');
                     charCount.classList.add('text-red-500');
                 } else {
@@ -739,8 +739,8 @@
             });
             
             // Enforce limit on all inputs
-            if (count > 500) {
-                setAIQueryValue(text.substring(0, 500));
+            if (count > 100) {
+                setAIQueryValue(text.substring(0, 100));
                 updateCharCount();
             }
         }

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from datetime import datetime
 from typing import TYPE_CHECKING, Any, Final
 
 from azurerbac.azure.models import OperationData, Permission, RoleDefinition
@@ -11,7 +12,11 @@ from azurerbac.cache.models import CachedRole
 from azurerbac.core.patterns import is_wildcard_pattern, matches_pattern
 
 if TYPE_CHECKING:
+    from fastapi import Request
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+
     from azurerbac.cache import AppCache
+    from azurerbac.core.models import Role, RoleHistory
 
 # =============================================================================
 # Operation Search/Filter Types
@@ -353,12 +358,12 @@ async def get_unique_providers(
 # =============================================================================
 async def get_role_from_cache_or_db(
     app_cache: AppCache,
-    session_local: Any,
-    role_snapshot_model: Any,
-    role_history_model: Any,
+    session_local: async_sessionmaker,
+    role_snapshot_model: type[Role],
+    role_history_model: type[RoleHistory],
     role_id: str,
     max_events: int = 200,
-) -> tuple[CachedRole | None, RoleDefinition | None, list[dict], object | None]:
+) -> tuple[CachedRole | None, RoleDefinition | None, list[dict], datetime | None]:
     """Get role data from cache or fallback to database.
 
     Args:
@@ -444,7 +449,7 @@ async def get_role_from_cache_or_db(
 
 
 def build_role_redirect_url(
-    request: Any,
+    request: Request,
     role_id: str,
     expected_slug: str,
     q: str | None,

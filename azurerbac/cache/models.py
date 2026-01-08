@@ -155,8 +155,8 @@ class CacheData:
     roles_by_id: dict[str, CachedRole] = field(default_factory=dict)
     all_change_events: list[dict] = field(default_factory=list)
     unique_providers: list[str] = field(default_factory=list)
-    last_scan: Any = None
-    first_scan: Any = None
+    last_scan: datetime | None = None
+    first_scan: datetime | None = None
 
     # ─────────────────────────────────────────────────────────────────────────
     # Indexes (built from raw data for fast lookup)

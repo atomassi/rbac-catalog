@@ -7,6 +7,7 @@ import logging
 import threading
 import time
 from dataclasses import replace
+from datetime import datetime
 from typing import TYPE_CHECKING, Any, Self
 
 from azurerbac.cache.models import (
@@ -252,8 +253,8 @@ class AppCache:
         self,
         *,
         unique_providers: list[str] | None = None,
-        last_scan: Any = None,
-        first_scan: Any = None,
+        last_scan: datetime | None = None,
+        first_scan: datetime | None = None,
     ) -> None:
         """Set metadata fields."""
         updates = {}

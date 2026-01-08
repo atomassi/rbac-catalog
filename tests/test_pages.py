@@ -9,6 +9,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from azurerbac.azure.models import OperationData, RoleDefinition
+from azurerbac.cache.models import CachedChangeEvent
 
 
 def make_role(
@@ -376,19 +377,22 @@ class TestEnrichEventWithDiff:
         """Test that role_json is formatted as role_json_pretty."""
         from azurerbac.web.services.pages import enrich_event_with_diff
 
-        event = {
-            "scan_timestamp": "2025-01-01T00:00:00Z",
-            "azure_updated_on": "2025-01-01T00:00:00Z",
-            "event_type": "created",
-            "summary": "Role created",
-            "diff_json": {"changed": True, "changes": []},
-            "role_json": {
+        event = CachedChangeEvent(
+            id=1,
+            role_id="test-id",
+            role_name="Test Role",
+            event_type="created",
+            scan_timestamp=None,
+            azure_updated_on=None,
+            summary="Role created",
+            diff_json={"changed": True, "changes": []},
+            role_json={
                 "id": "test-id",
                 "name": "test-guid",
                 "type": "Microsoft.Authorization/roleDefinitions",
                 "properties": {"roleName": "Test Role", "type": "BuiltInRole"},
             },
-        }
+        )
 
         result = enrich_event_with_diff(event)
 
@@ -400,14 +404,17 @@ class TestEnrichEventWithDiff:
         """Test that role_json_pretty is empty for deleted events."""
         from azurerbac.web.services.pages import enrich_event_with_diff
 
-        event = {
-            "scan_timestamp": "2025-01-01T00:00:00Z",
-            "azure_updated_on": "2025-01-01T00:00:00Z",
-            "event_type": "deleted",
-            "summary": "Role deleted",
-            "diff_json": {"changed": True, "changes": []},
-            "role_json": None,  # NULL for deleted
-        }
+        event = CachedChangeEvent(
+            id=2,
+            role_id="test-id",
+            role_name="Deleted Role",
+            event_type="deleted",
+            scan_timestamp=None,
+            azure_updated_on=None,
+            summary="Role deleted",
+            diff_json={"changed": True, "changes": []},
+            role_json=None,  # NULL for deleted
+        )
 
         result = enrich_event_with_diff(event)
 
@@ -417,18 +424,22 @@ class TestEnrichEventWithDiff:
         """Test that role_json is sanitized (isServiceRole excluded via RoleDefinition model)."""
         from azurerbac.web.services.pages import enrich_event_with_diff
 
-        event = {
-            "scan_timestamp": "2025-01-01T00:00:00Z",
-            "event_type": "created",
-            "summary": "Created",
-            "diff_json": {},
-            "role_json": {
+        event = CachedChangeEvent(
+            id=3,
+            role_id="test",
+            role_name="Test",
+            event_type="created",
+            scan_timestamp=None,
+            azure_updated_on=None,
+            summary="Created",
+            diff_json={},
+            role_json={
                 "id": "test",
                 "name": "test-guid",
                 "type": "Microsoft.Authorization/roleDefinitions",
                 "properties": {"roleName": "Test", "isServiceRole": True},
             },
-        }
+        )
 
         result = enrich_event_with_diff(event)
 
@@ -440,16 +451,20 @@ class TestEnrichEventWithDiff:
         """Test that diff_json is included in result."""
         from azurerbac.web.services.pages import enrich_event_with_diff
 
-        event = {
-            "scan_timestamp": "2025-01-01T00:00:00Z",
-            "event_type": "updated",
-            "summary": "Updated",
-            "diff_json": {
+        event = CachedChangeEvent(
+            id=4,
+            role_id="test-id",
+            role_name="Updated Role",
+            event_type="updated",
+            scan_timestamp=None,
+            azure_updated_on=None,
+            summary="Updated",
+            diff_json={
                 "changed": True,
                 "changes": [{"path": "description", "from": "old", "to": "new"}],
             },
-            "role_json": None,
-        }
+            role_json=None,
+        )
 
         result = enrich_event_with_diff(event)
 

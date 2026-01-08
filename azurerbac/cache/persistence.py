@@ -92,6 +92,10 @@ def save_cache_to_disk(data: CacheData) -> bool:
                 k: [op.to_dict() for op in v] for k, v in data.ops_by_prefix.items()
             }
 
+        # Convert CachedChangeEvent objects to dicts for serialization
+        if data.all_change_events:
+            data_dict["all_change_events"] = [ev.to_dict() for ev in data.all_change_events]
+
         packed = packb(data_dict)
 
         with open(temp_file, "wb") as f:
@@ -125,7 +129,7 @@ def load_cache_from_disk() -> CacheData | None:
 
         # Reconstruct dataclass from dict
         from azurerbac.azure.models import OperationData
-        from azurerbac.cache.models import CacheData, CachedRole, CacheMetadata
+        from azurerbac.cache.models import CacheData, CachedChangeEvent, CachedRole, CacheMetadata
 
         metadata_dict = data_dict.pop("metadata", {})
         metadata = CacheMetadata(**metadata_dict)
@@ -153,6 +157,10 @@ def load_cache_from_disk() -> CacheData | None:
                 k: [OperationData.model_validate(op) for op in v]
                 for k, v in ops_by_prefix_raw.items()
             }
+
+        # Convert all_change_events dicts back to CachedChangeEvent objects
+        if events_raw := data_dict.get("all_change_events"):
+            data_dict["all_change_events"] = [CachedChangeEvent.from_dict(ev) for ev in events_raw]
 
         # Post-process fields with tuple values
         # role_coverage: dict[str, tuple[set, set]] - values are tuples of sets

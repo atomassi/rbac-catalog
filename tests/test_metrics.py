@@ -6,6 +6,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from azurerbac.cache.models import CachedChangeEvent
+
 # =============================================================================
 # Fixtures
 # =============================================================================
@@ -44,7 +46,9 @@ def mock_app_cache():
     mock_data = MagicMock()
     mock_data.roles_by_id = {"role1": {}, "role2": {}}
     mock_data.all_operations = [{"name": "op1"}, {"name": "op2"}, {"name": "op3"}]
-    mock_data.all_change_events = [{"id": 1}]
+    mock_data.all_change_events = [
+        CachedChangeEvent(id=1, role_id="r1", role_name="Role 1", event_type="created")
+    ]
 
     mock_cache = MagicMock()
     mock_cache.data = mock_data

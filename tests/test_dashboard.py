@@ -11,7 +11,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from azurerbac.azure.models import Permission, RoleDefinition, RoleProperties
-from azurerbac.cache.models import CachedRole
+from azurerbac.cache.models import CachedChangeEvent, CachedRole
 from azurerbac.core.constants import RoleStatus
 
 
@@ -100,30 +100,38 @@ class TestFilterCachedEvents:
         cutoff = now - dt.timedelta(days=5)
 
         cached_events = [
-            {
-                "role_id": "created_recent",
-                "event_type": "created",
-                "azure_updated_on": now - dt.timedelta(days=1),
-                "scan_timestamp": now - dt.timedelta(days=1),
-            },
-            {
-                "role_id": "updated_recent",
-                "event_type": "updated",
-                "azure_updated_on": now - dt.timedelta(days=2),
-                "scan_timestamp": now - dt.timedelta(days=2),
-            },
-            {
-                "role_id": "deleted_recent",
-                "event_type": "deleted",
-                "azure_updated_on": now - dt.timedelta(days=20),
-                "scan_timestamp": now - dt.timedelta(days=3),
-            },
-            {
-                "role_id": "updated_old",
-                "event_type": "updated",
-                "azure_updated_on": now - dt.timedelta(days=10),
-                "scan_timestamp": now - dt.timedelta(days=10),
-            },
+            CachedChangeEvent(
+                id=1,
+                role_id="created_recent",
+                role_name="Created Recent",
+                event_type="created",
+                azure_updated_on=now - dt.timedelta(days=1),
+                scan_timestamp=now - dt.timedelta(days=1),
+            ),
+            CachedChangeEvent(
+                id=2,
+                role_id="updated_recent",
+                role_name="Updated Recent",
+                event_type="updated",
+                azure_updated_on=now - dt.timedelta(days=2),
+                scan_timestamp=now - dt.timedelta(days=2),
+            ),
+            CachedChangeEvent(
+                id=3,
+                role_id="deleted_recent",
+                role_name="Deleted Recent",
+                event_type="deleted",
+                azure_updated_on=now - dt.timedelta(days=20),
+                scan_timestamp=now - dt.timedelta(days=3),
+            ),
+            CachedChangeEvent(
+                id=4,
+                role_id="updated_old",
+                role_name="Updated Old",
+                event_type="updated",
+                azure_updated_on=now - dt.timedelta(days=10),
+                scan_timestamp=now - dt.timedelta(days=10),
+            ),
         ]
 
         deps = MagicMock()
@@ -348,12 +356,14 @@ class TestRecentPagePagination:
 
         # Create 50 events within the cutoff
         cached_events = [
-            {
-                "role_id": f"event_{i}",
-                "event_type": "updated",
-                "azure_updated_on": now - dt.timedelta(days=i % 25),
-                "scan_timestamp": now - dt.timedelta(days=i % 25),
-            }
+            CachedChangeEvent(
+                id=i,
+                role_id=f"event_{i}",
+                role_name=f"Event {i}",
+                event_type="updated",
+                azure_updated_on=now - dt.timedelta(days=i % 25),
+                scan_timestamp=now - dt.timedelta(days=i % 25),
+            )
             for i in range(50)
         ]
 

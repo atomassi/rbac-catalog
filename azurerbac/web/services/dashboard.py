@@ -6,14 +6,13 @@ import datetime as dt
 import math
 from collections.abc import Callable
 from enum import StrEnum
-from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, Final
 
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.sql import Select
 from sqlalchemy.sql.elements import ColumnElement
 
-from azurerbac.cache.models import CachedRole
+from azurerbac.cache.models import CachedChangeEvent, CachedRole
 from azurerbac.core.constants import RoleStatus
 from azurerbac.core.utils import (
     ensure_utc,
@@ -272,38 +271,42 @@ def _event_matches_type(
 
 
 def filter_cached_events(
-    cached_events: list[dict],
+    cached_events: list[CachedChangeEvent],
     deps: DashboardDeps,
     cutoff: dt.datetime,
     event_type: str,
-) -> list:
+) -> list[CachedChangeEvent]:
     """Filter cached events by type and date.
 
     Args:
-        cached_events: List of event dicts from cache
+        cached_events: List of CachedChangeEvent from cache
         deps: Dashboard dependencies (for role name lookup)
         cutoff: Datetime cutoff - events must be after this
         event_type: "created", "updated", "deleted", or "all"
 
     Returns:
-        List of filtered event objects sorted by date descending
+        List of filtered CachedChangeEvent sorted by date descending
     """
-    filtered_events = []
+    filtered_events: list[CachedChangeEvent] = []
     for ev in cached_events:
-        ev_type = ev.get("event_type")
-        azure_updated = ensure_utc(ev.get("azure_updated_on"))
-        scan_timestamp = ensure_utc(ev.get("scan_timestamp"))
+        ev_type = ev.event_type
+        azure_updated = ensure_utc(ev.azure_updated_on)
+        scan_timestamp = ensure_utc(ev.scan_timestamp)
 
         if _event_matches_type(ev_type, event_type, azure_updated, scan_timestamp, cutoff):
-            role_id = ev.get("role_id")
-            role_data = deps.app_cache.get_role_by_id(role_id) if role_id else None
-            enriched_ev = {**ev}
-            if role_data:
-                enriched_ev["role_name"] = role_data.role_name
-            filtered_events.append(SimpleNamespace(**enriched_ev))
+            # Update role_name from cache if available (role may have been renamed)
+            role_data = deps.app_cache.get_role_by_id(ev.role_id) if ev.role_id else None
+            if role_data and role_data.role_name != ev.role_name:
+                # Create new event with updated role_name (dataclass is immutable with slots)
+                from dataclasses import replace
 
-    def get_sort_key(e: SimpleNamespace) -> dt.datetime:
-        dt_val = getattr(e, "azure_updated_on", None) or getattr(e, "scan_timestamp", None)
+                enriched_ev = replace(ev, role_name=role_data.role_name)
+                filtered_events.append(enriched_ev)
+            else:
+                filtered_events.append(ev)
+
+    def get_sort_key(e: CachedChangeEvent) -> dt.datetime:
+        dt_val = e.azure_updated_on or e.scan_timestamp
         return ensure_utc_or_min(dt_val)
 
     filtered_events.sort(key=get_sort_key, reverse=True)

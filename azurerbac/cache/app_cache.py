@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any, Self
 from azurerbac.cache.models import (
     CACHE_VERSION,
     CacheData,
+    CachedChangeEvent,
     CachedRole,
     build_indexes,
 )
@@ -154,13 +155,13 @@ class AppCache:
         """Get all operations."""
         return self._cache.all_operations
 
-    def get_change_events(self) -> list[dict]:
+    def get_change_events(self) -> list[CachedChangeEvent]:
         """Get all change events."""
         return self._cache.all_change_events
 
-    def get_events_for_role(self, role_id: str) -> list[dict]:
+    def get_events_for_role(self, role_id: str) -> list[CachedChangeEvent]:
         """Get change events for a specific role."""
-        return [e for e in self._cache.all_change_events if e.get("role_id") == role_id]
+        return [e for e in self._cache.all_change_events if e.role_id == role_id]
 
     def get_role_coverage(self, role_id: str) -> tuple[set[str], set[str]] | None:
         """Get cached role coverage (control_ops, data_ops) or None if not cached.
@@ -238,7 +239,7 @@ class AppCache:
         self._cache = replace(self._cache, roles_by_id=roles_by_id)
         logger.info("Built roles index: %d roles", len(roles_by_id))
 
-    def set_change_events(self, events: list[dict]) -> None:
+    def set_change_events(self, events: list[CachedChangeEvent]) -> None:
         """Set change events. Used for testing."""
         self._cache = replace(self._cache, all_change_events=events)
 

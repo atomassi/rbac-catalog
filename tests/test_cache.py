@@ -18,6 +18,7 @@ from azurerbac.azure.models import OperationData, RoleDefinition
 from azurerbac.cache import (
     AppCache,
     CacheData,
+    CachedChangeEvent,
     CachedRole,
     CacheMetadata,
     compute_operations_hash,
@@ -285,8 +286,8 @@ class TestPreloadCache:
         cache = AppCache()
 
         events = [
-            {"id": 1, "role_id": "role-1", "event_type": "created"},
-            {"id": 2, "role_id": "role-2", "event_type": "updated"},
+            CachedChangeEvent(id=1, role_id="role-1", role_name="Role 1", event_type="created"),
+            CachedChangeEvent(id=2, role_id="role-2", role_name="Role 2", event_type="updated"),
         ]
         cache.set_change_events(events)
 
@@ -318,7 +319,9 @@ class TestPreloadCache:
     def test_get_change_events(self):
         """Test get_change_events returns cached events."""
         cache = AppCache()
-        events = [{"id": 1, "event_type": "created"}]
+        events = [
+            CachedChangeEvent(id=1, role_id="role-1", role_name="Role 1", event_type="created")
+        ]
         cache.set_change_events(events)
 
         assert cache.get_change_events() == events
@@ -327,15 +330,15 @@ class TestPreloadCache:
         """Test get_events_for_role filters by role_id."""
         cache = AppCache()
         events = [
-            {"id": 1, "role_id": "role-1", "event_type": "created"},
-            {"id": 2, "role_id": "role-2", "event_type": "updated"},
-            {"id": 3, "role_id": "role-1", "event_type": "modified"},
+            CachedChangeEvent(id=1, role_id="role-1", role_name="Role 1", event_type="created"),
+            CachedChangeEvent(id=2, role_id="role-2", role_name="Role 2", event_type="updated"),
+            CachedChangeEvent(id=3, role_id="role-1", role_name="Role 1", event_type="modified"),
         ]
         cache.set_change_events(events)
 
         role1_events = cache.get_events_for_role("role-1")
         assert len(role1_events) == 2
-        assert all(e["role_id"] == "role-1" for e in role1_events)
+        assert all(e.role_id == "role-1" for e in role1_events)
 
     def test_role_pages_cache(self):
         """Test role pages caching."""

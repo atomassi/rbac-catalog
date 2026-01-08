@@ -22,6 +22,7 @@ import pytest
 from azurerbac.azure.models import OperationData, RoleDefinition
 from azurerbac.cache import (
     CacheData,
+    CachedChangeEvent,
     CachedRole,
     CacheMetadata,
     app_cache,
@@ -41,34 +42,34 @@ from azurerbac.core.constants import RoleStatus
 def sample_change_events():
     """Sample change events for testing."""
     return [
-        {
-            "id": 1,
-            "role_id": "reader-role-id",
-            "role_name": "Reader",
-            "event_type": "created",
-            "scan_timestamp": datetime(2024, 1, 1, 12, 0, 0),
-            "azure_updated_on": datetime(2024, 1, 1, 10, 0, 0),
-            "summary": "Role created",
-            "diff_json": None,
-            "role_json": {
+        CachedChangeEvent(
+            id=1,
+            role_id="reader-role-id",
+            role_name="Reader",
+            event_type="created",
+            scan_timestamp=datetime(2024, 1, 1, 12, 0, 0),
+            azure_updated_on=datetime(2024, 1, 1, 10, 0, 0),
+            summary="Role created",
+            diff_json=None,
+            role_json={
                 "id": "reader-role-id",
                 "properties": {"roleName": "Reader", "type": "BuiltInRole"},
             },
-        },
-        {
-            "id": 2,
-            "role_id": "storage-data-reader-id",
-            "role_name": "Storage Data Reader",
-            "event_type": "updated",
-            "scan_timestamp": datetime(2024, 1, 15, 12, 0, 0),
-            "azure_updated_on": datetime(2024, 1, 15, 10, 0, 0),
-            "summary": "Permissions updated",
-            "diff_json": {"changes": [{"field": "permissions", "old": "X", "new": "Y"}]},
-            "role_json": {
+        ),
+        CachedChangeEvent(
+            id=2,
+            role_id="storage-data-reader-id",
+            role_name="Storage Data Reader",
+            event_type="updated",
+            scan_timestamp=datetime(2024, 1, 15, 12, 0, 0),
+            azure_updated_on=datetime(2024, 1, 15, 10, 0, 0),
+            summary="Permissions updated",
+            diff_json={"changes": [{"field": "permissions", "old": "X", "new": "Y"}]},
+            role_json={
                 "id": "storage-data-reader-id",
                 "properties": {"roleName": "Storage Data Reader", "type": "BuiltInRole"},
             },
-        },
+        ),
     ]
 
 
@@ -716,8 +717,8 @@ class TestDataConsistency:
 
             assert len(loaded.all_change_events) == len(sample_change_events)
             for i, event in enumerate(loaded.all_change_events):
-                assert event["role_id"] == sample_change_events[i]["role_id"]
-                assert event["event_type"] == sample_change_events[i]["event_type"]
+                assert event.role_id == sample_change_events[i].role_id
+                assert event.event_type == sample_change_events[i].event_type
 
     def test_change_events_include_role_json(
         self, temp_cache_dir, sample_roles, sample_operations, sample_change_events
@@ -739,10 +740,12 @@ class TestDataConsistency:
             # Verify role_json is preserved
             for i, event in enumerate(loaded.all_change_events):
                 original = sample_change_events[i]
-                assert "role_json" in event, f"Event {i} missing role_json"
-                if original.get("role_json"):
-                    assert event["role_json"] == original["role_json"]
-                    assert event["role_json"]["properties"]["roleName"]
+                assert (
+                    event.role_json is not None or original.role_json is None
+                ), f"Event {i} missing role_json"
+                if original.role_json:
+                    assert event.role_json == original.role_json
+                    assert event.role_json["properties"]["roleName"]
 
 
 # =============================================================================
@@ -757,9 +760,7 @@ class TestInvalidationFlow:
         self, temp_cache_dir, sample_roles, sample_operations
     ):
         """delete_cache_file removes the disk cache file."""
-        with (
-            patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_cache_dir),
-        ):
+        with (patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_cache_dir),):
             # Save cache
             cache_data = build_complete_cache(sample_roles, sample_operations)
             save_cache_to_disk(cache_data)

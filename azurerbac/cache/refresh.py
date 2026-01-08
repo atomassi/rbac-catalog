@@ -133,22 +133,24 @@ async def rebuild_cache(
                 )
 
         # Build change events list (include role_name for display)
-        all_change_events = []
+        from azurerbac.cache.models import CachedChangeEvent
+
+        all_change_events: list[CachedChangeEvent] = []
         for ev in all_events:
             cached_role = roles_by_id.get(ev.role_id)
             role_name = cached_role.role_name if cached_role else ev.role_name
             all_change_events.append(
-                {
-                    "id": ev.id,
-                    "role_id": ev.role_id,
-                    "role_name": role_name,
-                    "event_type": ev.event_type,
-                    "scan_timestamp": ev.scan.scan_timestamp if ev.scan else None,
-                    "azure_updated_on": ev.azure_updated_on,
-                    "summary": ev.summary,
-                    "diff_json": ev.diff_json,
-                    "role_json": ev.role_definition.to_dict() if ev.role_definition else None,
-                }
+                CachedChangeEvent(
+                    id=ev.id,
+                    role_id=ev.role_id,
+                    role_name=role_name,
+                    event_type=ev.event_type,
+                    scan_timestamp=ev.scan.scan_timestamp if ev.scan else None,
+                    azure_updated_on=ev.azure_updated_on,
+                    summary=ev.summary,
+                    diff_json=ev.diff_json,
+                    role_json=ev.role_definition.to_dict() if ev.role_definition else None,
+                )
             )
 
         # Compute hashes

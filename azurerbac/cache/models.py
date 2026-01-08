@@ -97,6 +97,64 @@ class CachedRole:
 
 
 @dataclass(slots=True)
+class CachedChangeEvent:
+    """A cached change event from role history.
+
+    Typed representation of role change events for cache storage.
+    Replaces untyped dict for better type safety and IDE support.
+    """
+
+    id: int
+    role_id: str
+    role_name: str
+    event_type: str
+    scan_timestamp: datetime | None = None
+    azure_updated_on: datetime | None = None
+    summary: str | None = None
+    diff_json: dict[str, Any] | None = None
+    role_json: dict[str, Any] | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dict for JSON serialization (disk persistence)."""
+        return {
+            "id": self.id,
+            "role_id": self.role_id,
+            "role_name": self.role_name,
+            "event_type": self.event_type,
+            "scan_timestamp": self.scan_timestamp.isoformat() if self.scan_timestamp else None,
+            "azure_updated_on": (
+                self.azure_updated_on.isoformat() if self.azure_updated_on else None
+            ),
+            "summary": self.summary,
+            "diff_json": self.diff_json,
+            "role_json": self.role_json,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> CachedChangeEvent:
+        """Create from dict (disk persistence)."""
+
+        def parse_dt(val: str | datetime | None) -> datetime | None:
+            if val is None:
+                return None
+            if isinstance(val, datetime):
+                return val
+            return datetime.fromisoformat(val)
+
+        return cls(
+            id=data["id"],
+            role_id=data["role_id"],
+            role_name=data["role_name"],
+            event_type=data["event_type"],
+            scan_timestamp=parse_dt(data.get("scan_timestamp")),
+            azure_updated_on=parse_dt(data.get("azure_updated_on")),
+            summary=data.get("summary"),
+            diff_json=data.get("diff_json"),
+            role_json=data.get("role_json"),
+        )
+
+
+@dataclass(slots=True)
 class CacheMetadata:
     """Metadata for cache invalidation."""
 
@@ -153,7 +211,7 @@ class CacheData:
 
     all_operations: list[OperationData] = field(default_factory=list)
     roles_by_id: dict[str, CachedRole] = field(default_factory=dict)
-    all_change_events: list[dict] = field(default_factory=list)
+    all_change_events: list[CachedChangeEvent] = field(default_factory=list)
     unique_providers: list[str] = field(default_factory=list)
     last_scan: datetime | None = None
     first_scan: datetime | None = None

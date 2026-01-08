@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any, Final
 
 from azurerbac.azure.models import OperationData, Permission, RoleDefinition
-from azurerbac.cache.models import CachedRole
+from azurerbac.cache.models import CachedChangeEvent, CachedRole
 from azurerbac.core.patterns import is_wildcard_pattern, matches_pattern
 
 if TYPE_CHECKING:
@@ -363,7 +363,7 @@ async def get_role_from_cache_or_db(
     role_history_model: type[RoleHistory],
     role_id: str,
     max_events: int = 200,
-) -> tuple[CachedRole | None, RoleDefinition | None, list[dict], datetime | None]:
+) -> tuple[CachedRole | None, RoleDefinition | None, list[CachedChangeEvent], datetime | None]:
     """Get role data from cache or fallback to database.
 
     Args:
@@ -435,14 +435,17 @@ async def get_role_from_cache_or_db(
             db_events = events_result.scalars().all()
             timer.rows = len(db_events)
         events_raw = [
-            {
-                "scan_timestamp": ev.scan.scan_timestamp if ev.scan else None,
-                "azure_updated_on": ev.azure_updated_on,
-                "event_type": ev.event_type,
-                "summary": ev.summary,
-                "diff_json": ev.diff_json,
-                "role_json": ev.role_definition.to_dict() if ev.role_definition else None,
-            }
+            CachedChangeEvent(
+                id=ev.id,
+                role_id=ev.role_id,
+                role_name=ev.role_name,
+                event_type=ev.event_type,
+                scan_timestamp=ev.scan.scan_timestamp if ev.scan else None,
+                azure_updated_on=ev.azure_updated_on,
+                summary=ev.summary,
+                diff_json=ev.diff_json,
+                role_json=ev.role_definition.to_dict() if ev.role_definition else None,
+            )
             for ev in db_events
         ]
         return cached_role_from_db, role_def, events_raw, first_scan
@@ -499,11 +502,11 @@ def build_role_redirect_url(
     return str(url)
 
 
-def enrich_event_with_diff(ev: dict) -> dict:
+def enrich_event_with_diff(ev: CachedChangeEvent) -> dict:
     """Enrich a role change event with processed diff_json.
 
     Args:
-        ev: Raw event dictionary with diff_json field.
+        ev: CachedChangeEvent instance with diff_json field.
 
     Returns:
         Enriched event dictionary with diff and diff_pretty fields.
@@ -517,7 +520,7 @@ def enrich_event_with_diff(ev: dict) -> dict:
         """Parse role JSON through RoleDefinition model for consistent output."""
         return RoleDefinition.model_validate(role_json).to_dict() if role_json else None
 
-    diff_json = ev.get("diff_json")
+    diff_json = ev.diff_json
     if diff_json:
         if before := diff_json.get("before_json"):
             diff_json = {**diff_json, "before_json": to_clean_dict(before)}
@@ -526,14 +529,14 @@ def enrich_event_with_diff(ev: dict) -> dict:
 
     # Process role_json for created/initial_scan events
     role_json_pretty_str = ""
-    if (role_json := ev.get("role_json")) and (display_json := to_clean_dict(role_json)):
+    if (role_json := ev.role_json) and (display_json := to_clean_dict(role_json)):
         role_json_pretty_str = role_json_pretty(display_json)
 
     return {
-        "scan_timestamp": ev.get("scan_timestamp"),
-        "azure_updated_on": ev.get("azure_updated_on"),
-        "event_type": ev.get("event_type"),
-        "summary": ev.get("summary"),
+        "scan_timestamp": ev.scan_timestamp,
+        "azure_updated_on": ev.azure_updated_on,
+        "event_type": ev.event_type,
+        "summary": ev.summary,
         "diff": diff_json,
         "diff_pretty": (json.dumps(diff_json, indent=2, default=str) if diff_json else ""),
         "role_json_pretty": role_json_pretty_str,

@@ -24,7 +24,6 @@ from azurerbac.web.services.pages import (
     build_role_redirect_url,
     compute_role_effective_permissions,
     enrich_event_with_diff,
-    enrich_operations_with_role_counts,
     filter_operations,
     get_role_from_cache_or_db,
     get_roles_allowing_operation,
@@ -140,9 +139,8 @@ async def operations_list(
     page_size = clamp(limit, 1, MAX_PAGE_SIZE)
     page = clamp(page, 1, MAX_PAGE_NUMBER)
 
-    # Get all operations from cache and convert to dicts for filtering/sorting
-    all_operations_raw = await deps.get_all_operations()
-    all_operations = [op.to_dict() for op in all_operations_raw]
+    # Get all operations from cache (as OperationData objects - no to_dict yet)
+    all_operations = await deps.get_all_operations()
     total_operations = len(all_operations)
 
     # Get unique providers for filter dropdown
@@ -151,7 +149,7 @@ async def operations_list(
     # Parse is_data_action filter
     is_data_action_filter = _BOOL_MAP.get(is_data_action)
 
-    # Build search params and filter operations
+    # Build search params and filter operations (operates on OperationData)
     search_params = OperationSearchParams(
         query=q,
         is_data_action=is_data_action_filter,
@@ -161,20 +159,23 @@ async def operations_list(
     )
     filtered_ops = filter_operations(all_operations, search_params)
 
-    # Sort operations
-    sort_operations(filtered_ops, sort, order, deps.app_cache)
+    # Sort operations - returns list of (OperationData, role_count) tuples
+    sorted_ops_with_counts = sort_operations(filtered_ops, sort, order, deps.app_cache)
 
-    total_filtered = len(filtered_ops)
+    total_filtered = len(sorted_ops_with_counts)
     total_pages = max(1, (total_filtered + page_size - 1) // page_size)
 
-    # Paginate
+    # Paginate FIRST, then convert to dicts (only ~25 conversions instead of ~20,000)
     start_idx = (page - 1) * page_size
     end_idx = start_idx + page_size
-    page_operations = filtered_ops[start_idx:end_idx]
+    page_slice = sorted_ops_with_counts[start_idx:end_idx]
 
-    # Enrich page operations with role count if not already done (for non-roles sort)
-    if sort != "roles":
-        enrich_operations_with_role_counts(page_operations, deps.app_cache)
+    # Convert only the paginated slice to dicts, with role_count already computed
+    page_operations = []
+    for op, role_count in page_slice:
+        op_dict = op.to_dict()
+        op_dict["role_count"] = role_count
+        page_operations.append(op_dict)
 
     return deps.templates.TemplateResponse(
         request,

@@ -8,7 +8,10 @@ import signal
 import time as time_module
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from dotenv import load_dotenv
@@ -43,7 +46,7 @@ class JobSpec:
     interval_seconds: int
 
 
-def _create_job_specs(settings: Any) -> list[JobSpec]:
+def _create_job_specs(settings: Settings) -> list[JobSpec]:
     """Create job specifications based on settings."""
     from azurerbac.telemetry import track_operations_scan, track_role_scan
 
@@ -122,7 +125,9 @@ def _setup_shutdown_handler(shutdown_event: asyncio.Event) -> None:
 
 
 async def _run_startup_jobs(
-    settings: Any, jobs_by_name: dict[str, JobSpec], run_job: Callable[[JobSpec], Awaitable[None]]
+    settings: Settings,
+    jobs_by_name: dict[str, JobSpec],
+    run_job: Callable[[JobSpec], Awaitable[None]],
 ) -> None:
     """Run optional startup jobs based on settings."""
     if settings.run_roles_scan_on_startup:
@@ -145,7 +150,7 @@ async def _cleanup(scheduler: AsyncIOScheduler | None) -> None:
 class JobRunner:
     """Encapsulates job execution with telemetry and error handling."""
 
-    session_factory: Any  # async_sessionmaker
+    session_factory: async_sessionmaker
 
     async def execute_with_telemetry(
         self,

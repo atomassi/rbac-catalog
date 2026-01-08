@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any, Final
 
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.sql import Select
+from sqlalchemy.sql.elements import ColumnElement
 
 from azurerbac.cache.models import CachedRole
 from azurerbac.core.constants import RoleStatus
@@ -595,6 +596,7 @@ async def search_roles_in_db(
     """
     stmt = _build_status_filter(deps.Role, status_filter)
 
+    conditions: list[ColumnElement[bool]]
     if exact_match:
         conditions = [
             func.lower(deps.Role.role_name) == func.lower(q.strip()),

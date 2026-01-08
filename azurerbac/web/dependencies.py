@@ -15,16 +15,19 @@ Usage in route handlers:
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from fastapi import Request
 
 if TYPE_CHECKING:
     from fastapi.templating import Jinja2Templates
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+    from azurerbac.azure.models import OperationData, RoleDefinition
     from azurerbac.cache import AppCache
+    from azurerbac.core.models import Operation, Role, RoleHistory, RoleScanStatus
 
 
 @dataclass(slots=True)
@@ -32,31 +35,31 @@ class BaseDeps:
     """Common dependencies shared across all route types."""
 
     app_cache: AppCache
-    SessionLocal: Any  # async_sessionmaker
+    SessionLocal: async_sessionmaker[AsyncSession]
 
 
 @dataclass(slots=True)
 class APIDeps(BaseDeps):
     """Dependencies for API routes (/api/*).
 
-    Inherits app_cache and SessionLocal from BaseDeps.
+    Provides cache access and service functions for API endpoints.
     """
 
-    get_all_operations: Callable
-    get_all_roles: Callable  # Returns list[RoleDefinition]
+    get_all_operations: Callable[[], Awaitable[list[OperationData]]]
+    get_all_roles: Callable[[], Awaitable[list[RoleDefinition]]]
 
 
 @dataclass(slots=True)
 class DashboardDeps(BaseDeps):
     """Dependencies for dashboard routes (/, /recent, /roles).
 
-    Inherits app_cache and SessionLocal from BaseDeps.
+    Provides models, templates, and RoleScanStatus for dashboard pages.
     """
 
-    Role: Any
-    RoleHistory: Any
-    RoleScanStatus: Any
-    Operation: Any
+    Role: type[Role]
+    RoleHistory: type[RoleHistory]
+    RoleScanStatus: type[RoleScanStatus]
+    Operation: type[Operation]
     templates: Jinja2Templates
 
 
@@ -64,14 +67,14 @@ class DashboardDeps(BaseDeps):
 class PagesDeps(BaseDeps):
     """Dependencies for page routes (/roles/{id}, /operations, etc).
 
-    Inherits app_cache and SessionLocal from BaseDeps.
+    Provides models, templates, and operations service.
     """
 
-    Role: Any
-    RoleHistory: Any
-    Operation: Any
+    Role: type[Role]
+    RoleHistory: type[RoleHistory]
+    Operation: type[Operation]
     templates: Jinja2Templates
-    get_all_operations: Callable
+    get_all_operations: Callable[[], Awaitable[list[OperationData]]]
 
 
 def get_api_deps(request: Request) -> APIDeps:

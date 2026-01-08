@@ -32,28 +32,28 @@ class OperationSearchParams:
     order: str = "asc"  # "asc", "desc"
 
 
-def operation_matches_search(op: dict, query_lower: str) -> bool:
-    """Check if an operation dict matches a text search query.
+def operation_matches_search(op: OperationData, query_lower: str) -> bool:
+    """Check if an OperationData matches a text search query.
 
     Searches across name, display_name, description, provider, and resource type.
     """
     return (
-        query_lower in op["name"].lower()
-        or query_lower in (op.get("display_name") or "").lower()
-        or query_lower in (op.get("description") or "").lower()
-        or query_lower in (op.get("provider_display_name") or "").lower()
-        or query_lower in (op.get("resource_type_display_name") or "").lower()
+        query_lower in op.name.lower()
+        or query_lower in (op.display_name or "").lower()
+        or query_lower in (op.description or "").lower()
+        or query_lower in (op.provider_display_name or "").lower()
+        or query_lower in (op.resource_type_display_name or "").lower()
     )
 
 
 def filter_operations(
-    operations: list[dict],
+    operations: list[OperationData],
     params: OperationSearchParams,
-) -> list[dict]:
+) -> list[OperationData]:
     """Filter operations based on search parameters.
 
     Args:
-        operations: List of operation dicts to filter
+        operations: List of OperationData objects to filter
         params: Search/filter parameters
 
     Returns:
@@ -68,57 +68,51 @@ def filter_operations(
 
     # Apply data action filter
     if params.is_data_action is not None:
-        result = [op for op in result if op.get("is_data_action", False) == params.is_data_action]
+        result = [op for op in result if op.is_data_action == params.is_data_action]
 
     # Apply provider filter
     if params.provider:
-        result = [op for op in result if op.get("provider_display_name") == params.provider]
+        result = [op for op in result if op.provider_display_name == params.provider]
 
     return result
 
 
-# Sort key functions for operations
-_OPERATION_SORT_KEYS: Final = {
-    "provider": lambda x: (x.get("provider_display_name") or "").lower(),
-    "type": lambda x: x.get("is_data_action", False),
-    "roles": lambda x: x.get("role_count", 0),
-    "name": lambda x: x["name"].lower(),
+# Sort key functions for OperationData objects
+_OPERATION_SORT_KEYS: Final[dict[str, Any]] = {
+    "provider": lambda x: (x.provider_display_name or "").lower(),
+    "type": lambda x: x.is_data_action,
+    "name": lambda x: x.name.lower(),
 }
 
 
 def sort_operations(
-    operations: list[dict],
+    operations: list[OperationData],
     sort: str,
     order: str,
     app_cache: AppCache,
-) -> None:
-    """Sort operations in-place based on sort field and order.
+) -> list[tuple[OperationData, int]]:
+    """Sort operations based on sort field and order.
 
     Args:
-        operations: List of operation dicts to sort (modified in-place)
+        operations: List of OperationData objects to sort
         sort: Sort field - "name", "provider", "type", or "roles"
         order: Sort order - "asc" or "desc"
         app_cache: The application cache instance
+
+    Returns:
+        List of (operation, role_count) tuples, sorted as requested
     """
-    # Enrich with role counts for "roles" sort
+    # Build tuples with role count for sorting (needed for "roles" sort and enrichment)
+    ops_with_count = [(op, app_cache.get_operation_role_count(op.name)) for op in operations]
+
     if sort == "roles":
-        for op in operations:
-            op["role_count"] = app_cache.get_operation_role_count(op["name"])
+        # Sort by role count
+        ops_with_count.sort(key=lambda x: x[1], reverse=(order == "desc"))
+    else:
+        key_func = _OPERATION_SORT_KEYS.get(sort, _OPERATION_SORT_KEYS["name"])
+        ops_with_count.sort(key=lambda x: key_func(x[0]), reverse=(order == "desc"))
 
-    key_func = _OPERATION_SORT_KEYS.get(sort, _OPERATION_SORT_KEYS["name"])
-    operations.sort(key=key_func, reverse=(order == "desc"))
-
-
-def enrich_operations_with_role_counts(operations: list[dict], app_cache: AppCache) -> None:
-    """Enrich operations with role count from cache.
-
-    Args:
-        operations: List of operation dicts to enrich (modified in-place)
-        app_cache: The application cache instance
-    """
-    for op in operations:
-        if "role_count" not in op:
-            op["role_count"] = app_cache.get_operation_role_count(op["name"])
+    return ops_with_count
 
 
 # =============================================================================
@@ -325,7 +319,7 @@ def get_roles_allowing_operation(
 
 
 async def get_unique_providers(
-    app_cache: AppCache, get_all_operations: Callable[[], Awaitable[list[dict[str, Any]]]]
+    app_cache: AppCache, get_all_operations: Callable[[], Awaitable[list[OperationData]]]
 ) -> list[str]:
     """Get unique provider names from all operations.
 
@@ -344,9 +338,8 @@ async def get_unique_providers(
     all_ops = await get_all_operations()
     providers = set()
     for op in all_ops:
-        provider = op.get("provider_display_name")
-        if provider:
-            providers.add(provider)
+        if op.provider_display_name:
+            providers.add(op.provider_display_name)
     result = sorted(providers, key=str.casefold)
 
     # Cache result via set_metadata

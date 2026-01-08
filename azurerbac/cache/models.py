@@ -213,15 +213,6 @@ class CacheData:
         """
         return [r.definition for r in self.roles_by_id.values() if r.status == "active"]
 
-    def get_role_definition_by_id(self, role_id: str) -> RoleDefinition | None:
-        """Get a single role as RoleDefinition by ID.
-
-        Returns None if role not found.
-        """
-        if cached_role := self.roles_by_id.get(role_id):
-            return cached_role.definition
-        return None
-
 
 def compute_roles_hash(roles: list[RoleDefinition]) -> str:
     """Compute hash of role data for change detection."""

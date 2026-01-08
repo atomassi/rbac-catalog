@@ -25,9 +25,6 @@ from azurerbac.core.constants import DEFAULT_SEARCH_LIMIT
 from azurerbac.telemetry import track_cache_hit
 
 if TYPE_CHECKING:
-    from azurerbac.azure.models import OperationData
-
-if TYPE_CHECKING:
     from azurerbac.azure.models import OperationData, RoleDefinition
 
 logger = logging.getLogger(__name__)
@@ -152,10 +149,6 @@ class AppCache:
     def get_all_roles(self) -> list[RoleDefinition]:
         """Get all roles as RoleDefinition objects."""
         return self._cache.get_role_definitions()
-
-    def get_role_definition_by_id(self, role_id: str) -> RoleDefinition | None:
-        """Get a role as RoleDefinition by ID."""
-        return self._cache.get_role_definition_by_id(role_id)
 
     def get_all_operations(self) -> list[OperationData]:
         """Get all operations."""

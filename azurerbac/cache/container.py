@@ -15,7 +15,6 @@ from typing import TYPE_CHECKING, Any
 
 from azurerbac.cache.models import CacheData, CachedChangeEvent, CachedRole
 from azurerbac.core.constants import DEFAULT_SEARCH_LIMIT
-from azurerbac.core.singleton import ThreadSafeSingleton
 from azurerbac.telemetry import track_cache_hit
 
 if TYPE_CHECKING:
@@ -272,11 +271,3 @@ class CacheContainer:
         self._preloaded = False
         self._loaded_version = None
         self._pending_reload = False
-
-
-_cache_singleton: ThreadSafeSingleton[CacheContainer] = ThreadSafeSingleton(CacheContainer)
-
-
-def get_cache_container() -> CacheContainer:
-    """Get the global cache container instance (thread-safe singleton)."""
-    return _cache_singleton.get()

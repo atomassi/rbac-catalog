@@ -16,11 +16,11 @@ def clear_computed_caches(container: CacheContainer | None = None) -> None:
 
     Test-only helper to reset cache state between tests.
     """
-    from azurerbac.cache import get_cache_container
+    from azurerbac.cache import get_cache_service
     from azurerbac.cache.models import CacheData
 
     if container is None:
-        container = get_cache_container()
+        container = get_cache_service().container
 
     current = container.cache
     new_cache = CacheData(

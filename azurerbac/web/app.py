@@ -36,7 +36,7 @@ from starlette.middleware.gzip import GZipMiddleware
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from azurerbac import __version__
-from azurerbac.cache import get_cache_container
+from azurerbac.cache import get_cache_service
 from azurerbac.core import (
     DBEngine,
     Operation,
@@ -152,7 +152,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:  # pylint: disable=unus
 app = FastAPI(title="Azure RBAC Built-in Role Change Monitor", lifespan=lifespan)
 
 # Store cache accessor in app.state for access by route handlers via request.app.state
-app.state.app_cache = get_cache_container()
+app.state.app_cache = get_cache_service().container
 
 # Store SessionLocal on app.state so tests can patch it in one place
 app.state.session_local = SessionLocal
@@ -163,12 +163,12 @@ app.state.session_local = SessionLocal
 
 # Store typed dependency containers on app.state for FastAPI dependency injection
 app.state.api_deps = BaseDeps(
-    app_cache=get_cache_container(),
+    app_cache=get_cache_service().container,
     SessionLocal=SessionLocal,
 )
 
 app.state.dashboard_deps = DashboardDeps(
-    app_cache=get_cache_container(),
+    app_cache=get_cache_service().container,
     SessionLocal=SessionLocal,
     Role=Role,
     RoleHistory=RoleHistory,
@@ -178,7 +178,7 @@ app.state.dashboard_deps = DashboardDeps(
 )
 
 app.state.pages_deps = PagesDeps(
-    app_cache=get_cache_container(),
+    app_cache=get_cache_service().container,
     SessionLocal=SessionLocal,
     Role=Role,
     RoleHistory=RoleHistory,

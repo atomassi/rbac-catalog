@@ -47,17 +47,18 @@ class _CacheFileHandler(FileSystemEventHandler):
         self._last_trigger = 0.0
         self._lock = threading.Lock()
 
-    def on_modified(self, event: FileSystemEvent) -> None:
-        """Handle file modification events."""
+    def _is_target_file(self, event: FileSystemEvent) -> bool:
+        """Check if this event is for our target cache file."""
         if event.is_directory:
-            return
-
-        # Check if this is our cache file
+            return False
         src_path_raw = event.src_path
         if isinstance(src_path_raw, bytes):
             src_path_raw = src_path_raw.decode("utf-8")
-        src_path = Path(src_path_raw)
-        if src_path.name != self._cache_filename:
+        return Path(src_path_raw).name == self._cache_filename
+
+    def on_modified(self, event: FileSystemEvent) -> None:
+        """Handle file modification events."""
+        if not self._is_target_file(event):
             return
 
         # Debounce rapid changes (atomic rename can trigger multiple events)
@@ -76,8 +77,15 @@ class _CacheFileHandler(FileSystemEventHandler):
 
     def on_created(self, event: FileSystemEvent) -> None:
         """Handle file creation events (new cache file from worker)."""
-        # Treat creation same as modification
         self.on_modified(event)
+
+    def on_deleted(self, event: FileSystemEvent) -> None:
+        """Handle file deletion events (ignored - app keeps using in-memory cache)."""
+        if not self._is_target_file(event):
+            return
+        logger.debug(
+            "Watcher: cache file deleted, ignoring (app will continue using in-memory cache)"
+        )
 
 
 class CacheFileWatcher:

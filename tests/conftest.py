@@ -157,9 +157,10 @@ def temp_cache_dir() -> Generator[Path, None, None]:
 
     Also configures the cache backend to use this directory.
     """
-    from azurerbac.cache.backends import FileCacheBackend, get_cache_backend
+    from azurerbac.cache import get_cache_service
+    from azurerbac.cache.backends import FileCacheBackend
 
-    backend = get_cache_backend()
+    backend = get_cache_service().backend
     old_cache_dir: Path | None = None
 
     with tempfile.TemporaryDirectory() as tmpdir:

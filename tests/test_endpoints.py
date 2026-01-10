@@ -47,7 +47,7 @@ def _make_test_snapshot(
 async def test_client(async_session_maker):
     """Create a test client with in-memory database."""
     # Lazy import to avoid loading .env during test collection
-    from azurerbac.cache import get_cache_container
+    from azurerbac.cache import get_cache_service
     from azurerbac.web import app as app_module
     from azurerbac.web.dependencies import (
         BaseDeps,
@@ -59,7 +59,7 @@ async def test_client(async_session_maker):
     )
 
     test_session_maker = async_session_maker
-    cache = get_cache_container()
+    cache = get_cache_service().container
 
     # Store original session maker
     original_session = app_module.SessionLocal

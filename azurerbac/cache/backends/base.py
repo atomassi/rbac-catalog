@@ -6,8 +6,6 @@ from abc import ABC, abstractmethod
 from enum import Enum, auto
 from typing import TYPE_CHECKING
 
-from azurerbac.core.singleton import ThreadSafeSingleton
-
 if TYPE_CHECKING:
     from collections.abc import Callable
 
@@ -146,13 +144,12 @@ class CacheBackend(ABC):
         """
 
 
-# =============================================================================
-# Singleton access for cache backend
-# =============================================================================
+def create_backend() -> CacheBackend:
+    """Create a backend instance based on settings.
 
-
-def _create_backend() -> CacheBackend:
-    """Create a backend instance based on settings."""
+    Called by CacheService to instantiate the backend.
+    Do not call directly - use get_cache_service().backend instead.
+    """
     from azurerbac.settings import get_settings
 
     settings = get_settings()
@@ -167,11 +164,3 @@ def _create_backend() -> CacheBackend:
         case _:
             msg = f"Unknown backend type: {backend_type}"
             raise ValueError(msg)
-
-
-_backend_singleton: ThreadSafeSingleton[CacheBackend] = ThreadSafeSingleton(factory=_create_backend)
-
-
-def get_cache_backend() -> CacheBackend:
-    """Get the singleton cache backend instance (thread-safe)."""
-    return _backend_singleton.get()

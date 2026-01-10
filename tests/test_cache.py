@@ -21,8 +21,9 @@ from azurerbac.cache import (
     CacheMetadata,
     compute_operations_hash,
     compute_roles_hash,
+    get_cache_service,
 )
-from azurerbac.cache.backends import FileCacheBackend, get_cache_backend
+from azurerbac.cache.backends import FileCacheBackend
 from azurerbac.cache.build import (
     build_operations_prefix_index,
     get_matching_operations,
@@ -451,10 +452,13 @@ class TestPreloadCacheIntegration:
         """Test that preload_cache delegates to rebuild_in_memory and warms role pages."""
         from unittest.mock import AsyncMock, MagicMock, patch
 
-        # Create a mock cache to track method calls
-        mock_cache = MagicMock(spec=CacheContainer)
-        mock_cache.cache = CacheData()
-        mock_cache._preloaded = False
+        # Create a mock cache service
+        mock_service = MagicMock()
+        mock_container = MagicMock(spec=CacheContainer)
+        mock_container.cache = CacheData()
+        mock_container._preloaded = False
+        mock_service.container = mock_container
+        mock_service.rebuild_in_memory = AsyncMock(return_value=True)
 
         # Mock database session
         mock_session = AsyncMock()
@@ -471,11 +475,8 @@ class TestPreloadCacheIntegration:
         mock_session_local.return_value.__aenter__ = AsyncMock(return_value=mock_session)
         mock_session_local.return_value.__aexit__ = AsyncMock(return_value=None)
 
-        rebuild_in_memory_mock = AsyncMock(return_value=True)
-
         with (
-            patch("azurerbac.web.services.startup.get_cache_container", return_value=mock_cache),
-            patch("azurerbac.cache.build.rebuild_in_memory", rebuild_in_memory_mock),
+            patch("azurerbac.web.services.startup.get_cache_service", return_value=mock_service),
             patch("azurerbac.telemetry.track_startup"),
             patch("azurerbac.telemetry.track_cache_refresh"),
         ):
@@ -483,8 +484,8 @@ class TestPreloadCacheIntegration:
 
             await preload_cache(mock_session_local)
 
-        rebuild_in_memory_mock.assert_awaited_once_with(mock_session)
-        mock_cache.set_role_page.assert_called()
+        mock_service.rebuild_in_memory.assert_awaited_once_with(mock_session)
+        mock_container.set_role_page.assert_called()
 
 
 class TestCacheContainerReloadLock:
@@ -494,32 +495,31 @@ class TestCacheContainerReloadLock:
         """Verify reload skips if lock is held."""
         from unittest.mock import MagicMock, patch
 
-        from azurerbac.cache import get_cache_container
-        from azurerbac.cache.build import reload_if_needed
+        from azurerbac.cache import get_cache_service
 
-        get_cache_container().loaded_version = "1000"
+        get_cache_service().container.loaded_version = "1000"
 
         # Acquire the async lock manually
-        await get_cache_container().reload_lock.acquire()
+        await get_cache_service().container.reload_lock.acquire()
 
         try:
             # Try to reload - should return False immediately (lock held)
             mock_backend = MagicMock()
             mock_backend.get_version.return_value = "2000"
-            with patch("azurerbac.cache.build.get_cache_backend", return_value=mock_backend):
-                result = await reload_if_needed()
+            with patch("azurerbac.cache.service.CacheService.backend", return_value=mock_backend):
+                result = await get_cache_service().reload_if_needed()
             assert result is False
         finally:
-            get_cache_container().reload_lock.release()
+            get_cache_service().container.reload_lock.release()
 
     async def test_reload_releases_lock_on_success(self) -> None:
         """Verify lock is released after successful reload."""
         from unittest.mock import AsyncMock, MagicMock, patch
 
-        from azurerbac.cache import CacheData, CacheMetadata, get_cache_container
-        from azurerbac.cache.build import reload_if_needed
+        from azurerbac.cache import CacheData, CacheMetadata
 
-        get_cache_container().loaded_version = "1000"
+        service = get_cache_service()
+        service.container.loaded_version = "1000"
 
         mock_op = OperationData(name="op1", isDataAction=False)
         mock_data = CacheData(
@@ -539,32 +539,33 @@ class TestCacheContainerReloadLock:
         mock_backend.get_version.return_value = "2000"
         mock_backend.load = AsyncMock(return_value=mock_data)
 
-        with patch("azurerbac.cache.build.get_cache_backend", return_value=mock_backend):
-            result = await reload_if_needed()
+        # Patch the instance's backend
+        with patch.object(service, "_backend", mock_backend):
+            result = await service.reload_if_needed()
 
         assert result is True
         # Lock should be released - we can acquire it
-        assert not get_cache_container().reload_lock.locked()
+        assert not service.container.reload_lock.locked()
 
     async def test_reload_releases_lock_on_failure(self) -> None:
         """Verify lock is released if reload fails."""
         from unittest.mock import AsyncMock, MagicMock, patch
 
-        from azurerbac.cache import get_cache_container
-        from azurerbac.cache.build import reload_if_needed
+        from azurerbac.cache import get_cache_service
 
-        get_cache_container().loaded_version = "1000"
+        service = get_cache_service()
+        service.container.loaded_version = "1000"
 
         mock_backend = MagicMock()
         mock_backend.get_version.return_value = "2000"
         mock_backend.load = AsyncMock(return_value=None)
 
-        with patch("azurerbac.cache.build.get_cache_backend", return_value=mock_backend):
-            result = await reload_if_needed()
+        with patch.object(service, "_backend", mock_backend):
+            result = await service.reload_if_needed()
 
         assert result is False
         # Lock should be released
-        assert not get_cache_container().reload_lock.locked()
+        assert not service.container.reload_lock.locked()
 
 
 # =============================================================================
@@ -802,7 +803,7 @@ class TestCacheFileOperations:
         self, temp_cache_dir, sample_roles, sample_operations
     ) -> None:
         """Test saving and loading cache from disk."""
-        backend = get_cache_backend()
+        backend = get_cache_service().backend
         metadata = CacheMetadata(
             roles_count=len(sample_roles),
             operations_count=len(sample_operations),
@@ -832,13 +833,13 @@ class TestCacheFileOperations:
 
     async def test_load_nonexistent_cache(self, temp_cache_dir) -> None:
         """Loading nonexistent cache returns None."""
-        backend = get_cache_backend()
+        backend = get_cache_service().backend
         result = await backend.load()
         assert result is None
 
     async def test_delete_cache(self, temp_cache_dir, sample_roles) -> None:
         """Test deleting cache file."""
-        backend = get_cache_backend()
+        backend = get_cache_service().backend
         # Create a cache file with valid data (roles + operations)
         metadata = CacheMetadata(roles_count=len(sample_roles), operations_count=1)
         roles_by_id = make_cached_roles_by_id(sample_roles)
@@ -853,7 +854,7 @@ class TestCacheFileOperations:
 
     async def test_delete_nonexistent_cache(self, temp_cache_dir):
         """Deleting nonexistent cache doesn't raise error."""
-        backend = get_cache_backend()
+        backend = get_cache_service().backend
         # Should not raise
         await backend.delete()
 
@@ -863,7 +864,7 @@ class TestCacheFileOperations:
         cache_file = temp_cache_dir / "app_cache.msgpack"
         cache_file.write_bytes(b"not valid pickle data")
 
-        backend = get_cache_backend()
+        backend = get_cache_service().backend
         result = await backend.load()
         assert result is None
 
@@ -879,7 +880,7 @@ class TestCacheDirectory:
     def test_local_cache_dir(self):
         """Local development uses local .cache directory."""
         # Reset backend's cached directory to force recomputation
-        backend = get_cache_backend()
+        backend = get_cache_service().backend
         assert isinstance(backend, FileCacheBackend)
         backend._cache_dir = None  # pyright: ignore[reportPrivateUsage]
 
@@ -892,7 +893,7 @@ class TestCacheDirectory:
     def test_azure_cache_dir(self):
         """Azure App Service uses /home/cache directory."""
         # Reset backend's cached directory to force recomputation
-        backend = get_cache_backend()
+        backend = get_cache_service().backend
         assert isinstance(backend, FileCacheBackend)
         backend._cache_dir = None  # pyright: ignore[reportPrivateUsage]
 
@@ -919,10 +920,10 @@ class TestCacheReloadLogic:
         """
         from unittest.mock import AsyncMock, MagicMock, patch
 
-        from azurerbac.cache import get_cache_container
-        from azurerbac.cache.build import reload_if_needed
+        from azurerbac.cache import get_cache_service
 
-        get_cache_container().loaded_version = "1000"
+        service = get_cache_service()
+        service.container.loaded_version = "1000"
 
         # Create incomplete cache data (no operations)
         incomplete_cache = CacheData(
@@ -940,21 +941,21 @@ class TestCacheReloadLogic:
         mock_backend.get_version.return_value = "2000"
         mock_backend.load = AsyncMock(return_value=incomplete_cache)
 
-        with patch("azurerbac.cache.build.get_cache_backend", return_value=mock_backend):
+        with patch.object(service, "_backend", mock_backend):
             # Reload should fail but update version
-            result = await reload_if_needed()
+            result = await service.reload_if_needed()
             assert result is False
             # Crucially: version should be updated to prevent retry loop
-            assert get_cache_container().loaded_version == "2000"
+            assert service.container.loaded_version == "2000"
 
     async def test_version_updated_on_failed_reload_version_mismatch(self) -> None:
         """When reload fails due to version mismatch, version should still be updated."""
         from unittest.mock import AsyncMock, MagicMock, patch
 
-        from azurerbac.cache import get_cache_container
-        from azurerbac.cache.build import reload_if_needed
+        from azurerbac.cache import get_cache_service
 
-        get_cache_container().loaded_version = "1000"
+        service = get_cache_service()
+        service.container.loaded_version = "1000"
 
         # Create cache with wrong version
         old_cache = CacheData(
@@ -973,46 +974,47 @@ class TestCacheReloadLogic:
         mock_backend.get_version.return_value = "2000"
         mock_backend.load = AsyncMock(return_value=old_cache)
 
-        with patch("azurerbac.cache.build.get_cache_backend", return_value=mock_backend):
-            result = await reload_if_needed()
+        with patch.object(service, "_backend", mock_backend):
+            result = await service.reload_if_needed()
             assert result is False
             # version should be updated to prevent retry loop
-            assert get_cache_container().loaded_version == "2000"
+            assert service.container.loaded_version == "2000"
 
     def test_no_reload_when_version_same(self) -> None:
         """No reload triggered when disk version equals loaded version."""
         from unittest.mock import MagicMock, patch
 
-        from azurerbac.cache import get_cache_container
+        from azurerbac.cache import get_cache_service
 
-        get_cache_container().loaded_version = "1000"
+        service = get_cache_service()
+        service.container.loaded_version = "1000"
 
         mock_backend = MagicMock()
         mock_backend.get_version.return_value = "1000"
 
-        with patch("azurerbac.cache.build.get_cache_backend", return_value=mock_backend):
-            result = get_cache_container().pending_reload
+        with patch.object(service, "_backend", mock_backend):
+            result = service.needs_reload()
             assert result is False
 
     def test_reload_when_version_different(self) -> None:
         """Reload triggered when disk version differs from loaded version."""
         from unittest.mock import MagicMock, patch
 
-        from azurerbac.cache import get_cache_container
-        from azurerbac.cache.build import needs_reload
+        from azurerbac.cache import get_cache_service
 
-        get_cache_container().loaded_version = "1000"
+        service = get_cache_service()
+        service.container.loaded_version = "1000"
 
         mock_backend = MagicMock()
         mock_backend.get_version.return_value = "2000"  # Different version
 
-        with patch("azurerbac.cache.build.get_cache_backend", return_value=mock_backend):
-            result = needs_reload()
+        with patch.object(service, "_backend", mock_backend):
+            result = service.needs_reload()
             assert result is True  # Should reload when version changes
 
     async def test_save_incomplete_cache_rejected(self, temp_cache_dir) -> None:
         """backend.save() should reject incomplete cache data."""
-        backend = get_cache_backend()
+        backend = get_cache_service().backend
         # Empty roles
         data = CacheData(
             roles_by_id={},
@@ -1050,7 +1052,7 @@ class TestCacheInvalidation:
         self, temp_cache_dir, roles_for_hashing, operations_for_hashing
     ) -> None:
         """Cache should be valid after simulated app restart."""
-        backend = get_cache_backend()
+        backend = get_cache_service().backend
         # Initial save
         roles_hash = compute_roles_hash(roles_for_hashing)
         ops_hash = compute_operations_hash(operations_for_hashing)
@@ -1083,7 +1085,7 @@ class TestCacheInvalidation:
         self, temp_cache_dir, roles_for_hashing, operations_for_hashing
     ) -> None:
         """Cache should be invalid after a new role is added."""
-        backend = get_cache_backend()
+        backend = get_cache_service().backend
         metadata = CacheMetadata(
             roles_count=len(roles_for_hashing),
             operations_count=len(operations_for_hashing),
@@ -1106,7 +1108,7 @@ class TestCacheInvalidation:
         self, temp_cache_dir, roles_for_hashing, operations_for_hashing
     ) -> None:
         """Cache should be invalid after an operation is removed."""
-        backend = get_cache_backend()
+        backend = get_cache_service().backend
         metadata = CacheMetadata(
             roles_count=len(roles_for_hashing),
             operations_count=len(operations_for_hashing),

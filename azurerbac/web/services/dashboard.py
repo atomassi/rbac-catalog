@@ -160,9 +160,9 @@ def enrich_role_with_counts(
     """
     # Get counts from the recommender cache
     if cache is None:
-        from azurerbac.cache import get_cache_container
+        from azurerbac.cache import get_cache_service
 
-        cache = get_cache_container()
+        cache = get_cache_service().container
 
     net_perms = cache.get_role_net_permissions(role.role_id)
     if net_perms:

@@ -357,18 +357,26 @@ class TestGenerateWithRetry:
         mock_response.__exit__ = MagicMock(return_value=False)
 
         # First call raises URLError, second succeeds
-        with patch(
-            "urllib.request.urlopen",
-            side_effect=[urllib.error.URLError("connection failed"), mock_response],
+        # Patch tenacity sleep to avoid actual delays
+        with (
+            patch(
+                "urllib.request.urlopen",
+                side_effect=[urllib.error.URLError("connection failed"), mock_response],
+            ),
+            patch("tenacity.nap.time.sleep"),
         ):
             result = connected_client.generate("test prompt")
             assert result == "success after retry"
 
     def test_generate_exhausts_retries_returns_none(self, connected_client):
         """Test that generate returns None after exhausting all retries."""
-        with patch(
-            "urllib.request.urlopen",
-            side_effect=urllib.error.URLError("connection failed"),
+        # Patch tenacity sleep to avoid actual delays
+        with (
+            patch(
+                "urllib.request.urlopen",
+                side_effect=urllib.error.URLError("connection failed"),
+            ),
+            patch("tenacity.nap.time.sleep"),
         ):
             result = connected_client.generate("test prompt")
             assert result is None

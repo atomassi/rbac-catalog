@@ -11,7 +11,7 @@ from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, field
 
 from azurerbac.azure.models import OperationData, Permission, RoleDefinition
-from azurerbac.cache import get_cache_container
+from azurerbac.cache import get_cache_service
 from azurerbac.core.constants import DEFAULT_SEARCH_LIMIT
 from azurerbac.core.patterns import is_wildcard_pattern
 from azurerbac.matching.role_matching import (
@@ -71,7 +71,7 @@ class RoleRecommendationService:
         """
         self.op_sets = OperationSets.from_operations(all_operations)
         self.requested_ops_data_flags = requested_ops_data_flags or {}
-        self._caches = get_cache_container().cache
+        self._caches = get_cache_service().container.cache
 
         # Pre-computed wildcard matches (populated by compute_wildcard_matches)
         self.control_wildcard_ops: dict[str, set[str]] = {}

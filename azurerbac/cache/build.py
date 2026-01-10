@@ -1,9 +1,12 @@
-"""Cache build and refresh operations."""
+"""Cache build and computation functions.
+
+This module contains pure computation functions for building cache data.
+Orchestration (swap, save, reload) is handled by CacheService in service.py.
+"""
 
 from __future__ import annotations
 
 import logging
-import threading
 import time
 from datetime import datetime
 from typing import TYPE_CHECKING
@@ -11,9 +14,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from azurerbac.azure.models import OperationData, RoleDefinition
-from azurerbac.cache.backends import get_cache_backend
 from azurerbac.cache.models import (
-    CACHE_VERSION,
     CacheData,
     CachedChangeEvent,
     CachedRole,
@@ -29,9 +30,6 @@ if TYPE_CHECKING:
     pass
 
 logger = logging.getLogger(__name__)
-
-# Module-level lock to prevent concurrent cache rebuilds
-_rebuild_lock = threading.Lock()
 
 
 # ============================================================================
@@ -480,233 +478,3 @@ async def build_from_db(session: AsyncSession) -> CacheData:
     )
 
     return cache_data
-
-
-# ============================================================================
-# Swap and save operations
-# ============================================================================
-
-
-def swap_in_memory(cache_data: CacheData) -> None:
-    """Swap cache data into the in-memory container.
-
-    Args:
-        cache_data: Complete cache data to swap in
-    """
-    from azurerbac.cache.container import get_cache_container
-
-    container = get_cache_container()
-    container.swap(cache_data)
-    container.loaded_version = get_cache_backend().get_version()
-    container.is_preloaded = True
-    logger.debug("Cache swapped into memory")
-
-
-async def save(cache_data: CacheData) -> None:
-    """Save cache data to backend."""
-    await get_cache_backend().save(cache_data)
-    logger.debug("Cache saved to backend")
-
-
-def _initialize_ai_recommender(cache_data: CacheData) -> None:
-    """Re-initialize AI recommender with updated role data."""
-    try:
-        from azurerbac.airecommender import get_ai_recommender
-
-        ai_recommender = get_ai_recommender()
-        active_roles = [
-            cached_role.definition
-            for cached_role in cache_data.roles_by_id.values()
-            if cached_role.status == RoleStatus.ACTIVE
-        ]
-        ai_recommender.initialize(active_roles)
-        logger.info("AI recommender re-initialized with updated roles")
-    except Exception as e:
-        logger.exception("Failed to re-initialize AI recommender: %s", e)
-
-
-# ============================================================================
-# High-level rebuild operations
-# ============================================================================
-
-
-async def rebuild_in_memory(session: AsyncSession) -> bool:
-    """Build cache from DB and swap into memory (web app startup).
-
-    Thread-safe: Uses lock to prevent concurrent rebuilds.
-
-    Args:
-        session: SQLAlchemy async session
-
-    Returns:
-        True if successful, False if rebuild already in progress or failed
-    """
-    if not _rebuild_lock.acquire(blocking=False):
-        logger.warning("Cache rebuild already in progress, skipping")
-        return False
-
-    try:
-        cache_data = await build_from_db(session)
-        swap_in_memory(cache_data)
-        _initialize_ai_recommender(cache_data)
-        return True
-    except Exception as e:
-        logger.exception("Failed to rebuild cache in memory: %s", e)
-        return False
-    finally:
-        _rebuild_lock.release()
-
-
-async def rebuild_and_save(session: AsyncSession) -> bool:
-    """Build cache from DB and save to backend (worker process)."""
-    if not _rebuild_lock.acquire(blocking=False):
-        logger.warning("Cache rebuild already in progress, skipping")
-        return False
-
-    try:
-        cache_data = await build_from_db(session)
-        await save(cache_data)
-        return True
-    except Exception as e:
-        logger.exception("Failed to rebuild cache to backend: %s", e)
-        return False
-    finally:
-        _rebuild_lock.release()
-
-
-async def invalidate_and_rebuild(session: AsyncSession) -> bool:
-    """Delete cache and rebuild from DB (worker after changes).
-
-    Args:
-        session: SQLAlchemy async session
-
-    Returns:
-        True if successful, False otherwise
-    """
-    logger.info("Invalidating and rebuilding cache")
-    await get_cache_backend().delete()
-    return await rebuild_and_save(session)
-
-
-async def invalidate_all() -> None:
-    """Reset in-memory cache and delete disk cache file."""
-    from azurerbac.cache.container import get_cache_container
-
-    get_cache_container().reset()
-    await get_cache_backend().delete()
-
-
-# ============================================================================
-# Reload from disk (web app detecting worker update)
-# ============================================================================
-
-
-def needs_reload() -> bool:
-    """Check if backend cache was updated by worker.
-
-    Compares loaded version with current backend version.
-
-    Returns:
-        True if cache version changed since last load.
-    """
-    from azurerbac.cache.container import get_cache_container
-
-    container = get_cache_container()
-    current_version = get_cache_backend().get_version()
-
-    if current_version is None:
-        return False
-
-    if container.loaded_version is None:
-        logger.info("New cache detected from worker (version: %s)", current_version)
-        return True
-
-    if current_version != container.loaded_version:
-        logger.info(
-            "Cache updated (version: %s != %s)",
-            current_version,
-            container.loaded_version,
-        )
-        return True
-
-    return False
-
-
-def mark_pending_reload() -> None:
-    """Mark that a reload is pending (called by backend watcher).
-
-    This is called from the watchdog thread when a cache change
-    is detected. The actual reload happens on the next async check.
-    """
-    from azurerbac.cache.container import get_cache_container
-
-    get_cache_container().pending_reload = True
-    logger.debug("Cache reload marked as pending (watcher triggered)")
-
-
-async def reload_if_needed() -> bool:
-    """Reload cache from backend if updated by worker.
-
-    Uses async lock to prevent concurrent reloads.
-    The backend file contains complete CacheData - no recomputation needed.
-
-    Returns:
-        True if cache was reloaded, False otherwise.
-    """
-    from azurerbac.cache.container import get_cache_container
-
-    container = get_cache_container()
-
-    # Quick check without lock
-    if not container.pending_reload and not needs_reload():
-        return False
-
-    reload_lock = container.reload_lock
-    if reload_lock.locked():
-        logger.debug("Cache reload already in progress, skipping")
-        return False
-
-    async with reload_lock:
-        container.pending_reload = False
-
-        if not needs_reload():
-            return False
-
-        logger.info("Reloading cache from backend...")
-        start_time = time.time()
-
-        backend = get_cache_backend()
-        cached = await backend.load()
-        if cached is None:
-            logger.warning("Failed to load cache from disk")
-            return False
-
-        current_version = backend.get_version()
-
-        # Validate required data
-        if not cached.roles_by_id or not cached.all_operations:
-            logger.warning("Loaded cache incomplete, keeping current")
-            container.loaded_version = current_version
-            return False
-
-        # Check version compatibility
-        if cached.metadata.version != CACHE_VERSION:
-            logger.warning(
-                f"Cache version mismatch: {cached.metadata.version} != {CACHE_VERSION}, "
-                "keeping current (worker will rebuild)"
-            )
-            container.loaded_version = current_version
-            return False
-
-        # Swap in the loaded cache
-        container.swap(cached)
-        container.loaded_version = current_version
-        container.is_preloaded = True
-
-        elapsed = time.time() - start_time
-        logger.info(
-            f"Cache reloaded in {elapsed:.2f}s: {len(cached.roles_by_id)} roles, "
-            f"{len(cached.all_operations)} ops, "
-            f"{len(cached.role_coverage)} role coverages (precomputed)"
-        )
-        return True

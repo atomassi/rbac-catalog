@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Set as AbstractSet
 from typing import Final
 
-from azurerbac.cache import CacheData, get_cache_container
+from azurerbac.cache import CacheData, get_cache_service
 from azurerbac.core.constants import MAX_UNCOVERED_SAMPLE
 from azurerbac.core.patterns import is_wildcard_pattern, matches_pattern
 
@@ -131,9 +131,9 @@ def get_matching_operations(
         pattern: The pattern to match operations against
         all_operations: Set of all operation names to search
         cache_key: Optional key for cache lookup (typically operation count)
-        caches: Optional cache container to use (defaults to get_cache_container().cache)
+        caches: Optional cache container to use (defaults to get_cache_service().container.cache)
     """
-    cache = caches if caches is not None else get_cache_container().cache
+    cache = caches if caches is not None else get_cache_service().container.cache
 
     key = (pattern.lower(), cache_key) if cache_key is not None else None
     if key is not None and key in cache.pattern_match:
@@ -321,7 +321,7 @@ def count_wildcard_partial_coverage(
         - uncovered_count: Number of uncovered operations
         - uncovered_sample: Sample list of uncovered operation names
     """
-    cache = get_cache_container().cache
+    cache = get_cache_service().container.cache
     partial_cache_key = None
 
     # Use cache if available
@@ -388,7 +388,7 @@ def count_wildcard_matches(
     caches: CacheData | None = None,
 ) -> int:
     """Count how many operations match a wildcard pattern (exact count)."""
-    cache = caches if caches is not None else get_cache_container().cache
+    cache = caches if caches is not None else get_cache_service().container.cache
 
     # Use the pattern match cache - this is fast after first call
     matching = get_matching_operations(pattern, all_operations, cache_key, caches=cache)

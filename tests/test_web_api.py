@@ -620,9 +620,8 @@ class TestRoleCoverageRaceCondition:
     def test_roles_allowing_works_when_coverage_cache_populated(self):
         """Verify roles_allowing works correctly when coverage cache IS populated."""
         from azurerbac.cache import (
-            get_cache_container,
+            get_cache_service,
             precompute_all,
-            swap_in_memory,
         )
         from azurerbac.web.routes.pages import get_roles_allowing_operation
         from tests.helpers import clear_computed_caches
@@ -656,10 +655,10 @@ class TestRoleCoverageRaceCondition:
         role_definition = RoleDefinition.model_validate(mock_role_json)
 
         # CORRECT order: precompute FIRST, then set data.roles_by_id
-        swap_in_memory(precompute_all([role_definition], sample_operations))
+        get_cache_service().swap_in_memory(precompute_all([role_definition], sample_operations))
 
         # Set data.roles_by_id (no TTL) - source of truth for cache.get_role_definitions()
-        get_cache_container().cache.roles_by_id = {
+        get_cache_service().container.cache.roles_by_id = {
             "test-reader-role": CachedRole(
                 definition=role_definition,
                 status=RoleStatus.ACTIVE,
@@ -670,7 +669,7 @@ class TestRoleCoverageRaceCondition:
         result = get_roles_allowing_operation(
             "Microsoft.Storage/storageAccounts/read",
             is_data_action=False,
-            cache=get_cache_container(),
+            cache=get_cache_service().container,
         )
 
         # Should find the role
@@ -694,20 +693,18 @@ class TestRoleCoverageRaceCondition:
         from azurerbac.cache import (
             CacheData,
             CacheMetadata,
-            get_cache_container,
-            reload_if_needed,
+            get_cache_service,
         )
-        from azurerbac.cache.backends import get_cache_backend
         from azurerbac.cache.backends.file import FileCacheBackend
 
         # Set up temp directory for cache
         with tempfile.TemporaryDirectory() as tmpdir:
-            backend = get_cache_backend()
+            backend = get_cache_service().backend
             if isinstance(backend, FileCacheBackend):
                 backend.cache_dir = Path(tmpdir)
 
             # Set up cache to think it has an old version loaded
-            get_cache_container().loaded_version = "1000.0"
+            get_cache_service().container.loaded_version = "1000.0"
 
             # Create cache data with precomputed fields
             from azurerbac.azure.models import OperationData
@@ -723,15 +720,15 @@ class TestRoleCoverageRaceCondition:
             )
 
             # Save to disk (this creates a new version)
-            await get_cache_backend().save(cached_data)
+            await get_cache_service().backend.save(cached_data)
 
             # Now reload should detect the version change
-            result = await reload_if_needed()
+            result = await get_cache_service().reload_if_needed()
 
             # Verify data was loaded directly (including precomputed fields)
             assert result is True
-            assert len(get_cache_container().cache.roles_by_id) == 1
-            assert get_cache_container().cache.role_coverage == precomputed_coverage
+            assert len(get_cache_service().container.cache.roles_by_id) == 1
+            assert get_cache_service().container.cache.role_coverage == precomputed_coverage
 
     def test_roles_allowing_uses_roles_by_id_as_source_of_truth(self):
         """Verify roles_allowing uses data.roles_by_id as the source of truth.
@@ -740,9 +737,8 @@ class TestRoleCoverageRaceCondition:
         which derives from data.roles_by_id, ensuring consistent data access.
         """
         from azurerbac.cache import (
-            get_cache_container,
+            get_cache_service,
             precompute_all,
-            swap_in_memory,
         )
         from azurerbac.web.routes.pages import get_roles_allowing_operation
         from tests.helpers import clear_computed_caches
@@ -775,10 +771,10 @@ class TestRoleCoverageRaceCondition:
         role_definition = RoleDefinition.model_validate(mock_role_json)
 
         # Precompute coverage cache
-        swap_in_memory(precompute_all([role_definition], sample_operations))
+        get_cache_service().swap_in_memory(precompute_all([role_definition], sample_operations))
 
         # Set up data.roles_by_id directly (source of truth)
-        get_cache_container().cache.roles_by_id = {
+        get_cache_service().container.cache.roles_by_id = {
             "test-reader-role": CachedRole(
                 definition=role_definition,
                 status=RoleStatus.ACTIVE,
@@ -786,14 +782,14 @@ class TestRoleCoverageRaceCondition:
         }
 
         # Verify cache.get_role_definitions() derives from data.roles_by_id
-        role_definitions = get_cache_container().cache.get_role_definitions()
+        role_definitions = get_cache_service().container.cache.get_role_definitions()
         assert len(role_definitions) == 1
 
         # Now call get_roles_allowing_operation - should work!
         result = get_roles_allowing_operation(
             "Microsoft.Storage/storageAccounts/read",
             is_data_action=False,
-            cache=get_cache_container(),
+            cache=get_cache_service().container,
         )
 
         # Should find the role

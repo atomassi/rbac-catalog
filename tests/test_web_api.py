@@ -1,25 +1,23 @@
-"""Comprehensive tests for the web API endpoints and AppCache."""
+"""Comprehensive tests for the web API endpoints and CacheContainer."""
 
 from __future__ import annotations
-
-from unittest.mock import patch
 
 import pytest
 
 from azurerbac.azure.models import OperationData, RoleDefinition
 from azurerbac.cache.models import CachedRole
 from azurerbac.core.constants import RoleStatus
-from tests.conftest import make_cached_role
+from tests.conftest import make_cached_role, populate_cache_with_operations
 
 
-class TestAppCache:
-    """Tests for AppCache class."""
+class TestCacheContainer:
+    """Tests for CacheContainer class."""
 
     def test_cache_get_set_supported_keys(self):
         """Test get/set for supported keys."""
-        from azurerbac.cache import AppCache
+        from azurerbac.cache import CacheContainer
 
-        cache = AppCache()
+        cache = CacheContainer()
 
         # Test supported keys
         cache.set("unique_providers", ["Provider1"])
@@ -30,17 +28,17 @@ class TestAppCache:
 
     def test_cache_returns_none_for_missing_key(self):
         """Test that missing keys return None."""
-        from azurerbac.cache import AppCache
+        from azurerbac.cache import CacheContainer
 
-        cache = AppCache()
+        cache = CacheContainer()
         result = cache.get("nonexistent")
         assert result is None
 
     def test_cache_role_pages(self):
         """Test role page caching."""
-        from azurerbac.cache import AppCache
+        from azurerbac.cache import CacheContainer
 
-        cache = AppCache()
+        cache = CacheContainer()
         cache.set_role_page("roles:page:1", [{"role_id": "test1"}])
         cache.set_role_page("roles:page:2", [{"role_id": "test2"}])
 
@@ -49,13 +47,13 @@ class TestAppCache:
 
     def test_cache_invalidate_all_clears_all_data(self):
         """Test invalidating all caches."""
-        from azurerbac.cache import AppCache
+        from azurerbac.cache import CacheContainer
 
-        cache = AppCache()
+        cache = CacheContainer()
         cache.set("custom_key", ["value1"])
         cache.set_role_page("roles:page:1", [{"role_id": "test"}])
 
-        cache.invalidate_all()
+        cache.reset()
 
         # Misc cache cleared
         assert cache.get("custom_key") is None
@@ -70,10 +68,10 @@ class TestOperationsIndex:
 
     def test_build_from_operations(self, sample_operations):
         """Test building operations index."""
-        from azurerbac.cache import AppCache
+        from azurerbac.cache import CacheContainer
 
-        cache = AppCache()
-        cache.build_from_operations(sample_operations)
+        cache = CacheContainer()
+        populate_cache_with_operations(cache, sample_operations)
 
         # Check that indexes were built via data accessor
         assert len(cache.cache.ops_by_name_lower) == len(sample_operations)
@@ -83,10 +81,10 @@ class TestOperationsIndex:
 
     def test_search_operations_substring(self, sample_operations):
         """Test substring search."""
-        from azurerbac.cache import AppCache
+        from azurerbac.cache import CacheContainer
 
-        cache = AppCache()
-        cache.build_from_operations(sample_operations)
+        cache = CacheContainer()
+        populate_cache_with_operations(cache, sample_operations)
 
         results = cache.search_operations("virtualMachines", limit=10)
 
@@ -95,10 +93,10 @@ class TestOperationsIndex:
 
     def test_search_operations_wildcard(self, sample_operations):
         """Test wildcard search."""
-        from azurerbac.cache import AppCache
+        from azurerbac.cache import CacheContainer
 
-        cache = AppCache()
-        cache.build_from_operations(sample_operations)
+        cache = CacheContainer()
+        populate_cache_with_operations(cache, sample_operations)
 
         results = cache.search_operations("microsoft.compute/*/read", limit=10, is_wildcard=True)
 
@@ -107,10 +105,10 @@ class TestOperationsIndex:
 
     def test_search_operations_case_insensitive(self, sample_operations):
         """Test that search is case insensitive."""
-        from azurerbac.cache import AppCache
+        from azurerbac.cache import CacheContainer
 
-        cache = AppCache()
-        cache.build_from_operations(sample_operations)
+        cache = CacheContainer()
+        populate_cache_with_operations(cache, sample_operations)
 
         results = cache.search_operations("VIRTUALMACHINES", limit=10)
 
@@ -118,10 +116,10 @@ class TestOperationsIndex:
 
     def test_search_operations_by_display_name(self, sample_operations):
         """Test search by display name."""
-        from azurerbac.cache import AppCache
+        from azurerbac.cache import CacheContainer
 
-        cache = AppCache()
-        cache.build_from_operations(sample_operations)
+        cache = CacheContainer()
+        populate_cache_with_operations(cache, sample_operations)
 
         results = cache.search_operations("Get Virtual", limit=10)
 
@@ -129,10 +127,10 @@ class TestOperationsIndex:
 
     def test_search_operations_limit(self, sample_operations):
         """Test search respects limit."""
-        from azurerbac.cache import AppCache
+        from azurerbac.cache import CacheContainer
 
-        cache = AppCache()
-        cache.build_from_operations(sample_operations)
+        cache = CacheContainer()
+        populate_cache_with_operations(cache, sample_operations)
 
         results = cache.search_operations("microsoft", limit=2)
 
@@ -140,10 +138,10 @@ class TestOperationsIndex:
 
     def test_search_empty_query(self, sample_operations):
         """Test search with empty query returns nothing."""
-        from azurerbac.cache import AppCache
+        from azurerbac.cache import CacheContainer
 
-        cache = AppCache()
-        cache.build_from_operations(sample_operations)
+        cache = CacheContainer()
+        populate_cache_with_operations(cache, sample_operations)
 
         # Empty query won't match anything in the search logic
         results = cache.search_operations("", limit=10)
@@ -190,10 +188,10 @@ class TestCountWildcardMatches:
         description: str,
     ):
         """Test counting wildcard pattern matches."""
-        from azurerbac.cache import AppCache
+        from azurerbac.cache import CacheContainer
 
-        cache = AppCache()
-        cache.build_from_operations(sample_operations)
+        cache = CacheContainer()
+        populate_cache_with_operations(cache, sample_operations)
 
         count = cache.count_wildcard_matches(pattern, is_data_action=is_data_action)
 
@@ -236,7 +234,7 @@ class TestMatchesPattern:
 
 
 class TestCacheSimplicity:
-    """Tests for simplified AppCache without TTL."""
+    """Tests for simplified CacheContainer without TTL."""
 
     def test_cache_has_no_ttl_on_set(self):
         """Test that set() does not require a TTL parameter.
@@ -244,25 +242,25 @@ class TestCacheSimplicity:
         Cache is refreshed atomically by worker invalidation or periodic recompute,
         so TTL is not needed.
         """
-        from azurerbac.cache import AppCache
+        from azurerbac.cache import CacheContainer
 
-        cache = AppCache()
+        cache = CacheContainer()
         # Should work without TTL parameter for supported keys
         cache.set("unique_providers", ["Test"])
         assert cache.get("unique_providers") == ["Test"]
 
 
-class TestAppCacheThreadSafety:
-    """Tests for AppCache thread safety."""
+class TestCacheContainerThreadSafety:
+    """Tests for CacheContainer thread safety."""
 
     def test_concurrent_access(self, sample_operations):
         """Test concurrent cache access doesn't corrupt data."""
         import concurrent.futures
 
-        from azurerbac.cache import AppCache
+        from azurerbac.cache import CacheContainer
 
-        cache = AppCache()
-        cache.build_from_operations(sample_operations)
+        cache = CacheContainer()
+        populate_cache_with_operations(cache, sample_operations)
 
         errors = []
 
@@ -292,35 +290,33 @@ class TestAppCacheThreadSafety:
         assert len(errors) == 0, f"Errors during concurrent access: {errors}"
 
 
-class TestAppCacheInvalidateAll:
+class TestCacheContainerInvalidateAll:
     """Tests for invalidate_all method."""
 
     def test_invalidate_all_clears_memory_cache(self, sample_operations):
         """Test that invalidate_all clears memory cache."""
-        from azurerbac.cache import AppCache
+        from azurerbac.cache import CacheContainer
 
-        cache = AppCache()
+        cache = CacheContainer()
         cache.set("key1", "value1")
-        cache.build_from_operations(sample_operations)
+        populate_cache_with_operations(cache, sample_operations)
 
-        # Mock the recommender cache clear function - patch where it's imported
-        with patch("azurerbac.cache.precompute.clear_computed_caches"):
-            cache.invalidate_all()
+        cache.reset()
 
         assert cache.get("key1") is None
         assert len(cache.cache.all_operations) == 0
 
     def test_invalidate_all_clears_computed_caches(self, sample_operations):
         """Test that invalidate_all clears computed caches."""
-        from azurerbac.cache import AppCache
+        from azurerbac.cache import CacheContainer
 
-        cache = AppCache()
+        cache = CacheContainer()
 
         # Add some data to the computed caches
         cache._cache.role_coverage["test-role"] = ({"op1"}, {"op2"})
         assert len(cache.cache.role_coverage) > 0
 
-        cache.invalidate_all()
+        cache.reset()
 
         # Verify computed caches are cleared (CacheData reset to empty)
         assert len(cache.cache.role_coverage) == 0
@@ -331,11 +327,11 @@ class TestUniqueProvidersCaching:
 
     def test_unique_providers_is_cached(self, sample_operations):
         """Test that unique_providers is stored in cache."""
-        from azurerbac.cache import AppCache
+        from azurerbac.cache import CacheContainer
 
-        cache = AppCache()
+        cache = CacheContainer()
         # Set up the cache with operations data
-        cache.build_from_operations(sample_operations)
+        populate_cache_with_operations(cache, sample_operations)
 
         # Compute and cache unique_providers
         providers = set()
@@ -355,31 +351,30 @@ class TestUniqueProvidersCaching:
 
     def test_unique_providers_cleared_on_invalidate_all(self, sample_operations):
         """Test that unique_providers is cleared when invalidate_all is called."""
-        from azurerbac.cache import AppCache
+        from azurerbac.cache import CacheContainer
 
-        cache = AppCache()
+        cache = CacheContainer()
         cache.set_metadata(unique_providers=["Provider1", "Provider2"])
 
         # Verify it's cached
         assert cache.cache.unique_providers == ["Provider1", "Provider2"]
 
         # Invalidate all
-        with patch("azurerbac.cache.precompute.clear_computed_caches"):
-            cache.invalidate_all()
+        cache.reset()
 
         # Verify it's cleared (empty list after invalidation)
         assert cache.cache.unique_providers == []
 
     def test_unique_providers_cleared_on_cache_invalidate_all(self, sample_operations):
         """Test that unique_providers is cleared with invalidate_all."""
-        from azurerbac.cache import AppCache
+        from azurerbac.cache import CacheContainer
 
-        cache = AppCache()
+        cache = CacheContainer()
         cache.set_metadata(unique_providers=["Provider1", "Provider2"])
         cache.set_role_page("roles:page:1", [{"id": "test"}])
 
         # Invalidate all cache entries
-        cache.invalidate_all()
+        cache.reset()
 
         assert cache.cache.unique_providers == []
         assert cache.get_role_page("roles:page:1") is None
@@ -390,9 +385,9 @@ class TestRolesAllowingOperationCaching:
 
     def test_roles_allowing_operation_cache_key_format(self):
         """Test that cache key format is correct for roles_allowing_op."""
-        from azurerbac.cache import AppCache
+        from azurerbac.cache import CacheContainer
 
-        AppCache()
+        CacheContainer()
 
         # The cache key format should be: roles_allowing_op:{operation_name}:{is_data_action}
         operation_name = "Microsoft.Storage/read"
@@ -405,10 +400,10 @@ class TestRolesAllowingOperationCaching:
 
     def test_roles_allowing_operation_is_cached(self):
         """Test that roles_allowing_operation results are stored in cache."""
-        from azurerbac.cache import AppCache
+        from azurerbac.cache import CacheContainer
         from azurerbac.web.services.models import RoleAllowingOperation
 
-        cache = AppCache()
+        cache = CacheContainer()
 
         # Simulate caching the result with proper typed models
         mock_result = [
@@ -444,10 +439,10 @@ class TestRolesAllowingOperationCaching:
 
     def test_roles_allowing_operation_cleared_on_invalidate_all(self):
         """Test that roles_allowing_op entries are cleared on invalidate_all."""
-        from azurerbac.cache import AppCache
+        from azurerbac.cache import CacheContainer
         from azurerbac.web.services.models import RoleAllowingOperation
 
-        cache = AppCache()
+        cache = CacheContainer()
 
         # Helper to create a minimal RoleAllowingOperation
         def make_role(name: str) -> RoleAllowingOperation:
@@ -473,8 +468,7 @@ class TestRolesAllowingOperationCaching:
         assert cache.get("roles_allowing_op:op3:False") is not None
 
         # Invalidate all
-        with patch("azurerbac.cache.precompute.clear_computed_caches"):
-            cache.invalidate_all()
+        cache.reset()
 
         # Verify all are cleared
         assert cache.get("roles_allowing_op:op1:False") is None
@@ -483,10 +477,10 @@ class TestRolesAllowingOperationCaching:
 
     def test_different_operations_have_different_cache_keys(self):
         """Test that different operations use different cache keys."""
-        from azurerbac.cache import AppCache
+        from azurerbac.cache import CacheContainer
         from azurerbac.web.services.models import RoleAllowingOperation
 
-        cache = AppCache()
+        cache = CacheContainer()
 
         # Cache results for different operations using proper typed models
         storage_role = RoleAllowingOperation(
@@ -539,16 +533,16 @@ class TestCacheConsistencyOnRebuild:
 
     def test_cache_entries_cleared_on_invalidate_all(self):
         """Test that cache entries are cleared when invalidate_all is called."""
-        from azurerbac.cache import AppCache
+        from azurerbac.cache import CacheContainer
 
-        cache = AppCache()
+        cache = CacheContainer()
 
         # Set up some initial cache entries via set_metadata for unique_providers
         cache.set_metadata(unique_providers=["Old Provider"])
         cache.set("roles_allowing_op:old_op:False", [{"role": "old"}])
 
         # Invalidate all
-        cache.invalidate_all()
+        cache.reset()
 
         # Verify all entries are cleared (CacheData fields return defaults)
         assert cache.cache.unique_providers == []  # Default is empty list
@@ -566,15 +560,16 @@ class TestRoleCoverageRaceCondition:
         """Reproduce the bug: roles_allowing returns empty when coverage cache is cleared.
 
         This simulates the race condition where:
-        1. Cache is cleared (reload_from_disk_if_needed)
+        1. Cache is cleared (reload_if_needed)
         2. all_role_jsons is set in cache
         3. But _role_coverage_cache is not yet populated (precompute_func not called yet)
         4. get_roles_allowing_operation is called -> returns empty list (BUG)
         """
-        from azurerbac.cache import AppCache, clear_computed_caches
+        from azurerbac.cache import CacheContainer
         from azurerbac.web.routes.pages import get_roles_allowing_operation
+        from tests.helpers import clear_computed_caches
 
-        cache = AppCache()
+        cache = CacheContainer()
 
         # Set up mock role data - a role that grants Microsoft.Storage/storageAccounts/read
         mock_roles = [
@@ -614,7 +609,7 @@ class TestRoleCoverageRaceCondition:
         result = get_roles_allowing_operation(
             "Microsoft.Storage/storageAccounts/read",
             is_data_action=False,
-            app_cache=cache,
+            cache=cache,
         )
 
         # This assertion documents the BUG - if coverage cache is empty, we get empty results
@@ -624,8 +619,13 @@ class TestRoleCoverageRaceCondition:
 
     def test_roles_allowing_works_when_coverage_cache_populated(self):
         """Verify roles_allowing works correctly when coverage cache IS populated."""
-        from azurerbac.cache import app_cache, clear_computed_caches, precompute_all_caches
+        from azurerbac.cache import (
+            get_cache_container,
+            precompute_all,
+            swap_in_memory,
+        )
         from azurerbac.web.routes.pages import get_roles_allowing_operation
+        from tests.helpers import clear_computed_caches
 
         # Set up mock role data
         mock_role_json = {
@@ -656,10 +656,10 @@ class TestRoleCoverageRaceCondition:
         role_definition = RoleDefinition.model_validate(mock_role_json)
 
         # CORRECT order: precompute FIRST, then set data.roles_by_id
-        precompute_all_caches([role_definition], sample_operations)
+        swap_in_memory(precompute_all([role_definition], sample_operations))
 
         # Set data.roles_by_id (no TTL) - source of truth for cache.get_role_definitions()
-        app_cache.cache.roles_by_id = {
+        get_cache_container().cache.roles_by_id = {
             "test-reader-role": CachedRole(
                 definition=role_definition,
                 status=RoleStatus.ACTIVE,
@@ -670,7 +670,7 @@ class TestRoleCoverageRaceCondition:
         result = get_roles_allowing_operation(
             "Microsoft.Storage/storageAccounts/read",
             is_data_action=False,
-            app_cache=app_cache,
+            cache=get_cache_container(),
         )
 
         # Should find the role
@@ -681,43 +681,57 @@ class TestRoleCoverageRaceCondition:
         # Cleanup
         clear_computed_caches()
 
-    def test_reload_from_disk_loads_precomputed_data(self):
-        """Verify that reload_from_disk_if_needed loads precomputed data directly.
+    @pytest.mark.asyncio
+    async def test_reload_from_disk_loads_precomputed_data(self):
+        """Verify that reload_if_needed loads precomputed data directly.
 
         In the new architecture, the disk file contains all computed fields.
         On reload, we just load and swap - no recomputation needed.
         """
-        from azurerbac.cache import AppCache, CacheData, CacheMetadata
+        import tempfile
+        from pathlib import Path
 
-        cache = AppCache()
-
-        # Set up cache to think it needs reload
-        cache._loaded_cache_mtime = 1000.0
-        cache._last_cache_check = 0
-
-        # Create cache data with precomputed fields
-        precomputed_coverage = {"role-1": ({"op1"}, {"op2"})}
-        cached_data = CacheData(
-            metadata=CacheMetadata(roles_count=1, operations_count=1),
-            all_operations=[{"name": "Microsoft.Test/read", "is_data_action": False}],
-            roles_by_id={
-                "role-1": make_cached_role("role-1", "Test Role"),
-            },
-            role_coverage=precomputed_coverage,
+        from azurerbac.cache import (
+            CacheData,
+            CacheMetadata,
+            get_cache_container,
+            reload_if_needed,
         )
+        from azurerbac.cache.backends import get_cache_backend
+        from azurerbac.cache.backends.file import FileCacheBackend
 
-        with (
-            patch(
-                "azurerbac.cache.app_cache.load_cache_from_disk",
-                return_value=cached_data,
-            ),
-            patch("azurerbac.cache.app_cache.get_cache_file_mtime", return_value=2000.0),
-        ):
-            cache.reload_from_disk_if_needed()
+        # Set up temp directory for cache
+        with tempfile.TemporaryDirectory() as tmpdir:
+            backend = get_cache_backend()
+            if isinstance(backend, FileCacheBackend):
+                backend.cache_dir = Path(tmpdir)
 
-        # Verify data was loaded directly (including precomputed fields)
-        assert len(cache.cache.roles_by_id) == 1
-        assert cache.cache.role_coverage == precomputed_coverage
+            # Set up cache to think it has an old version loaded
+            get_cache_container().loaded_version = "1000.0"
+
+            # Create cache data with precomputed fields
+            from azurerbac.azure.models import OperationData
+
+            precomputed_coverage = {"role-1": ({"op1"}, {"op2"})}
+            cached_data = CacheData(
+                metadata=CacheMetadata(roles_count=1, operations_count=1),
+                all_operations=[OperationData(name="Microsoft.Test/read", isDataAction=False)],
+                roles_by_id={
+                    "role-1": make_cached_role("role-1", "Test Role"),
+                },
+                role_coverage=precomputed_coverage,
+            )
+
+            # Save to disk (this creates a new version)
+            await get_cache_backend().save(cached_data)
+
+            # Now reload should detect the version change
+            result = await reload_if_needed()
+
+            # Verify data was loaded directly (including precomputed fields)
+            assert result is True
+            assert len(get_cache_container().cache.roles_by_id) == 1
+            assert get_cache_container().cache.role_coverage == precomputed_coverage
 
     def test_roles_allowing_uses_roles_by_id_as_source_of_truth(self):
         """Verify roles_allowing uses data.roles_by_id as the source of truth.
@@ -725,8 +739,13 @@ class TestRoleCoverageRaceCondition:
         This tests that get_roles_allowing_operation uses get_all_roles()
         which derives from data.roles_by_id, ensuring consistent data access.
         """
-        from azurerbac.cache import app_cache, clear_computed_caches, precompute_all_caches
+        from azurerbac.cache import (
+            get_cache_container,
+            precompute_all,
+            swap_in_memory,
+        )
         from azurerbac.web.routes.pages import get_roles_allowing_operation
+        from tests.helpers import clear_computed_caches
 
         # Set up mock role data
         mock_role_json = {
@@ -756,10 +775,10 @@ class TestRoleCoverageRaceCondition:
         role_definition = RoleDefinition.model_validate(mock_role_json)
 
         # Precompute coverage cache
-        precompute_all_caches([role_definition], sample_operations)
+        swap_in_memory(precompute_all([role_definition], sample_operations))
 
         # Set up data.roles_by_id directly (source of truth)
-        app_cache.cache.roles_by_id = {
+        get_cache_container().cache.roles_by_id = {
             "test-reader-role": CachedRole(
                 definition=role_definition,
                 status=RoleStatus.ACTIVE,
@@ -767,14 +786,14 @@ class TestRoleCoverageRaceCondition:
         }
 
         # Verify cache.get_role_definitions() derives from data.roles_by_id
-        role_definitions = app_cache.cache.get_role_definitions()
+        role_definitions = get_cache_container().cache.get_role_definitions()
         assert len(role_definitions) == 1
 
         # Now call get_roles_allowing_operation - should work!
         result = get_roles_allowing_operation(
             "Microsoft.Storage/storageAccounts/read",
             is_data_action=False,
-            app_cache=app_cache,
+            cache=get_cache_container(),
         )
 
         # Should find the role

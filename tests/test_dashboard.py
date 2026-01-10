@@ -39,7 +39,7 @@ class TestEnrichRoleWithCounts:
         mock_app_cache = MagicMock()
         mock_app_cache.get_role_net_permissions.return_value = None
 
-        result = enrich_role_with_counts(role, app_cache=mock_app_cache)
+        result = enrich_role_with_counts(role, cache=mock_app_cache)
 
         # Cache miss returns zeros (no fallback to role_json anymore)
         assert result.actions_count == 0
@@ -59,7 +59,7 @@ class TestEnrichRoleWithCounts:
         mock_app_cache = MagicMock()
         mock_app_cache.get_role_net_permissions.return_value = (5, 2)
 
-        result = enrich_role_with_counts(role, app_cache=mock_app_cache)
+        result = enrich_role_with_counts(role, cache=mock_app_cache)
 
         assert result.actions_count == 5
         assert result.data_actions_count == 2
@@ -111,7 +111,7 @@ class TestFilterCachedEvents:
         ]
 
         deps = MagicMock()
-        deps.app_cache.get_role_by_id.return_value = make_cached_role("test-id", "Test Role")
+        deps.cache_container.get_role_by_id.return_value = make_cached_role("test-id", "Test Role")
 
         result = filter_cached_events(cached_events, deps, cutoff, "all")
 
@@ -336,7 +336,7 @@ class TestRecentPagePagination:
         ]
 
         deps = MagicMock()
-        deps.app_cache.get_role_by_id.return_value = make_cached_role("test-id", "Test Role")
+        deps.cache_container.get_role_by_id.return_value = make_cached_role("test-id", "Test Role")
 
         result = filter_cached_events(cached_events, deps, cutoff, "all")
 

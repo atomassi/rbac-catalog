@@ -1,7 +1,7 @@
 """End-to-end tests for cache refresh scenarios.
 
 These tests verify complete cache workflows across all sources:
-1. Worker process refresh (rebuild_cache -> save to disk -> web reload)
+1. Worker process refresh (rebuild_cache_to_disk -> web reload)
 2. Periodic web app refresh (precompute every hour)
 3. Web startup flow (load from disk OR rebuild from DB)
 4. Cache version compatibility (v4 format with metadata)
@@ -15,7 +15,6 @@ import tempfile
 import threading
 from datetime import datetime
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
@@ -25,17 +24,19 @@ from azurerbac.cache import (
     CachedChangeEvent,
     CachedRole,
     CacheMetadata,
-    app_cache,
-    clear_computed_caches,
     compute_operations_hash,
     compute_roles_hash,
-    delete_cache_file,
-    load_cache_from_disk,
-    precompute_all_caches,
-    save_cache_to_disk,
+    get_cache_container,
+    invalidate_all,
+    precompute_all,
+    swap_in_memory,
 )
+from azurerbac.cache.backends import get_cache_backend
+from azurerbac.cache.build import needs_reload, reload_if_needed
 from azurerbac.cache.models import CACHE_VERSION
 from azurerbac.core.constants import RoleStatus
+from tests.conftest import populate_cache_with_operations
+from tests.helpers import clear_computed_caches
 
 
 @pytest.fixture
@@ -75,31 +76,29 @@ def sample_change_events():
 
 @pytest.fixture
 def temp_cache_dir():
-    """Create a temporary directory for cache testing."""
+    """Create a temporary directory for cache testing and configure backend."""
+    from azurerbac.cache.backends.file import FileCacheBackend
+
     with tempfile.TemporaryDirectory() as tmpdir:
-        yield Path(tmpdir)
+        temp_path = Path(tmpdir)
+        # Configure the backend to use this temp directory
+        backend = get_cache_backend()
+        if isinstance(backend, FileCacheBackend):
+            backend.cache_dir = temp_path
+        yield temp_path
 
 
 @pytest.fixture(autouse=True)
 def clean_cache():
     """Clean up caches before and after each test."""
+    container = get_cache_container()
     # Clear before test
-    app_cache._cache = CacheData()
-    app_cache._role_pages.clear()
-    app_cache._misc_cache.clear()
-    app_cache._preloaded = False
-    app_cache._loaded_cache_mtime = None
-    app_cache._last_cache_check = 0
-    clear_computed_caches()
+    container.reset()
+    clear_computed_caches(container)
     yield
     # Clear after test
-    app_cache._cache = CacheData()
-    app_cache._role_pages.clear()
-    app_cache._misc_cache.clear()
-    app_cache._preloaded = False
-    app_cache._loaded_cache_mtime = None
-    app_cache._last_cache_check = 0
-    clear_computed_caches()
+    container.reset()
+    clear_computed_caches(container)
 
 
 def build_roles_by_id(roles: list[RoleDefinition]) -> dict[str, CachedRole]:
@@ -128,13 +127,12 @@ def build_complete_cache(
         operations_hash=compute_operations_hash(operations),
     )
 
-    cache_data = precompute_all_caches(
+    cache_data = precompute_all(
         roles,
         operations,
         metadata=metadata,
         roles_by_id=roles_by_id,
         all_change_events=change_events or [],
-        swap_in_memory=False,
     )
     return cache_data
 
@@ -147,145 +145,135 @@ def build_complete_cache(
 class TestWorkerRefreshFlow:
     """Tests for worker process cache refresh (the primary refresh mechanism)."""
 
-    def test_worker_builds_complete_cache_and_saves_to_disk(
+    async def test_worker_builds_complete_cache_and_saves_to_disk(
         self, temp_cache_dir, sample_roles, sample_operations, sample_change_events
     ):
         """Worker builds complete cache with all computed fields and saves to disk."""
-        with patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_cache_dir):
-            # Worker builds complete cache
-            cache_data = build_complete_cache(sample_roles, sample_operations, sample_change_events)
+        # Worker builds complete cache
+        cache_data = build_complete_cache(sample_roles, sample_operations, sample_change_events)
 
-            # Verify all fields are populated
-            assert cache_data.metadata is not None
-            assert cache_data.metadata.version == CACHE_VERSION
-            assert len(cache_data.roles_by_id) == len(sample_roles)
-            assert len(cache_data.all_operations) == len(sample_operations)
-            assert len(cache_data.all_change_events) == len(sample_change_events)
-            assert len(cache_data.role_coverage) == len(sample_roles)
-            assert len(cache_data.role_net_permissions) == len(sample_roles)
-            assert len(cache_data.unique_providers) > 0
+        # Verify all fields are populated
+        assert cache_data.metadata is not None
+        assert cache_data.metadata.version == CACHE_VERSION
+        assert len(cache_data.roles_by_id) == len(sample_roles)
+        assert len(cache_data.all_operations) == len(sample_operations)
+        assert len(cache_data.all_change_events) == len(sample_change_events)
+        assert len(cache_data.role_coverage) == len(sample_roles)
+        assert len(cache_data.role_net_permissions) == len(sample_roles)
+        assert len(cache_data.unique_providers) > 0
 
-            # Save to disk
-            result = save_cache_to_disk(cache_data)
-            assert result is True
+        # Save to disk
+        result = await get_cache_backend().save(cache_data)
+        assert result is True
 
-            # Verify file exists and is substantial
-            cache_file = temp_cache_dir / "app_cache.msgpack"
-            assert cache_file.exists()
-            assert cache_file.stat().st_size > 1000  # Should be several KB
+        # Verify file exists and is substantial
+        cache_file = temp_cache_dir / "app_cache.msgpack"
+        assert cache_file.exists()
+        assert cache_file.stat().st_size > 1000  # Should be several KB
 
-    def test_web_process_loads_precomputed_cache_from_disk(
+    async def test_web_process_loads_precomputed_cache_from_disk(
         self, temp_cache_dir, sample_roles, sample_operations
     ):
         """Web process loads complete cache from disk - no recomputation needed."""
-        with patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_cache_dir):
-            # Worker saves cache with precomputed data
-            cache_data = build_complete_cache(sample_roles, sample_operations)
-            original_coverage = dict(cache_data.role_coverage)
-            save_cache_to_disk(cache_data)
+        # Worker saves cache with precomputed data
+        cache_data = build_complete_cache(sample_roles, sample_operations)
+        original_coverage = dict(cache_data.role_coverage)
+        await get_cache_backend().save(cache_data)
 
-            # Web process loads from disk
-            loaded = load_cache_from_disk()
+        # Web process loads from disk
+        loaded = await get_cache_backend().load()
 
-            assert loaded is not None
-            assert loaded.metadata.version == CACHE_VERSION
-            assert len(loaded.roles_by_id) == len(sample_roles)
-            assert len(loaded.all_operations) == len(sample_operations)
+        assert loaded is not None
+        assert loaded.metadata.version == CACHE_VERSION
+        assert len(loaded.roles_by_id) == len(sample_roles)
+        assert len(loaded.all_operations) == len(sample_operations)
 
-            # Precomputed fields should be loaded directly
-            assert loaded.role_coverage == original_coverage
-            assert len(loaded.role_net_permissions) == len(sample_roles)
+        # Precomputed fields should be loaded directly
+        assert loaded.role_coverage == original_coverage
+        assert len(loaded.role_net_permissions) == len(sample_roles)
 
-    def test_web_detects_worker_update_and_reloads(
+    async def test_web_detects_worker_update_and_reloads(
         self, temp_cache_dir, sample_roles, sample_operations
     ):
         """Web process detects worker disk update and reloads cache."""
-        with patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_cache_dir):
-            # Initial state - web has old cache
-            old_role_def = RoleDefinition.model_validate({"name": "old-role", "properties": {}})
-            old_cache = CacheData(
-                metadata=CacheMetadata(roles_count=1, operations_count=1),
-                all_operations=[OperationData(name="old-op", is_data_action=False)],
-                roles_by_id={
-                    "old-role": CachedRole(definition=old_role_def, status=RoleStatus.ACTIVE)
-                },
-            )
-            app_cache.swap(old_cache)
-            app_cache._loaded_cache_mtime = 1000.0
-            app_cache._last_cache_check = 0
+        # Initial state - web has old cache
+        old_role_def = RoleDefinition.model_validate({"name": "old-role", "properties": {}})
+        old_cache = CacheData(
+            metadata=CacheMetadata(roles_count=1, operations_count=1),
+            all_operations=[OperationData(name="old-op", is_data_action=False)],
+            roles_by_id={"old-role": CachedRole(definition=old_role_def, status=RoleStatus.ACTIVE)},
+        )
+        get_cache_container().swap(old_cache)
+        get_cache_container()._loaded_version = "1000.0"
 
-            # Worker saves new cache
-            new_cache = build_complete_cache(sample_roles, sample_operations)
-            save_cache_to_disk(new_cache)
+        # Worker saves new cache
+        new_cache = build_complete_cache(sample_roles, sample_operations)
+        await get_cache_backend().save(new_cache)
 
-            # Web detects update and reloads
-            # (single call since needs_reload updates _last_cache_check)
-            with patch("azurerbac.cache.app_cache.get_cache_file_mtime", return_value=2000.0):
-                result = app_cache.reload_from_disk_if_needed()
-                assert result is True
+        # Web detects update and reloads
+        # (single call since needs_reload updates _last_cache_check)
+        result = await reload_if_needed()
+        assert result is True
 
-            # Verify web now has new data
-            assert len(app_cache.cache.all_operations) == len(sample_operations)
-            assert len(app_cache.cache.roles_by_id) == len(sample_roles)
-            assert len(app_cache.cache.role_coverage) == len(sample_roles)
+        # Verify web now has new data
+        assert len(get_cache_container().cache.all_operations) == len(sample_operations)
+        assert len(get_cache_container().cache.roles_by_id) == len(sample_roles)
+        assert len(get_cache_container().cache.role_coverage) == len(sample_roles)
 
-    def test_reload_is_atomic_no_partial_state(
+    async def test_reload_is_atomic_no_partial_state(
         self, temp_cache_dir, sample_roles, sample_operations
     ):
         """Reload is atomic - readers never see partial state."""
-        with patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_cache_dir):
-            # Setup initial cache
-            old_ops = [OperationData(name="old-op", is_data_action=False)]
-            app_cache.build_from_operations(old_ops)
-            app_cache._loaded_cache_mtime = 1000.0
-            app_cache._last_cache_check = 0
+        # Setup initial cache
+        old_ops = [OperationData(name="old-op", is_data_action=False)]
+        populate_cache_with_operations(get_cache_container(), old_ops)
+        get_cache_container()._loaded_version = "1000.0"
 
-            # Save new cache to disk
-            new_cache = build_complete_cache(sample_roles, sample_operations)
-            save_cache_to_disk(new_cache)
+        # Save new cache to disk
+        new_cache = build_complete_cache(sample_roles, sample_operations)
+        await get_cache_backend().save(new_cache)
 
-            # Capture reference before reload
-            old_cache_ref = app_cache.cache
-            assert len(old_cache_ref.all_operations) == 1
+        # Capture reference before reload
+        old_cache_ref = get_cache_container().cache
+        assert len(old_cache_ref.all_operations) == 1
 
-            # Reload
-            with patch("azurerbac.cache.app_cache.get_cache_file_mtime", return_value=2000.0):
-                app_cache.reload_from_disk_if_needed()
+        # Reload
+        await reload_if_needed()
 
-            # New cache is different object
-            new_cache_ref = app_cache.cache
-            assert new_cache_ref is not old_cache_ref
-            assert len(new_cache_ref.all_operations) == len(sample_operations)
+        # New cache is different object
+        new_cache_ref = get_cache_container().cache
+        assert new_cache_ref is not old_cache_ref
+        assert len(new_cache_ref.all_operations) == len(sample_operations)
 
-            # Old reference is unchanged (readers with old ref see consistent data)
-            assert len(old_cache_ref.all_operations) == 1
+        # Old reference is unchanged (readers with old ref see consistent data)
+        assert len(old_cache_ref.all_operations) == 1
 
     def test_worker_refresh_clears_recommender_caches_before_rebuild(
         self, sample_roles, sample_operations
     ):
         """Worker clears computed caches before rebuilding to ensure consistency."""
         # Setup with computed data
-        app_cache.build_from_operations(sample_operations)
+        populate_cache_with_operations(get_cache_container(), sample_operations)
         roles_by_id = build_roles_by_id(sample_roles)
-        app_cache._cache = CacheData(
+        get_cache_container()._cache = CacheData(
             all_operations=sample_operations,
             roles_by_id=roles_by_id,
-            ops_by_name_lower=app_cache.cache.ops_by_name_lower,
-            ops_by_prefix=app_cache.cache.ops_by_prefix,
+            ops_by_name_lower=get_cache_container().cache.ops_by_name_lower,
+            ops_by_prefix=get_cache_container().cache.ops_by_prefix,
         )
-        precompute_all_caches(sample_roles, sample_operations)
+        swap_in_memory(precompute_all(sample_roles, sample_operations))
 
         # Verify computed data exists
-        assert app_cache.get_role_coverage("reader-role-id") is not None
+        assert get_cache_container().get_role_coverage("reader-role-id") is not None
 
         # Simulate worker clear (before rebuild)
         clear_computed_caches()
 
         # Computed data should be cleared
-        assert app_cache.get_role_coverage("reader-role-id") is None
+        assert get_cache_container().get_role_coverage("reader-role-id") is None
 
         # Source data preserved
-        assert len(app_cache.cache.all_operations) == len(sample_operations)
+        assert len(get_cache_container().cache.all_operations) == len(sample_operations)
 
 
 # =============================================================================
@@ -301,62 +289,59 @@ class TestPeriodicWebRefreshFlow:
     ):
         """Periodic refresh recomputes using current cache data."""
         # Initial setup
-        app_cache.build_from_operations(sample_operations)
+        populate_cache_with_operations(get_cache_container(), sample_operations)
         roles_by_id = build_roles_by_id(sample_roles)
-        app_cache._cache = CacheData(
-            all_operations=sample_operations,
-            roles_by_id=roles_by_id,
-            ops_by_name_lower=app_cache.cache.ops_by_name_lower,
-            ops_by_prefix=app_cache.cache.ops_by_prefix,
-        )
 
         # First compute
-        precompute_all_caches(sample_roles, sample_operations)
-        first_coverage = app_cache.get_role_coverage("reader-role-id")
+        swap_in_memory(precompute_all(sample_roles, sample_operations, roles_by_id=roles_by_id))
+        first_coverage = get_cache_container().get_role_coverage("reader-role-id")
 
         # Simulate 1 hour later - periodic refresh uses data from cache
-        role_definitions = app_cache.cache.get_role_definitions()
-        all_ops = app_cache.cache.all_operations
+        role_definitions = get_cache_container().cache.get_role_definitions()
+        all_ops = get_cache_container().cache.all_operations
+        current_roles_by_id = get_cache_container().cache.roles_by_id
 
         # Recompute
-        precompute_all_caches(role_definitions, all_ops)
-        second_coverage = app_cache.get_role_coverage("reader-role-id")
+        swap_in_memory(precompute_all(role_definitions, all_ops, roles_by_id=current_roles_by_id))
+        second_coverage = get_cache_container().get_role_coverage("reader-role-id")
 
         # Results should be identical
         assert first_coverage == second_coverage
 
     def test_periodic_refresh_updates_pattern_match_cache(self, sample_roles, sample_operations):
         """Periodic refresh updates all pattern caches."""
-        app_cache.build_from_operations(sample_operations)
+        populate_cache_with_operations(get_cache_container(), sample_operations)
         roles_by_id = build_roles_by_id(sample_roles)
-        app_cache._cache = CacheData(
+        get_cache_container()._cache = CacheData(
             all_operations=sample_operations,
             roles_by_id=roles_by_id,
-            ops_by_name_lower=app_cache.cache.ops_by_name_lower,
-            ops_by_prefix=app_cache.cache.ops_by_prefix,
+            ops_by_name_lower=get_cache_container().cache.ops_by_name_lower,
+            ops_by_prefix=get_cache_container().cache.ops_by_prefix,
         )
 
-        precompute_all_caches(sample_roles, sample_operations)
+        swap_in_memory(precompute_all(sample_roles, sample_operations))
 
         # Pattern match cache should be populated
-        assert len(app_cache.cache.pattern_match) > 0
+        assert len(get_cache_container().cache.pattern_match) > 0
 
-    def test_multiple_periodic_refreshes_are_consistent(self, sample_roles, sample_operations):
+    async def test_multiple_periodic_refreshes_are_consistent(
+        self, sample_roles, sample_operations
+    ):
         """Multiple periodic refreshes produce identical results."""
-        app_cache.build_from_operations(sample_operations)
+        populate_cache_with_operations(get_cache_container(), sample_operations)
         roles_by_id = build_roles_by_id(sample_roles)
-        app_cache._cache = CacheData(
+        get_cache_container()._cache = CacheData(
             all_operations=sample_operations,
             roles_by_id=roles_by_id,
-            ops_by_name_lower=app_cache.cache.ops_by_name_lower,
-            ops_by_prefix=app_cache.cache.ops_by_prefix,
+            ops_by_name_lower=get_cache_container().cache.ops_by_name_lower,
+            ops_by_prefix=get_cache_container().cache.ops_by_prefix,
         )
 
         results = []
         for _ in range(5):
-            precompute_all_caches(sample_roles, sample_operations)
-            coverage = app_cache.get_role_coverage("reader-role-id")
-            net_perms = app_cache.get_role_net_permissions("reader-role-id")
+            swap_in_memory(precompute_all(sample_roles, sample_operations))
+            coverage = get_cache_container().get_role_coverage("reader-role-id")
+            net_perms = get_cache_container().get_role_net_permissions("reader-role-id")
             results.append((len(coverage[0]), len(coverage[1]), net_perms))
 
         # All should be identical
@@ -371,98 +356,92 @@ class TestPeriodicWebRefreshFlow:
 class TestWebStartupFlow:
     """Tests for web app startup cache initialization."""
 
-    def test_startup_with_valid_disk_cache_loads_directly(
+    async def test_startup_with_valid_disk_cache_loads_directly(
         self, temp_cache_dir, sample_roles, sample_operations
     ):
         """Startup with valid disk cache loads directly - no DB query needed."""
-        with patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_cache_dir):
-            # Previous run saved cache
-            cache_data = build_complete_cache(sample_roles, sample_operations)
-            save_cache_to_disk(cache_data)
+        # Previous run saved cache
+        cache_data = build_complete_cache(sample_roles, sample_operations)
+        await get_cache_backend().save(cache_data)
 
-            # Startup loads from disk
-            loaded = load_cache_from_disk()
+        # Startup loads from disk
+        loaded = await get_cache_backend().load()
 
-            assert loaded is not None
-            assert len(loaded.roles_by_id) == len(sample_roles)
-            assert len(loaded.all_operations) == len(sample_operations)
-            # Computed fields are already populated
-            assert len(loaded.role_coverage) == len(sample_roles)
+        assert loaded is not None
+        assert len(loaded.roles_by_id) == len(sample_roles)
+        assert len(loaded.all_operations) == len(sample_operations)
+        # Computed fields are already populated
+        assert len(loaded.role_coverage) == len(sample_roles)
 
-    def test_startup_with_no_disk_cache_builds_from_scratch(
+    async def test_startup_with_no_disk_cache_builds_from_scratch(
         self, temp_cache_dir, sample_roles, sample_operations
     ):
         """Startup with no disk cache builds from database."""
-        with patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_cache_dir):
-            # No disk cache
-            loaded = load_cache_from_disk()
-            assert loaded is None
+        # No disk cache
+        loaded = await get_cache_backend().load()
+        assert loaded is None
 
-            # Build from "database" (simulated)
-            app_cache.build_from_operations(sample_operations)
-            roles_by_id = build_roles_by_id(sample_roles)
-            app_cache._cache = CacheData(
-                all_operations=sample_operations,
-                roles_by_id=roles_by_id,
-                ops_by_name_lower=app_cache.cache.ops_by_name_lower,
-                ops_by_prefix=app_cache.cache.ops_by_prefix,
-            )
+        # Build from "database" (simulated)
+        populate_cache_with_operations(get_cache_container(), sample_operations)
+        roles_by_id = build_roles_by_id(sample_roles)
+        get_cache_container()._cache = CacheData(
+            all_operations=sample_operations,
+            roles_by_id=roles_by_id,
+            ops_by_name_lower=get_cache_container().cache.ops_by_name_lower,
+            ops_by_prefix=get_cache_container().cache.ops_by_prefix,
+        )
 
-            # Precompute
-            precompute_all_caches(sample_roles, sample_operations)
+        # Precompute
+        swap_in_memory(precompute_all(sample_roles, sample_operations))
 
-            # Save for next startup
-            save_cache_to_disk(app_cache.cache)
+        # Save for next startup
+        await get_cache_backend().save(get_cache_container().cache)
 
-            # Verify data is available
-            assert app_cache.get_role_coverage("reader-role-id") is not None
+        # Verify data is available
+        assert get_cache_container().get_role_coverage("reader-role-id") is not None
 
-    def test_startup_with_stale_cache_rebuilds(
+    async def test_startup_with_stale_cache_rebuilds(
         self, temp_cache_dir, sample_roles, sample_operations
     ):
         """Startup with stale disk cache (wrong counts) triggers rebuild."""
-        with patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_cache_dir):
-            # Save cache with 3 roles
-            cache_data = build_complete_cache(sample_roles, sample_operations)
-            save_cache_to_disk(cache_data)
+        # Save cache with 3 roles
+        cache_data = build_complete_cache(sample_roles, sample_operations)
+        await get_cache_backend().save(cache_data)
 
-            # Startup with different counts (simulating DB has more data)
-            loaded = load_cache_from_disk()
-            assert loaded is not None
+        # Startup with different counts (simulating DB has more data)
+        loaded = await get_cache_backend().load()
+        assert loaded is not None
 
-            # Check if valid for different counts
-            is_valid = loaded.metadata.is_valid_for(100, 1000)  # Different counts
-            assert is_valid is False  # Should be invalid
+        # Check if valid for different counts
+        is_valid = loaded.metadata.is_valid_for(100, 1000)  # Different counts
+        assert is_valid is False  # Should be invalid
 
-    def test_startup_with_old_version_cache_rebuilds(
+    async def test_startup_with_old_version_cache_rebuilds(
         self, temp_cache_dir, sample_roles, sample_operations
     ):
         """Startup with old cache version triggers rebuild."""
-        with patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_cache_dir):
-            # Save cache with old version
-            cache_data = build_complete_cache(sample_roles, sample_operations)
-            # Manually set old version
-            old_metadata = CacheMetadata(
-                roles_count=len(sample_roles),
-                operations_count=len(sample_operations),
-            )
-            old_metadata.version = "v1"  # Old version
-            cache_data = CacheData(
-                metadata=old_metadata,
-                roles_by_id=cache_data.roles_by_id,
-                all_operations=cache_data.all_operations,
-            )
-            save_cache_to_disk(cache_data)
+        # Save cache with old version
+        cache_data = build_complete_cache(sample_roles, sample_operations)
+        # Manually set old version
+        old_metadata = CacheMetadata(
+            roles_count=len(sample_roles),
+            operations_count=len(sample_operations),
+        )
+        old_metadata.version = "v1"  # Old version
+        cache_data = CacheData(
+            metadata=old_metadata,
+            roles_by_id=cache_data.roles_by_id,
+            all_operations=cache_data.all_operations,
+        )
+        await get_cache_backend().save(cache_data)
 
-            # Startup tries to reload
-            app_cache._loaded_cache_mtime = 1000.0
-            app_cache._last_cache_check = 0
+        # Startup tries to reload
+        get_cache_container()._loaded_version = "1000.0"
 
-            with patch("azurerbac.cache.app_cache.get_cache_file_mtime", return_value=2000.0):
-                result = app_cache.reload_from_disk_if_needed()
+        result = await reload_if_needed()
 
-            # Should fail due to version mismatch
-            assert result is False
+        # Should fail due to version mismatch
+        assert result is False
 
 
 # =============================================================================
@@ -497,7 +476,7 @@ class TestCacheVersionFormat:
         # Invalid for different counts
         assert not cache_data.metadata.is_valid_for(100, 1000)
 
-    def test_cache_includes_all_computed_fields(self, sample_roles, sample_operations):
+    async def test_cache_includes_all_computed_fields(self, sample_roles, sample_operations):
         """Cache includes all computed fields for direct load."""
         cache_data = build_complete_cache(sample_roles, sample_operations)
 
@@ -525,55 +504,49 @@ class TestCacheVersionFormat:
 class TestThreadSafety:
     """Tests for thread safety and race condition handling."""
 
-    def test_concurrent_reloads_only_one_proceeds(
+    async def test_concurrent_reloads_only_one_proceeds(
         self, temp_cache_dir, sample_roles, sample_operations
     ):
         """Only one concurrent reload proceeds, others skip."""
-        with patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_cache_dir):
-            # Save cache
-            cache_data = build_complete_cache(sample_roles, sample_operations)
-            save_cache_to_disk(cache_data)
+        import asyncio
 
-            app_cache._loaded_cache_mtime = 1000.0
-            app_cache._last_cache_check = 0
+        # Save cache
+        cache_data = build_complete_cache(sample_roles, sample_operations)
+        await get_cache_backend().save(cache_data)
 
-            results = []
-            errors = []
+        get_cache_container()._loaded_version = "1000.0"
 
-            def attempt_reload(thread_id):
-                try:
-                    with patch(
-                        "azurerbac.cache.app_cache.get_cache_file_mtime", return_value=2000.0
-                    ):
-                        result = app_cache.reload_from_disk_if_needed()
-                        results.append((thread_id, result))
-                except Exception as e:
-                    errors.append((thread_id, str(e)))
+        results = []
+        errors = []
 
-            # Start multiple threads
-            threads = [threading.Thread(target=attempt_reload, args=(i,)) for i in range(5)]
-            for t in threads:
-                t.start()
-            for t in threads:
-                t.join()
+        async def attempt_reload(task_id):
+            try:
+                result = await reload_if_needed()
+                results.append((task_id, result))
+            except Exception as e:
+                errors.append((task_id, str(e)))
 
-            assert len(errors) == 0
-            # At most one should succeed (first one to acquire lock)
-            successful = [r for r in results if r[1] is True]
-            assert len(successful) <= 1
+        # Start multiple concurrent tasks
+        tasks = [asyncio.create_task(attempt_reload(i)) for i in range(5)]
+        await asyncio.gather(*tasks)
+
+        assert len(errors) == 0
+        # At most one should succeed (first one to acquire lock)
+        successful = [r for r in results if r[1] is True]
+        assert len(successful) <= 1
 
     def test_readers_see_consistent_data_during_swap(self, sample_roles, sample_operations):
         """Readers always see consistent data even during cache swap."""
         # Setup initial cache
-        app_cache.build_from_operations(sample_operations)
+        populate_cache_with_operations(get_cache_container(), sample_operations)
         roles_by_id = build_roles_by_id(sample_roles)
-        app_cache._cache = CacheData(
+        get_cache_container()._cache = CacheData(
             all_operations=sample_operations,
             roles_by_id=roles_by_id,
-            ops_by_name_lower=app_cache.cache.ops_by_name_lower,
-            ops_by_prefix=app_cache.cache.ops_by_prefix,
+            ops_by_name_lower=get_cache_container().cache.ops_by_name_lower,
+            ops_by_prefix=get_cache_container().cache.ops_by_prefix,
         )
-        precompute_all_caches(sample_roles, sample_operations)
+        swap_in_memory(precompute_all(sample_roles, sample_operations))
 
         read_results = []
         errors = []
@@ -582,7 +555,7 @@ class TestThreadSafety:
             """Read multiple times and verify consistency."""
             try:
                 for _ in range(100):
-                    cache = app_cache.cache  # Capture reference
+                    cache = get_cache_container().cache  # Capture reference
                     ops_count = len(cache.all_operations)
                     roles_count = len(cache.roles_by_id)
                     # These should be consistent within single read
@@ -597,7 +570,7 @@ class TestThreadSafety:
                     all_operations=sample_operations,
                     roles_by_id=roles_by_id,
                 )
-                app_cache.swap(new_cache)
+                get_cache_container().swap(new_cache)
 
         # Run concurrent readers and writer
         threads = [threading.Thread(target=reader, args=(i,)) for i in range(3)]
@@ -649,7 +622,7 @@ class TestDataConsistency:
 
         assert set(cache_data.unique_providers) == expected_providers
 
-    def test_no_role_data_pollution_between_roles(self, sample_operations):
+    async def test_no_role_data_pollution_between_roles(self, sample_operations):
         """One role's computed data doesn't pollute another role's cache."""
         role_dicts = [
             {
@@ -703,24 +676,23 @@ class TestDataConsistency:
         # No overlap
         assert reader_ops.isdisjoint(writer_ops)
 
-    def test_change_events_preserved_through_cache_cycle(
+    async def test_change_events_preserved_through_cache_cycle(
         self, temp_cache_dir, sample_roles, sample_operations, sample_change_events
     ):
         """Change events are preserved through save/load cycle."""
-        with patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_cache_dir):
-            # Build and save
-            cache_data = build_complete_cache(sample_roles, sample_operations, sample_change_events)
-            save_cache_to_disk(cache_data)
+        # Build and save
+        cache_data = build_complete_cache(sample_roles, sample_operations, sample_change_events)
+        await get_cache_backend().save(cache_data)
 
-            # Load
-            loaded = load_cache_from_disk()
+        # Load
+        loaded = await get_cache_backend().load()
 
-            assert len(loaded.all_change_events) == len(sample_change_events)
-            for i, event in enumerate(loaded.all_change_events):
-                assert event.role_id == sample_change_events[i].role_id
-                assert event.event_type == sample_change_events[i].event_type
+        assert len(loaded.all_change_events) == len(sample_change_events)
+        for i, event in enumerate(loaded.all_change_events):
+            assert event.role_id == sample_change_events[i].role_id
+            assert event.event_type == sample_change_events[i].event_type
 
-    def test_change_events_include_role_json(
+    async def test_change_events_include_role_json(
         self, temp_cache_dir, sample_roles, sample_operations, sample_change_events
     ):
         """Change events include role_json for created/updated events.
@@ -729,23 +701,22 @@ class TestDataConsistency:
         for 'created' events, especially important for deleted roles where
         the current role_json is NULL.
         """
-        with patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_cache_dir):
-            # Build and save
-            cache_data = build_complete_cache(sample_roles, sample_operations, sample_change_events)
-            save_cache_to_disk(cache_data)
+        # Build and save
+        cache_data = build_complete_cache(sample_roles, sample_operations, sample_change_events)
+        await get_cache_backend().save(cache_data)
 
-            # Load
-            loaded = load_cache_from_disk()
+        # Load
+        loaded = await get_cache_backend().load()
 
-            # Verify role_json is preserved
-            for i, event in enumerate(loaded.all_change_events):
-                original = sample_change_events[i]
-                assert (
-                    event.role_json is not None or original.role_json is None
-                ), f"Event {i} missing role_json"
-                if original.role_json:
-                    assert event.role_json == original.role_json
-                    assert event.role_json["properties"]["roleName"]
+        # Verify role_json is preserved
+        for i, event in enumerate(loaded.all_change_events):
+            original = sample_change_events[i]
+            assert (
+                event.role_json is not None or original.role_json is None
+            ), f"Event {i} missing role_json"
+            if original.role_json:
+                assert event.role_json == original.role_json
+                assert event.role_json["properties"]["roleName"]
 
 
 # =============================================================================
@@ -756,62 +727,60 @@ class TestDataConsistency:
 class TestInvalidationFlow:
     """Tests for cache invalidation scenarios."""
 
-    def test_delete_cache_file_removes_disk_file(
+    async def test_delete_cache_file_removes_disk_file(
         self, temp_cache_dir, sample_roles, sample_operations
     ):
-        """delete_cache_file removes the disk cache file."""
-        with (patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_cache_dir),):
-            # Save cache
-            cache_data = build_complete_cache(sample_roles, sample_operations)
-            save_cache_to_disk(cache_data)
+        """backend.delete() removes the disk cache file."""
+        # Save cache
+        cache_data = build_complete_cache(sample_roles, sample_operations)
+        await get_cache_backend().save(cache_data)
 
-            cache_file = temp_cache_dir / "app_cache.msgpack"
-            assert cache_file.exists()
+        cache_file = temp_cache_dir / "app_cache.msgpack"
+        assert cache_file.exists()
 
-            # Delete cache file
-            delete_cache_file()
-            assert not cache_file.exists()
+        # Delete cache file
+        await get_cache_backend().delete()
+        assert not cache_file.exists()
 
-    def test_invalidate_all_clears_everything(
+    async def test_invalidate_all_clears_everything(
         self, temp_cache_dir, sample_roles, sample_operations
     ):
         """invalidate_all clears all caches including memory and disk."""
-        with patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_cache_dir):
-            # Setup cache
-            cache_data = build_complete_cache(sample_roles, sample_operations)
-            app_cache.swap(cache_data)
-            app_cache._role_pages["page1"] = [{"test": True}]
-            app_cache._misc_cache["key1"] = "value1"
-            save_cache_to_disk(app_cache.cache)
+        # Setup cache
+        cache_data = build_complete_cache(sample_roles, sample_operations)
+        get_cache_container().swap(cache_data)
+        get_cache_container()._role_pages["page1"] = [{"test": True}]
+        get_cache_container()._misc_cache["key1"] = "value1"
+        await get_cache_backend().save(get_cache_container().cache)
 
-            # Verify everything exists
-            assert len(app_cache.cache.all_operations) > 0
-            assert len(app_cache._role_pages) > 0
-            assert len(app_cache._misc_cache) > 0
-            assert (temp_cache_dir / "app_cache.msgpack").exists()
+        # Verify everything exists
+        assert len(get_cache_container().cache.all_operations) > 0
+        assert len(get_cache_container()._role_pages) > 0
+        assert len(get_cache_container()._misc_cache) > 0
+        assert (temp_cache_dir / "app_cache.msgpack").exists()
 
-            # Invalidate all
-            app_cache.invalidate_all()
+        # Invalidate all
+        await invalidate_all()
 
-            # Everything should be cleared
-            assert len(app_cache.cache.all_operations) == 0
-            assert len(app_cache.cache.roles_by_id) == 0
-            assert len(app_cache._role_pages) == 0
-            assert len(app_cache._misc_cache) == 0
-            assert not (temp_cache_dir / "app_cache.msgpack").exists()
+        # Everything should be cleared
+        assert len(get_cache_container().cache.all_operations) == 0
+        assert len(get_cache_container().cache.roles_by_id) == 0
+        assert len(get_cache_container()._role_pages) == 0
+        assert len(get_cache_container()._misc_cache) == 0
+        assert not (temp_cache_dir / "app_cache.msgpack").exists()
 
     def test_swap_clears_misc_cache(self, sample_operations):
         """Atomic swap clears misc_cache (dynamic lookups like roles_allowing_op)."""
         # Populate misc cache
-        app_cache._misc_cache["roles_allowing_op:test"] = ["role1", "role2"]
-        assert app_cache.get("roles_allowing_op:test") is not None
+        get_cache_container()._misc_cache["roles_allowing_op:test"] = ["role1", "role2"]
+        assert get_cache_container().get("roles_allowing_op:test") is not None
 
         # Swap with new cache
         new_cache = CacheData(all_operations=sample_operations)
-        app_cache.swap(new_cache)
+        get_cache_container().swap(new_cache)
 
         # Misc cache should be cleared
-        assert app_cache.get("roles_allowing_op:test") is None
+        assert get_cache_container().get("roles_allowing_op:test") is None
 
 
 # =============================================================================
@@ -822,129 +791,130 @@ class TestInvalidationFlow:
 class TestFullLifecycleE2E:
     """End-to-end tests for complete cache lifecycle."""
 
-    def test_complete_lifecycle_startup_worker_reload_refresh(
+    async def test_complete_lifecycle_startup_worker_reload_refresh(
         self, temp_cache_dir, sample_roles, sample_operations, sample_change_events
     ):
         """Test complete lifecycle: startup -> worker update -> web reload -> periodic refresh."""
-        with patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_cache_dir):
-            # === PHASE 1: Cold Start ===
-            # No disk cache, web builds from DB
-            assert load_cache_from_disk() is None
+        # === PHASE 1: Cold Start ===
+        # No disk cache, web builds from DB
+        assert await get_cache_backend().load() is None
 
-            app_cache.build_from_operations(sample_operations)
-            roles_by_id = build_roles_by_id(sample_roles)
-            app_cache._cache = CacheData(
-                all_operations=sample_operations,
-                roles_by_id=roles_by_id,
-                all_change_events=sample_change_events,
-                ops_by_name_lower=app_cache.cache.ops_by_name_lower,
-                ops_by_prefix=app_cache.cache.ops_by_prefix,
-            )
+        populate_cache_with_operations(get_cache_container(), sample_operations)
+        roles_by_id = build_roles_by_id(sample_roles)
+        get_cache_container()._cache = CacheData(
+            all_operations=sample_operations,
+            roles_by_id=roles_by_id,
+            all_change_events=sample_change_events,
+            ops_by_name_lower=get_cache_container().cache.ops_by_name_lower,
+            ops_by_prefix=get_cache_container().cache.ops_by_prefix,
+        )
 
-            metadata = CacheMetadata(
-                roles_count=len(sample_roles),
-                operations_count=len(sample_operations),
-            )
-            precompute_all_caches(sample_roles, sample_operations, metadata=metadata)
-            save_cache_to_disk(app_cache.cache)
+        metadata = CacheMetadata(
+            roles_count=len(sample_roles),
+            operations_count=len(sample_operations),
+        )
+        swap_in_memory(precompute_all(sample_roles, sample_operations, metadata=metadata))
+        await get_cache_backend().save(get_cache_container().cache)
 
-            startup_coverage = app_cache.get_role_coverage("reader-role-id")
-            assert startup_coverage is not None
-            startup_ops = startup_coverage[0]
+        startup_coverage = get_cache_container().get_role_coverage("reader-role-id")
+        assert startup_coverage is not None
+        startup_ops = startup_coverage[0]
 
-            # === PHASE 2: Worker Adds New Operation ===
-            new_operations = [
-                *sample_operations,
-                OperationData(
-                    name="Microsoft.NewProvider/resources/read",
-                    display_name="Read New Resource",
-                    description="Reads new resource",
-                    provider_display_name="Microsoft NewProvider",
-                    resource_type_display_name="Resources",
-                    is_data_action=False,
-                ),
-            ]
+        # === PHASE 2: Worker Adds New Operation ===
+        new_operations = [
+            *sample_operations,
+            OperationData(
+                name="Microsoft.NewProvider/resources/read",
+                display_name="Read New Resource",
+                description="Reads new resource",
+                provider_display_name="Microsoft NewProvider",
+                resource_type_display_name="Resources",
+                is_data_action=False,
+            ),
+        ]
 
-            # Worker builds and saves complete cache
-            worker_cache = build_complete_cache(sample_roles, new_operations, sample_change_events)
-            save_cache_to_disk(worker_cache)
+        # Worker builds and saves complete cache
+        worker_cache = build_complete_cache(sample_roles, new_operations, sample_change_events)
+        await get_cache_backend().save(worker_cache)
 
-            # === PHASE 3: Web Reloads ===
-            app_cache._loaded_cache_mtime = 1000.0
-            app_cache._last_cache_check = 0
+        # === PHASE 3: Web Reloads ===
+        get_cache_container()._loaded_version = "1000.0"
 
-            with patch("azurerbac.cache.app_cache.get_cache_file_mtime", return_value=2000.0):
-                reloaded = app_cache.reload_from_disk_if_needed()
+        reloaded = await reload_if_needed()
 
-            assert reloaded is True
-            assert len(app_cache.cache.all_operations) == len(new_operations)
+        assert reloaded is True
+        assert len(get_cache_container().cache.all_operations) == len(new_operations)
 
-            # Reader should now cover the new read operation
-            reload_coverage = app_cache.get_role_coverage("reader-role-id")
-            reload_ops = reload_coverage[0]
-            assert len(reload_ops) > len(startup_ops)
-            assert any("newprovider" in op.lower() for op in reload_ops)
+        # Reader should now cover the new read operation
+        reload_coverage = get_cache_container().get_role_coverage("reader-role-id")
+        reload_ops = reload_coverage[0]
+        assert len(reload_ops) > len(startup_ops)
+        assert any("newprovider" in op.lower() for op in reload_ops)
 
-            # === PHASE 4: Periodic Refresh ===
-            role_definitions = app_cache.cache.get_role_definitions()
-            all_ops = app_cache.cache.all_operations
+        # === PHASE 4: Periodic Refresh ===
+        role_definitions = get_cache_container().cache.get_role_definitions()
+        all_ops = get_cache_container().cache.all_operations
 
-            precompute_all_caches(role_definitions, all_ops)
+        swap_in_memory(precompute_all(role_definitions, all_ops))
 
-            # Coverage should be unchanged
-            periodic_coverage = app_cache.get_role_coverage("reader-role-id")
-            assert periodic_coverage[0] == reload_ops
+        # Coverage should be unchanged
+        periodic_coverage = get_cache_container().get_role_coverage("reader-role-id")
+        assert periodic_coverage[0] == reload_ops
 
-    def test_multiple_workers_scenario(self, temp_cache_dir, sample_roles, sample_operations):
+    @pytest.mark.asyncio
+    async def test_multiple_workers_scenario(self, temp_cache_dir, sample_roles, sample_operations):
         """Multiple workers writing cache - last writer wins."""
-        with patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_cache_dir):
-            # Worker 1 writes
-            worker1_ops = sample_operations[:3]
-            cache1 = build_complete_cache(sample_roles, worker1_ops)
-            save_cache_to_disk(cache1)
+        # Worker 1 writes
+        worker1_ops = sample_operations[:3]
+        cache1 = build_complete_cache(sample_roles, worker1_ops)
+        await get_cache_backend().save(cache1)
 
-            # Worker 2 writes (overwrites)
-            cache2 = build_complete_cache(sample_roles, sample_operations)
-            save_cache_to_disk(cache2)
+        # Worker 2 writes (overwrites)
+        cache2 = build_complete_cache(sample_roles, sample_operations)
+        await get_cache_backend().save(cache2)
 
-            # Load should get worker 2's cache
-            loaded = load_cache_from_disk()
-            assert len(loaded.all_operations) == len(sample_operations)
+        # Load should get worker 2's cache
+        loaded = await get_cache_backend().load()
+        assert len(loaded.all_operations) == len(sample_operations)
 
-    def test_web_survives_corrupt_disk_cache(self, temp_cache_dir, sample_roles, sample_operations):
+    @pytest.mark.asyncio
+    async def test_web_survives_corrupt_disk_cache(
+        self, temp_cache_dir, sample_roles, sample_operations
+    ):
         """Web handles corrupt disk cache gracefully."""
-        with patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_cache_dir):
-            # Write corrupt data
-            cache_file = temp_cache_dir / "app_cache.msgpack"
-            cache_file.write_bytes(b"not a valid pickle")
+        # Write corrupt data
+        cache_file = temp_cache_dir / "app_cache.msgpack"
+        cache_file.write_bytes(b"not a valid pickle")
 
-            # Load should return None (not crash)
-            loaded = load_cache_from_disk()
-            assert loaded is None
+        # Load should return None (not crash)
+        loaded = await get_cache_backend().load()
+        assert loaded is None
 
-            # Web can still build from scratch
-            app_cache.build_from_operations(sample_operations)
-            assert len(app_cache.cache.all_operations) == len(sample_operations)
+        # Web can still build from scratch
+        populate_cache_with_operations(get_cache_container(), sample_operations)
+        assert len(get_cache_container().cache.all_operations) == len(sample_operations)
 
-    def test_cache_survives_app_restart(self, temp_cache_dir, sample_roles, sample_operations):
+    @pytest.mark.asyncio
+    async def test_cache_survives_app_restart(
+        self, temp_cache_dir, sample_roles, sample_operations
+    ):
         """Cache persists across app restarts."""
-        with patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_cache_dir):
-            # First run: build and save
-            cache1 = build_complete_cache(sample_roles, sample_operations)
-            save_cache_to_disk(cache1)
-            original_coverage = dict(cache1.role_coverage)
+        # First run: build and save
+        cache1 = build_complete_cache(sample_roles, sample_operations)
+        await get_cache_backend().save(cache1)
+        original_coverage = dict(cache1.role_coverage)
 
-            # Simulate restart: clear memory
-            app_cache._cache = CacheData()
-            clear_computed_caches()
+        # Simulate restart: clear memory
+        get_cache_container()._cache = CacheData()
+        clear_computed_caches()
 
-            # Load from disk
-            loaded = load_cache_from_disk()
-            assert loaded is not None
-            app_cache.swap(loaded)
+        # Load from disk
+        loaded = await get_cache_backend().load()
+        assert loaded is not None
+        get_cache_container().swap(loaded)
 
-            # Data should be identical
-            assert app_cache.cache.role_coverage == original_coverage
+        # Data should be identical
+        assert get_cache_container().cache.role_coverage == original_coverage
 
 
 # =============================================================================
@@ -956,25 +926,25 @@ class TestStartupCacheFlow:
     """Tests for cache initialization at startup."""
 
     def test_precompute_populates_all_computed_caches(self, sample_roles, sample_operations):
-        """Verify precompute_all_caches populates all computed data."""
+        """Verify precompute_all populates all computed data."""
         # Build source data into the singleton cache
-        app_cache.build_from_operations(sample_operations)
+        populate_cache_with_operations(get_cache_container(), sample_operations)
         roles_by_id = build_roles_by_id(sample_roles)
-        app_cache._cache = CacheData(
+        get_cache_container()._cache = CacheData(
             all_operations=sample_operations,
             roles_by_id=roles_by_id,
-            ops_by_name_lower=app_cache.cache.ops_by_name_lower,
-            ops_by_prefix=app_cache.cache.ops_by_prefix,
+            ops_by_name_lower=get_cache_container().cache.ops_by_name_lower,
+            ops_by_prefix=get_cache_container().cache.ops_by_prefix,
         )
 
         # Before precompute - no computed data
-        assert app_cache.get_role_coverage("reader-role-id") is None
+        assert get_cache_container().get_role_coverage("reader-role-id") is None
 
         # Run precompute (uses singleton by default)
-        precompute_all_caches(sample_roles, sample_operations)
+        swap_in_memory(precompute_all(sample_roles, sample_operations))
 
         # After precompute - computed data available
-        coverage = app_cache.get_role_coverage("reader-role-id")
+        coverage = get_cache_container().get_role_coverage("reader-role-id")
         assert coverage is not None
         control_ops, _data_ops = coverage
         # Reader has */read pattern - matches all control plane read operations
@@ -984,49 +954,48 @@ class TestStartupCacheFlow:
     def test_precompute_is_atomic(self, sample_roles, sample_operations):
         """Verify precompute uses atomic swap pattern."""
         # Set up initial data
-        app_cache.build_from_operations(sample_operations)
+        populate_cache_with_operations(get_cache_container(), sample_operations)
         roles_by_id = build_roles_by_id(sample_roles)
-        app_cache._cache = CacheData(
+        get_cache_container()._cache = CacheData(
             all_operations=sample_operations,
             roles_by_id=roles_by_id,
-            ops_by_name_lower=app_cache.cache.ops_by_name_lower,
-            ops_by_prefix=app_cache.cache.ops_by_prefix,
+            ops_by_name_lower=get_cache_container().cache.ops_by_name_lower,
+            ops_by_prefix=get_cache_container().cache.ops_by_prefix,
         )
 
         # Run precompute
-        precompute_all_caches(sample_roles, sample_operations)
+        swap_in_memory(precompute_all(sample_roles, sample_operations))
 
         # Computed fields should now be populated
-        assert len(app_cache.cache.role_coverage) > 0
-        assert len(app_cache.cache.role_net_permissions) > 0
+        assert len(get_cache_container().cache.role_coverage) > 0
+        assert len(get_cache_container().cache.role_net_permissions) > 0
 
-    def test_startup_builds_cache_from_scratch(
+    async def test_startup_builds_cache_from_scratch(
         self, temp_cache_dir, sample_roles, sample_operations
     ):
         """Simulate startup: no disk cache, build from database."""
-        with patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_cache_dir):
-            # No disk cache exists
-            loaded = load_cache_from_disk()
-            assert loaded is None
+        # No disk cache exists
+        loaded = await get_cache_backend().load()
+        assert loaded is None
 
-            # Simulate startup: build operations index
-            app_cache.build_from_operations(sample_operations)
+        # Simulate startup: build operations index
+        populate_cache_with_operations(get_cache_container(), sample_operations)
 
-            # Build roles index
-            roles_by_id = build_roles_by_id(sample_roles)
-            app_cache._cache = CacheData(
-                all_operations=sample_operations,
-                roles_by_id=roles_by_id,
-                ops_by_name_lower=app_cache.cache.ops_by_name_lower,
-                ops_by_prefix=app_cache.cache.ops_by_prefix,
-            )
+        # Build roles index
+        roles_by_id = build_roles_by_id(sample_roles)
+        get_cache_container()._cache = CacheData(
+            all_operations=sample_operations,
+            roles_by_id=roles_by_id,
+            ops_by_name_lower=get_cache_container().cache.ops_by_name_lower,
+            ops_by_prefix=get_cache_container().cache.ops_by_prefix,
+        )
 
-            # Precompute all caches
-            precompute_all_caches(sample_roles, sample_operations)
+        # Precompute all caches
+        swap_in_memory(precompute_all(sample_roles, sample_operations))
 
-            # Verify computed data is available
-            assert app_cache.get_role_coverage("reader-role-id") is not None
-            assert app_cache.get_role_net_permissions("reader-role-id") is not None
+        # Verify computed data is available
+        assert get_cache_container().get_role_coverage("reader-role-id") is not None
+        assert get_cache_container().get_role_net_permissions("reader-role-id") is not None
 
 
 # =============================================================================
@@ -1037,57 +1006,59 @@ class TestStartupCacheFlow:
 class TestWorkerUpdateFlow:
     """Tests for cache reload when worker updates disk cache."""
 
-    def test_worker_saves_cache_to_disk(self, temp_cache_dir, sample_roles, sample_operations):
+    @pytest.mark.asyncio
+    async def test_worker_saves_cache_to_disk(
+        self, temp_cache_dir, sample_roles, sample_operations
+    ):
         """Verify worker can save cache to disk."""
-        with patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_cache_dir):
-            # Worker builds and saves cache
-            roles_hash = compute_roles_hash(sample_roles)
-            ops_hash = compute_operations_hash(sample_operations)
+        # Worker builds and saves cache
+        roles_hash = compute_roles_hash(sample_roles)
+        ops_hash = compute_operations_hash(sample_operations)
 
-            roles_by_id = build_roles_by_id(sample_roles)
+        roles_by_id = build_roles_by_id(sample_roles)
 
-            data = CacheData(
-                metadata=CacheMetadata(
-                    roles_count=len(sample_roles),
-                    operations_count=len(sample_operations),
-                    roles_hash=roles_hash,
-                    operations_hash=ops_hash,
-                ),
-                roles_by_id=roles_by_id,
-                all_operations=sample_operations,
-            )
+        data = CacheData(
+            metadata=CacheMetadata(
+                roles_count=len(sample_roles),
+                operations_count=len(sample_operations),
+                roles_hash=roles_hash,
+                operations_hash=ops_hash,
+            ),
+            roles_by_id=roles_by_id,
+            all_operations=sample_operations,
+        )
 
-            result = save_cache_to_disk(data)
-            assert result is True
+        result = await get_cache_backend().save(data)
+        assert result is True
 
-            # Verify file exists
-            cache_file = temp_cache_dir / "app_cache.msgpack"
-            assert cache_file.exists()
+        # Verify file exists
+        cache_file = temp_cache_dir / "app_cache.msgpack"
+        assert cache_file.exists()
 
-    def test_web_process_detects_disk_update(self, temp_cache_dir, sample_roles, sample_operations):
+    @pytest.mark.asyncio
+    async def test_web_process_detects_disk_update(
+        self, temp_cache_dir, sample_roles, sample_operations
+    ):
         """Verify web process detects when worker updates disk cache."""
-        with patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_cache_dir):
-            app_cache._loaded_cache_mtime = 1000.0  # Old mtime
-            app_cache._last_cache_check = 0  # Force check
+        get_cache_container()._loaded_version = "1000.0"  # Old version
 
-            # Worker saves cache
-            roles_by_id = build_roles_by_id(sample_roles)
-            data = CacheData(
-                metadata=CacheMetadata(
-                    roles_count=len(sample_roles),
-                    operations_count=len(sample_operations),
-                ),
-                roles_by_id=roles_by_id,
-                all_operations=sample_operations,
-            )
-            save_cache_to_disk(data)
+        # Worker saves cache
+        roles_by_id = build_roles_by_id(sample_roles)
+        data = CacheData(
+            metadata=CacheMetadata(
+                roles_count=len(sample_roles),
+                operations_count=len(sample_operations),
+            ),
+            roles_by_id=roles_by_id,
+            all_operations=sample_operations,
+        )
+        await get_cache_backend().save(data)
 
-            # Web process checks if reload needed
-            with patch("azurerbac.cache.app_cache.get_cache_file_mtime", return_value=2000.0):
-                needs_reload = app_cache.needs_reload_from_disk()
-                assert needs_reload is True
+        # Web process checks if reload needed (version comparison)
+        result = needs_reload()
+        assert result is True
 
-    def test_reload_from_disk_loads_precomputed_data(
+    async def test_reload_from_disk_loads_precomputed_data(
         self, temp_cache_dir, sample_roles, sample_operations
     ):
         """Verify reload_from_disk_if_needed loads precomputed data directly.
@@ -1095,69 +1066,66 @@ class TestWorkerUpdateFlow:
         The disk file contains the complete CacheData including all computed fields.
         No recomputation is needed on reload - just load and swap.
         """
-        with patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_cache_dir):
-            app_cache._loaded_cache_mtime = 1000.0
-            app_cache._last_cache_check = 0
+        get_cache_container()._loaded_version = "1000.0"
 
-            # Save cache to disk with precomputed data
-            roles_by_id = build_roles_by_id(sample_roles)
-            precomputed_role_coverage = {"reader-role-id": ({"op1"}, {"op2"})}
-            data = CacheData(
-                metadata=CacheMetadata(
-                    roles_count=len(sample_roles),
-                    operations_count=len(sample_operations),
-                ),
-                roles_by_id=roles_by_id,
-                all_operations=sample_operations,
-                unique_providers=["Microsoft.Storage", "Microsoft.Compute"],
-                role_coverage=precomputed_role_coverage,
-            )
-            save_cache_to_disk(data)
+        # Save cache to disk with precomputed data
+        roles_by_id = build_roles_by_id(sample_roles)
+        precomputed_role_coverage = {"reader-role-id": ({"op1"}, {"op2"})}
+        data = CacheData(
+            metadata=CacheMetadata(
+                roles_count=len(sample_roles),
+                operations_count=len(sample_operations),
+            ),
+            roles_by_id=roles_by_id,
+            all_operations=sample_operations,
+            unique_providers=["Microsoft.Storage", "Microsoft.Compute"],
+            role_coverage=precomputed_role_coverage,
+        )
+        await get_cache_backend().save(data)
 
-            with patch("azurerbac.cache.app_cache.get_cache_file_mtime", return_value=2000.0):
-                result = app_cache.reload_from_disk_if_needed()
+        result = await reload_if_needed()
 
-            assert result is True
-            # Verify the precomputed data was loaded directly
-            assert app_cache.cache.role_coverage == precomputed_role_coverage
-            assert len(app_cache.cache.roles_by_id) == len(sample_roles)
-            assert len(app_cache.cache.all_operations) == len(sample_operations)
+        assert result is True
+        # Verify the precomputed data was loaded directly
+        assert get_cache_container().cache.role_coverage == precomputed_role_coverage
+        assert len(get_cache_container().cache.roles_by_id) == len(sample_roles)
+        assert len(get_cache_container().cache.all_operations) == len(sample_operations)
 
-    def test_reload_updates_cache_atomically(self, temp_cache_dir, sample_roles, sample_operations):
+    @pytest.mark.asyncio
+    async def test_reload_updates_cache_atomically(
+        self, temp_cache_dir, sample_roles, sample_operations
+    ):
         """Verify reload replaces cache atomically."""
-        with patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_cache_dir):
-            app_cache._loaded_cache_mtime = 1000.0
-            app_cache._last_cache_check = 0
+        get_cache_container()._loaded_version = "1000.0"
 
-            # Set initial data
-            app_cache._cache = CacheData(
-                all_operations=[OperationData(name="old-op", is_data_action=False)]
-            )
+        # Set initial data
+        get_cache_container()._cache = CacheData(
+            all_operations=[OperationData(name="old-op", is_data_action=False)]
+        )
 
-            # Save new cache to disk
-            roles_by_id = build_roles_by_id(sample_roles)
-            data = CacheData(
-                metadata=CacheMetadata(
-                    roles_count=len(sample_roles),
-                    operations_count=len(sample_operations),
-                ),
-                roles_by_id=roles_by_id,
-                all_operations=sample_operations,
-                unique_providers=[],
-            )
-            save_cache_to_disk(data)
+        # Save new cache to disk
+        roles_by_id = build_roles_by_id(sample_roles)
+        data = CacheData(
+            metadata=CacheMetadata(
+                roles_count=len(sample_roles),
+                operations_count=len(sample_operations),
+            ),
+            roles_by_id=roles_by_id,
+            all_operations=sample_operations,
+            unique_providers=[],
+        )
+        await get_cache_backend().save(data)
 
-            # Capture reference before reload
-            old_cache = app_cache.cache
-            assert len(old_cache.all_operations) == 1
+        # Capture reference before reload
+        old_cache = get_cache_container().cache
+        assert len(old_cache.all_operations) == 1
 
-            with patch("azurerbac.cache.app_cache.get_cache_file_mtime", return_value=2000.0):
-                app_cache.reload_from_disk_if_needed()
+        await reload_if_needed()
 
-            # Cache should be new object with new data
-            new_cache = app_cache.cache
-            assert len(new_cache.all_operations) == len(sample_operations)
-            assert len(new_cache.roles_by_id) == len(sample_roles)
+        # Cache should be new object with new data
+        new_cache = get_cache_container().cache
+        assert len(new_cache.all_operations) == len(sample_operations)
+        assert len(new_cache.roles_by_id) == len(sample_roles)
 
 
 # =============================================================================
@@ -1171,23 +1139,23 @@ class TestPeriodicRefreshFlow:
     def test_periodic_refresh_recomputes_caches(self, sample_roles, sample_operations):
         """Verify periodic refresh recomputes all caches."""
         # Initial setup
-        app_cache.build_from_operations(sample_operations)
+        populate_cache_with_operations(get_cache_container(), sample_operations)
         roles_by_id = build_roles_by_id(sample_roles)
-        app_cache._cache = CacheData(
+        get_cache_container()._cache = CacheData(
             all_operations=sample_operations,
             roles_by_id=roles_by_id,
-            ops_by_name_lower=app_cache.cache.ops_by_name_lower,
-            ops_by_prefix=app_cache.cache.ops_by_prefix,
+            ops_by_name_lower=get_cache_container().cache.ops_by_name_lower,
+            ops_by_prefix=get_cache_container().cache.ops_by_prefix,
         )
 
         # First precompute
-        precompute_all_caches(sample_roles, sample_operations)
-        first_coverage = app_cache.get_role_coverage("reader-role-id")
+        swap_in_memory(precompute_all(sample_roles, sample_operations))
+        first_coverage = get_cache_container().get_role_coverage("reader-role-id")
         assert first_coverage is not None
 
         # Simulate periodic refresh (recompute same data)
-        precompute_all_caches(sample_roles, sample_operations)
-        second_coverage = app_cache.get_role_coverage("reader-role-id")
+        swap_in_memory(precompute_all(sample_roles, sample_operations))
+        second_coverage = get_cache_container().get_role_coverage("reader-role-id")
 
         # Results should be identical
         assert second_coverage is not None
@@ -1197,27 +1165,27 @@ class TestPeriodicRefreshFlow:
     def test_periodic_refresh_uses_current_cache_data(self, sample_roles, sample_operations):
         """Verify periodic refresh uses data from current cache, not stale data."""
         # Setup with sample data
-        app_cache.build_from_operations(sample_operations)
+        populate_cache_with_operations(get_cache_container(), sample_operations)
         roles_by_id = build_roles_by_id(sample_roles)
-        app_cache._cache = CacheData(
+        get_cache_container()._cache = CacheData(
             all_operations=sample_operations,
             roles_by_id=roles_by_id,
-            ops_by_name_lower=app_cache.cache.ops_by_name_lower,
-            ops_by_prefix=app_cache.cache.ops_by_prefix,
+            ops_by_name_lower=get_cache_container().cache.ops_by_name_lower,
+            ops_by_prefix=get_cache_container().cache.ops_by_prefix,
         )
 
         # Get role JSONs from cache (simulates what periodic refresh does)
-        role_definitions = app_cache.cache.get_role_definitions()
-        all_ops = app_cache.cache.all_operations
+        role_definitions = get_cache_container().cache.get_role_definitions()
+        all_ops = get_cache_container().cache.all_operations
 
         assert len(role_definitions) == len(sample_roles)
         assert len(all_ops) == len(sample_operations)
 
         # Run precompute with cache data
-        precompute_all_caches(role_definitions, all_ops)
+        swap_in_memory(precompute_all(role_definitions, all_ops))
 
         # Verify computed data is correct
-        coverage = app_cache.get_role_coverage("reader-role-id")
+        coverage = get_cache_container().get_role_coverage("reader-role-id")
         assert coverage is not None
 
 
@@ -1232,75 +1200,68 @@ class TestInvalidationAfterDataChange:
     def test_clear_computed_caches_removes_computed_data(self, sample_roles, sample_operations):
         """Verify clear_computed_caches removes computed fields but preserves source data."""
         # Setup with source and computed data
-        app_cache.build_from_operations(sample_operations)
+        populate_cache_with_operations(get_cache_container(), sample_operations)
         roles_by_id = build_roles_by_id(sample_roles)
-        app_cache._cache = CacheData(
-            all_operations=sample_operations,
-            roles_by_id=roles_by_id,
-            ops_by_name_lower=app_cache.cache.ops_by_name_lower,
-            ops_by_prefix=app_cache.cache.ops_by_prefix,
-        )
-        precompute_all_caches(sample_roles, sample_operations)
+        swap_in_memory(precompute_all(sample_roles, sample_operations, roles_by_id=roles_by_id))
 
         # Verify computed data exists
-        assert app_cache.get_role_coverage("reader-role-id") is not None
+        assert get_cache_container().get_role_coverage("reader-role-id") is not None
 
         # Clear computed caches (uses singleton by default)
         clear_computed_caches()
 
         # Computed data should be gone
-        assert app_cache.get_role_coverage("reader-role-id") is None
+        assert get_cache_container().get_role_coverage("reader-role-id") is None
 
         # Source data should be preserved
-        assert len(app_cache.cache.all_operations) == len(sample_operations)
-        assert len(app_cache.cache.roles_by_id) == len(sample_roles)
+        assert len(get_cache_container().cache.all_operations) == len(sample_operations)
+        assert len(get_cache_container().cache.roles_by_id) == len(sample_roles)
 
-    def test_invalidate_all_clears_everything(
+    async def test_invalidate_all_clears_everything(
         self, temp_cache_dir, sample_roles, sample_operations
     ):
         """Verify invalidate_all clears all caches including disk."""
-        with patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_cache_dir):
-            # Save to disk
-            roles_by_id = build_roles_by_id(sample_roles)
-            data = CacheData(
-                metadata=CacheMetadata(
-                    roles_count=len(sample_roles),
-                    operations_count=len(sample_operations),
-                ),
-                roles_by_id=roles_by_id,
-                all_operations=sample_operations,
-            )
-            save_cache_to_disk(data)
+        # Save to disk
+        roles_by_id = build_roles_by_id(sample_roles)
+        data = CacheData(
+            metadata=CacheMetadata(
+                roles_count=len(sample_roles),
+                operations_count=len(sample_operations),
+            ),
+            roles_by_id=roles_by_id,
+            all_operations=sample_operations,
+        )
+        await get_cache_backend().save(data)
 
-            # Populate memory cache
-            app_cache.build_from_operations(sample_operations)
-            app_cache._role_pages["page1"] = [{"role_id": "test"}]
-            app_cache._misc_cache["key1"] = "value1"
+        # Populate memory cache
+        populate_cache_with_operations(get_cache_container(), sample_operations)
+        get_cache_container()._role_pages["page1"] = [{"role_id": "test"}]
+        get_cache_container()._misc_cache["key1"] = "value1"
 
-            # Invalidate all
-            app_cache.invalidate_all()
+        # Invalidate all
+        await invalidate_all()
 
-            # Memory cache cleared
-            assert len(app_cache.cache.all_operations) == 0
-            assert len(app_cache.cache.roles_by_id) == 0
-            assert len(app_cache._role_pages) == 0
-            assert len(app_cache._misc_cache) == 0
+        # Memory cache cleared
+        assert len(get_cache_container().cache.all_operations) == 0
+        assert len(get_cache_container().cache.roles_by_id) == 0
+        assert len(get_cache_container()._role_pages) == 0
+        assert len(get_cache_container()._misc_cache) == 0
 
-            # Disk cache deleted
-            assert not (temp_cache_dir / "app_cache.msgpack").exists()
+        # Disk cache deleted
+        assert not (temp_cache_dir / "app_cache.msgpack").exists()
 
     def test_swap_clears_misc_cache(self, sample_operations):
         """Verify atomic swap clears misc_cache (roles_allowing_op, etc.)."""
         # Populate misc cache
-        app_cache._misc_cache["roles_allowing_op:test"] = [{"role_id": "test"}]
-        assert app_cache.get("roles_allowing_op:test") is not None
+        get_cache_container()._misc_cache["roles_allowing_op:test"] = [{"role_id": "test"}]
+        assert get_cache_container().get("roles_allowing_op:test") is not None
 
         # Atomic swap with new data
         new_cache = CacheData(all_operations=sample_operations)
-        app_cache.swap(new_cache)
+        get_cache_container().swap(new_cache)
 
         # Misc cache should be cleared
-        assert app_cache.get("roles_allowing_op:test") is None
+        assert get_cache_container().get("roles_allowing_op:test") is None
 
 
 # =============================================================================
@@ -1311,98 +1272,94 @@ class TestInvalidationAfterDataChange:
 class TestCacheLifecycleE2E:
     """End-to-end tests for complete cache lifecycle."""
 
-    def test_full_lifecycle_startup_to_refresh(
+    async def test_full_lifecycle_startup_to_refresh(
         self, temp_cache_dir, sample_roles, sample_operations
     ):
         """Test complete lifecycle: startup -> worker update -> reload -> periodic refresh."""
-        with patch("azurerbac.cache.persistence.get_cache_dir", return_value=temp_cache_dir):
-            # === PHASE 1: Startup ===
-            # Build from "database"
-            app_cache.build_from_operations(sample_operations)
-            roles_by_id = build_roles_by_id(sample_roles)
-            app_cache._cache = CacheData(
-                all_operations=sample_operations,
-                roles_by_id=roles_by_id,
-                ops_by_name_lower=app_cache.cache.ops_by_name_lower,
-                ops_by_prefix=app_cache.cache.ops_by_prefix,
-            )
+        # === PHASE 1: Startup ===
+        # Build from "database"
+        populate_cache_with_operations(get_cache_container(), sample_operations)
+        roles_by_id = build_roles_by_id(sample_roles)
+        get_cache_container()._cache = CacheData(
+            all_operations=sample_operations,
+            roles_by_id=roles_by_id,
+            ops_by_name_lower=get_cache_container().cache.ops_by_name_lower,
+            ops_by_prefix=get_cache_container().cache.ops_by_prefix,
+        )
 
-            # Precompute all caches
-            precompute_all_caches(sample_roles, sample_operations)
+        # Precompute all caches
+        swap_in_memory(precompute_all(sample_roles, sample_operations))
 
-            # Verify startup state
-            coverage_after_startup = app_cache.get_role_coverage("reader-role-id")
-            assert coverage_after_startup is not None
-            startup_control_ops = coverage_after_startup[0]
+        # Verify startup state
+        coverage_after_startup = get_cache_container().get_role_coverage("reader-role-id")
+        assert coverage_after_startup is not None
+        startup_control_ops = coverage_after_startup[0]
 
-            # === PHASE 2: Worker Update ===
-            # Worker adds a new operation
-            updated_operations = [
-                *sample_operations,
-                OperationData(name="Microsoft.NewService/resources/read", is_data_action=False),
-            ]
+        # === PHASE 2: Worker Update ===
+        # Worker adds a new operation
+        updated_operations = [
+            *sample_operations,
+            OperationData(name="Microsoft.NewService/resources/read", is_data_action=False),
+        ]
 
-            # Worker precomputes and saves complete cache to disk
-            # (In real system, rebuild_cache does this)
-            roles_by_id_for_save = build_roles_by_id(sample_roles)
-            # Precompute using worker's data, but don't swap into our memory
-            worker_cache = precompute_all_caches(
-                sample_roles,
-                updated_operations,
-                roles_by_id=roles_by_id_for_save,
-                swap_in_memory=False,  # Worker saves to disk, doesn't swap
-            )
-            save_cache_to_disk(worker_cache)
+        # Worker precomputes and saves complete cache to disk
+        # (In real system, rebuild_cache_to_disk does this)
+        roles_by_id_for_save = build_roles_by_id(sample_roles)
+        # Precompute using worker's data, but don't swap into our memory
+        worker_cache = precompute_all(
+            sample_roles,
+            updated_operations,
+            roles_by_id=roles_by_id_for_save,
+        )
+        await get_cache_backend().save(worker_cache)
 
-            # === PHASE 3: Web Reload ===
-            app_cache._loaded_cache_mtime = 1000.0
-            app_cache._last_cache_check = 0
+        # === PHASE 3: Web Reload ===
+        get_cache_container()._loaded_version = "1000.0"
 
-            with patch("azurerbac.cache.app_cache.get_cache_file_mtime", return_value=2000.0):
-                reloaded = app_cache.reload_from_disk_if_needed()
+        reloaded = await reload_if_needed()
 
-            assert reloaded is True
+        assert reloaded is True
 
-            # Verify new operation is in cache
-            assert len(app_cache.cache.all_operations) == len(updated_operations)
+        # Verify new operation is in cache
+        assert len(get_cache_container().cache.all_operations) == len(updated_operations)
 
-            # Verify computed data is loaded from disk (no recomputation needed)
-            coverage_after_reload = app_cache.get_role_coverage("reader-role-id")
-            assert coverage_after_reload is not None
-            reload_control_ops = coverage_after_reload[0]
+        # Verify computed data is loaded from disk (no recomputation needed)
+        coverage_after_reload = get_cache_container().get_role_coverage("reader-role-id")
+        assert coverage_after_reload is not None
+        reload_control_ops = coverage_after_reload[0]
 
-            # Reader should cover new op (*/read matches NewService/resources/read)
-            assert len(reload_control_ops) > len(startup_control_ops)
+        # Reader should cover new op (*/read matches NewService/resources/read)
+        assert len(reload_control_ops) > len(startup_control_ops)
 
-            # === PHASE 4: Periodic Refresh ===
-            # Simulate 1 hour later, periodic refresh
-            role_definitions = app_cache.cache.get_role_definitions()
-            all_ops = app_cache.cache.all_operations
+        # === PHASE 4: Periodic Refresh ===
+        # Simulate 1 hour later, periodic refresh
+        role_definitions = get_cache_container().cache.get_role_definitions()
+        all_ops = get_cache_container().cache.all_operations
 
-            precompute_all_caches(role_definitions, all_ops)
+        swap_in_memory(precompute_all(role_definitions, all_ops))
 
-            # Coverage should be unchanged
-            coverage_after_periodic = app_cache.get_role_coverage("reader-role-id")
-            assert coverage_after_periodic is not None
-            assert coverage_after_periodic[0] == reload_control_ops
+        # Coverage should be unchanged
+        coverage_after_periodic = get_cache_container().get_role_coverage("reader-role-id")
+        assert coverage_after_periodic is not None
+        assert coverage_after_periodic[0] == reload_control_ops
 
     def test_data_consistency_across_refresh(self, sample_roles, sample_operations):
         """Verify data remains consistent across multiple refreshes."""
         # Initial setup
-        app_cache.build_from_operations(sample_operations)
+        populate_cache_with_operations(get_cache_container(), sample_operations)
         roles_by_id = build_roles_by_id(sample_roles)
-        app_cache._cache = CacheData(
+        get_cache_container()._cache = CacheData(
             all_operations=sample_operations,
             roles_by_id=roles_by_id,
-            ops_by_name_lower=app_cache.cache.ops_by_name_lower,
-            ops_by_prefix=app_cache.cache.ops_by_prefix,
+            ops_by_name_lower=get_cache_container().cache.ops_by_name_lower,
+            ops_by_prefix=get_cache_container().cache.ops_by_prefix,
         )
 
         # Multiple refresh cycles
         results = []
         for _ in range(5):
-            precompute_all_caches(sample_roles, sample_operations)
-            coverage = app_cache.get_role_coverage("reader-role-id")
+            swap_in_memory(precompute_all(sample_roles, sample_operations))
+            coverage = get_cache_container().get_role_coverage("reader-role-id")
             assert coverage is not None
             results.append((len(coverage[0]), len(coverage[1])))
 
@@ -1446,19 +1403,19 @@ class TestCacheLifecycleE2E:
         ]
         roles = [RoleDefinition.model_validate(r) for r in role_dicts]
 
-        app_cache.build_from_operations(sample_operations)
+        populate_cache_with_operations(get_cache_container(), sample_operations)
         roles_by_id = {r.role_id: {"role_id": r.role_id, "role_json": r.to_dict()} for r in roles}
-        app_cache._cache = CacheData(
+        get_cache_container()._cache = CacheData(
             all_operations=sample_operations,
             roles_by_id=roles_by_id,
-            ops_by_name_lower=app_cache.cache.ops_by_name_lower,
-            ops_by_prefix=app_cache.cache.ops_by_prefix,
+            ops_by_name_lower=get_cache_container().cache.ops_by_name_lower,
+            ops_by_prefix=get_cache_container().cache.ops_by_prefix,
         )
 
-        precompute_all_caches(roles, sample_operations)
+        swap_in_memory(precompute_all(roles, sample_operations))
 
-        reader_coverage = app_cache.get_role_coverage("reader-role-id")
-        writer_coverage = app_cache.get_role_coverage("writer-role")
+        reader_coverage = get_cache_container().get_role_coverage("reader-role-id")
+        writer_coverage = get_cache_container().get_role_coverage("writer-role")
 
         assert reader_coverage is not None
         assert writer_coverage is not None
@@ -1479,30 +1436,30 @@ class TestCacheLifecycleE2E:
     def test_worker_invalidate_and_rebuild_flow(self, sample_roles, sample_operations):
         """Test the worker flow: invalidate -> rebuild -> web reload."""
         # Setup initial state
-        app_cache.build_from_operations(sample_operations)
+        populate_cache_with_operations(get_cache_container(), sample_operations)
         roles_by_id = build_roles_by_id(sample_roles)
-        app_cache._cache = CacheData(
+        get_cache_container()._cache = CacheData(
             all_operations=sample_operations,
             roles_by_id=roles_by_id,
-            ops_by_name_lower=app_cache.cache.ops_by_name_lower,
-            ops_by_prefix=app_cache.cache.ops_by_prefix,
+            ops_by_name_lower=get_cache_container().cache.ops_by_name_lower,
+            ops_by_prefix=get_cache_container().cache.ops_by_prefix,
         )
-        precompute_all_caches(sample_roles, sample_operations)
+        swap_in_memory(precompute_all(sample_roles, sample_operations))
 
         # Verify initial state
-        assert app_cache.get_role_coverage("reader-role-id") is not None
+        assert get_cache_container().get_role_coverage("reader-role-id") is not None
 
         # Simulate worker calling clear_computed_caches (invalidation)
         clear_computed_caches()
 
         # Computed data should be cleared
-        assert app_cache.get_role_coverage("reader-role-id") is None
+        assert get_cache_container().get_role_coverage("reader-role-id") is None
 
         # Source data should still exist
-        assert len(app_cache.cache.all_operations) == len(sample_operations)
+        assert len(get_cache_container().cache.all_operations) == len(sample_operations)
 
         # Simulate worker rebuilding cache
-        precompute_all_caches(sample_roles, sample_operations)
+        swap_in_memory(precompute_all(sample_roles, sample_operations))
 
         # Computed data should be back
-        assert app_cache.get_role_coverage("reader-role-id") is not None
+        assert get_cache_container().get_role_coverage("reader-role-id") is not None

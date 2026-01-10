@@ -322,48 +322,6 @@ class TestGetRolesAllowingOperationServices:
         assert "roles_allowing_op:" in cache_key
 
 
-class TestGetUniqueProviders:
-    """Tests for get_unique_providers function."""
-
-    @pytest.mark.asyncio
-    async def test_returns_cached_providers(self):
-        """Test returning cached providers."""
-        from azurerbac.web.services.pages import get_unique_providers
-
-        app_cache = MagicMock()
-        app_cache.cache.unique_providers = ["Microsoft.Compute", "Microsoft.Storage"]
-
-        async def mock_get_all_operations():
-            return []
-
-        result = await get_unique_providers(app_cache, mock_get_all_operations)
-
-        assert result == ["Microsoft.Compute", "Microsoft.Storage"]
-
-    @pytest.mark.asyncio
-    async def test_computes_providers_when_not_cached(self):
-        """Test computing providers when not cached."""
-        from azurerbac.azure.models import OperationData
-        from azurerbac.web.services.pages import get_unique_providers
-
-        app_cache = MagicMock()
-        app_cache.cache.unique_providers = None
-
-        async def mock_get_all_operations():
-            return [
-                OperationData(name="op1", provider_display_name="Microsoft.Compute"),
-                OperationData(name="op2", provider_display_name="Microsoft.Storage"),
-                OperationData(name="op3", provider_display_name="Microsoft.Compute"),  # Duplicate
-            ]
-
-        result = await get_unique_providers(app_cache, mock_get_all_operations)
-
-        assert result == ["Microsoft.Compute", "Microsoft.Storage"]
-        app_cache.set_metadata.assert_called_once()
-        call_kwargs = app_cache.set_metadata.call_args[1]
-        assert "unique_providers" in call_kwargs
-
-
 class TestEnrichEventWithDiff:
     """Tests for enrich_event_with_diff function."""
 

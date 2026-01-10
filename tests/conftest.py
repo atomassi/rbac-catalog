@@ -13,6 +13,7 @@ import os
 import tempfile
 from collections.abc import AsyncGenerator, Generator
 from pathlib import Path
+from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, MagicMock
 
 # Clear Application Insights connection string to prevent OpenTelemetry
@@ -152,9 +153,28 @@ def mock_session_factory(mock_async_session: AsyncMock) -> MagicMock:
 
 @pytest.fixture
 def temp_cache_dir() -> Generator[Path, None, None]:
-    """Create a temporary directory for cache testing."""
+    """Create a temporary directory for cache testing.
+
+    Also configures the cache backend to use this directory.
+    """
+    from azurerbac.cache.backends import FileCacheBackend, get_cache_backend
+
+    backend = get_cache_backend()
+    old_cache_dir: Path | None = None
+
     with tempfile.TemporaryDirectory() as tmpdir:
-        yield Path(tmpdir)
+        temp_path = Path(tmpdir)
+
+        # Configure backend to use temp directory
+        if isinstance(backend, FileCacheBackend):
+            old_cache_dir = backend._cache_dir  # pyright: ignore[reportPrivateUsage]
+            backend.cache_dir = temp_path
+
+        yield temp_path
+
+        # Restore original cache dir
+        if isinstance(backend, FileCacheBackend):
+            backend._cache_dir = old_cache_dir  # pyright: ignore[reportPrivateUsage]
 
 
 # =============================================================================
@@ -792,3 +812,55 @@ def sample_roles_db_format() -> list[CachedRole]:
             last_seen_at=None,
         ),
     ]
+
+
+# =============================================================================
+# Cache Test Helpers
+# =============================================================================
+
+
+def populate_cache_with_operations(cache: CacheContainer, operations: list[OperationData]) -> None:
+    """Helper to populate cache with operations for testing.
+
+    Uses the proper swap() pattern with dataclass replace.
+    """
+    from dataclasses import replace
+
+    from azurerbac.cache.models import build_indexes
+
+    ops_by_name_lower, ops_by_prefix = build_indexes(operations)
+    cache.swap(
+        replace(
+            cache.cache,
+            all_operations=operations,
+            ops_by_name_lower=ops_by_name_lower,
+            ops_by_prefix=ops_by_prefix,
+        )
+    )
+
+
+def populate_cache_with_roles(cache: CacheContainer, roles: list[CachedRole]) -> None:
+    """Helper to populate cache with roles for testing.
+
+    Uses the proper swap() pattern with dataclass replace.
+    """
+    from dataclasses import replace
+
+    roles_by_id = {r.role_id: r for r in roles}
+    cache.swap(replace(cache.cache, roles_by_id=roles_by_id))
+
+
+def populate_cache_with_events(cache: CacheContainer, events: list[CachedChangeEvent]) -> None:
+    """Helper to populate cache with change events for testing.
+
+    Uses the proper swap() pattern with dataclass replace.
+    """
+    from dataclasses import replace
+
+    cache.swap(replace(cache.cache, all_change_events=events))
+
+
+# Type hint imports for helpers
+if TYPE_CHECKING:
+    from azurerbac.cache.container import CacheContainer
+    from azurerbac.cache.models import CachedChangeEvent

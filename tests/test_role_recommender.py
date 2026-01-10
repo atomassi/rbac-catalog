@@ -474,14 +474,14 @@ class TestRecommendationService:
 
     def test_check_cache_staleness_detects_changes(self, sample_operations):
         """check_cache_staleness should detect when operation counts change."""
-        from azurerbac.cache import app_cache
+        from azurerbac.cache import get_cache_container
         from azurerbac.matching.recommendation_service import RoleRecommendationService
 
         # First call with current operations
         svc = RoleRecommendationService(sample_operations)
 
         # Get the cache and set it to stale values
-        cache = app_cache.cache
+        cache = get_cache_container().cache
         old_counts = cache.cache_ops_count
         cache.cache_ops_count = (999, 999)  # Set to wrong values
 

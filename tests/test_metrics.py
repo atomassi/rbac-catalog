@@ -109,7 +109,7 @@ class TestTrackFunctions:
     """Test individual track functions accept correct parameters."""
 
     def test_track_cache_stats_extracts_correct_values(self, local_env, mock_app_cache):
-        """track_cache_stats should extract values from app_cache."""
+        """track_cache_stats should extract values from cache_container."""
         metrics_module = local_env
         # Should not raise (no-op when local)
         metrics_module.track_cache_stats(mock_app_cache)

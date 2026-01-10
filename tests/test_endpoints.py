@@ -47,9 +47,10 @@ def _make_test_snapshot(
 async def test_client(async_session_maker):
     """Create a test client with in-memory database."""
     # Lazy import to avoid loading .env during test collection
+    from azurerbac.cache import get_cache_container
     from azurerbac.web import app as app_module
     from azurerbac.web.dependencies import (
-        APIDeps,
+        BaseDeps,
         DashboardDeps,
         PagesDeps,
         get_api_deps,
@@ -58,6 +59,7 @@ async def test_client(async_session_maker):
     )
 
     test_session_maker = async_session_maker
+    cache = get_cache_container()
 
     # Store original session maker
     original_session = app_module.SessionLocal
@@ -67,28 +69,15 @@ async def test_client(async_session_maker):
     original_dashboard_deps = getattr(app_module.app.state, "dashboard_deps", None)
     original_pages_deps = getattr(app_module.app.state, "pages_deps", None)
 
-    # Wrap cache functions to use test session maker
-    async def test_get_all_operations():
-        return await app_module.get_all_operations(
-            cache=app_module.app_cache, session_factory=test_session_maker
-        )
-
-    async def test_get_all_roles():
-        return await app_module.get_all_roles(
-            cache=app_module.app_cache, session_factory=test_session_maker
-        )
-
-    # Create test APIDeps with test session
-    test_api_deps = APIDeps(
-        app_cache=app_module.app_cache,
+    # Create test BaseDeps with test session
+    test_api_deps = BaseDeps(
+        app_cache=cache,
         SessionLocal=test_session_maker,
-        get_all_operations=test_get_all_operations,
-        get_all_roles=test_get_all_roles,
     )
 
     # Create test DashboardDeps with test session
     test_dashboard_deps = DashboardDeps(
-        app_cache=app_module.app_cache,
+        app_cache=cache,
         SessionLocal=test_session_maker,
         Role=Role,
         RoleHistory=RoleHistory,
@@ -99,13 +88,12 @@ async def test_client(async_session_maker):
 
     # Create test PagesDeps with test session
     test_pages_deps = PagesDeps(
-        app_cache=app_module.app_cache,
+        app_cache=cache,
         SessionLocal=test_session_maker,
         Role=Role,
         RoleHistory=RoleHistory,
         Operation=Operation,
         templates=app_module.templates,
-        get_all_operations=test_get_all_operations,
     )
 
     # Update deps via app.state and dependency overrides

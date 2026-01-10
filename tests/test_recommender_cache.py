@@ -16,12 +16,13 @@ import pytest
 
 from azurerbac.azure.models import OperationData
 from azurerbac.cache import (
-    app_cache,
-    clear_computed_caches,
-    precompute_all_caches,
+    get_cache_container,
+    precompute_all,
+    swap_in_memory,
 )
 from azurerbac.matching import recommend_roles
 from tests.conftest import make_role_definition
+from tests.helpers import clear_computed_caches
 
 # =============================================================================
 # Tests for max_results Parameter
@@ -107,7 +108,7 @@ class TestCacheConsistency:
         """Test that */read produces same results with and without cache."""
         # Clear cache and run without cache
         clear_computed_caches()
-        assert len(app_cache.cache.role_coverage) == 0
+        assert len(get_cache_container().cache.role_coverage) == 0
 
         result_no_cache = recommend_roles(
             ["*/read"],
@@ -116,8 +117,8 @@ class TestCacheConsistency:
         )
 
         # Now populate cache and run again
-        precompute_all_caches(sample_roles, large_operations)
-        assert len(app_cache.cache.role_coverage) > 0
+        swap_in_memory(precompute_all(sample_roles, large_operations))
+        assert len(get_cache_container().cache.role_coverage) > 0
 
         result_with_cache = recommend_roles(
             ["*/read"],
@@ -131,24 +132,24 @@ class TestCacheConsistency:
         for r_no, r_with in zip(result_no_cache, result_with_cache, strict=True):
             assert r_no.role_id == r_with.role_id, "Role ID mismatch"
             assert r_no.role_name == r_with.role_name, "Role name mismatch"
-            assert r_no.matched_operations == r_with.matched_operations, (
-                f"Matched ops mismatch for {r_no.role_name}"
-            )
-            assert r_no.missing_operations == r_with.missing_operations, (
-                f"Missing ops mismatch for {r_no.role_name}"
-            )
-            assert r_no.matched_operations_count == r_with.matched_operations_count, (
-                f"Matched count mismatch for {r_no.role_name}"
-            )
-            assert r_no.missing_operations_count == r_with.missing_operations_count, (
-                f"Missing count mismatch for {r_no.role_name}"
-            )
-            assert abs(r_no.match_percentage - r_with.match_percentage) < 0.001, (
-                f"Match % mismatch for {r_no.role_name}"
-            )
-            assert r_no.is_full_match == r_with.is_full_match, (
-                f"Full match mismatch for {r_no.role_name}"
-            )
+            assert (
+                r_no.matched_operations == r_with.matched_operations
+            ), f"Matched ops mismatch for {r_no.role_name}"
+            assert (
+                r_no.missing_operations == r_with.missing_operations
+            ), f"Missing ops mismatch for {r_no.role_name}"
+            assert (
+                r_no.matched_operations_count == r_with.matched_operations_count
+            ), f"Matched count mismatch for {r_no.role_name}"
+            assert (
+                r_no.missing_operations_count == r_with.missing_operations_count
+            ), f"Missing count mismatch for {r_no.role_name}"
+            assert (
+                abs(r_no.match_percentage - r_with.match_percentage) < 0.001
+            ), f"Match % mismatch for {r_no.role_name}"
+            assert (
+                r_no.is_full_match == r_with.is_full_match
+            ), f"Full match mismatch for {r_no.role_name}"
 
     def test_data_plane_wildcard_consistency(self, large_operations, sample_roles):
         """Test data plane wildcards produce same results with and without cache."""
@@ -161,7 +162,7 @@ class TestCacheConsistency:
             requested_ops_data_flags={"*/read": True},  # Data plane only
         )
 
-        precompute_all_caches(sample_roles, large_operations)
+        swap_in_memory(precompute_all(sample_roles, large_operations))
 
         result_with_cache = recommend_roles(
             ["*/read"],
@@ -189,7 +190,7 @@ class TestCacheConsistency:
             large_operations,
         )
 
-        precompute_all_caches(sample_roles, large_operations)
+        swap_in_memory(precompute_all(sample_roles, large_operations))
 
         result_with_cache = recommend_roles(
             ["*/read"],
@@ -222,7 +223,7 @@ class TestCacheConsistency:
 
         result_no_cache = recommend_roles(explicit_ops, sample_roles, large_operations)
 
-        precompute_all_caches(sample_roles, large_operations)
+        swap_in_memory(precompute_all(sample_roles, large_operations))
 
         result_with_cache = recommend_roles(explicit_ops, sample_roles, large_operations)
 
@@ -244,7 +245,7 @@ class TestCacheConsistency:
 
         result_no_cache = recommend_roles(mixed_ops, sample_roles, large_operations)
 
-        precompute_all_caches(sample_roles, large_operations)
+        swap_in_memory(precompute_all(sample_roles, large_operations))
 
         result_with_cache = recommend_roles(mixed_ops, sample_roles, large_operations)
 
@@ -284,9 +285,9 @@ class TestMissingOperationsExpanded:
         # Reader should have missing data plane operations
         # missing_operations_expanded should contain actual operation names
         if reader.missing_operations_count > 0:
-            assert len(reader.missing_operations_expanded) > 0, (
-                "missing_operations_expanded should have samples when missing_operations_count > 0"
-            )
+            assert (
+                len(reader.missing_operations_expanded) > 0
+            ), "missing_operations_expanded should have samples when missing_operations_count > 0"
             # Check that expanded ops are real operation names, not wildcards
             for op in reader.missing_operations_expanded:
                 assert "*" not in op, f"Expanded op should not be a wildcard: {op}"
@@ -308,7 +309,7 @@ class TestMissingOperationsExpanded:
             large_operations,
         )
 
-        precompute_all_caches([reader_role], large_operations)
+        swap_in_memory(precompute_all([reader_role], large_operations))
 
         result_with_cache = recommend_roles(
             ["*/read"],
@@ -370,7 +371,7 @@ class TestPartialWildcardCoverage:
             large_operations,
         )
 
-        precompute_all_caches([partial_role], large_operations)
+        swap_in_memory(precompute_all([partial_role], large_operations))
 
         result_with_cache = recommend_roles(
             ["*/read"],
@@ -384,12 +385,12 @@ class TestPartialWildcardCoverage:
         r_no = result_no_cache[0]
         r_with = result_with_cache[0]
 
-        assert r_no.matched_operations_count == r_with.matched_operations_count, (
-            f"Matched count: {r_no.matched_operations_count} vs {r_with.matched_operations_count}"
-        )
-        assert r_no.missing_operations_count == r_with.missing_operations_count, (
-            f"Missing count: {r_no.missing_operations_count} vs {r_with.missing_operations_count}"
-        )
+        assert (
+            r_no.matched_operations_count == r_with.matched_operations_count
+        ), f"Matched count: {r_no.matched_operations_count} vs {r_with.matched_operations_count}"
+        assert (
+            r_no.missing_operations_count == r_with.missing_operations_count
+        ), f"Missing count: {r_no.missing_operations_count} vs {r_with.missing_operations_count}"
         assert r_no.has_partial_wildcard_match == r_with.has_partial_wildcard_match
 
 
@@ -415,7 +416,7 @@ class TestNotActionsExclusions:
             large_operations,
         )
 
-        precompute_all_caches([contributor_role], large_operations)
+        swap_in_memory(precompute_all([contributor_role], large_operations))
 
         result_with_cache = recommend_roles(
             ["*/delete"],
@@ -452,7 +453,7 @@ class TestNotActionsExclusions:
             large_operations,
         )
 
-        precompute_all_caches([role_with_exclusions], large_operations)
+        swap_in_memory(precompute_all([role_with_exclusions], large_operations))
 
         result_with_cache = recommend_roles(
             ["Microsoft.Storage/accounts/read"],
@@ -484,7 +485,7 @@ class TestEdgeCases:
         clear_computed_caches()
         result_no_cache = recommend_roles([], sample_roles, [])
 
-        precompute_all_caches(sample_roles, [])
+        swap_in_memory(precompute_all(sample_roles, []))
         result_with_cache = recommend_roles([], sample_roles, [])
 
         assert result_no_cache == []
@@ -500,7 +501,7 @@ class TestEdgeCases:
             large_operations,
         )
 
-        precompute_all_caches(sample_roles, large_operations)
+        swap_in_memory(precompute_all(sample_roles, large_operations))
 
         result_with_cache = recommend_roles(
             ["Microsoft.Storage/accounts/read"],
@@ -530,7 +531,7 @@ class TestEdgeCases:
             large_operations,
         )
 
-        precompute_all_caches(sample_roles, large_operations)
+        swap_in_memory(precompute_all(sample_roles, large_operations))
 
         result_with_cache = recommend_roles(
             ["Microsoft.Nonexistent/resource/read"],
@@ -555,7 +556,7 @@ class TestEdgeCases:
             large_operations,
         )
 
-        precompute_all_caches(sample_roles, large_operations)
+        swap_in_memory(precompute_all(sample_roles, large_operations))
 
         result_with_cache = recommend_roles(
             ["*"],
@@ -573,29 +574,29 @@ class TestCachePopulation:
     """Tests for cache population and retrieval."""
 
     def test_cache_is_populated_by_precompute(self, large_operations, sample_roles):
-        """Test that precompute_all_caches populates the cache."""
+        """Test that precompute_all populates the cache."""
         clear_computed_caches()
-        assert len(app_cache.cache.role_coverage) == 0
-        assert len(app_cache.cache.role_net_permissions) == 0
+        assert len(get_cache_container().cache.role_coverage) == 0
+        assert len(get_cache_container().cache.role_net_permissions) == 0
 
-        precompute_all_caches(sample_roles, large_operations)
+        swap_in_memory(precompute_all(sample_roles, large_operations))
 
-        assert len(app_cache.cache.role_coverage) > 0
-        assert len(app_cache.cache.role_net_permissions) > 0
+        assert len(get_cache_container().cache.role_coverage) > 0
+        assert len(get_cache_container().cache.role_net_permissions) > 0
 
         # Check all roles are cached
         for role in sample_roles:
             role_id = role.role_id
-            assert role_id in app_cache.cache.role_coverage
-            assert role_id in app_cache.cache.role_net_permissions
+            assert role_id in get_cache_container().cache.role_coverage
+            assert role_id in get_cache_container().cache.role_net_permissions
 
     def test_get_role_coverage_returns_correct_data(self, large_operations, sample_roles):
-        """Test app_cache.get_role_coverage returns correct tuple of sets."""
+        """Test get_cache_container().get_role_coverage returns correct tuple of sets."""
         clear_computed_caches()
-        precompute_all_caches(sample_roles, large_operations)
+        swap_in_memory(precompute_all(sample_roles, large_operations))
 
         # Get coverage for Owner (should have everything)
-        owner_coverage = app_cache.get_role_coverage("owner-role-id")
+        owner_coverage = get_cache_container().get_role_coverage("owner-role-id")
         assert owner_coverage is not None
         control_ops, data_ops = owner_coverage
         assert isinstance(control_ops, set)
@@ -604,24 +605,24 @@ class TestCachePopulation:
         assert len(data_ops) > 0
 
         # Get coverage for Reader (should have only control plane reads)
-        reader_coverage = app_cache.get_role_coverage("reader-role-id")
+        reader_coverage = get_cache_container().get_role_coverage("reader-role-id")
         assert reader_coverage is not None
         control_ops, data_ops = reader_coverage
         assert len(control_ops) > 0  # Has control plane reads
         assert len(data_ops) == 0  # No data plane actions
 
     def test_get_role_net_permissions_returns_counts(self, large_operations, sample_roles):
-        """Test app_cache.get_role_net_permissions returns correct counts."""
+        """Test get_cache_container().get_role_net_permissions returns correct counts."""
         clear_computed_caches()
-        precompute_all_caches(sample_roles, large_operations)
+        swap_in_memory(precompute_all(sample_roles, large_operations))
 
-        owner_perms = app_cache.get_role_net_permissions("owner-role-id")
+        owner_perms = get_cache_container().get_role_net_permissions("owner-role-id")
         assert owner_perms is not None
         control_count, data_count = owner_perms
         assert control_count > 0
         assert data_count > 0
 
-        reader_perms = app_cache.get_role_net_permissions("reader-role-id")
+        reader_perms = get_cache_container().get_role_net_permissions("reader-role-id")
         assert reader_perms is not None
         control_count, data_count = reader_perms
         assert control_count > 0
@@ -629,13 +630,13 @@ class TestCachePopulation:
 
     def test_cache_is_cleared(self, large_operations, sample_roles):
         """Test that clear_computed_caches actually clears everything."""
-        precompute_all_caches(sample_roles, large_operations)
-        assert len(app_cache.cache.role_coverage) > 0
+        swap_in_memory(precompute_all(sample_roles, large_operations))
+        assert len(get_cache_container().cache.role_coverage) > 0
 
         clear_computed_caches()
 
-        assert len(app_cache.cache.role_coverage) == 0
-        assert len(app_cache.cache.role_net_permissions) == 0
+        assert len(get_cache_container().cache.role_coverage) == 0
+        assert len(get_cache_container().cache.role_net_permissions) == 0
 
 
 class TestMultipleWildcardPatterns:
@@ -651,7 +652,7 @@ class TestMultipleWildcardPatterns:
             large_operations,
         )
 
-        precompute_all_caches(sample_roles, large_operations)
+        swap_in_memory(precompute_all(sample_roles, large_operations))
 
         result_with_cache = recommend_roles(
             ["*/read", "*/write", "*/delete"],
@@ -676,7 +677,7 @@ class TestMultipleWildcardPatterns:
             large_operations,
         )
 
-        precompute_all_caches(sample_roles, large_operations)
+        swap_in_memory(precompute_all(sample_roles, large_operations))
 
         result_with_cache = recommend_roles(
             ["Microsoft.Storage/*/read", "Microsoft.Compute/*/read"],
@@ -701,7 +702,7 @@ class TestDataPlaneFlags:
             requested_ops_data_flags={"*/read": False},
         )
 
-        precompute_all_caches(sample_roles, large_operations)
+        swap_in_memory(precompute_all(sample_roles, large_operations))
 
         result_with_cache = recommend_roles(
             ["*/read"],
@@ -727,7 +728,7 @@ class TestDataPlaneFlags:
             requested_ops_data_flags={"*/read": True},
         )
 
-        precompute_all_caches(sample_roles, large_operations)
+        swap_in_memory(precompute_all(sample_roles, large_operations))
 
         result_with_cache = recommend_roles(
             ["*/read"],
@@ -835,7 +836,7 @@ class TestReaderRoleSpecificCases:
                 requested_ops_data_flags=flags,
             )
 
-            precompute_all_caches([reader], reader_test_ops)
+            precompute_all([reader], reader_test_ops)
             result_with_cache = recommend_roles(
                 ["*/read"],
                 [reader],
@@ -843,9 +844,9 @@ class TestReaderRoleSpecificCases:
                 requested_ops_data_flags=flags,
             )
 
-            assert len(result_no_cache) == len(result_with_cache), (
-                f"Length mismatch for {flags_desc}"
-            )
+            assert len(result_no_cache) == len(
+                result_with_cache
+            ), f"Length mismatch for {flags_desc}"
 
             if result_no_cache:
                 assert (
@@ -871,7 +872,7 @@ class TestSortingConsistency:
             large_operations,
         )
 
-        precompute_all_caches(sample_roles, large_operations)
+        swap_in_memory(precompute_all(sample_roles, large_operations))
 
         result_with_cache = recommend_roles(
             ["Microsoft.Storage/accounts/read"],
@@ -883,9 +884,9 @@ class TestSortingConsistency:
         no_cache_order = [r.role_id for r in result_no_cache]
         with_cache_order = [r.role_id for r in result_with_cache]
 
-        assert no_cache_order == with_cache_order, (
-            f"Sort order mismatch:\n  No cache: {no_cache_order}\n  With cache: {with_cache_order}"
-        )
+        assert (
+            no_cache_order == with_cache_order
+        ), f"Sort order mismatch:\n  No cache: {no_cache_order}\n  With cache: {with_cache_order}"
 
     def test_high_privilege_roles_sorted_last(self, large_operations, sample_roles):
         """High privilege roles should be sorted to end consistently."""
@@ -897,7 +898,7 @@ class TestSortingConsistency:
             large_operations,
         )
 
-        precompute_all_caches(sample_roles, large_operations)
+        swap_in_memory(precompute_all(sample_roles, large_operations))
 
         result_with_cache = recommend_roles(
             ["Microsoft.Storage/accounts/read"],
@@ -915,9 +916,9 @@ class TestSortingConsistency:
             ]
 
             if high_priv_indices and non_high_priv_indices:
-                assert max(non_high_priv_indices) < min(high_priv_indices), (
-                    f"{desc}: High privilege roles should be after non-high privilege"
-                )
+                assert max(non_high_priv_indices) < min(
+                    high_priv_indices
+                ), f"{desc}: High privilege roles should be after non-high privilege"
 
         check_high_privilege_last(result_no_cache, "No cache")
         check_high_privilege_last(result_with_cache, "With cache")
@@ -936,14 +937,14 @@ class TestCacheStalenessDetection:
         clear_computed_caches()
 
         # Build cache with current operations (roles first, then operations)
-        precompute_all_caches(sample_roles, large_operations)
-        initial_cache_size = len(app_cache.cache.role_coverage)
+        swap_in_memory(precompute_all(sample_roles, large_operations))
+        initial_cache_size = len(get_cache_container().cache.role_coverage)
 
         # Cache should be populated
         assert initial_cache_size > 0
 
         # Store initial cache counts
-        initial_counts = app_cache.cache.cache_ops_count
+        initial_counts = get_cache_container().cache.cache_ops_count
         assert initial_counts[0] > 0, f"Expected control ops > 0, got {initial_counts}"
 
         # Add new operations
@@ -974,9 +975,9 @@ class TestCacheStalenessDetection:
         clear_computed_caches()
 
         # Build cache (roles first, then operations)
-        precompute_all_caches(sample_roles, large_operations)
-        initial_cache_size = len(app_cache.cache.role_coverage)
-        initial_counts = app_cache.cache.cache_ops_count
+        swap_in_memory(precompute_all(sample_roles, large_operations))
+        initial_cache_size = len(get_cache_container().cache.role_coverage)
+        initial_counts = get_cache_container().cache.cache_ops_count
 
         # Make a recommendation with same operations
         result = recommend_roles(
@@ -986,8 +987,8 @@ class TestCacheStalenessDetection:
         )
 
         # Cache should still be populated (not cleared)
-        assert len(app_cache.cache.role_coverage) == initial_cache_size
-        assert app_cache.cache.cache_ops_count == initial_counts
+        assert len(get_cache_container().cache.role_coverage) == initial_cache_size
+        assert get_cache_container().cache.cache_ops_count == initial_counts
 
         # Results should be correct
         assert len(result) > 0
@@ -1014,11 +1015,11 @@ class TestCacheStalenessDetection:
         clear_computed_caches()
 
         # Step 2: Build cache with initial operations
-        precompute_all_caches(sample_roles, initial_operations)
+        swap_in_memory(precompute_all(sample_roles, initial_operations))
 
         # Verify cache was built correctly
-        assert len(app_cache.cache.role_coverage) > 0
-        initial_cache_count = app_cache.cache.cache_ops_count[0]
+        assert len(get_cache_container().cache.role_coverage) > 0
+        initial_cache_count = get_cache_container().cache.cache_ops_count[0]
         assert initial_cache_count == 100
 
         # Step 3: Simulate new operations being added (DB updated)
@@ -1052,17 +1053,17 @@ class TestCacheStalenessDetection:
 
         # Verify the counts are correct
         # Reader should match ALL 107 read operations (100 initial + 7 new)
-        assert reader.matched_operations_count == 107, (
-            f"Reader should match all 107 read operations, got {reader.matched_operations_count}"
-        )
-        assert reader.missing_operations_count == 0, (
-            f"Reader should have 0 missing operations, got {reader.missing_operations_count}"
-        )
+        assert (
+            reader.matched_operations_count == 107
+        ), f"Reader should match all 107 read operations, got {reader.matched_operations_count}"
+        assert (
+            reader.missing_operations_count == 0
+        ), f"Reader should have 0 missing operations, got {reader.missing_operations_count}"
 
         # Verify no partial wildcard match flag
-        assert not reader.has_partial_wildcard_match, (
-            "Reader should not have partial wildcard match for */read"
-        )
+        assert (
+            not reader.has_partial_wildcard_match
+        ), "Reader should not have partial wildcard match for */read"
 
     def test_cache_rebuilt_correctly_after_invalidation(self, sample_roles):
         """
@@ -1079,7 +1080,7 @@ class TestCacheStalenessDetection:
         ]
 
         clear_computed_caches()
-        precompute_all_caches(sample_roles, ops_v1)
+        swap_in_memory(precompute_all(sample_roles, ops_v1))
 
         # First query with v1 ops
         result_v1 = recommend_roles(
@@ -1109,8 +1110,11 @@ class TestCacheStalenessDetection:
         assert reader_v2.match_percentage == 100.0
 
         # Now rebuild cache with v2 and verify it's correct
-        precompute_all_caches(sample_roles, ops_v2)
-        assert app_cache.cache.cache_ops_count == [5, 0]  # 5 control ops total, 0 data ops
+        swap_in_memory(precompute_all(sample_roles, ops_v2))
+        assert get_cache_container().cache.cache_ops_count == [
+            5,
+            0,
+        ]  # 5 control ops total, 0 data ops
 
         # Query again - should use fresh cache
         result_v2_cached = recommend_roles(
@@ -1128,8 +1132,8 @@ class TestCacheStalenessDetection:
         ]
 
         clear_computed_caches()
-        precompute_all_caches(sample_roles, ops_v1)
-        assert app_cache.cache.cache_ops_count == [1, 0]
+        swap_in_memory(precompute_all(sample_roles, ops_v1))
+        assert get_cache_container().cache.cache_ops_count == [1, 0]
 
         # Add data plane operations
         ops_v2 = [
@@ -1153,25 +1157,25 @@ class TestCacheStalenessDetection:
         # The key point is that the cache was invalidated properly
 
         # Verify cache was rebuilt correctly
-        precompute_all_caches(sample_roles, ops_v2)
-        assert app_cache.cache.cache_ops_count == [1, 1]  # 1 control, 1 data
+        swap_in_memory(precompute_all(sample_roles, ops_v2))
+        assert get_cache_container().cache.cache_ops_count == [1, 1]  # 1 control, 1 data
 
 
 class TestAtomicSwap:
     """Tests for atomic cache swap behavior during refresh."""
 
     def test_atomic_swap_replaces_cache_instance(self, large_operations, sample_roles):
-        """Test that precompute_all_caches atomically swaps the cache instance."""
+        """Test that precompute_all atomically swaps the cache instance."""
         # Clear and capture initial cache reference
         clear_computed_caches()
-        initial_cache = app_cache.cache
+        initial_cache = get_cache_container().cache
         assert len(initial_cache.role_coverage) == 0
 
         # Precompute creates a new cache and swaps
-        precompute_all_caches(sample_roles, large_operations)
+        swap_in_memory(precompute_all(sample_roles, large_operations))
 
         # The new cache should have data
-        new_cache = app_cache.cache
+        new_cache = get_cache_container().cache
         assert len(new_cache.role_coverage) > 0
 
         # It should be a different instance (atomic swap)
@@ -1184,10 +1188,10 @@ class TestAtomicSwap:
         """Test that readers capture a consistent snapshot before swap."""
         # Build initial cache
         clear_computed_caches()
-        precompute_all_caches(sample_roles, large_operations)
+        swap_in_memory(precompute_all(sample_roles, large_operations))
 
         # Capture cache reference before any changes
-        cached_before = app_cache.cache
+        cached_before = get_cache_container().cache
         initial_role_count = len(cached_before.role_coverage)
         assert initial_role_count > 0
 
@@ -1197,10 +1201,10 @@ class TestAtomicSwap:
         # Now rebuild with different data (simulating refresh)
         # Use a subset of roles to get different cache contents
         subset_roles = sample_roles[:2]  # Only first 2 roles
-        precompute_all_caches(subset_roles, large_operations)
+        swap_in_memory(precompute_all(subset_roles, large_operations))
 
         # New readers see the new cache
-        cached_after = app_cache.cache
+        cached_after = get_cache_container().cache
 
         # Old reference still has original data
         assert len(old_cache_ref.role_coverage) == initial_role_count
@@ -1208,8 +1212,8 @@ class TestAtomicSwap:
         # New reference may have different count (depends on roles)
         assert cached_after is not old_cache_ref
 
-    def test_app_cache_swap_method_works(self):
-        """Test that app_cache.swap() works correctly."""
+    def test_cache_container_swap_method_works(self):
+        """Test that get_cache_container().swap() works correctly."""
         from azurerbac.cache import CacheData
 
         # Create a new cache with specific data
@@ -1217,11 +1221,11 @@ class TestAtomicSwap:
         new_cache.role_coverage["test-role"] = ({"op1", "op2"}, {"op3"})
 
         # Swap it in
-        app_cache.swap(new_cache)
+        get_cache_container().swap(new_cache)
 
         # Verify it's now the active cache
-        assert app_cache.cache is new_cache
-        assert "test-role" in app_cache.cache.role_coverage
+        assert get_cache_container().cache is new_cache
+        assert "test-role" in get_cache_container().cache.role_coverage
 
         # Clean up
         clear_computed_caches()
@@ -1230,7 +1234,7 @@ class TestAtomicSwap:
         """Test that clear() swaps to a fresh instance (atomic swap pattern)."""
 
         # Get initial instance
-        initial_instance = app_cache.cache
+        initial_instance = get_cache_container().cache
 
         # Add some data manually
         initial_instance.role_coverage["test"] = (set(), set())
@@ -1240,7 +1244,7 @@ class TestAtomicSwap:
         clear_computed_caches()
 
         # Should be a NEW instance that is empty
-        new_instance = app_cache.cache
+        new_instance = get_cache_container().cache
         assert new_instance is not initial_instance
         assert len(new_instance.role_coverage) == 0
         # Old instance still has the data (no in-place mutation for thread safety)

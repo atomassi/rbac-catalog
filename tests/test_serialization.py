@@ -2,6 +2,7 @@
 
 from datetime import UTC, datetime
 
+import msgpack
 import pytest
 
 from azurerbac.cache.serialization import (
@@ -11,10 +12,10 @@ from azurerbac.cache.serialization import (
     TAG_TUPLE_KEY_DICT,
     TUPLE_KEY_FIELDS,
     decode_ext,
+    deserialize_from_bytes,
     encode_ext,
-    packb,
     prepare_for_msgpack,
-    unpackb,
+    serialize_to_bytes,
 )
 
 
@@ -84,7 +85,6 @@ class TestDecodeExt:
     )
     def test_decode_set(self, original, expected_type):
         """TAG_SET is decoded back to a set."""
-        import msgpack
 
         packed = msgpack.packb(list(original))
         result = decode_ext(TAG_SET, packed)
@@ -93,7 +93,6 @@ class TestDecodeExt:
 
     def test_decode_tuple(self):
         """TAG_TUPLE is decoded back to a tuple."""
-        import msgpack
 
         original = (1, 2, 3)
         packed = msgpack.packb(list(original))
@@ -111,7 +110,6 @@ class TestDecodeExt:
 
     def test_decode_tuple_key_dict(self):
         """TAG_TUPLE_KEY_DICT is decoded back to a dict with tuple keys."""
-        import msgpack
 
         pairs = [[["a", 1], "value1"], [["b", 2], "value2"]]
         packed = msgpack.packb(pairs)
@@ -121,7 +119,6 @@ class TestDecodeExt:
 
     def test_decode_unknown_code_returns_exttype(self):
         """Unknown ExtType codes are returned as-is."""
-        import msgpack
 
         result = decode_ext(99, b"some data")
         assert isinstance(result, msgpack.ExtType)
@@ -141,7 +138,6 @@ class TestPrepareForMsgpack:
 
     def test_pattern_match_converted(self):
         """pattern_match field with tuple keys is converted to ExtType."""
-        import msgpack
 
         data = {"pattern_match": {("pattern1", 1): {"op1", "op2"}, ("pattern2", 2): {"op3"}}}
         result = prepare_for_msgpack(data)
@@ -150,7 +146,6 @@ class TestPrepareForMsgpack:
 
     def test_partial_coverage_converted(self):
         """partial_coverage field with tuple keys is converted to ExtType."""
-        import msgpack
 
         data = {"partial_coverage": {("pattern", 1, "actions", "notActions"): (10, 20, 5, ["op1"])}}
         result = prepare_for_msgpack(data)
@@ -159,7 +154,6 @@ class TestPrepareForMsgpack:
 
     def test_wildcard_count_converted(self):
         """wildcard_count field with tuple keys is converted to ExtType."""
-        import msgpack
 
         data = {"wildcard_count": {("pattern", 1): 5}}
         result = prepare_for_msgpack(data)
@@ -168,7 +162,6 @@ class TestPrepareForMsgpack:
 
     def test_empty_tuple_key_dict_converted(self):
         """Empty tuple-keyed dicts are still converted."""
-        import msgpack
 
         data = {"pattern_match": {}}
         result = prepare_for_msgpack(data)
@@ -187,22 +180,22 @@ class TestRoundTrip:
     def test_simple_dict_roundtrip(self):
         """Simple dicts survive round-trip."""
         data = {"key": "value", "number": 42, "list": [1, 2, 3]}
-        packed = packb(data)
-        unpacked = unpackb(packed)
+        packed = serialize_to_bytes(data)
+        unpacked = deserialize_from_bytes(packed)
         assert unpacked == data
 
     def test_nested_dict_roundtrip(self):
         """Nested dicts survive round-trip."""
         data = {"outer": {"inner": {"deep": "value"}}}
-        packed = packb(data)
-        unpacked = unpackb(packed)
+        packed = serialize_to_bytes(data)
+        unpacked = deserialize_from_bytes(packed)
         assert unpacked == data
 
     def test_set_roundtrip(self):
         """Sets survive round-trip."""
         data = {"my_set": {1, 2, 3}}
-        packed = packb(data)
-        unpacked = unpackb(packed)
+        packed = serialize_to_bytes(data)
+        unpacked = deserialize_from_bytes(packed)
         assert unpacked["my_set"] == {1, 2, 3}
         assert isinstance(unpacked["my_set"], set)
 
@@ -215,8 +208,8 @@ class TestRoundTrip:
         role_coverage and role_net_permissions.
         """
         data = {"my_tuple": (1, 2, 3)}
-        packed = packb(data)
-        unpacked = unpackb(packed)
+        packed = serialize_to_bytes(data)
+        unpacked = deserialize_from_bytes(packed)
         # Tuples become lists due to msgpack's nested unpacking behavior
         assert unpacked["my_tuple"] == [1, 2, 3]
         assert isinstance(unpacked["my_tuple"], list)
@@ -225,8 +218,8 @@ class TestRoundTrip:
         """Datetimes survive round-trip (normalized to UTC)."""
         dt = datetime(2024, 1, 15, 10, 30, 0)
         data = {"timestamp": dt}
-        packed = packb(data)
-        unpacked = unpackb(packed)
+        packed = serialize_to_bytes(data)
+        unpacked = deserialize_from_bytes(packed)
         # Naive datetimes are normalized to UTC on encode
         expected = datetime(2024, 1, 15, 10, 30, 0, tzinfo=UTC)
         assert unpacked["timestamp"] == expected
@@ -236,8 +229,8 @@ class TestRoundTrip:
     def test_tuple_key_dict_roundtrip(self):
         """Dicts with tuple keys in TUPLE_KEY_FIELDS survive round-trip."""
         data = {"pattern_match": {("pattern", 1): {"op1", "op2"}, ("pattern2", 2): {"op3"}}}
-        packed = packb(data)
-        unpacked = unpackb(packed)
+        packed = serialize_to_bytes(data)
+        unpacked = deserialize_from_bytes(packed)
         assert ("pattern", 1) in unpacked["pattern_match"]
         assert unpacked["pattern_match"][("pattern", 1)] == {"op1", "op2"}
 
@@ -252,8 +245,8 @@ class TestRoundTrip:
             "pattern_match": {("*.read", 1): {"read_op1", "read_op2"}},
             "timestamps": [datetime(2024, 1, 1), datetime(2024, 1, 2)],
         }
-        packed = packb(data)
-        unpacked = unpackb(packed)
+        packed = serialize_to_bytes(data)
+        unpacked = deserialize_from_bytes(packed)
 
         assert unpacked["metadata"] == data["metadata"]
         # role_coverage values are tuples of sets - msgpack returns lists
@@ -267,8 +260,8 @@ class TestRoundTrip:
             "empty_list": [],
             "pattern_match": {},  # Empty tuple-keyed dict
         }
-        packed = packb(data)
-        unpacked = unpackb(packed)
+        packed = serialize_to_bytes(data)
+        unpacked = deserialize_from_bytes(packed)
         assert unpacked["empty_dict"] == {}
         assert unpacked["empty_list"] == []
         assert unpacked["pattern_match"] == {}
@@ -276,21 +269,21 @@ class TestRoundTrip:
     def test_binary_data_roundtrip(self):
         """Binary data survives round-trip."""
         data = {"binary": b"some binary data"}
-        packed = packb(data)
-        unpacked = unpackb(packed)
+        packed = serialize_to_bytes(data)
+        unpacked = deserialize_from_bytes(packed)
         assert unpacked["binary"] == b"some binary data"
 
     def test_none_values_roundtrip(self):
         """None values survive round-trip."""
         data = {"none_value": None, "nested": {"also_none": None}}
-        packed = packb(data)
-        unpacked = unpackb(packed)
+        packed = serialize_to_bytes(data)
+        unpacked = deserialize_from_bytes(packed)
         assert unpacked["none_value"] is None
         assert unpacked["nested"]["also_none"] is None
 
     def test_unicode_strings_roundtrip(self):
         """Unicode strings survive round-trip."""
         data = {"unicode": "こんにちは世界 🌍 émojis"}
-        packed = packb(data)
-        unpacked = unpackb(packed)
+        packed = serialize_to_bytes(data)
+        unpacked = deserialize_from_bytes(packed)
         assert unpacked["unicode"] == "こんにちは世界 🌍 émojis"

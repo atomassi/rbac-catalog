@@ -130,7 +130,7 @@ class RoleKnowledgeBase:
         """
         # Import inside function to avoid circular import:
         # cache.refresh imports airecommender, airecommender imports knowledge_base
-        from azurerbac.cache import app_cache
+        from azurerbac.cache import get_cache_container
 
         # Reset state for fresh build
         self._role_documents = {}
@@ -152,7 +152,7 @@ class RoleKnowledgeBase:
             raw_data_actions = first_perm.data_actions if first_perm else []
 
             # Get EFFECTIVE permissions from precomputed cache
-            cached_coverage = app_cache.get_role_coverage(role_id)
+            cached_coverage = get_cache_container().get_role_coverage(role_id)
             if cached_coverage:
                 effective_control, effective_data = cached_coverage
             else:

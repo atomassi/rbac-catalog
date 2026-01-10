@@ -31,8 +31,7 @@ from azurerbac.cache import (
 )
 from azurerbac.cache.models import CACHE_VERSION
 from azurerbac.core.constants import RoleStatus
-from tests.conftest import populate_cache_with_operations
-from tests.helpers import clear_computed_caches
+from tests.helpers import clear_computed_caches, populate_cache_with_operations
 
 
 @pytest.fixture

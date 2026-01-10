@@ -222,7 +222,7 @@ class TestPreloadCache:
 
     def test_populate_cache_with_operations(self, sample_operations):
         """Test populate_cache_with_operations builds correct indexes."""
-        from tests.conftest import populate_cache_with_operations
+        from tests.helpers import populate_cache_with_operations
 
         cache = CacheContainer()
         populate_cache_with_operations(cache, sample_operations)
@@ -234,7 +234,7 @@ class TestPreloadCache:
 
     def test_populate_cache_with_roles(self, sample_roles_db_format):
         """Test populate_cache_with_roles builds correct index."""
-        from tests.conftest import populate_cache_with_roles
+        from tests.helpers import populate_cache_with_roles
 
         cache = CacheContainer()
         populate_cache_with_roles(cache, sample_roles_db_format)
@@ -248,7 +248,7 @@ class TestPreloadCache:
         self, sample_operations, sample_roles_db_format
     ):
         """Test populate_cache_with_operations doesn't overwrite other cache data."""
-        from tests.conftest import populate_cache_with_operations, populate_cache_with_roles
+        from tests.helpers import populate_cache_with_operations, populate_cache_with_roles
 
         cache = CacheContainer()
         populate_cache_with_roles(cache, sample_roles_db_format)
@@ -261,7 +261,7 @@ class TestPreloadCache:
 
     def test_populate_roles_preserves_other_data(self, sample_operations, sample_roles_db_format):
         """Test populate_cache_with_roles doesn't overwrite other cache data."""
-        from tests.conftest import populate_cache_with_operations, populate_cache_with_roles
+        from tests.helpers import populate_cache_with_operations, populate_cache_with_roles
 
         cache = CacheContainer()
         populate_cache_with_operations(cache, sample_operations)
@@ -286,7 +286,7 @@ class TestPreloadCache:
 
     def test_populate_cache_with_events(self):
         """Test populate_cache_with_events caches events."""
-        from tests.conftest import populate_cache_with_events
+        from tests.helpers import populate_cache_with_events
 
         cache = CacheContainer()
 
@@ -304,7 +304,7 @@ class TestPreloadCache:
 
     def test_get_role_by_id(self, sample_roles_db_format):
         """Test get_role_by_id returns correct CachedRole."""
-        from tests.conftest import populate_cache_with_roles
+        from tests.helpers import populate_cache_with_roles
 
         cache = CacheContainer()
         populate_cache_with_roles(cache, sample_roles_db_format)
@@ -319,7 +319,7 @@ class TestPreloadCache:
 
     def test_get_all_roles(self, sample_roles_db_format):
         """Test get_all_roles returns RoleDefinition objects."""
-        from tests.conftest import populate_cache_with_roles
+        from tests.helpers import populate_cache_with_roles
 
         cache = CacheContainer()
         populate_cache_with_roles(cache, sample_roles_db_format)
@@ -331,7 +331,7 @@ class TestPreloadCache:
 
     def test_get_change_events(self):
         """Test get_change_events returns cached events."""
-        from tests.conftest import populate_cache_with_events
+        from tests.helpers import populate_cache_with_events
 
         cache = CacheContainer()
         events = [
@@ -345,7 +345,7 @@ class TestPreloadCache:
 
     def test_get_events_for_role(self):
         """Test get_events_for_role filters by role_id."""
-        from tests.conftest import populate_cache_with_events
+        from tests.helpers import populate_cache_with_events
 
         cache = CacheContainer()
         events = [

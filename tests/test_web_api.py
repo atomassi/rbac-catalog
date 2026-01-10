@@ -7,7 +7,7 @@ import pytest
 from azurerbac.azure.models import OperationData, RoleDefinition
 from azurerbac.cache.models import CachedRole
 from azurerbac.core.constants import RoleStatus
-from tests.conftest import make_cached_role, populate_cache_with_operations
+from tests.helpers import make_cached_role, populate_cache_with_operations
 
 
 class TestCacheContainer:

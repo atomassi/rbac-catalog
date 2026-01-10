@@ -11,7 +11,7 @@ from azurerbac.matching.role_matching import (
     check_operation_allowed,
     operation_matches_any_pattern,
 )
-from tests.conftest import make_role_definition
+from tests.helpers import make_role_definition
 
 # =============================================================================
 # Pattern Matching Tests

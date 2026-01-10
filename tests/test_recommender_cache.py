@@ -17,8 +17,7 @@ import pytest
 from azurerbac.azure.models import OperationData
 from azurerbac.cache import get_cache_service, precompute_all
 from azurerbac.matching import recommend_roles
-from tests.conftest import make_role_definition
-from tests.helpers import clear_computed_caches
+from tests.helpers import clear_computed_caches, make_role_definition
 
 # =============================================================================
 # Tests for max_results Parameter

@@ -12,7 +12,7 @@ import pytest
 
 from azurerbac.cache.models import CachedChangeEvent
 from azurerbac.core.constants import EventType, RoleStatus
-from tests.conftest import make_cached_role
+from tests.helpers import make_cached_role
 
 # =============================================================================
 # Tests for dashboard service functions

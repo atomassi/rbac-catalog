@@ -11,7 +11,7 @@ import pytest
 from azurerbac.azure.models import OperationData, RoleDefinition
 from azurerbac.cache.models import CachedChangeEvent
 from azurerbac.core.constants import EventType
-from tests.conftest import make_role_definition
+from tests.helpers import make_role_definition
 
 # =============================================================================
 # Tests for pages service functions

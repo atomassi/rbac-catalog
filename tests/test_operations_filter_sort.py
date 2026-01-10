@@ -13,7 +13,7 @@ from azurerbac.web.services.pages import (
     operation_matches_search,
     sort_operations,
 )
-from tests.conftest import make_operation
+from tests.helpers import make_operation
 
 # =============================================================================
 # Test Fixtures

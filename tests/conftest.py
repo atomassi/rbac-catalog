@@ -2,9 +2,12 @@
 
 This module provides the test infrastructure for azurerbac:
 - Database fixtures with session-scoped engine for performance
-- Mock factories for AI/ML components
+- Mock fixtures for AI/ML components
 - Shared test data fixtures (operations, roles)
 - Async session management
+
+Factory functions are in tests.helpers - import them directly in tests
+that need to call them without fixtures.
 """
 
 from __future__ import annotations
@@ -13,7 +16,6 @@ import os
 import tempfile
 from collections.abc import AsyncGenerator, Generator
 from pathlib import Path
-from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, MagicMock
 
 # Clear Application Insights connection string to prevent OpenTelemetry
@@ -36,7 +38,15 @@ from sqlalchemy.ext.asyncio import (
 from azurerbac.azure.models import OperationData, RoleDefinition
 from azurerbac.cache.models import CachedRole
 from azurerbac.core import Base
-from azurerbac.core.constants import ROLE_DEFINITION_TYPE, RoleStatus
+from azurerbac.core.constants import RoleStatus
+
+# Import factory functions from helpers for use in fixtures
+from tests.helpers import (
+    create_mock_embedding_model,
+    create_mock_knowledge_base,
+    create_mock_ollama_client,
+    make_operation,
+)
 
 # =============================================================================
 # Settings Fixtures
@@ -179,169 +189,11 @@ def temp_cache_dir() -> Generator[Path, None, None]:
 
 
 # =============================================================================
-# Test Data Factories - Reusable Builders for Domain Objects
-# =============================================================================
-
-
-def make_role_definition(
-    role_name: str,
-    role_id: str,
-    actions: list[str] | None = None,
-    not_actions: list[str] | None = None,
-    data_actions: list[str] | None = None,
-    not_data_actions: list[str] | None = None,
-    *,
-    description: str | None = None,
-    condition: str | None = None,
-) -> RoleDefinition:
-    """Create a RoleDefinition for testing.
-
-    Args:
-        role_name: Display name of the role.
-        role_id: Unique role identifier (GUID).
-        actions: Optional list of control plane actions.
-        not_actions: Optional list of excluded control plane actions.
-        data_actions: Optional list of data plane actions.
-        not_data_actions: Optional list of excluded data plane actions.
-        description: Optional description (defaults to "Test role: {role_name}").
-        condition: Optional ABAC condition expression.
-
-    Returns:
-        Configured RoleDefinition for testing.
-    """
-    permission_dict: dict = {
-        "actions": actions or [],
-        "notActions": not_actions or [],
-        "dataActions": data_actions or [],
-        "notDataActions": not_data_actions or [],
-    }
-    if condition:
-        permission_dict["condition"] = condition
-
-    return RoleDefinition.model_validate(
-        {
-            "name": role_id,
-            "id": f"/providers/{ROLE_DEFINITION_TYPE}/{role_id}",
-            "type": ROLE_DEFINITION_TYPE,
-            "properties": {
-                "roleName": role_name,
-                "type": "BuiltInRole",
-                "description": description or f"Test role: {role_name}",
-                "permissions": [permission_dict],
-                "assignableScopes": ["/"],
-            },
-        }
-    )
-
-
-def make_operation(
-    name: str,
-    is_data_action: bool = False,
-    *,
-    display_name: str | None = None,
-    description: str | None = None,
-    provider_display_name: str = "",
-    resource_type_display_name: str | None = None,
-) -> OperationData:
-    """Create an OperationData object for testing.
-
-    Args:
-        name: Full operation name (e.g., "Microsoft.Storage/storageAccounts/read").
-        is_data_action: Whether this is a data plane operation.
-        display_name: Human-readable operation name.
-        description: Operation description.
-        provider_display_name: Display name of the resource provider.
-        resource_type_display_name: Display name of the resource type.
-
-    Returns:
-        Configured OperationData for testing.
-    """
-    return OperationData(
-        name=name,
-        display_name=display_name,
-        description=description,
-        origin=None,
-        provider_display_name=provider_display_name,
-        resource_type=None,
-        resource_type_display_name=resource_type_display_name,
-        is_data_action=is_data_action,
-    )
-
-
-def make_cached_role(
-    role_id: str,
-    role_name: str,
-    status: RoleStatus = RoleStatus.ACTIVE,
-    *,
-    description: str | None = None,
-    actions: list[str] | None = None,
-) -> CachedRole:
-    """Create a CachedRole for testing.
-
-    Args:
-        role_id: Unique role identifier (GUID).
-        role_name: Display name of the role.
-        status: Role status (ACTIVE or DELETED).
-        description: Optional description (defaults to "Test role: {role_name}").
-        actions: Optional list of actions (defaults to ["*"]).
-
-    Returns:
-        Configured CachedRole for testing.
-    """
-    definition = make_role_definition(
-        role_name=role_name,
-        role_id=role_id,
-        actions=actions or ["*"],
-        description=description,
-    )
-    return CachedRole(definition=definition, status=status)
-
-
-# =============================================================================
-# AI/ML Mock Factories - Configurable Mocks via Factory Pattern
+# AI/ML Mock Fixtures
 #
-# These fixtures use the Factory pattern to provide sensible defaults
-# while allowing tests to customize behavior as needed.
+# These fixtures use factory functions from helpers.py to provide
+# sensible defaults while allowing tests to customize behavior as needed.
 # =============================================================================
-
-
-def create_mock_embedding_model(
-    *,
-    is_loaded: bool = True,
-    embedding_vector: list[float] | None = None,
-    role_embeddings: dict[str, list[float]] | None = None,
-    search_results: list[tuple[str, float]] | None = None,
-) -> MagicMock:
-    """Factory function to create a mock embedding model.
-
-    Args:
-        is_loaded: Whether the model appears loaded.
-        embedding_vector: Default vector returned by encode_single.
-        role_embeddings: Mapping of role_id -> embedding vector.
-        search_results: Results for search_vector calls.
-
-    Returns:
-        Configured MagicMock embedding model.
-    """
-    embedding_vector = embedding_vector or [0.1, 0.2, 0.3, 0.4]
-    role_embeddings = role_embeddings or {
-        "role-1": [0.1, 0.2, 0.3, 0.4],
-        "role-2": [0.4, 0.3, 0.2, 0.1],
-        "role-3": [-0.1, -0.2, -0.3, -0.4],
-    }
-    search_results = search_results or [
-        ("role-1", 1.0),
-        ("role-2", 0.5),
-        ("role-3", -0.5),
-    ]
-
-    model = MagicMock()
-    model.is_loaded = is_loaded
-    model.encode_single = MagicMock(return_value=embedding_vector)
-    model.encode_single_cached = MagicMock(return_value=tuple(embedding_vector))
-    model.embeddings = role_embeddings
-    model.search_vector = MagicMock(return_value=search_results)
-    return model
 
 
 @pytest.fixture
@@ -359,40 +211,6 @@ def mock_embedding_model() -> MagicMock:
     return create_mock_embedding_model()
 
 
-def create_mock_knowledge_base(
-    role_documents: dict[str, dict[str, str]] | None = None,
-) -> MagicMock:
-    """Factory function to create a mock knowledge base.
-
-    Args:
-        role_documents: Mapping of role_id -> role document dict.
-
-    Returns:
-        Configured MagicMock knowledge base.
-    """
-    role_documents = role_documents or {
-        "role-1": {
-            "role_name": "Storage Blob Data Reader",
-            "description": "Read blob storage data",
-        },
-        "role-2": {
-            "role_name": "Storage Account Contributor",
-            "description": "Manage storage accounts",
-        },
-        "role-3": {
-            "role_name": "Owner",
-            "description": "Full access including RBAC",
-        },
-    }
-
-    kb = MagicMock()
-    kb.role_documents = role_documents
-    kb.get_all_role_names = MagicMock(
-        return_value=[doc["role_name"] for doc in role_documents.values()]
-    )
-    return kb
-
-
 @pytest.fixture
 def mock_knowledge_base() -> MagicMock:
     """Create a mock knowledge base with standard test roles.
@@ -401,26 +219,6 @@ def mock_knowledge_base() -> MagicMock:
         Configured MagicMock knowledge base.
     """
     return create_mock_knowledge_base()
-
-
-def create_mock_ollama_client(
-    *,
-    is_connected: bool = True,
-    generate_response: str = "1. Storage Blob Data Reader\n2. Storage Account Contributor",
-) -> MagicMock:
-    """Factory function to create a mock Ollama client.
-
-    Args:
-        is_connected: Whether the client appears connected.
-        generate_response: Response returned by generate().
-
-    Returns:
-        Configured MagicMock Ollama client.
-    """
-    client = MagicMock()
-    client.is_connected = is_connected
-    client.generate = MagicMock(return_value=generate_response)
-    return client
 
 
 @pytest.fixture
@@ -633,7 +431,7 @@ def large_operations() -> list[OperationData]:
 
     # Control plane operations
     ops.extend(
-        OperationData(name=f"{provider}/{resource}/{action}", is_data_action=False)
+        make_operation(f"{provider}/{resource}/{action}", is_data_action=False)
         for provider in providers
         for resource in resources
         for action in actions
@@ -644,7 +442,7 @@ def large_operations() -> list[OperationData]:
     data_resources = ["blobs", "secrets", "keys", "messages", "queues"]
 
     ops.extend(
-        OperationData(name=f"{provider}/data/{resource}/{action}", is_data_action=True)
+        make_operation(f"{provider}/data/{resource}/{action}", is_data_action=True)
         for provider in data_providers
         for resource in data_resources
         for action in actions
@@ -813,55 +611,3 @@ def sample_roles_db_format() -> list[CachedRole]:
             last_seen_at=None,
         ),
     ]
-
-
-# =============================================================================
-# Cache Test Helpers
-# =============================================================================
-
-
-def populate_cache_with_operations(cache: CacheContainer, operations: list[OperationData]) -> None:
-    """Helper to populate cache with operations for testing.
-
-    Uses the proper swap() pattern with dataclass replace.
-    """
-    from dataclasses import replace
-
-    from azurerbac.cache.models import build_indexes
-
-    ops_by_name_lower, ops_by_prefix = build_indexes(operations)
-    cache.swap(
-        replace(
-            cache.cache,
-            all_operations=operations,
-            ops_by_name_lower=ops_by_name_lower,
-            ops_by_prefix=ops_by_prefix,
-        )
-    )
-
-
-def populate_cache_with_roles(cache: CacheContainer, roles: list[CachedRole]) -> None:
-    """Helper to populate cache with roles for testing.
-
-    Uses the proper swap() pattern with dataclass replace.
-    """
-    from dataclasses import replace
-
-    roles_by_id = {r.role_id: r for r in roles}
-    cache.swap(replace(cache.cache, roles_by_id=roles_by_id))
-
-
-def populate_cache_with_events(cache: CacheContainer, events: list[CachedChangeEvent]) -> None:
-    """Helper to populate cache with change events for testing.
-
-    Uses the proper swap() pattern with dataclass replace.
-    """
-    from dataclasses import replace
-
-    cache.swap(replace(cache.cache, all_change_events=events))
-
-
-# Type hint imports for helpers
-if TYPE_CHECKING:
-    from azurerbac.cache.container import CacheContainer
-    from azurerbac.cache.models import CachedChangeEvent

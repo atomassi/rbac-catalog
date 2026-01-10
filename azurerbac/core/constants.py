@@ -30,6 +30,9 @@ HIGH_PRIVILEGE_ROLES: Final[frozenset[str]] = frozenset(
     }
 )
 
+# Default role type for built-in roles
+DEFAULT_ROLE_TYPE: Final[str] = "BuiltInRole"
+
 # Default limits for search and matching operations
 DEFAULT_SEARCH_LIMIT: Final[int] = 50
 MAX_UNCOVERED_SAMPLE: Final[int] = 50

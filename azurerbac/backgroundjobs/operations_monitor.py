@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from azurerbac.azure.models import OperationData
+from azurerbac.backgroundjobs.models import OperationsScanResult
 from azurerbac.cache import invalidate_and_rebuild_cache
 from azurerbac.core import Operation, OperationScanStatus, utcnow
 
@@ -82,13 +83,15 @@ def _create_operation(op_data: OperationData, now: dt.datetime) -> Operation:
     )
 
 
-async def apply_operations_scan(session: AsyncSession, operations: list[OperationData]) -> dict:
+async def apply_operations_scan(
+    session: AsyncSession, operations: list[OperationData]
+) -> OperationsScanResult:
     """Store/update operations in the database.
 
     Uses upsert logic - updates existing operations, inserts new ones.
     Handles duplicates by keeping the last occurrence.
 
-    Returns stats dict.
+    Returns OperationsScanResult with created/updated/total/duplicates/providers counts.
     """
     now = utcnow()
     logger.info(
@@ -147,10 +150,10 @@ async def apply_operations_scan(session: AsyncSession, operations: list[Operatio
         logger.info("New operations added: %d, triggering cache rebuild", created)
         await invalidate_and_rebuild_cache(session)
 
-    return {
-        "created": created,
-        "updated": updated,
-        "total": len(ops_by_name),
-        "duplicates_skipped": duplicates,
-        "providers": len(providers),
-    }
+    return OperationsScanResult(
+        created=created,
+        updated=updated,
+        total=len(ops_by_name),
+        duplicates_skipped=duplicates,
+        providers=len(providers),
+    )

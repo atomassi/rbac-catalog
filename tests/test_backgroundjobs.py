@@ -97,7 +97,7 @@ class TestApplyRoleScan:
 
         stats = await apply_role_scan(db_session, roles)
 
-        assert stats["created"] == 1
+        assert stats.created == 1
 
         history = (await db_session.execute(select(RoleHistory))).scalars().all()
         assert len(history) == 1
@@ -139,10 +139,10 @@ class TestApplyRoleScan:
 
         stats = await apply_role_scan(db_session, roles)
 
-        assert stats["created"] == 2
-        assert stats["updated"] == 0
-        assert stats["deleted"] == 0
-        assert stats["total"] == 2
+        assert stats.created == 2
+        assert stats.updated == 0
+        assert stats.deleted == 0
+        assert stats.total == 2
 
         # Verify snapshots created
         snapshots = (await db_session.execute(select(Role))).scalars().all()
@@ -173,8 +173,8 @@ class TestApplyRoleScan:
         ]
         stats = await apply_role_scan(db_session, roles_v2)
 
-        assert stats["created"] == 0
-        assert stats["updated"] == 1
+        assert stats.created == 0
+        assert stats.updated == 1
 
         # Verify history entries
         history = (
@@ -213,8 +213,8 @@ class TestApplyRoleScan:
         # Second scan with same data
         stats = await apply_role_scan(db_session, roles)
 
-        assert stats["created"] == 0
-        assert stats["updated"] == 0
+        assert stats.created == 0
+        assert stats.updated == 0
 
         # Only one history entry (the creation)
         history = (await db_session.execute(select(RoleHistory))).scalars().all()
@@ -232,7 +232,7 @@ class TestApplyRoleScan:
         roles_v2 = [_make_role("role-1", "Reader")]
         stats = await apply_role_scan(db_session, roles_v2)
 
-        assert stats["deleted"] == 1
+        assert stats.deleted == 1
 
         # Verify delete history entry
         deleted_history = (
@@ -276,10 +276,10 @@ class TestApplyRoleScan:
         """Test handling of empty roles list."""
         stats = await apply_role_scan(db_session, [])
 
-        assert stats["created"] == 0
-        assert stats["updated"] == 0
-        assert stats["deleted"] == 0
-        assert stats["total"] == 0
+        assert stats.created == 0
+        assert stats.updated == 0
+        assert stats.deleted == 0
+        assert stats.total == 0
 
     @pytest.mark.asyncio
     async def test_skips_roles_without_id(self, db_session):
@@ -287,8 +287,8 @@ class TestApplyRoleScan:
         roles = [{"properties": {"roleName": "No ID Role"}}]
         stats = await apply_role_scan(db_session, roles)
 
-        assert stats["total"] == 0
-        assert stats["created"] == 0
+        assert stats.total == 0
+        assert stats.created == 0
 
     @pytest.mark.asyncio
     async def test_diff_contains_change_details(self, db_session):
@@ -349,7 +349,7 @@ class TestApplyOperationsScan:
         stats = await apply_operations_scan(db_session, operations)
         await db_session.commit()
 
-        assert stats["created"] == 1
+        assert stats.created == 1
 
     @pytest.mark.asyncio
     async def test_apply_operations_scan_empty_list(self, db_session):
@@ -357,8 +357,8 @@ class TestApplyOperationsScan:
         from azurerbac.backgroundjobs.operations_monitor import apply_operations_scan
 
         stats = await apply_operations_scan(db_session, [])
-        assert stats["created"] == 0
-        assert stats["updated"] == 0
+        assert stats.created == 0
+        assert stats.updated == 0
 
 
 # =============================================================================

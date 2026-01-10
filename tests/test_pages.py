@@ -69,9 +69,9 @@ class TestComputeRoleEffectivePermissionsServices:
 
         result = compute_role_effective_permissions(role, all_operations, mock_app_cache)
 
-        assert result["control_plane_count"] == 1
-        assert result["data_plane_count"] == 0
-        assert "Microsoft.Storage/storageAccounts/read" in result["control_plane_actions"]
+        assert result.control_plane_count == 1
+        assert result.data_plane_count == 0
+        assert "Microsoft.Storage/storageAccounts/read" in result.control_plane_actions
 
     def test_compute_with_not_actions(self):
         """Test that notActions are properly excluded."""
@@ -100,8 +100,8 @@ class TestComputeRoleEffectivePermissionsServices:
 
         result = compute_role_effective_permissions(role, all_operations, mock_app_cache)
 
-        assert result["control_plane_count"] == 2
-        assert "Microsoft.Storage/storageAccounts/delete" not in result["control_plane_actions"]
+        assert result.control_plane_count == 2
+        assert "Microsoft.Storage/storageAccounts/delete" not in result.control_plane_actions
 
     def test_compute_data_actions(self):
         """Test computing data plane actions."""
@@ -126,8 +126,8 @@ class TestComputeRoleEffectivePermissionsServices:
 
         result = compute_role_effective_permissions(role, all_operations, mock_app_cache)
 
-        assert result["control_plane_count"] == 0
-        assert result["data_plane_count"] == 1
+        assert result.control_plane_count == 0
+        assert result.data_plane_count == 1
 
     def test_detect_conditions(self):
         """Test detection of conditions in permissions."""
@@ -143,7 +143,7 @@ class TestComputeRoleEffectivePermissionsServices:
 
         result = compute_role_effective_permissions(role, [], mock_app_cache)
 
-        assert result["has_conditions"] is True
+        assert result.has_conditions is True
 
     def test_detect_wildcards(self):
         """Test detection of wildcard patterns."""
@@ -156,8 +156,8 @@ class TestComputeRoleEffectivePermissionsServices:
 
         result = compute_role_effective_permissions(role, [], mock_app_cache)
 
-        assert result["has_wildcards"] is True
-        assert result["raw_actions"] == ["Microsoft.Storage/*/read"]
+        assert result.has_wildcards is True
+        assert result.raw_actions == ["Microsoft.Storage/*/read"]
 
     def test_detect_unresolved_permissions(self):
         """Test detection of unresolved permissions."""
@@ -172,7 +172,7 @@ class TestComputeRoleEffectivePermissionsServices:
         result = compute_role_effective_permissions(role, [], mock_app_cache)
 
         # Role has actions defined but none resolved
-        assert result["has_unresolved_permissions"] is True
+        assert result.has_unresolved_permissions is True
 
     def test_no_unresolved_when_actions_resolve(self):
         """Test that has_unresolved_permissions is False when actions resolve."""
@@ -188,7 +188,7 @@ class TestComputeRoleEffectivePermissionsServices:
 
         result = compute_role_effective_permissions(role, [], mock_app_cache)
 
-        assert result["has_unresolved_permissions"] is False
+        assert result.has_unresolved_permissions is False
 
     def test_fallback_to_manual_computation(self):
         """Test fallback to manual computation when cache misses."""
@@ -208,8 +208,8 @@ class TestComputeRoleEffectivePermissionsServices:
         result = compute_role_effective_permissions(role, all_operations, mock_app_cache)
 
         # Should compute manually
-        assert result["control_plane_count"] == 1
-        assert "Microsoft.Storage/storageAccounts/read" in result["control_plane_actions"]
+        assert result.control_plane_count == 1
+        assert "Microsoft.Storage/storageAccounts/read" in result.control_plane_actions
 
 
 class TestGetRolesAllowingOperationServices:
@@ -217,10 +217,22 @@ class TestGetRolesAllowingOperationServices:
 
     def test_returns_roles_from_cache(self):
         """Test returning cached results."""
+        from azurerbac.web.services.models import RoleAllowingOperation
         from azurerbac.web.services.pages import get_roles_allowing_operation
 
         mock_app_cache = MagicMock()
-        cached_roles = [{"role_id": "role1", "role_name": "Storage Reader"}]
+        cached_roles = [
+            RoleAllowingOperation(
+                role_id="role1",
+                role_name="Storage Reader",
+                role_type="BuiltInRole",
+                matched_pattern="Microsoft.Storage/read",
+                actions_count=1,
+                data_actions_count=0,
+                has_condition=False,
+                condition_text=None,
+            )
+        ]
         mock_app_cache.get.return_value = cached_roles
 
         result = get_roles_allowing_operation("Microsoft.Storage/read", False, mock_app_cache)
@@ -259,8 +271,8 @@ class TestGetRolesAllowingOperationServices:
         )
 
         assert len(result) == 1
-        assert result[0]["role_name"] == "Storage Reader"
-        assert result[0]["role_id"] == "role1"
+        assert result[0].role_name == "Storage Reader"
+        assert result[0].role_id == "role1"
 
     def test_excludes_roles_without_operation(self):
         """Test that roles without the operation are excluded."""
@@ -396,9 +408,9 @@ class TestEnrichEventWithDiff:
 
         result = enrich_event_with_diff(event)
 
-        assert "role_json_pretty" in result
-        assert '"roleName": "Test Role"' in result["role_json_pretty"]
-        assert '"type": "BuiltInRole"' in result["role_json_pretty"]
+        assert result.role_json_pretty != ""
+        assert '"roleName": "Test Role"' in result.role_json_pretty
+        assert '"type": "BuiltInRole"' in result.role_json_pretty
 
     def test_role_json_pretty_empty_when_no_role_json(self):
         """Test that role_json_pretty is empty for deleted events."""
@@ -418,7 +430,7 @@ class TestEnrichEventWithDiff:
 
         result = enrich_event_with_diff(event)
 
-        assert result["role_json_pretty"] == ""
+        assert result.role_json_pretty == ""
 
     def test_applies_sanitization_to_role_json(self):
         """Test that role_json is sanitized (isServiceRole excluded via RoleDefinition model)."""
@@ -444,8 +456,8 @@ class TestEnrichEventWithDiff:
         result = enrich_event_with_diff(event)
 
         # isServiceRole is excluded by RoleDefinition.to_dict()
-        assert "isServiceRole" not in result["role_json_pretty"]
-        assert "roleName" in result["role_json_pretty"]
+        assert "isServiceRole" not in result.role_json_pretty
+        assert "roleName" in result.role_json_pretty
 
     def test_diff_json_is_processed(self):
         """Test that diff_json is included in result."""
@@ -468,6 +480,6 @@ class TestEnrichEventWithDiff:
 
         result = enrich_event_with_diff(event)
 
-        assert result["diff"] is not None
-        assert result["diff"]["changed"] is True
-        assert len(result["diff"]["changes"]) == 1
+        assert result.diff is not None
+        assert result.diff["changed"] is True
+        assert len(result.diff["changes"]) == 1

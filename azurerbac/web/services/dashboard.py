@@ -13,12 +13,13 @@ from sqlalchemy.sql import Select
 from sqlalchemy.sql.elements import ColumnElement
 
 from azurerbac.cache.models import CachedChangeEvent, CachedRole
-from azurerbac.core.constants import RoleStatus
+from azurerbac.core.constants import DEFAULT_ROLE_TYPE, RoleStatus
 from azurerbac.core.utils import (
     ensure_utc,
     ensure_utc_or_min,
     normalize_uuid_or_none,
 )
+from azurerbac.web.services.models import DashboardSummary, RoleWithCounts
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -41,12 +42,12 @@ class SortField(StrEnum):
 # Sort key functions for enriched roles (maps SortField -> sort key function)
 # For UPDATED, use a minimum datetime for None values to ensure consistent comparison
 _MIN_DATETIME: Final[dt.datetime] = dt.datetime.min.replace(tzinfo=dt.UTC)
-_ROLE_SORT_KEYS: Final[dict[str, Callable[[dict], Any]]] = {
-    SortField.ACTIONS: lambda r: r.get("actions_count", 0),
-    SortField.DATA_ACTIONS: lambda r: r.get("data_actions_count", 0),
-    SortField.ID: lambda r: (r.get("role_id") or "").lower(),
-    SortField.UPDATED: lambda r: r.get("updated_on") or _MIN_DATETIME,
-    SortField.NAME: lambda r: (r.get("role_name") or "").lower(),
+_ROLE_SORT_KEYS: Final[dict[str, Callable[[RoleWithCounts], Any]]] = {
+    SortField.ACTIONS: lambda r: r.actions_count,
+    SortField.DATA_ACTIONS: lambda r: r.data_actions_count,
+    SortField.ID: lambda r: r.role_id.lower(),
+    SortField.UPDATED: lambda r: r.updated_on or _MIN_DATETIME,
+    SortField.NAME: lambda r: r.role_name.lower(),
 }
 
 
@@ -90,7 +91,7 @@ def _get_sort_column(role_snapshot: type[Role], sort: str) -> Any:
     return role_snapshot.role_name
 
 
-def _sort_enriched_roles(enriched_roles: list[dict], *, sort: str, order: str) -> None:
+def _sort_enriched_roles(enriched_roles: list[RoleWithCounts], *, sort: str, order: str) -> None:
     """Sort enriched roles in-place by the specified field."""
     key_func = _ROLE_SORT_KEYS.get(sort, _ROLE_SORT_KEYS[SortField.NAME])
     enriched_roles.sort(key=key_func, reverse=(order == "desc"))
@@ -106,7 +107,7 @@ async def _execute_paginated_role_query(
     page: int,
     page_size: int,
     needs_python_sort: bool,
-) -> list[dict[str, Any]]:
+) -> list[RoleWithCounts]:
     """Execute a role query with sorting and pagination.
 
     Args:
@@ -120,7 +121,7 @@ async def _execute_paginated_role_query(
         needs_python_sort: If True, fetch all and sort in Python
 
     Returns:
-        List of enriched role dicts for the requested page
+        List of RoleWithCounts for the requested page
     """
     offset = (page - 1) * page_size
 
@@ -141,11 +142,11 @@ async def _execute_paginated_role_query(
     return [enrich_role_with_counts(r) for r in db_roles]
 
 
-def enrich_role_with_counts(role: Role | Any, app_cache: AppCache | None = None) -> dict[str, Any]:
+def enrich_role_with_counts(role: Role | Any, app_cache: AppCache | None = None) -> RoleWithCounts:
     """Enrich a role object with actions_count and data_actions_count.
 
     Uses the pre-computed role net permissions cache from the recommender.
-    Returns a dict with all role attributes plus counts.
+    Returns a RoleWithCounts with all role attributes plus counts.
 
     Args:
         role: A role object (SQLAlchemy model or cached dict-like object)
@@ -153,7 +154,7 @@ def enrich_role_with_counts(role: Role | Any, app_cache: AppCache | None = None)
         app_cache: Optional cache instance. If None, imports the singleton.
 
     Returns:
-        dict with role data plus actions_count and data_actions_count
+        RoleWithCounts with role data and action counts
     """
     # Get counts from the recommender cache
     if app_cache is None:
@@ -169,35 +170,38 @@ def enrich_role_with_counts(role: Role | Any, app_cache: AppCache | None = None)
         actions_count = 0
         data_actions_count = 0
 
-    return {
-        "role_id": role.role_id,
-        "role_name": role.role_name,
-        "role_type": role.role_type,
-        "status": role.status,
-        "updated_on": role.updated_on,
-        "actions_count": actions_count,
-        "data_actions_count": data_actions_count,
-    }
+    # Handle status - could be RoleStatus enum or string
+    status_value = role.status.value if hasattr(role.status, "value") else str(role.status)
+
+    return RoleWithCounts(
+        role_id=role.role_id,
+        role_name=role.role_name,
+        role_type=role.role_type or DEFAULT_ROLE_TYPE,
+        status=status_value,
+        updated_on=role.updated_on,
+        actions_count=actions_count,
+        data_actions_count=data_actions_count,
+    )
 
 
-async def get_common_dashboard_data(deps: DashboardDeps) -> dict:
+async def get_common_dashboard_data(deps: DashboardDeps) -> DashboardSummary:
     """Get common data used by both recent and roles pages.
 
     Args:
         deps: Dashboard dependencies
 
     Returns:
-        dict with total_roles, total_operations, last_scan, first_scan
+        DashboardSummary with total_roles, total_operations, last_scan, first_scan
     """
     # Check for disk cache updates
     deps.app_cache.reload_from_disk_if_needed()
 
-    return {
-        "total_roles": len(deps.app_cache.cache.roles_by_id),
-        "total_operations": len(deps.app_cache.get_all_operations()),
-        "last_scan": deps.app_cache.cache.last_scan,
-        "first_scan": deps.app_cache.cache.first_scan,
-    }
+    return DashboardSummary(
+        total_roles=len(deps.app_cache.cache.roles_by_id),
+        total_operations=len(deps.app_cache.get_all_operations()),
+        last_scan=deps.app_cache.cache.last_scan,
+        first_scan=deps.app_cache.cache.first_scan,
+    )
 
 
 async def ensure_scan_metadata(
@@ -403,7 +407,7 @@ async def fetch_roles_paginated(
     page: int,
     page_size: int,
     needs_python_sort: bool,
-) -> tuple[list[dict[str, Any]], int, int]:
+) -> tuple[list[RoleWithCounts], int, int]:
     """Fetch paginated roles, using cache when possible.
 
     Args:
@@ -464,7 +468,7 @@ async def search_roles(
     page_size: int,
     needs_python_sort: bool,
     exact_match: str | None,
-) -> tuple[list[dict[str, Any]], int, int]:
+) -> tuple[list[RoleWithCounts], int, int]:
     """Search roles using cache first, fallback to DB.
 
     Args:
@@ -511,7 +515,7 @@ def search_roles_in_cache(
     page: int,
     page_size: int,
     exact_match: str | None,
-) -> tuple[list[dict[str, Any]], int, int]:
+) -> tuple[list[RoleWithCounts], int, int]:
     """Search roles in memory cache.
 
     Args:
@@ -579,7 +583,7 @@ async def search_roles_in_db(
     page_size: int,
     needs_python_sort: bool,
     exact_match: str | None,
-) -> tuple[list[dict[str, Any]], int, int]:
+) -> tuple[list[RoleWithCounts], int, int]:
     """Search roles in database (fallback when cache is empty).
 
     Args:

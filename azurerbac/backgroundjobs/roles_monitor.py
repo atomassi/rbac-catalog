@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from azurerbac.azure.models import RoleDefinition
+from azurerbac.backgroundjobs.models import RoleScanResult
 from azurerbac.cache import invalidate_and_rebuild_cache
 from azurerbac.core import (
     EventType,
@@ -159,10 +160,10 @@ async def _handle_role_update(
     return None
 
 
-async def apply_role_scan(session: AsyncSession, roles: list[dict]) -> dict:
+async def apply_role_scan(session: AsyncSession, roles: list[dict]) -> RoleScanResult:
     """Compare fetched roles vs DB snapshots, store changes.
 
-    Returns small stats dict.
+    Returns RoleScanResult with created/updated/deleted/total counts.
     """
     now = utcnow()
     logger.info("Starting role scan at %s with %d roles from Azure", now, len(roles))
@@ -269,9 +270,9 @@ async def apply_role_scan(session: AsyncSession, roles: list[dict]) -> dict:
         )
         await invalidate_and_rebuild_cache(session)
 
-    return {
-        "created": created,
-        "updated": updated,
-        "deleted": deleted_count,
-        "total": len(fetched_by_id),
-    }
+    return RoleScanResult(
+        created=created,
+        updated=updated,
+        deleted=deleted_count,
+        total=len(fetched_by_id),
+    )

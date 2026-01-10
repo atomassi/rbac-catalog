@@ -9,7 +9,13 @@ from typing import TYPE_CHECKING, Any, Final
 
 from azurerbac.azure.models import OperationData, Permission, RoleDefinition
 from azurerbac.cache.models import CachedChangeEvent, CachedRole
+from azurerbac.core.constants import DEFAULT_ROLE_TYPE
 from azurerbac.core.patterns import is_wildcard_pattern, matches_pattern
+from azurerbac.web.services.models import (
+    EnrichedChangeEvent,
+    RoleAllowingOperation,
+    RoleEffectivePermissions,
+)
 
 if TYPE_CHECKING:
     from fastapi import Request
@@ -127,7 +133,7 @@ def sort_operations(
 
 def compute_role_effective_permissions(
     role: RoleDefinition, all_operations: list[OperationData], app_cache: AppCache
-) -> dict:
+) -> RoleEffectivePermissions:
     """Compute the effective permissions for a role.
 
     Applies the same logic as the recommender:
@@ -140,18 +146,7 @@ def compute_role_effective_permissions(
         app_cache: The application cache instance.
 
     Returns:
-        A dict with:
-        - control_plane_actions: list of effective control plane operations
-        - data_plane_actions: list of effective data plane operations
-        - control_plane_count: count of control plane operations
-        - data_plane_count: count of data plane operations
-        - has_conditions: whether any permissions have conditions
-        - has_wildcards: whether any patterns contain wildcards
-        - has_unresolved_permissions: whether role has permissions that don't resolve
-        - raw_actions: list of action patterns from the role
-        - raw_not_actions: list of notAction patterns from the role
-        - raw_data_actions: list of dataAction patterns from the role
-        - raw_not_data_actions: list of notDataAction patterns from the role
+        RoleEffectivePermissions with control/data plane actions and metadata.
     """
     role_id = role.name
     permissions = role.properties.permissions
@@ -215,19 +210,19 @@ def compute_role_effective_permissions(
     has_resolved_operations = bool(control_effective or data_effective)
     has_unresolved_permissions = has_defined_permissions and not has_resolved_operations
 
-    return {
-        "control_plane_actions": sorted(control_effective),
-        "data_plane_actions": sorted(data_effective),
-        "control_plane_count": len(control_effective),
-        "data_plane_count": len(data_effective),
-        "has_conditions": has_conditions,
-        "has_wildcards": has_wildcards,
-        "has_unresolved_permissions": has_unresolved_permissions,
-        "raw_actions": raw_actions,
-        "raw_not_actions": raw_not_actions,
-        "raw_data_actions": raw_data_actions,
-        "raw_not_data_actions": raw_not_data_actions,
-    }
+    return RoleEffectivePermissions(
+        control_plane_actions=sorted(control_effective),
+        data_plane_actions=sorted(data_effective),
+        control_plane_count=len(control_effective),
+        data_plane_count=len(data_effective),
+        has_conditions=has_conditions,
+        has_wildcards=has_wildcards,
+        has_unresolved_permissions=has_unresolved_permissions,
+        raw_actions=raw_actions,
+        raw_not_actions=raw_not_actions,
+        raw_data_actions=raw_data_actions,
+        raw_not_data_actions=raw_not_data_actions,
+    )
 
 
 def _find_matching_pattern_and_condition(
@@ -258,7 +253,7 @@ def _operation_in_set(operation_lower: str, operation_set: set[str]) -> bool:
 
 def get_roles_allowing_operation(
     operation_name: str, is_data_action: bool, app_cache: AppCache
-) -> list[dict]:
+) -> list[RoleAllowingOperation]:
     """Find all roles that allow a specific operation.
 
     Uses the pre-computed role coverage cache from the recommender.
@@ -271,8 +266,7 @@ def get_roles_allowing_operation(
         app_cache: The application cache instance.
 
     Returns:
-        List of dicts with role_id, role_name, role_type, matched_pattern,
-        actions_count, data_actions_count, has_condition, condition_text.
+        List of RoleAllowingOperation with role details and matched pattern.
     """
     # Check cache first
     cache_key = f"roles_allowing_op:{operation_name.lower()}:{is_data_action}"
@@ -282,7 +276,7 @@ def get_roles_allowing_operation(
     if not (all_roles := app_cache.get_all_roles()):
         return []
 
-    allowing_roles = []
+    allowing_roles: list[RoleAllowingOperation] = []
     operation_lower = operation_name.lower()
 
     for role in all_roles:
@@ -303,19 +297,19 @@ def get_roles_allowing_operation(
         )
 
         allowing_roles.append(
-            {
-                "role_id": role_id,
-                "role_name": role.properties.role_name,
-                "role_type": role.properties.type or "BuiltInRole",
-                "matched_pattern": matched_pattern or "*",
-                "actions_count": len(control_effective),
-                "data_actions_count": len(data_effective),
-                "has_condition": has_condition,
-                "condition_text": condition_text,
-            }
+            RoleAllowingOperation(
+                role_id=role_id,
+                role_name=role.properties.role_name,
+                role_type=role.properties.type or DEFAULT_ROLE_TYPE,
+                matched_pattern=matched_pattern or "*",
+                actions_count=len(control_effective),
+                data_actions_count=len(data_effective),
+                has_condition=has_condition,
+                condition_text=condition_text,
+            )
         )
 
-    allowing_roles.sort(key=lambda x: x["role_name"].lower())
+    allowing_roles.sort(key=lambda x: x.role_name.lower())
 
     # Cache result
     app_cache.set(cache_key, allowing_roles)
@@ -502,14 +496,14 @@ def build_role_redirect_url(
     return str(url)
 
 
-def enrich_event_with_diff(ev: CachedChangeEvent) -> dict:
+def enrich_event_with_diff(ev: CachedChangeEvent) -> EnrichedChangeEvent:
     """Enrich a role change event with processed diff_json.
 
     Args:
         ev: CachedChangeEvent instance with diff_json field.
 
     Returns:
-        Enriched event dictionary with diff and diff_pretty fields.
+        EnrichedChangeEvent with processed diff and formatted JSON.
     """
     import json
 
@@ -532,12 +526,12 @@ def enrich_event_with_diff(ev: CachedChangeEvent) -> dict:
     if (role_json := ev.role_json) and (display_json := to_clean_dict(role_json)):
         role_json_pretty_str = role_json_pretty(display_json)
 
-    return {
-        "scan_timestamp": ev.scan_timestamp,
-        "azure_updated_on": ev.azure_updated_on,
-        "event_type": ev.event_type,
-        "summary": ev.summary,
-        "diff": diff_json,
-        "diff_pretty": (json.dumps(diff_json, indent=2, default=str) if diff_json else ""),
-        "role_json_pretty": role_json_pretty_str,
-    }
+    return EnrichedChangeEvent(
+        scan_timestamp=ev.scan_timestamp,
+        azure_updated_on=ev.azure_updated_on,
+        event_type=ev.event_type,
+        summary=ev.summary,
+        diff=diff_json,
+        diff_pretty=(json.dumps(diff_json, indent=2, default=str) if diff_json else ""),
+        role_json_pretty=role_json_pretty_str,
+    )

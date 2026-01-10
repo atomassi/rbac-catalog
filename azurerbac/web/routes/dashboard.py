@@ -135,7 +135,7 @@ async def _render_recent(
             events = await fetch_events_from_db(session, deps, cutoff, event_type)
 
         last_scan, first_scan = await ensure_scan_metadata(
-            session, deps, common["last_scan"], common["first_scan"]
+            session, deps, common.last_scan, common.first_scan
         )
 
     # Pagination: calculate total and slice
@@ -153,8 +153,8 @@ async def _render_recent(
             "events": paginated_events,
             "total_events": total_events,
             "roles": [],
-            "total_roles": common["total_roles"] or 0,
-            "total_operations": common["total_operations"] or 0,
+            "total_roles": common.total_roles or 0,
+            "total_operations": common.total_operations or 0,
             "last_scan": last_scan,
             "first_scan": first_scan,
             "q": q,
@@ -220,7 +220,7 @@ async def _render_roles(
             )
 
         last_scan, first_scan = await ensure_scan_metadata(
-            session, deps, common["last_scan"], common["first_scan"]
+            session, deps, common.last_scan, common.first_scan
         )
 
     return deps.templates.TemplateResponse(
@@ -229,8 +229,8 @@ async def _render_roles(
         {
             "events": [],
             "roles": roles,
-            "total_roles": common["total_roles"] or 0,
-            "total_operations": common["total_operations"] or 0,
+            "total_roles": common.total_roles or 0,
+            "total_operations": common.total_operations or 0,
             "last_scan": last_scan,
             "first_scan": first_scan,
             "q": q,

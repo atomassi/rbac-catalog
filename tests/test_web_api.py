@@ -429,17 +429,32 @@ class TestRolesAllowingOperationCaching:
     def test_roles_allowing_operation_is_cached(self):
         """Test that roles_allowing_operation results are stored in cache."""
         from azurerbac.cache import AppCache
+        from azurerbac.web.services.models import RoleAllowingOperation
 
         cache = AppCache()
 
-        # Simulate caching the result
+        # Simulate caching the result with proper typed models
         mock_result = [
-            {"role_id": "role-1", "role_name": "Reader", "matched_pattern": "*"},
-            {
-                "role_id": "role-2",
-                "role_name": "Contributor",
-                "matched_pattern": "*/read",
-            },
+            RoleAllowingOperation(
+                role_id="role-1",
+                role_name="Reader",
+                role_type="BuiltInRole",
+                matched_pattern="*",
+                actions_count=1,
+                data_actions_count=0,
+                has_condition=False,
+                condition_text=None,
+            ),
+            RoleAllowingOperation(
+                role_id="role-2",
+                role_name="Contributor",
+                role_type="BuiltInRole",
+                matched_pattern="*/read",
+                actions_count=5,
+                data_actions_count=0,
+                has_condition=False,
+                condition_text=None,
+            ),
         ]
         cache_key = "roles_allowing_op:microsoft.storage/read:False"
         cache.set(cache_key, mock_result)
@@ -448,18 +463,32 @@ class TestRolesAllowingOperationCaching:
         cached = cache.get(cache_key)
         assert cached is not None
         assert len(cached) == 2
-        assert cached[0]["role_name"] == "Reader"
+        assert cached[0].role_name == "Reader"
 
     def test_roles_allowing_operation_cleared_on_invalidate_all(self):
         """Test that roles_allowing_op entries are cleared on invalidate_all."""
         from azurerbac.cache import AppCache
+        from azurerbac.web.services.models import RoleAllowingOperation
 
         cache = AppCache()
 
-        # Cache multiple operation results
-        cache.set("roles_allowing_op:op1:False", [{"role": "r1"}])
-        cache.set("roles_allowing_op:op2:True", [{"role": "r2"}])
-        cache.set("roles_allowing_op:op3:False", [{"role": "r3"}])
+        # Helper to create a minimal RoleAllowingOperation
+        def make_role(name: str) -> RoleAllowingOperation:
+            return RoleAllowingOperation(
+                role_id=f"{name}-id",
+                role_name=name,
+                role_type="BuiltInRole",
+                matched_pattern="*",
+                actions_count=1,
+                data_actions_count=0,
+                has_condition=False,
+                condition_text=None,
+            )
+
+        # Cache multiple operation results with proper typed models
+        cache.set("roles_allowing_op:op1:False", [make_role("r1")])
+        cache.set("roles_allowing_op:op2:True", [make_role("r2")])
+        cache.set("roles_allowing_op:op3:False", [make_role("r3")])
 
         # Verify all are cached
         assert cache.get("roles_allowing_op:op1:False") is not None
@@ -478,31 +507,54 @@ class TestRolesAllowingOperationCaching:
     def test_different_operations_have_different_cache_keys(self):
         """Test that different operations use different cache keys."""
         from azurerbac.cache import AppCache
+        from azurerbac.web.services.models import RoleAllowingOperation
 
         cache = AppCache()
 
-        # Cache results for different operations
-        cache.set(
-            "roles_allowing_op:microsoft.storage/read:False",
-            [{"role": "storage-reader"}],
+        # Cache results for different operations using proper typed models
+        storage_role = RoleAllowingOperation(
+            role_id="storage-reader-id",
+            role_name="storage-reader",
+            role_type="BuiltInRole",
+            matched_pattern="Microsoft.Storage/*",
+            actions_count=1,
+            data_actions_count=0,
+            has_condition=False,
+            condition_text=None,
         )
-        cache.set(
-            "roles_allowing_op:microsoft.compute/read:False",
-            [{"role": "compute-reader"}],
+        compute_role = RoleAllowingOperation(
+            role_id="compute-reader-id",
+            role_name="compute-reader",
+            role_type="BuiltInRole",
+            matched_pattern="Microsoft.Compute/*",
+            actions_count=1,
+            data_actions_count=0,
+            has_condition=False,
+            condition_text=None,
         )
-        cache.set(
-            "roles_allowing_op:microsoft.storage/read:True",
-            [{"role": "data-reader"}],
+        data_role = RoleAllowingOperation(
+            role_id="data-reader-id",
+            role_name="data-reader",
+            role_type="BuiltInRole",
+            matched_pattern="Microsoft.Storage/*",
+            actions_count=0,
+            data_actions_count=1,
+            has_condition=False,
+            condition_text=None,
         )
+
+        cache.set("roles_allowing_op:microsoft.storage/read:False", [storage_role])
+        cache.set("roles_allowing_op:microsoft.compute/read:False", [compute_role])
+        cache.set("roles_allowing_op:microsoft.storage/read:True", [data_role])
 
         # Verify they're independent
         storage_result = cache.get("roles_allowing_op:microsoft.storage/read:False")
         compute_result = cache.get("roles_allowing_op:microsoft.compute/read:False")
         data_result = cache.get("roles_allowing_op:microsoft.storage/read:True")
 
-        assert storage_result[0]["role"] == "storage-reader"
-        assert compute_result[0]["role"] == "compute-reader"
-        assert data_result[0]["role"] == "data-reader"
+        assert storage_result[0].role_name == "storage-reader"
+        assert compute_result[0].role_name == "compute-reader"
+        assert data_result[0].role_name == "data-reader"
 
 
 class TestCacheConsistencyOnRebuild:
@@ -646,8 +698,8 @@ class TestRoleCoverageRaceCondition:
 
         # Should find the role
         assert len(result) == 1
-        assert result[0]["role_name"] == "Test Reader"
-        assert result[0]["role_id"] == "test-reader-role"
+        assert result[0].role_name == "Test Reader"
+        assert result[0].role_id == "test-reader-role"
 
         # Cleanup
         clear_computed_caches()
@@ -750,7 +802,7 @@ class TestRoleCoverageRaceCondition:
 
         # Should find the role
         assert len(result) == 1
-        assert result[0]["role_name"] == "Test Reader"
+        assert result[0].role_name == "Test Reader"
 
         # Cleanup
         clear_computed_caches()

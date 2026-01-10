@@ -18,6 +18,13 @@ from azurerbac.web.services.dashboard import (
     search_roles_in_cache,
     search_roles_in_db,
 )
+from azurerbac.web.services.models import (
+    DashboardSummary,
+    EnrichedChangeEvent,
+    RoleAllowingOperation,
+    RoleEffectivePermissions,
+    RoleWithCounts,
+)
 from azurerbac.web.services.pages import (
     compute_role_effective_permissions,
     get_roles_allowing_operation,
@@ -30,6 +37,11 @@ from azurerbac.web.services.startup import (
 )
 
 __all__ = [
+    "DashboardSummary",
+    "EnrichedChangeEvent",
+    "RoleAllowingOperation",
+    "RoleEffectivePermissions",
+    "RoleWithCounts",
     "cache_refresh_task",
     "compute_role_effective_permissions",
     "enrich_role_with_counts",

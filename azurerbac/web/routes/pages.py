@@ -98,7 +98,7 @@ async def role_detail(
     display_json = role_def.to_dict() if role_def else {}
     all_ops = await deps.get_all_operations()
     effective_perms = (
-        compute_role_effective_permissions(role_def, all_ops, deps.app_cache) if role_def else {}
+        compute_role_effective_permissions(role_def, all_ops, deps.app_cache) if role_def else None
     )
 
     return deps.templates.TemplateResponse(

@@ -18,6 +18,10 @@ from dotenv import load_dotenv
 
 from azurerbac.azure import fetch_builtin_roles, fetch_provider_operations
 from azurerbac.backgroundjobs.exceptions import EmptyFetchResultError
+from azurerbac.backgroundjobs.models import (
+    RoleScanResult,
+    ScanResult,
+)
 from azurerbac.backgroundjobs.operations_monitor import apply_operations_scan
 from azurerbac.backgroundjobs.roles_monitor import apply_role_scan
 from azurerbac.core import (
@@ -41,8 +45,8 @@ class JobSpec:
     enabled: bool
     fetch_label: str
     fetch: Callable[[], Awaitable[list[Any]]]
-    apply: Callable[[Any, list[Any]], Awaitable[dict]]
-    on_success: Callable[[float, list[Any], dict], None]
+    apply: Callable[[Any, list[Any]], Awaitable[ScanResult]]
+    on_success: Callable[[float, list[Any], ScanResult], None]
     interval_seconds: int
 
 
@@ -53,16 +57,18 @@ def _create_job_specs(settings: Settings) -> list[JobSpec]:
     async def _fetch_roles() -> list[dict]:
         return await fetch_builtin_roles()
 
-    def _on_roles_success(elapsed: float, roles: list[Any], stats: dict) -> None:
+    def _on_roles_success(elapsed: float, roles: list[Any], stats: ScanResult) -> None:
+        # stats is always RoleScanResult here
+        assert isinstance(stats, RoleScanResult)
         track_role_scan(
             duration_seconds=elapsed,
             roles_fetched=len(roles),
-            roles_added=stats.get("created", 0),
-            roles_updated=stats.get("updated", 0),
-            roles_deleted=stats.get("deleted", 0),
+            roles_added=stats.created,
+            roles_updated=stats.updated,
+            roles_deleted=stats.deleted,
         )
 
-    def _on_operations_success(elapsed: float, operations: list[Any], stats: dict) -> None:
+    def _on_operations_success(elapsed: float, operations: list[Any], stats: ScanResult) -> None:
         track_operations_scan(elapsed, len(operations))
 
     return [
@@ -183,7 +189,7 @@ class JobRunner:
 
         logger.info("Starting job: %s", spec.name)
 
-        async def work() -> tuple[list[dict], dict]:
+        async def work() -> tuple[list[Any], ScanResult]:
             logger.info("%s", spec.fetch_label)
             items = await spec.fetch()
             logger.info("Fetched %s items", len(items))
@@ -201,7 +207,7 @@ class JobRunner:
                 stats = await spec.apply(session, items)
             return items, stats
 
-        def on_success(elapsed: float, result: tuple[list[dict], dict]) -> None:
+        def on_success(elapsed: float, result: tuple[list[Any], ScanResult]) -> None:
             items, stats = result
             logger.info("%s complete: %s (took %.2fs)", spec.name, stats, elapsed)
             spec.on_success(elapsed, items, stats)

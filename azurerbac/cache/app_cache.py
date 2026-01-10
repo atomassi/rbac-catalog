@@ -87,32 +87,26 @@ class AppCache:
 
     @property
     def is_preloaded(self) -> bool:
-        """Check if cache has been preloaded."""
         return self._preloaded
 
     @is_preloaded.setter
     def is_preloaded(self, value: bool) -> None:
-        """Mark cache as preloaded."""
         self._preloaded = value
 
     @property
     def loaded_cache_mtime(self) -> float | None:
-        """Get the mtime of the currently loaded cache file."""
         return self._loaded_cache_mtime
 
     @loaded_cache_mtime.setter
     def loaded_cache_mtime(self, mtime: float | None) -> None:
-        """Set the mtime of the currently loaded cache file."""
         self._loaded_cache_mtime = mtime
 
     @property
     def last_cache_check(self) -> float:
-        """Get timestamp of last cache file check."""
         return self._last_cache_check
 
     @last_cache_check.setter
     def last_cache_check(self, timestamp: float) -> None:
-        """Set timestamp of last cache file check."""
         self._last_cache_check = timestamp
 
     # ─────────────────────────────────────────────────────────────────────────
@@ -121,7 +115,7 @@ class AppCache:
 
     @property
     def cache(self) -> CacheData:
-        """Get current cache. Capture reference for consistent reads."""
+        """Current cache data. Capture reference for consistent reads."""
         return self._cache
 
     def swap(self, new_cache: CacheData) -> None:
@@ -148,15 +142,12 @@ class AppCache:
         return result
 
     def get_all_roles(self) -> list[RoleDefinition]:
-        """Get all roles as RoleDefinition objects."""
         return self._cache.get_role_definitions()
 
     def get_all_operations(self) -> list[OperationData]:
-        """Get all operations."""
         return self._cache.all_operations
 
     def get_change_events(self) -> list[CachedChangeEvent]:
-        """Get all change events."""
         return self._cache.all_change_events
 
     def get_events_for_role(self, role_id: str) -> list[CachedChangeEvent]:
@@ -202,7 +193,6 @@ class AppCache:
         self._role_pages[page_key] = roles
 
     def get_role_pages_count(self) -> int:
-        """Get the number of cached role pages."""
         return len(self._role_pages)
 
     # ─────────────────────────────────────────────────────────────────────────
@@ -210,13 +200,11 @@ class AppCache:
     # ─────────────────────────────────────────────────────────────────────────
 
     def get(self, key: str) -> Any:
-        """Get a value from misc cache."""
         result = self._misc_cache.get(key)
         track_cache_hit("misc", result is not None, key)
         return result
 
     def set(self, key: str, value: Any) -> None:
-        """Set a value in misc cache."""
         self._misc_cache[key] = value
 
     # ─────────────────────────────────────────────────────────────────────────

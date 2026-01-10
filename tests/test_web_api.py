@@ -6,33 +6,10 @@ from unittest.mock import patch
 
 import pytest
 
-from azurerbac.azure.models import OperationData, Permission, RoleDefinition, RoleProperties
+from azurerbac.azure.models import OperationData, RoleDefinition
 from azurerbac.cache.models import CachedRole
 from azurerbac.core.constants import RoleStatus
-
-
-def _make_cached_role(
-    role_id: str, role_name: str, status: RoleStatus = RoleStatus.ACTIVE
-) -> CachedRole:
-    """Create a CachedRole for testing."""
-    definition = RoleDefinition(
-        name=role_id,
-        id=f"/providers/Microsoft.Authorization/roleDefinitions/{role_id}",
-        type="Microsoft.Authorization/roleDefinitions",
-        properties=RoleProperties(
-            role_name=role_name,
-            type="BuiltInRole",
-            description=f"Test role: {role_name}",
-            permissions=[
-                Permission(actions=["*"], not_actions=[], data_actions=[], not_data_actions=[])
-            ],
-            assignable_scopes=["/"],
-        ),
-    )
-    return CachedRole(
-        definition=definition,
-        status=status,
-    )
+from tests.conftest import make_cached_role
 
 
 class TestAppCache:
@@ -724,7 +701,7 @@ class TestRoleCoverageRaceCondition:
             metadata=CacheMetadata(roles_count=1, operations_count=1),
             all_operations=[{"name": "Microsoft.Test/read", "is_data_action": False}],
             roles_by_id={
-                "role-1": _make_cached_role("role-1", "Test Role"),
+                "role-1": make_cached_role("role-1", "Test Role"),
             },
             role_coverage=precomputed_coverage,
         )

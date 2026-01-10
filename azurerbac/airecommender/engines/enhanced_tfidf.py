@@ -270,7 +270,6 @@ class EnhancedTFIDFRecommender:
         logger.info("Enhanced TF-IDF initialized: %d roles indexed", len(self._role_data))
 
     def _get_role_name(self, role_id: str) -> str:
-        """Get role name from role ID."""
         role = self._role_data.get(role_id)
         return role.properties.role_name if role else role_id
 

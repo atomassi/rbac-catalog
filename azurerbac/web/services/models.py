@@ -8,7 +8,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any
+
+from azurerbac.core.types import JsonDict
 
 
 @dataclass(slots=True)
@@ -31,7 +32,7 @@ class RoleEffectivePermissions:
     raw_data_actions: list[str]
     raw_not_data_actions: list[str]
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> JsonDict:
         """Convert to dict for template rendering."""
         return {
             "control_plane_actions": self.control_plane_actions,
@@ -59,11 +60,11 @@ class EnrichedChangeEvent:
     azure_updated_on: datetime | None
     event_type: str
     summary: str | None
-    diff: dict[str, Any] | None
+    diff: JsonDict | None
     diff_pretty: str
     role_json_pretty: str
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> JsonDict:
         """Convert to dict for template rendering."""
         return {
             "scan_timestamp": self.scan_timestamp,
@@ -93,7 +94,7 @@ class RoleAllowingOperation:
     has_condition: bool
     condition_text: str | None
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> JsonDict:
         """Convert to dict for template rendering."""
         return {
             "role_id": self.role_id,
@@ -122,7 +123,7 @@ class RoleWithCounts:
     actions_count: int
     data_actions_count: int
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> JsonDict:
         """Convert to dict for template rendering."""
         return {
             "role_id": self.role_id,
@@ -147,7 +148,7 @@ class DashboardSummary:
     last_scan: datetime | None
     first_scan: datetime | None
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> JsonDict:
         """Convert to dict for template rendering."""
         return {
             "total_roles": self.total_roles,

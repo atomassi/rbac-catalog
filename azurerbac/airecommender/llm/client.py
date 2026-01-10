@@ -79,12 +79,10 @@ class OllamaClient:
 
     @property
     def is_connected(self) -> bool:
-        """Check if client is connected to Ollama server."""
         return self._connected
 
     @property
     def has_role_names(self) -> bool:
-        """Check if known role names have been initialized for fuzzy matching."""
         return bool(self._known_role_names)
 
     def try_connect(self) -> bool:

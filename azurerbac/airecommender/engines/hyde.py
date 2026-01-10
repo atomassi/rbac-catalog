@@ -67,7 +67,7 @@ class HyDEEngine(BaseRecommenderEngine):
         """
         self._log_start(query, top_k)
 
-        if self.embedding_model is None or not self.embedding_model.is_loaded:
+        if not self.is_embeddings_available:
             logger.warning("HyDE: Embedding model not loaded")
             return []
 

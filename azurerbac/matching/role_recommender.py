@@ -7,10 +7,10 @@ The heavy lifting is delegated to RoleRecommendationService.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
 
 from azurerbac.azure.models import OperationData, RoleDefinition
 from azurerbac.core import HIGH_PRIVILEGE_ROLES
+from azurerbac.core.types import JsonDict
 from azurerbac.matching.recommendation_service import (
     RoleEvaluationContext,
     RoleRecommendationService,
@@ -47,7 +47,7 @@ class RoleMatch:
         """Check if all requested operations are covered."""
         return len(self.missing_operations) == 0
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> JsonDict:
         """Convert to dictionary for API response."""
         return {
             "role_id": self.role_id,

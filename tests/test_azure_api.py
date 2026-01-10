@@ -589,25 +589,21 @@ class TestRoleDefinitionEdgeCases:
         )
         assert role.properties.permissions[0].condition == complex_condition
 
-    def test_condition_empty_string_is_not_has_condition(self):
-        """Empty condition string means has_condition is False."""
-        perm = Permission.model_validate({"actions": ["*"], "condition": ""})
-        assert perm.condition == ""
-        assert not perm.has_condition  # Empty string is falsy
-
-    def test_condition_none_is_not_has_condition(self):
-        """None condition means has_condition is False."""
-        perm = Permission.model_validate({"actions": ["*"], "condition": None})
-        assert perm.condition is None
-        assert not perm.has_condition
-
-    def test_condition_with_version_but_empty_condition(self):
-        """conditionVersion without condition is valid."""
-        perm = Permission.model_validate(
-            {"actions": ["*"], "condition": None, "conditionVersion": "2.0"}
-        )
-        assert perm.condition_version == "2.0"
-        assert not perm.has_condition
+    @pytest.mark.parametrize(
+        ("condition", "condition_version", "expected_has_condition"),
+        [
+            pytest.param("", None, False, id="empty_string"),
+            pytest.param(None, None, False, id="none"),
+            pytest.param(None, "2.0", False, id="version_only"),
+        ],
+    )
+    def test_condition_falsy_values(self, condition, condition_version, expected_has_condition):
+        """Falsy condition values mean has_condition is False."""
+        perm_data = {"actions": ["*"], "condition": condition}
+        if condition_version:
+            perm_data["conditionVersion"] = condition_version
+        perm = Permission.model_validate(perm_data)
+        assert perm.has_condition == expected_has_condition
 
 
 class TestPermissionEdgeCases:

@@ -10,34 +10,8 @@ import pytest
 
 from azurerbac.azure.models import OperationData, RoleDefinition
 from azurerbac.cache.models import CachedChangeEvent
-
-
-def make_role(
-    role_id: str = "test-role-id",
-    actions: list[str] | None = None,
-    not_actions: list[str] | None = None,
-    data_actions: list[str] | None = None,
-    not_data_actions: list[str] | None = None,
-    condition: str | None = None,
-) -> RoleDefinition:
-    """Create a RoleDefinition for testing."""
-    return RoleDefinition.model_validate(
-        {
-            "name": role_id,
-            "properties": {
-                "permissions": [
-                    {
-                        "actions": actions or [],
-                        "notActions": not_actions or [],
-                        "dataActions": data_actions or [],
-                        "notDataActions": not_data_actions or [],
-                        **({"condition": condition} if condition else {}),
-                    }
-                ]
-            },
-        }
-    )
-
+from azurerbac.core.constants import EventType
+from tests.conftest import make_role_definition
 
 # =============================================================================
 # Tests for pages service functions
@@ -53,7 +27,9 @@ class TestComputeRoleEffectivePermissionsServices:
         """Test computing effective permissions from cache."""
         from azurerbac.web.services.pages import compute_role_effective_permissions
 
-        role = make_role(actions=["Microsoft.Storage/*/read"])
+        role = make_role_definition(
+            "Test Role", "test-role-id", actions=["Microsoft.Storage/*/read"]
+        )
 
         all_operations = [
             {"name": "Microsoft.Storage/storageAccounts/read", "is_data_action": False},
@@ -77,7 +53,9 @@ class TestComputeRoleEffectivePermissionsServices:
         """Test that notActions are properly excluded."""
         from azurerbac.web.services.pages import compute_role_effective_permissions
 
-        role = make_role(
+        role = make_role_definition(
+            "Test Role",
+            "test-role-id",
             actions=["Microsoft.Storage/*"],
             not_actions=["Microsoft.Storage/storageAccounts/delete"],
         )
@@ -107,8 +85,10 @@ class TestComputeRoleEffectivePermissionsServices:
         """Test computing data plane actions."""
         from azurerbac.web.services.pages import compute_role_effective_permissions
 
-        role = make_role(
-            data_actions=["Microsoft.Storage/storageAccounts/blobServices/containers/blobs/read"]
+        role = make_role_definition(
+            "Test Role",
+            "test-role-id",
+            data_actions=["Microsoft.Storage/storageAccounts/blobServices/containers/blobs/read"],
         )
 
         all_operations = [
@@ -129,72 +109,74 @@ class TestComputeRoleEffectivePermissionsServices:
         assert result.control_plane_count == 0
         assert result.data_plane_count == 1
 
-    def test_detect_conditions(self):
-        """Test detection of conditions in permissions."""
+    @pytest.mark.parametrize(
+        ("actions", "condition", "cache_coverage", "attr", "expected"),
+        [
+            pytest.param(
+                ["Microsoft.Storage/*/read"],
+                "@Resource[Microsoft.Storage/storageAccounts:name] == 'example'",
+                (set(), set()),
+                "has_conditions",
+                True,
+                id="detect_conditions",
+            ),
+            pytest.param(
+                ["Microsoft.Storage/*/read"],
+                None,
+                (set(), set()),
+                "has_wildcards",
+                True,
+                id="detect_wildcards",
+            ),
+            pytest.param(
+                ["Microsoft.OldService/*/read"],
+                None,
+                (set(), set()),
+                "has_unresolved_permissions",
+                True,
+                id="unresolved_permissions",
+            ),
+            pytest.param(
+                ["Microsoft.Storage/*/read"],
+                None,
+                ({"Microsoft.Storage/storageAccounts/read"}, set()),
+                "has_unresolved_permissions",
+                False,
+                id="resolved_permissions",
+            ),
+        ],
+    )
+    def test_permission_detection(
+        self,
+        actions: list[str],
+        condition: str | None,
+        cache_coverage: tuple[set, set],
+        attr: str,
+        expected: bool,
+    ):
+        """Test detection of various permission attributes (conditions, wildcards, unresolved)."""
         from azurerbac.web.services.pages import compute_role_effective_permissions
 
-        role = make_role(
-            actions=["Microsoft.Storage/*/read"],
-            condition="@Resource[Microsoft.Storage/storageAccounts:name] == 'example'",
+        role = make_role_definition(
+            "Test Role", "test-role-id", actions=actions, condition=condition
         )
 
         mock_app_cache = MagicMock()
-        mock_app_cache.get_role_coverage.return_value = (set(), set())
+        mock_app_cache.get_role_coverage.return_value = cache_coverage
 
         result = compute_role_effective_permissions(role, [], mock_app_cache)
 
-        assert result.has_conditions is True
-
-    def test_detect_wildcards(self):
-        """Test detection of wildcard patterns."""
-        from azurerbac.web.services.pages import compute_role_effective_permissions
-
-        role = make_role(actions=["Microsoft.Storage/*/read"])
-
-        mock_app_cache = MagicMock()
-        mock_app_cache.get_role_coverage.return_value = (set(), set())
-
-        result = compute_role_effective_permissions(role, [], mock_app_cache)
-
-        assert result.has_wildcards is True
-        assert result.raw_actions == ["Microsoft.Storage/*/read"]
-
-    def test_detect_unresolved_permissions(self):
-        """Test detection of unresolved permissions."""
-        from azurerbac.web.services.pages import compute_role_effective_permissions
-
-        role = make_role(actions=["Microsoft.OldService/*/read"])
-
-        mock_app_cache = MagicMock()
-        # Cache returns empty sets (no matching operations)
-        mock_app_cache.get_role_coverage.return_value = (set(), set())
-
-        result = compute_role_effective_permissions(role, [], mock_app_cache)
-
-        # Role has actions defined but none resolved
-        assert result.has_unresolved_permissions is True
-
-    def test_no_unresolved_when_actions_resolve(self):
-        """Test that has_unresolved_permissions is False when actions resolve."""
-        from azurerbac.web.services.pages import compute_role_effective_permissions
-
-        role = make_role(actions=["Microsoft.Storage/*/read"])
-
-        mock_app_cache = MagicMock()
-        mock_app_cache.get_role_coverage.return_value = (
-            {"Microsoft.Storage/storageAccounts/read"},
-            set(),
-        )
-
-        result = compute_role_effective_permissions(role, [], mock_app_cache)
-
-        assert result.has_unresolved_permissions is False
+        assert getattr(result, attr) == expected
 
     def test_fallback_to_manual_computation(self):
         """Test fallback to manual computation when cache misses."""
         from azurerbac.web.services.pages import compute_role_effective_permissions
 
-        role = make_role(actions=["Microsoft.Storage/storageAccounts/read"])
+        role = make_role_definition(
+            "Test Role",
+            "test-role-id",
+            actions=["Microsoft.Storage/storageAccounts/read"],
+        )
 
         all_operations = [
             OperationData(name="Microsoft.Storage/storageAccounts/read", is_data_action=False),
@@ -393,7 +375,7 @@ class TestEnrichEventWithDiff:
             id=1,
             role_id="test-id",
             role_name="Test Role",
-            event_type="created",
+            event_type=EventType.CREATED,
             scan_timestamp=None,
             azure_updated_on=None,
             summary="Role created",
@@ -420,7 +402,7 @@ class TestEnrichEventWithDiff:
             id=2,
             role_id="test-id",
             role_name="Deleted Role",
-            event_type="deleted",
+            event_type=EventType.DELETED,
             scan_timestamp=None,
             azure_updated_on=None,
             summary="Role deleted",
@@ -440,7 +422,7 @@ class TestEnrichEventWithDiff:
             id=3,
             role_id="test",
             role_name="Test",
-            event_type="created",
+            event_type=EventType.CREATED,
             scan_timestamp=None,
             azure_updated_on=None,
             summary="Created",
@@ -467,7 +449,7 @@ class TestEnrichEventWithDiff:
             id=4,
             role_id="test-id",
             role_name="Updated Role",
-            event_type="updated",
+            event_type=EventType.UPDATED,
             scan_timestamp=None,
             azure_updated_on=None,
             summary="Updated",

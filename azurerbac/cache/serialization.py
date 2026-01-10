@@ -16,6 +16,8 @@ from typing import Any
 
 import msgpack
 
+from azurerbac.core.types import JsonDict
+
 # Marker tags for msgpack ExtType custom types
 TAG_SET = 1
 TAG_TUPLE = 2
@@ -54,7 +56,7 @@ def decode_ext(code: int, data: bytes) -> Any:
     return msgpack.ExtType(code, data)
 
 
-def prepare_for_msgpack(data_dict: dict[str, Any]) -> dict[str, Any]:
+def prepare_for_msgpack(data_dict: JsonDict) -> JsonDict:
     """Convert tuple-keyed dicts to list-of-pairs for msgpack compatibility."""
     result = {}
     for key, value in data_dict.items():
@@ -69,12 +71,12 @@ def prepare_for_msgpack(data_dict: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
-def packb(data: dict[str, Any]) -> bytes:
+def packb(data: JsonDict) -> bytes:
     """Serialize a dictionary to msgpack bytes."""
     prepared = prepare_for_msgpack(data)
     return msgpack.packb(prepared, default=encode_ext, strict_types=False)  # type: ignore[return-value]
 
 
-def unpackb(data: bytes) -> dict[str, Any]:
+def unpackb(data: bytes) -> JsonDict:
     """Deserialize msgpack bytes to a dictionary."""
     return msgpack.unpackb(data, ext_hook=decode_ext, strict_map_key=False)

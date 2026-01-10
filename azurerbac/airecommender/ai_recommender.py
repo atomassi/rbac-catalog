@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Final
+from typing import TYPE_CHECKING, Final
 
 from pydantic import BaseModel
 
@@ -20,6 +20,7 @@ from azurerbac.airecommender.llm import OllamaClient
 from azurerbac.airecommender.modes import RecommenderMode
 from azurerbac.azure.models import RoleDefinition
 from azurerbac.core.singleton import ThreadSafeSingleton
+from azurerbac.core.types import JsonDict
 
 if TYPE_CHECKING:
     from azurerbac.airecommender.embeddings import EmbeddingModel
@@ -62,7 +63,7 @@ class AIRecommendation:
     score: float  # Similarity score 0-1
     matched_keywords: list[str] = field(default_factory=list)
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> JsonDict:
         """Convert the recommendation to a dictionary."""
         return {
             "role_id": self.role_id,

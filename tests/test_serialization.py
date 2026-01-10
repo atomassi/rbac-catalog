@@ -38,51 +38,58 @@ class TestEncodeExt:
         assert result.code == expected_tag
         assert isinstance(result.data, bytes)
 
-    def test_encode_datetime(self):
-        """Naive datetimes are normalized to UTC."""
-        dt = datetime(2024, 1, 15, 10, 30, 0)
-        result = encode_ext(dt)
+    @pytest.mark.parametrize(
+        ("dt_value", "expected_in_data"),
+        [
+            pytest.param(
+                datetime(2024, 1, 15, 10, 30, 0),
+                b"2024-01-15T10:30:00+00:00",
+                id="naive_datetime_normalized_to_utc",
+            ),
+            pytest.param(
+                datetime(2024, 1, 15, 10, 30, 0, tzinfo=UTC),
+                b"2024-01-15T10:30:00",
+                id="aware_datetime",
+            ),
+        ],
+    )
+    def test_encode_datetime(self, dt_value, expected_in_data):
+        """Datetimes are encoded with TAG_DATETIME."""
+        result = encode_ext(dt_value)
         assert result.code == TAG_DATETIME
-        assert result.data == b"2024-01-15T10:30:00+00:00"
+        assert expected_in_data in result.data
 
-    def test_encode_datetime_with_timezone(self):
-        """Datetimes with timezone are encoded correctly."""
-        dt = datetime(2024, 1, 15, 10, 30, 0, tzinfo=UTC)
-        result = encode_ext(dt)
-        assert result.code == TAG_DATETIME
-        assert b"2024-01-15T10:30:00" in result.data
-
-    def test_encode_unsupported_type_raises(self):
+    @pytest.mark.parametrize(
+        "value",
+        [
+            pytest.param(object(), id="unsupported_type"),
+            pytest.param([1, 2, 3], id="list_native_to_msgpack"),
+        ],
+    )
+    def test_encode_unsupported_raises(self, value):
         """Unsupported types raise TypeError."""
         with pytest.raises(TypeError, match="Cannot serialize type"):
-            encode_ext(object())
-
-    def test_encode_list_raises(self):
-        """Lists are not handled by encode_ext (they're native to msgpack)."""
-        with pytest.raises(TypeError, match="Cannot serialize type"):
-            encode_ext([1, 2, 3])
+            encode_ext(value)
 
 
 class TestDecodeExt:
     """Tests for decode_ext function."""
 
-    def test_decode_set(self):
+    @pytest.mark.parametrize(
+        ("original", "expected_type"),
+        [
+            pytest.param({1, 2, 3}, set, id="set_with_values"),
+            pytest.param(set(), set, id="empty_set"),
+        ],
+    )
+    def test_decode_set(self, original, expected_type):
         """TAG_SET is decoded back to a set."""
         import msgpack
 
-        original = {1, 2, 3}
         packed = msgpack.packb(list(original))
         result = decode_ext(TAG_SET, packed)
         assert result == original
-        assert isinstance(result, set)
-
-    def test_decode_empty_set(self):
-        """Empty sets are decoded correctly."""
-        import msgpack
-
-        packed = msgpack.packb([])
-        result = decode_ext(TAG_SET, packed)
-        assert result == set()
+        assert isinstance(result, expected_type)
 
     def test_decode_tuple(self):
         """TAG_TUPLE is decoded back to a tuple."""
@@ -100,12 +107,6 @@ class TestDecodeExt:
         result = decode_ext(TAG_DATETIME, dt_str.encode("utf-8"))
         assert result == datetime(2024, 1, 15, 10, 30, 0, tzinfo=UTC)
         assert isinstance(result, datetime)
-        assert result.tzinfo is not None
-
-    def test_decode_datetime_with_timezone(self):
-        """Datetimes with timezone info are decoded correctly."""
-        dt_str = "2024-01-15T10:30:00+00:00"
-        result = decode_ext(TAG_DATETIME, dt_str.encode("utf-8"))
         assert result.tzinfo is not None
 
     def test_decode_tuple_key_dict(self):

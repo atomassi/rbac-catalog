@@ -49,6 +49,7 @@ class EnvVars:
 
     # Cache
     CACHE_DIR: Final = "CACHE_DIR"
+    CACHE_BACKEND: Final = "CACHE_BACKEND"
     CACHE_CHECK_INTERVAL_SECONDS: Final = "CACHE_CHECK_INTERVAL_SECONDS"
     DB_REBUILD_INTERVAL_SECONDS: Final = "DB_REBUILD_INTERVAL_SECONDS"
 
@@ -139,6 +140,9 @@ class Settings(BaseModel):
 
     # Cache directory (optional override)
     cache_dir: str | None = None
+
+    # Cache backend type (file, redis, etc.)
+    cache_backend: str = "file"
 
     # Cache timing
     cache_check_interval_seconds: int = Field(default=30, gt=0)

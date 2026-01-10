@@ -4,6 +4,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from azurerbac.core import Operation, Role, RoleHistory, RoleScanStatus
+from azurerbac.core.constants import EventType, RoleStatus
 
 
 def _make_test_snapshot(
@@ -11,7 +12,7 @@ def _make_test_snapshot(
     role_id: str,
     role_name: str,
     role_type: str = "BuiltInRole",
-    status: str = "active",
+    status: str | RoleStatus = RoleStatus.ACTIVE,
     description: str = "A test role",
 ) -> Role:
     """Helper to create Role + RoleHistory for tests.
@@ -32,7 +33,7 @@ def _make_test_snapshot(
         role_id=role_id,
         version_number=1,
         role_name=role_name,
-        event_type="created",
+        event_type=EventType.CREATED,
         role_json=role_json_data,
         diff_json={},
         summary="Role created",

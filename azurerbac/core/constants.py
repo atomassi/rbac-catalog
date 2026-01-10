@@ -33,6 +33,9 @@ HIGH_PRIVILEGE_ROLES: Final[frozenset[str]] = frozenset(
 # Default role type for built-in roles
 DEFAULT_ROLE_TYPE: Final[str] = "BuiltInRole"
 
+# Azure resource type for role definitions
+ROLE_DEFINITION_TYPE: Final[str] = "Microsoft.Authorization/roleDefinitions"
+
 # Default limits for search and matching operations
 DEFAULT_SEARCH_LIMIT: Final[int] = 50
 MAX_UNCOVERED_SAMPLE: Final[int] = 50

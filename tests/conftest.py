@@ -10,7 +10,9 @@ This module provides the test infrastructure for azurerbac:
 from __future__ import annotations
 
 import os
+import tempfile
 from collections.abc import AsyncGenerator, Generator
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 # Clear Application Insights connection string to prevent OpenTelemetry
@@ -33,7 +35,7 @@ from sqlalchemy.ext.asyncio import (
 from azurerbac.azure.models import OperationData, RoleDefinition
 from azurerbac.cache.models import CachedRole
 from azurerbac.core import Base
-from azurerbac.core.constants import RoleStatus
+from azurerbac.core.constants import ROLE_DEFINITION_TYPE, RoleStatus
 
 # =============================================================================
 # Settings Fixtures
@@ -141,6 +143,137 @@ def mock_session_factory(mock_async_session: AsyncMock) -> MagicMock:
     factory = MagicMock()
     factory.return_value = mock_async_session
     return factory
+
+
+# =============================================================================
+# Utility Fixtures
+# =============================================================================
+
+
+@pytest.fixture
+def temp_cache_dir() -> Generator[Path, None, None]:
+    """Create a temporary directory for cache testing."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        yield Path(tmpdir)
+
+
+# =============================================================================
+# Test Data Factories - Reusable Builders for Domain Objects
+# =============================================================================
+
+
+def make_role_definition(
+    role_name: str,
+    role_id: str,
+    actions: list[str] | None = None,
+    not_actions: list[str] | None = None,
+    data_actions: list[str] | None = None,
+    not_data_actions: list[str] | None = None,
+    *,
+    description: str | None = None,
+    condition: str | None = None,
+) -> RoleDefinition:
+    """Create a RoleDefinition for testing.
+
+    Args:
+        role_name: Display name of the role.
+        role_id: Unique role identifier (GUID).
+        actions: Optional list of control plane actions.
+        not_actions: Optional list of excluded control plane actions.
+        data_actions: Optional list of data plane actions.
+        not_data_actions: Optional list of excluded data plane actions.
+        description: Optional description (defaults to "Test role: {role_name}").
+        condition: Optional ABAC condition expression.
+
+    Returns:
+        Configured RoleDefinition for testing.
+    """
+    permission_dict: dict = {
+        "actions": actions or [],
+        "notActions": not_actions or [],
+        "dataActions": data_actions or [],
+        "notDataActions": not_data_actions or [],
+    }
+    if condition:
+        permission_dict["condition"] = condition
+
+    return RoleDefinition.model_validate(
+        {
+            "name": role_id,
+            "id": f"/providers/{ROLE_DEFINITION_TYPE}/{role_id}",
+            "type": ROLE_DEFINITION_TYPE,
+            "properties": {
+                "roleName": role_name,
+                "type": "BuiltInRole",
+                "description": description or f"Test role: {role_name}",
+                "permissions": [permission_dict],
+                "assignableScopes": ["/"],
+            },
+        }
+    )
+
+
+def make_operation(
+    name: str,
+    is_data_action: bool = False,
+    *,
+    display_name: str | None = None,
+    description: str | None = None,
+    provider_display_name: str = "",
+    resource_type_display_name: str | None = None,
+) -> OperationData:
+    """Create an OperationData object for testing.
+
+    Args:
+        name: Full operation name (e.g., "Microsoft.Storage/storageAccounts/read").
+        is_data_action: Whether this is a data plane operation.
+        display_name: Human-readable operation name.
+        description: Operation description.
+        provider_display_name: Display name of the resource provider.
+        resource_type_display_name: Display name of the resource type.
+
+    Returns:
+        Configured OperationData for testing.
+    """
+    return OperationData(
+        name=name,
+        display_name=display_name,
+        description=description,
+        origin=None,
+        provider_display_name=provider_display_name,
+        resource_type=None,
+        resource_type_display_name=resource_type_display_name,
+        is_data_action=is_data_action,
+    )
+
+
+def make_cached_role(
+    role_id: str,
+    role_name: str,
+    status: RoleStatus = RoleStatus.ACTIVE,
+    *,
+    description: str | None = None,
+    actions: list[str] | None = None,
+) -> CachedRole:
+    """Create a CachedRole for testing.
+
+    Args:
+        role_id: Unique role identifier (GUID).
+        role_name: Display name of the role.
+        status: Role status (ACTIVE or DELETED).
+        description: Optional description (defaults to "Test role: {role_name}").
+        actions: Optional list of actions (defaults to ["*"]).
+
+    Returns:
+        Configured CachedRole for testing.
+    """
+    definition = make_role_definition(
+        role_name=role_name,
+        role_id=role_id,
+        actions=actions or ["*"],
+        description=description,
+    )
+    return CachedRole(definition=definition, status=status)
 
 
 # =============================================================================
@@ -337,115 +470,105 @@ def sample_operations() -> list[OperationData]:
     """
     return [
         # Control plane - Storage
-        OperationData(
-            name="Microsoft.Storage/storageAccounts/read",
+        make_operation(
+            "Microsoft.Storage/storageAccounts/read",
             display_name="Get Storage Account",
             description="Returns storage account details",
             provider_display_name="Microsoft Storage",
             resource_type_display_name="Storage Accounts",
-            is_data_action=False,
         ),
-        OperationData(
-            name="Microsoft.Storage/storageAccounts/write",
+        make_operation(
+            "Microsoft.Storage/storageAccounts/write",
             display_name="Create Storage Account",
             description="Creates a storage account",
             provider_display_name="Microsoft Storage",
             resource_type_display_name="Storage Accounts",
-            is_data_action=False,
         ),
-        OperationData(
-            name="Microsoft.Storage/storageAccounts/delete",
+        make_operation(
+            "Microsoft.Storage/storageAccounts/delete",
             display_name="Delete Storage Account",
             description="Deletes a storage account",
             provider_display_name="Microsoft Storage",
             resource_type_display_name="Storage Accounts",
-            is_data_action=False,
         ),
         # Control plane - Compute
-        OperationData(
-            name="Microsoft.Compute/virtualMachines/read",
+        make_operation(
+            "Microsoft.Compute/virtualMachines/read",
             display_name="Get Virtual Machine",
             description="Returns VM details",
             provider_display_name="Microsoft Compute",
             resource_type_display_name="Virtual Machines",
-            is_data_action=False,
         ),
-        OperationData(
-            name="Microsoft.Compute/virtualMachines/write",
+        make_operation(
+            "Microsoft.Compute/virtualMachines/write",
             display_name="Create Virtual Machine",
             description="Creates a VM",
             provider_display_name="Microsoft Compute",
             resource_type_display_name="Virtual Machines",
-            is_data_action=False,
         ),
-        OperationData(
-            name="Microsoft.Compute/virtualMachines/delete",
+        make_operation(
+            "Microsoft.Compute/virtualMachines/delete",
             display_name="Delete Virtual Machine",
             description="Deletes a VM",
             provider_display_name="Microsoft Compute",
             resource_type_display_name="Virtual Machines",
-            is_data_action=False,
         ),
         # Control plane - Authorization (for testing notActions exclusions)
-        OperationData(
-            name="Microsoft.Authorization/roleAssignments/read",
+        make_operation(
+            "Microsoft.Authorization/roleAssignments/read",
             display_name="Get Role Assignment",
             description="Returns role assignment",
             provider_display_name="Microsoft Authorization",
             resource_type_display_name="Role Assignments",
-            is_data_action=False,
         ),
-        OperationData(
-            name="Microsoft.Authorization/roleAssignments/write",
+        make_operation(
+            "Microsoft.Authorization/roleAssignments/write",
             display_name="Create Role Assignment",
             description="Creates a role assignment",
             provider_display_name="Microsoft Authorization",
             resource_type_display_name="Role Assignments",
-            is_data_action=False,
         ),
         # Control plane - Network
-        OperationData(
-            name="Microsoft.Network/virtualNetworks/read",
+        make_operation(
+            "Microsoft.Network/virtualNetworks/read",
             display_name="Get Virtual Network",
             description="Returns virtual network details",
             provider_display_name="Microsoft Network",
             resource_type_display_name="Virtual Networks",
-            is_data_action=False,
         ),
         # Control plane - KeyVault
-        OperationData(
-            name="Microsoft.KeyVault/vaults/read",
+        make_operation(
+            "Microsoft.KeyVault/vaults/read",
             display_name="Get Key Vault",
             description="Returns key vault details",
             provider_display_name="Microsoft KeyVault",
             resource_type_display_name="Vaults",
-            is_data_action=False,
         ),
         # Data plane - Storage blobs
-        OperationData(
-            name="Microsoft.Storage/storageAccounts/blobServices/containers/blobs/read",
+        make_operation(
+            "Microsoft.Storage/storageAccounts/blobServices/containers/blobs/read",
+            is_data_action=True,
             display_name="Read Blob",
             description="Reads blob data",
             provider_display_name="Microsoft Storage",
             resource_type_display_name="Blobs",
-            is_data_action=True,
         ),
-        OperationData(
-            name="Microsoft.Storage/storageAccounts/blobServices/containers/blobs/write",
+        make_operation(
+            "Microsoft.Storage/storageAccounts/blobServices/containers/blobs/write",
+            is_data_action=True,
             display_name="Write Blob",
             description="Writes blob data",
             provider_display_name="Microsoft Storage",
             resource_type_display_name="Blobs",
-            is_data_action=True,
         ),
         # Data plane - KeyVault secrets
-        OperationData(
-            name="Microsoft.KeyVault/vaults/secrets/read",
+        make_operation(
+            "Microsoft.KeyVault/vaults/secrets/read",
+            is_data_action=True,
             display_name="Read Secret",
             description="Reads secret value",
             provider_display_name="Microsoft Key Vault",
             resource_type_display_name="Secrets",
-            is_data_action=True,
         ),
     ]
 

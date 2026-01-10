@@ -7,7 +7,8 @@ providing better type safety and IDE support.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+
+from azurerbac.core.types import JsonDict
 
 
 @dataclass(slots=True)
@@ -21,7 +22,7 @@ class ScanResult:
     updated: int
     total: int
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> JsonDict:
         """Convert to dict for JSON serialization."""
         return {
             "created": self.created,
@@ -39,7 +40,7 @@ class RoleScanResult(ScanResult):
 
     deleted: int = 0
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> JsonDict:
         """Convert to dict for JSON serialization."""
         return {
             **super().to_dict(),
@@ -57,7 +58,7 @@ class OperationsScanResult(ScanResult):
     duplicates_skipped: int = 0
     providers: int = 0
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> JsonDict:
         """Convert to dict for JSON serialization."""
         return {
             **super().to_dict(),

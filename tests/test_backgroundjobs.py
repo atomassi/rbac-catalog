@@ -5,6 +5,7 @@ from sqlalchemy import select
 
 from azurerbac.backgroundjobs.roles_monitor import apply_role_scan
 from azurerbac.core import Role, RoleHistory
+from azurerbac.core.constants import EventType, RoleStatus
 
 
 def _make_role(
@@ -129,8 +130,8 @@ class TestApplyRoleScan:
         assert len(history) == 2
 
         event_types = {h.role_id: h.event_type for h in history}
-        assert event_types["brand-new"] == "created"
-        assert event_types["pre-existing"] == "initial_scan"
+        assert event_types["brand-new"] == EventType.CREATED
+        assert event_types["pre-existing"] == EventType.INITIAL_SCAN
 
     @pytest.mark.asyncio
     async def test_creates_new_roles(self, db_session):
@@ -152,7 +153,7 @@ class TestApplyRoleScan:
         history = (await db_session.execute(select(RoleHistory))).scalars().all()
         assert len(history) == 2
         # Default _make_role has created_on == updated_on, so these are "created"
-        assert all(h.event_type == "created" for h in history)
+        assert all(h.event_type == EventType.CREATED for h in history)
         assert all(h.version_number == 1 for h in history)
 
     @pytest.mark.asyncio
@@ -183,8 +184,8 @@ class TestApplyRoleScan:
             .all()
         )
         assert len(history) == 2
-        assert history[0].event_type == "created"
-        assert history[1].event_type == "updated"
+        assert history[0].event_type == EventType.CREATED
+        assert history[1].event_type == EventType.UPDATED
 
         # Verify version numbers
         role_history = (
@@ -219,7 +220,7 @@ class TestApplyRoleScan:
         # Only one history entry (the creation)
         history = (await db_session.execute(select(RoleHistory))).scalars().all()
         assert len(history) == 1
-        assert history[0].event_type == "created"
+        assert history[0].event_type == EventType.CREATED
 
     @pytest.mark.asyncio
     async def test_deletes_missing_role(self, db_session):
@@ -251,7 +252,7 @@ class TestApplyRoleScan:
 
         # Verify snapshot status
         snapshot = await db_session.get(Role, "role-2")
-        assert snapshot.status == "deleted"
+        assert snapshot.status == RoleStatus.DELETED
 
     @pytest.mark.asyncio
     async def test_reactivates_deleted_role(self, db_session):
@@ -269,7 +270,7 @@ class TestApplyRoleScan:
 
         # Should be updated (reactivated)
         snapshot = await db_session.get(Role, "role-1")
-        assert snapshot.status == "active"
+        assert snapshot.status == RoleStatus.ACTIVE
 
     @pytest.mark.asyncio
     async def test_handles_empty_roles_list(self, db_session):

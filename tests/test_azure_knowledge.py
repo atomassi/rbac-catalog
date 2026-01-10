@@ -82,15 +82,31 @@ class TestExpandQueryWithSynonyms:
         expanded = expand_query_with_synonyms(query)
         assert expected_in_result in expanded.lower() or len(expanded) >= len(query)
 
-    def test_expand_empty_query(self):
-        """Test expanding empty query."""
-        expanded = expand_query_with_synonyms("")
-        assert expanded == ""
-
-    def test_expand_no_matching_synonyms(self):
-        """Test query with no matching synonyms."""
-        expanded = expand_query_with_synonyms("unknown service xyz")
-        assert "unknown" in expanded.lower()
+    @pytest.mark.parametrize(
+        ("query", "assertion"),
+        [
+            pytest.param("", lambda e: e == "", id="empty_query"),
+            pytest.param(
+                "unknown service xyz",
+                lambda e: "unknown" in e.lower(),
+                id="no_matching_synonyms",
+            ),
+            pytest.param(
+                "vm storage keyvault",
+                lambda e: len(e) > len("vm storage keyvault"),
+                id="multiple_synonyms",
+            ),
+            pytest.param(
+                "aks",
+                lambda e: "aks" in e.lower() or "kubernetes" in e.lower(),
+                id="abbreviations_expansion",
+            ),
+        ],
+    )
+    def test_expand_query_edge_cases(self, query, assertion):
+        """Test query expansion edge cases."""
+        expanded = expand_query_with_synonyms(query)
+        assert assertion(expanded)
 
     def test_case_insensitive_matching(self):
         """Test that synonym matching is case insensitive."""
@@ -98,16 +114,6 @@ class TestExpandQueryWithSynonyms:
         expanded_upper = expand_query_with_synonyms("STORAGE")
         assert len(expanded_lower) > 0
         assert len(expanded_upper) > 0
-
-    def test_multiple_synonyms_in_query(self):
-        """Test query with multiple synonym matches."""
-        expanded = expand_query_with_synonyms("vm storage keyvault")
-        assert len(expanded) > len("vm storage keyvault")
-
-    def test_abbreviations_expansion(self):
-        """Test that abbreviations are properly expanded."""
-        expanded = expand_query_with_synonyms("aks")
-        assert "aks" in expanded.lower() or "kubernetes" in expanded.lower()
 
 
 # =============================================================================

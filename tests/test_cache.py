@@ -28,12 +28,11 @@ from azurerbac.cache import (
     load_cache_from_disk,
     save_cache_to_disk,
 )
-from azurerbac.cache.models import CACHE_VERSION
 from azurerbac.cache.utils import (
     build_operations_prefix_index,
     get_matching_operations,
 )
-from azurerbac.core.constants import RoleStatus
+from azurerbac.core.constants import EventType, RoleStatus
 
 
 def make_cached_roles_by_id(roles: list[RoleDefinition]) -> dict[str, CachedRole]:
@@ -286,8 +285,12 @@ class TestPreloadCache:
         cache = AppCache()
 
         events = [
-            CachedChangeEvent(id=1, role_id="role-1", role_name="Role 1", event_type="created"),
-            CachedChangeEvent(id=2, role_id="role-2", role_name="Role 2", event_type="updated"),
+            CachedChangeEvent(
+                id=1, role_id="role-1", role_name="Role 1", event_type=EventType.CREATED
+            ),
+            CachedChangeEvent(
+                id=2, role_id="role-2", role_name="Role 2", event_type=EventType.UPDATED
+            ),
         ]
         cache.set_change_events(events)
 
@@ -320,7 +323,9 @@ class TestPreloadCache:
         """Test get_change_events returns cached events."""
         cache = AppCache()
         events = [
-            CachedChangeEvent(id=1, role_id="role-1", role_name="Role 1", event_type="created")
+            CachedChangeEvent(
+                id=1, role_id="role-1", role_name="Role 1", event_type=EventType.CREATED
+            )
         ]
         cache.set_change_events(events)
 
@@ -330,9 +335,15 @@ class TestPreloadCache:
         """Test get_events_for_role filters by role_id."""
         cache = AppCache()
         events = [
-            CachedChangeEvent(id=1, role_id="role-1", role_name="Role 1", event_type="created"),
-            CachedChangeEvent(id=2, role_id="role-2", role_name="Role 2", event_type="updated"),
-            CachedChangeEvent(id=3, role_id="role-1", role_name="Role 1", event_type="modified"),
+            CachedChangeEvent(
+                id=1, role_id="role-1", role_name="Role 1", event_type=EventType.CREATED
+            ),
+            CachedChangeEvent(
+                id=2, role_id="role-2", role_name="Role 2", event_type=EventType.UPDATED
+            ),
+            CachedChangeEvent(
+                id=3, role_id="role-1", role_name="Role 1", event_type=EventType.UPDATED
+            ),
         ]
         cache.set_change_events(events)
 
@@ -601,13 +612,6 @@ def operations_for_hashing():
     ]
 
 
-@pytest.fixture
-def temp_cache_dir():
-    """Create a temporary directory for cache testing."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        yield Path(tmpdir)
-
-
 # =============================================================================
 # Tests for CacheMetadata
 # =============================================================================
@@ -616,42 +620,63 @@ def temp_cache_dir():
 class TestCacheMetadata:
     """Tests for CacheMetadata validation logic."""
 
-    def test_is_valid_for_matching_counts(self):
-        """Cache is valid when counts match."""
-        meta = CacheMetadata(roles_count=10, operations_count=100)
-        assert meta.is_valid_for(10, 100) is True
-
-    def test_is_valid_for_roles_count_mismatch(self):
-        """Cache is invalid when roles count changes."""
-        meta = CacheMetadata(roles_count=10, operations_count=100)
-        assert meta.is_valid_for(15, 100) is False
-
-    def test_is_valid_for_operations_count_mismatch(self):
-        """Cache is invalid when operations count changes."""
-        meta = CacheMetadata(roles_count=10, operations_count=100)
-        assert meta.is_valid_for(10, 150) is False
-
-    def test_is_valid_for_version_mismatch(self):
-        """Cache is invalid when version changes."""
-        meta = CacheMetadata(version="v1", roles_count=10, operations_count=100)
-        assert meta.is_valid_for(10, 100) is False
-
-    def test_is_valid_for_roles_hash_mismatch(self):
-        """Cache is invalid when roles hash changes."""
-        meta = CacheMetadata(roles_count=10, operations_count=100, roles_hash="abc123")
-        assert meta.is_valid_for(10, 100, roles_hash="xyz789") is False
-
-    def test_is_valid_for_operations_hash_mismatch(self):
-        """Cache is invalid when operations hash changes."""
-        meta = CacheMetadata(roles_count=10, operations_count=100, operations_hash="abc123")
-        assert meta.is_valid_for(10, 100, operations_hash="xyz789") is False
-
-    def test_is_valid_for_empty_hashes_ignored(self):
-        """Empty hashes are not checked."""
-        meta = CacheMetadata(roles_count=10, operations_count=100)
-        # Empty hashes should not affect validation
-        assert meta.is_valid_for(10, 100, roles_hash="any") is True
-        assert meta.is_valid_for(10, 100, operations_hash="any") is True
+    @pytest.mark.parametrize(
+        ("meta_kwargs", "check_kwargs", "expected"),
+        [
+            pytest.param(
+                {"roles_count": 10, "operations_count": 100},
+                {"roles_count": 10, "operations_count": 100},
+                True,
+                id="matching_counts_valid",
+            ),
+            pytest.param(
+                {"roles_count": 10, "operations_count": 100},
+                {"roles_count": 15, "operations_count": 100},
+                False,
+                id="roles_count_mismatch",
+            ),
+            pytest.param(
+                {"roles_count": 10, "operations_count": 100},
+                {"roles_count": 10, "operations_count": 150},
+                False,
+                id="operations_count_mismatch",
+            ),
+            pytest.param(
+                {"version": "v1", "roles_count": 10, "operations_count": 100},
+                {"roles_count": 10, "operations_count": 100},
+                False,
+                id="version_mismatch",
+            ),
+            pytest.param(
+                {"roles_count": 10, "operations_count": 100, "roles_hash": "abc123"},
+                {"roles_count": 10, "operations_count": 100, "roles_hash": "xyz789"},
+                False,
+                id="roles_hash_mismatch",
+            ),
+            pytest.param(
+                {"roles_count": 10, "operations_count": 100, "operations_hash": "abc123"},
+                {"roles_count": 10, "operations_count": 100, "operations_hash": "xyz789"},
+                False,
+                id="operations_hash_mismatch",
+            ),
+            pytest.param(
+                {"roles_count": 10, "operations_count": 100},
+                {"roles_count": 10, "operations_count": 100, "roles_hash": "any"},
+                True,
+                id="empty_stored_roles_hash_ignored",
+            ),
+            pytest.param(
+                {"roles_count": 10, "operations_count": 100},
+                {"roles_count": 10, "operations_count": 100, "operations_hash": "any"},
+                True,
+                id="empty_stored_operations_hash_ignored",
+            ),
+        ],
+    )
+    def test_is_valid_for(self, meta_kwargs: dict, check_kwargs: dict, expected: bool):
+        """Test cache validity under various conditions."""
+        meta = CacheMetadata(**meta_kwargs)
+        assert meta.is_valid_for(**check_kwargs) is expected
 
 
 # =============================================================================
@@ -1079,9 +1104,10 @@ class TestCacheInvalidation:
 class TestCachedRoleFromDict:
     """Edge cases for CachedRole.from_dict deserialization."""
 
-    def _make_cached_role_dict(self, **overrides) -> dict:
-        """Helper to create valid CachedRole dict with overrides."""
-        base = {
+    @pytest.fixture
+    def base_role_dict(self) -> dict:
+        """Base valid CachedRole dict."""
+        return {
             "definition": {
                 "id": "/test",
                 "name": "test-guid",
@@ -1091,145 +1117,84 @@ class TestCachedRoleFromDict:
             "status": "active",
             "last_seen_at": "2024-01-15T10:30:00+00:00",
         }
-        base.update(overrides)
-        return base
 
-    def test_valid_cached_role(self):
+    def test_valid_cached_role(self, base_role_dict: dict):
         """CachedRole.from_dict works with valid data."""
-        data = self._make_cached_role_dict()
-        cached = CachedRole.from_dict(data)
+        cached = CachedRole.from_dict(base_role_dict)
         assert cached.role_name == "Test Role"
         assert cached.status == RoleStatus.ACTIVE
         assert cached.last_seen_at is not None
 
-    def test_invalid_status_raises_value_error(self):
-        """from_dict with invalid status raises ValueError."""
-        data = self._make_cached_role_dict(status="invalid_status")
-        with pytest.raises(ValueError, match="invalid_status"):
-            CachedRole.from_dict(data)
+    @pytest.mark.parametrize(
+        ("status", "expected_error"),
+        [
+            pytest.param("invalid_status", ValueError, id="invalid_status"),
+            pytest.param("ACTIVE", ValueError, id="uppercase_status"),
+        ],
+    )
+    def test_invalid_status_raises(self, base_role_dict: dict, status: str, expected_error: type):
+        """from_dict with invalid status raises appropriate error."""
+        base_role_dict["status"] = status
+        with pytest.raises(expected_error):
+            CachedRole.from_dict(base_role_dict)
 
-    def test_status_case_sensitivity(self):
-        """Status must be exact lowercase match."""
-        # ACTIVE in uppercase should fail
-        data = self._make_cached_role_dict(status="ACTIVE")
-        with pytest.raises(ValueError):
-            CachedRole.from_dict(data)
-
-    def test_missing_definition_raises_key_error(self):
-        """from_dict with missing 'definition' raises KeyError."""
-        data = {"status": "active", "last_seen_at": None}
+    @pytest.mark.parametrize(
+        ("missing_key", "data"),
+        [
+            pytest.param(
+                "definition",
+                {"status": "active", "last_seen_at": None},
+                id="missing_definition",
+            ),
+            pytest.param(
+                "status",
+                {"definition": {"name": "test", "properties": {"roleName": "Test"}}},
+                id="missing_status",
+            ),
+        ],
+    )
+    def test_missing_required_key_raises(self, missing_key: str, data: dict):
+        """from_dict with missing required key raises KeyError."""
         with pytest.raises(KeyError):
             CachedRole.from_dict(data)
 
-    def test_missing_status_raises_key_error(self):
-        """from_dict with missing 'status' raises KeyError."""
-        data = {
-            "definition": {
-                "name": "test",
-                "properties": {"roleName": "Test"},
-            }
-        }
-        with pytest.raises(KeyError):
-            CachedRole.from_dict(data)
+    @pytest.mark.parametrize(
+        ("last_seen_at_value", "expected"),
+        [
+            pytest.param(None, None, id="null"),
+            pytest.param("__MISSING__", None, id="missing_key"),
+        ],
+    )
+    def test_last_seen_at_optional(
+        self, base_role_dict: dict, last_seen_at_value: str | None, expected: datetime | None
+    ):
+        """from_dict handles missing or null last_seen_at."""
+        if last_seen_at_value == "__MISSING__":
+            del base_role_dict["last_seen_at"]
+        else:
+            base_role_dict["last_seen_at"] = last_seen_at_value
+        cached = CachedRole.from_dict(base_role_dict)
+        assert cached.last_seen_at is expected
 
-    def test_last_seen_at_none(self):
-        """from_dict handles last_seen_at: null."""
-        data = self._make_cached_role_dict(last_seen_at=None)
-        cached = CachedRole.from_dict(data)
-        assert cached.last_seen_at is None
-
-    def test_last_seen_at_missing(self):
-        """from_dict handles missing last_seen_at key."""
-        data = self._make_cached_role_dict()
-        del data["last_seen_at"]
-        cached = CachedRole.from_dict(data)
-        assert cached.last_seen_at is None
-
-    def test_last_seen_at_already_datetime(self):
+    def test_last_seen_at_already_datetime(self, base_role_dict: dict):
         """from_dict handles last_seen_at as datetime object."""
         now = datetime.now(UTC)
-        data = self._make_cached_role_dict(last_seen_at=now)
-        cached = CachedRole.from_dict(data)
+        base_role_dict["last_seen_at"] = now
+        cached = CachedRole.from_dict(base_role_dict)
         assert cached.last_seen_at == now
 
-    def test_deleted_status(self):
+    def test_deleted_status(self, base_role_dict: dict):
         """from_dict handles deleted status."""
-        data = self._make_cached_role_dict(status="deleted")
-        cached = CachedRole.from_dict(data)
+        base_role_dict["status"] = "deleted"
+        cached = CachedRole.from_dict(base_role_dict)
         assert cached.status == RoleStatus.DELETED
 
-    def test_to_dict_roundtrip(self):
+    def test_to_dict_roundtrip(self, base_role_dict: dict):
         """to_dict -> from_dict roundtrip preserves data."""
-        original_data = self._make_cached_role_dict()
-        cached = CachedRole.from_dict(original_data)
+        cached = CachedRole.from_dict(base_role_dict)
         exported = cached.to_dict()
         restored = CachedRole.from_dict(exported)
 
         assert restored.role_id == cached.role_id
         assert restored.role_name == cached.role_name
         assert restored.status == cached.status
-
-
-# =============================================================================
-# CacheMetadata Validation Edge Cases
-# =============================================================================
-
-
-class TestCacheMetadataEdgeCases:
-    """Edge case tests for CacheMetadata.is_valid_for method."""
-
-    def test_version_mismatch_returns_false(self):
-        """is_valid_for returns False on version mismatch."""
-        meta = CacheMetadata(version="old-version", roles_count=10, operations_count=100)
-        assert not meta.is_valid_for(roles_count=10, operations_count=100)
-
-    def test_current_version_valid(self):
-        """is_valid_for returns True with current version and matching counts."""
-        meta = CacheMetadata(
-            version=CACHE_VERSION,
-            roles_count=10,
-            operations_count=100,
-        )
-        assert meta.is_valid_for(roles_count=10, operations_count=100)
-
-    def test_roles_count_mismatch_returns_false(self):
-        """is_valid_for returns False when roles count doesn't match."""
-        meta = CacheMetadata(version=CACHE_VERSION, roles_count=10, operations_count=100)
-        assert not meta.is_valid_for(roles_count=15, operations_count=100)
-
-    def test_operations_count_mismatch_returns_false(self):
-        """is_valid_for returns False when operations count doesn't match."""
-        meta = CacheMetadata(version=CACHE_VERSION, roles_count=10, operations_count=100)
-        assert not meta.is_valid_for(roles_count=10, operations_count=200)
-
-    def test_hash_mismatch_returns_false(self):
-        """is_valid_for returns False on hash mismatch."""
-        meta = CacheMetadata(
-            version=CACHE_VERSION,
-            roles_count=10,
-            operations_count=100,
-            roles_hash="abc123",
-        )
-        assert not meta.is_valid_for(roles_count=10, operations_count=100, roles_hash="xyz789")
-
-    def test_operations_hash_mismatch_returns_false(self):
-        """is_valid_for returns False on operations hash mismatch."""
-        meta = CacheMetadata(
-            version=CACHE_VERSION,
-            roles_count=10,
-            operations_count=100,
-            operations_hash="abc123",
-        )
-        assert not meta.is_valid_for(roles_count=10, operations_count=100, operations_hash="xyz789")
-
-    def test_empty_hashes_ignored(self):
-        """is_valid_for ignores empty hash strings."""
-        meta = CacheMetadata(
-            version=CACHE_VERSION,
-            roles_count=10,
-            operations_count=100,
-            roles_hash="",  # Empty
-        )
-        # Empty hashes on either side should not cause mismatch
-        assert meta.is_valid_for(roles_count=10, operations_count=100, roles_hash="")
-        assert meta.is_valid_for(roles_count=10, operations_count=100, roles_hash="anything")

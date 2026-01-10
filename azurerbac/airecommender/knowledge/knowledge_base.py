@@ -11,9 +11,10 @@ import logging
 import re
 from collections.abc import Iterable
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Final
+from typing import TYPE_CHECKING, Final
 
 from azurerbac.airecommender.knowledge.azure_knowledge import USE_CASE_PATTERNS
+from azurerbac.core.types import JsonDict
 
 if TYPE_CHECKING:
     from azurerbac.azure.models import RoleDefinition
@@ -66,20 +67,18 @@ class RoleKnowledgeBase:
 
     def __init__(self) -> None:
         """Initialize an empty knowledge base."""
-        self._knowledge_base: dict[str, Any] = {}
-        self._role_documents: dict[str, dict[str, Any]] = {}  # role_id -> document
+        self._knowledge_base: JsonDict = {}
+        self._role_documents: dict[str, JsonDict] = {}  # role_id -> document
         self._name_to_role_id: dict[str, str] = {}  # lowercase name -> role_id
         # Precomputed word sets for fuzzy matching (role_id -> frozenset of words)
         self._name_word_sets: dict[str, frozenset[str]] = {}
 
     @property
-    def role_documents(self) -> dict[str, dict[str, Any]]:
-        """Get all role documents."""
+    def role_documents(self) -> dict[str, JsonDict]:
         return self._role_documents
 
     @property
-    def knowledge_base(self) -> dict[str, Any]:
-        """Get the raw knowledge base data."""
+    def knowledge_base(self) -> JsonDict:
         return self._knowledge_base
 
     def get_all_role_names(self) -> list[str]:

@@ -10,9 +10,10 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from functools import cached_property
-from typing import TYPE_CHECKING, Any, Final
+from typing import TYPE_CHECKING, Final
 
 from azurerbac.core.constants import RoleStatus
+from azurerbac.core.types import JsonDict
 
 if TYPE_CHECKING:
     from azurerbac.azure.models import OperationData, RoleDefinition
@@ -20,6 +21,23 @@ if TYPE_CHECKING:
 CACHE_VERSION: Final[str] = (
     "v7"  # Bump to force cache rebuild (simplified CachedRole, OperationData)
 )
+
+
+def parse_datetime(val: str | datetime | None) -> datetime | None:
+    """Parse datetime from string, datetime, or None.
+
+    Used for deserializing cached data from disk (ISO format strings).
+    """
+    if val is None:
+        return None
+    if isinstance(val, datetime):
+        return val
+    return datetime.fromisoformat(val)
+
+
+def format_datetime(val: datetime | None) -> str | None:
+    """Format datetime to ISO string for serialization."""
+    return val.isoformat() if val else None
 
 
 @dataclass(slots=True)
@@ -36,63 +54,50 @@ class CachedRole:
     """
 
     definition: RoleDefinition
-    status: RoleStatus  # From our database tracking
-    last_seen_at: datetime | None = None  # Last time we saw this role in Azure
+    status: RoleStatus
+    last_seen_at: datetime | None = None
 
     @property
     def role_id(self) -> str:
-        """Get role ID (GUID) from definition."""
         return self.definition.role_id
 
     @property
     def role_name(self) -> str:
-        """Get role display name from definition."""
         return self.definition.role_name
 
     @property
     def role_type(self) -> str:
-        """Get role type from definition."""
         return self.definition.role_type
 
     @property
     def description(self) -> str:
-        """Get role description from definition."""
         return self.definition.description
 
     @property
     def created_on(self) -> datetime | None:
-        """Get created timestamp from definition."""
         return self.definition.properties.created_on
 
     @property
     def updated_on(self) -> datetime | None:
-        """Get updated timestamp from definition."""
         return self.definition.properties.updated_on
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> JsonDict:
         """Convert to dict for JSON serialization (disk persistence)."""
         return {
             "definition": self.definition.to_dict(),
             "status": self.status.value,
-            "last_seen_at": self.last_seen_at.isoformat() if self.last_seen_at else None,
+            "last_seen_at": format_datetime(self.last_seen_at),
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> CachedRole:
+    def from_dict(cls, data: JsonDict) -> CachedRole:
         """Create from dict (disk persistence)."""
         from azurerbac.azure.models import RoleDefinition
-
-        def parse_dt(val: str | datetime | None) -> datetime | None:
-            if val is None:
-                return None
-            if isinstance(val, datetime):
-                return val
-            return datetime.fromisoformat(val)
 
         return cls(
             definition=RoleDefinition.model_validate(data["definition"]),
             status=RoleStatus(data["status"]),
-            last_seen_at=parse_dt(data.get("last_seen_at")),
+            last_seen_at=parse_datetime(data.get("last_seen_at")),
         )
 
 
@@ -111,43 +116,33 @@ class CachedChangeEvent:
     scan_timestamp: datetime | None = None
     azure_updated_on: datetime | None = None
     summary: str | None = None
-    diff_json: dict[str, Any] | None = None
-    role_json: dict[str, Any] | None = None
+    diff_json: JsonDict | None = None
+    role_json: JsonDict | None = None
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> JsonDict:
         """Convert to dict for JSON serialization (disk persistence)."""
         return {
             "id": self.id,
             "role_id": self.role_id,
             "role_name": self.role_name,
             "event_type": self.event_type,
-            "scan_timestamp": self.scan_timestamp.isoformat() if self.scan_timestamp else None,
-            "azure_updated_on": (
-                self.azure_updated_on.isoformat() if self.azure_updated_on else None
-            ),
+            "scan_timestamp": format_datetime(self.scan_timestamp),
+            "azure_updated_on": format_datetime(self.azure_updated_on),
             "summary": self.summary,
             "diff_json": self.diff_json,
             "role_json": self.role_json,
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> CachedChangeEvent:
+    def from_dict(cls, data: JsonDict) -> CachedChangeEvent:
         """Create from dict (disk persistence)."""
-
-        def parse_dt(val: str | datetime | None) -> datetime | None:
-            if val is None:
-                return None
-            if isinstance(val, datetime):
-                return val
-            return datetime.fromisoformat(val)
-
         return cls(
             id=data["id"],
             role_id=data["role_id"],
             role_name=data["role_name"],
             event_type=data["event_type"],
-            scan_timestamp=parse_dt(data.get("scan_timestamp")),
-            azure_updated_on=parse_dt(data.get("azure_updated_on")),
+            scan_timestamp=parse_datetime(data.get("scan_timestamp")),
+            azure_updated_on=parse_datetime(data.get("azure_updated_on")),
             summary=data.get("summary"),
             diff_json=data.get("diff_json"),
             role_json=data.get("role_json"),
@@ -165,6 +160,18 @@ class CacheMetadata:
     operations_hash: str = ""
     created_at: float = field(default_factory=time.time)
 
+    def _version_matches(self) -> bool:
+        return self.version == CACHE_VERSION
+
+    def _counts_match(self, roles_count: int, operations_count: int) -> bool:
+        return self.roles_count == roles_count and self.operations_count == operations_count
+
+    def _hash_matches(self, stored: str, provided: str) -> bool:
+        """Check if hashes match. Empty strings on either side are ignored."""
+        if not stored or not provided:
+            return True
+        return stored == provided
+
     def is_valid_for(
         self,
         roles_count: int,
@@ -172,15 +179,12 @@ class CacheMetadata:
         roles_hash: str = "",
         operations_hash: str = "",
     ) -> bool:
-        """Check if cache is still valid."""
-        if self.version != CACHE_VERSION:
-            return False
-        if self.roles_count != roles_count or self.operations_count != operations_count:
-            return False
-        if roles_hash and self.roles_hash and self.roles_hash != roles_hash:
-            return False
-        return not (
-            operations_hash and self.operations_hash and self.operations_hash != operations_hash
+        """Check if cache is still valid for given parameters."""
+        return (
+            self._version_matches()
+            and self._counts_match(roles_count, operations_count)
+            and self._hash_matches(self.roles_hash, roles_hash)
+            and self._hash_matches(self.operations_hash, operations_hash)
         )
 
 
@@ -199,16 +203,10 @@ class CacheData:
     All fields are immutable after creation - to update, create new instance and swap.
     """
 
-    # ─────────────────────────────────────────────────────────────────────────
     # Metadata (for versioning and invalidation)
-    # ─────────────────────────────────────────────────────────────────────────
-
     metadata: CacheMetadata = field(default_factory=CacheMetadata)
 
-    # ─────────────────────────────────────────────────────────────────────────
     # Raw data (from database)
-    # ─────────────────────────────────────────────────────────────────────────
-
     all_operations: list[OperationData] = field(default_factory=list)
     roles_by_id: dict[str, CachedRole] = field(default_factory=dict)
     all_change_events: list[CachedChangeEvent] = field(default_factory=list)
@@ -216,47 +214,22 @@ class CacheData:
     last_scan: datetime | None = None
     first_scan: datetime | None = None
 
-    # ─────────────────────────────────────────────────────────────────────────
     # Indexes (built from raw data for fast lookup)
-    # ─────────────────────────────────────────────────────────────────────────
-
-    # name.lower() -> OperationData (for case-insensitive lookup)
     ops_by_name_lower: dict[str, OperationData] = field(default_factory=dict)
-
-    # provider prefix -> list of operations (for wildcard search optimization)
     ops_by_prefix: dict[str, list[OperationData]] = field(default_factory=dict)
 
-    # ─────────────────────────────────────────────────────────────────────────
     # Computed caches (expensive analysis, rebuilt on data change)
-    # ─────────────────────────────────────────────────────────────────────────
-
-    # role_id -> (control_ops: set, data_ops: set) with original casing
     role_coverage: dict[str, tuple[set[str], set[str]]] = field(default_factory=dict)
-
-    # role_id -> (control_perms_count, data_perms_count)
     role_net_permissions: dict[str, tuple[int, int]] = field(default_factory=dict)
-
-    # operation_name.lower() -> count of roles granting it
     operation_role_count: dict[str, int] = field(default_factory=dict)
-
-    # (pattern, cache_key) -> set of matching operation names
     pattern_match: dict[tuple[str, int], set[str]] = field(default_factory=dict)
-
-    # (pattern, cache_key, actions, not_actions) -> (covered, total, uncovered, sample)
-    partial_coverage: dict[tuple, tuple[int, int, int, list[str]]] = field(default_factory=dict)
-
-    # (pattern, cache_key) -> match count
+    # Key: (pattern, cache_key, sorted_actions_tuple, sorted_not_actions_tuple)
+    partial_coverage: dict[
+        tuple[str, int, tuple[str, ...], tuple[str, ...]], tuple[int, int, int, list[str]]
+    ] = field(default_factory=dict)
     wildcard_count: dict[tuple[str, int], int] = field(default_factory=dict)
-
-    # cache_key -> {provider_prefix -> set[operation_names]}
     operations_by_prefix_computed: dict[int, dict[str, set[str]]] = field(default_factory=dict)
-
-    # [control_ops_count, data_ops_count] when cache was built
     cache_ops_count: list[int] = field(default_factory=lambda: [0, 0])
-
-    # ─────────────────────────────────────────────────────────────────────────
-    # Derived properties (computed on-demand, not stored)
-    # ─────────────────────────────────────────────────────────────────────────
 
     @cached_property
     def ops_names_set(self) -> set[str]:
@@ -264,33 +237,27 @@ class CacheData:
         return {op.name for op in self.all_operations}
 
     def get_role_definitions(self) -> list[RoleDefinition]:
-        """Get all roles as RoleDefinition objects.
-
-        Extracts the definition from each CachedRole.
-        Filters out deleted roles (status != 'active').
-        """
-        return [r.definition for r in self.roles_by_id.values() if r.status == "active"]
+        """Get all active roles as RoleDefinition objects."""
+        return [r.definition for r in self.roles_by_id.values() if r.status == RoleStatus.ACTIVE]
 
 
 def compute_roles_hash(roles: list[RoleDefinition]) -> str:
     """Compute hash of role data for change detection."""
     from azurerbac.core.utils import content_hash
 
-    data = []
-    for role in roles:
+    def role_key(role: RoleDefinition) -> str:
         updated = role.properties.updated_on.isoformat() if role.properties.updated_on else ""
-        data.append(f"{role.role_id}:{updated}")
-    combined = "|".join(sorted(data))
-    return content_hash(combined)
+        return f"{role.role_id}:{updated}"
+
+    data = [role_key(role) for role in roles]
+    return content_hash("|".join(sorted(data)))
 
 
 def compute_operations_hash(operations: list[OperationData]) -> str:
     """Compute hash of operation data for change detection."""
     from azurerbac.core.utils import content_hash
 
-    names = sorted(op.name for op in operations)
-    combined = "|".join(names)
-    return content_hash(combined)
+    return content_hash("|".join(sorted(op.name for op in operations)))
 
 
 def build_indexes(
@@ -305,10 +272,10 @@ def build_indexes(
 
     ops_by_prefix: dict[str, list[OperationData]] = {}
     for op in operations:
-        name = op.name.lower()
-        slash_idx = name.find("/")
+        name_lower = op.name.lower()
+        slash_idx = name_lower.find("/")
         if slash_idx > 0:
-            prefix = name[:slash_idx]
+            prefix = name_lower[:slash_idx]
             ops_by_prefix.setdefault(prefix, []).append(op)
 
     return ops_by_name_lower, ops_by_prefix

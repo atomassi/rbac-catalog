@@ -10,36 +10,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from azurerbac.azure.models import Permission, RoleDefinition, RoleProperties
-from azurerbac.cache.models import CachedChangeEvent, CachedRole
-from azurerbac.core.constants import RoleStatus
-
-
-def _make_cached_role(
-    role_id: str, role_name: str, status: RoleStatus = RoleStatus.ACTIVE
-) -> CachedRole:
-    """Create a CachedRole for testing."""
-    definition = RoleDefinition(
-        name=role_id,
-        id=f"/providers/Microsoft.Authorization/roleDefinitions/{role_id}",
-        type="Microsoft.Authorization/roleDefinitions",
-        properties=RoleProperties(
-            role_name=role_name,
-            type="BuiltInRole",
-            description=f"Test role: {role_name}",
-            permissions=[
-                Permission(actions=["*"], not_actions=[], data_actions=[], not_data_actions=[])
-            ],
-            assignable_scopes=["/"],
-        ),
-    )
-    return CachedRole(
-        definition=definition,
-        status=status,
-    )
-
+from azurerbac.cache.models import CachedChangeEvent
+from azurerbac.core.constants import EventType, RoleStatus
+from tests.conftest import make_cached_role
 
 # =============================================================================
+# Tests for dashboard service functions
 # Tests for dashboard service functions
 # These tests cover the business logic extracted from the dashboard routes
 # into the services module.
@@ -104,7 +80,7 @@ class TestFilterCachedEvents:
                 id=1,
                 role_id="created_recent",
                 role_name="Created Recent",
-                event_type="created",
+                event_type=EventType.CREATED,
                 azure_updated_on=now - dt.timedelta(days=1),
                 scan_timestamp=now - dt.timedelta(days=1),
             ),
@@ -112,7 +88,7 @@ class TestFilterCachedEvents:
                 id=2,
                 role_id="updated_recent",
                 role_name="Updated Recent",
-                event_type="updated",
+                event_type=EventType.UPDATED,
                 azure_updated_on=now - dt.timedelta(days=2),
                 scan_timestamp=now - dt.timedelta(days=2),
             ),
@@ -120,7 +96,7 @@ class TestFilterCachedEvents:
                 id=3,
                 role_id="deleted_recent",
                 role_name="Deleted Recent",
-                event_type="deleted",
+                event_type=EventType.DELETED,
                 azure_updated_on=now - dt.timedelta(days=20),
                 scan_timestamp=now - dt.timedelta(days=3),
             ),
@@ -128,14 +104,14 @@ class TestFilterCachedEvents:
                 id=4,
                 role_id="updated_old",
                 role_name="Updated Old",
-                event_type="updated",
+                event_type=EventType.UPDATED,
                 azure_updated_on=now - dt.timedelta(days=10),
                 scan_timestamp=now - dt.timedelta(days=10),
             ),
         ]
 
         deps = MagicMock()
-        deps.app_cache.get_role_by_id.return_value = _make_cached_role("test-id", "Test Role")
+        deps.app_cache.get_role_by_id.return_value = make_cached_role("test-id", "Test Role")
 
         result = filter_cached_events(cached_events, deps, cutoff, "all")
 
@@ -166,9 +142,9 @@ class TestSearchRolesInCache:
         from azurerbac.web.services.dashboard import search_roles_in_cache
 
         cached_roles = {
-            "id1": _make_cached_role("id1", "Storage Reader"),
-            "id2": _make_cached_role("id2", "Storage Contributor"),
-            "id3": _make_cached_role("id3", "Network Admin"),
+            "id1": make_cached_role("id1", "Storage Reader"),
+            "id2": make_cached_role("id2", "Storage Contributor"),
+            "id3": make_cached_role("id3", "Network Admin"),
         }
 
         with patch("azurerbac.web.services.dashboard.enrich_role_with_counts") as mock_enrich:
@@ -194,8 +170,8 @@ class TestSearchRolesInCache:
         from azurerbac.web.services.dashboard import search_roles_in_cache
 
         cached_roles = {
-            "id1": _make_cached_role("id1", "Reader"),
-            "id2": _make_cached_role("id2", "Storage Reader"),
+            "id1": make_cached_role("id1", "Reader"),
+            "id2": make_cached_role("id2", "Storage Reader"),
         }
 
         with patch("azurerbac.web.services.dashboard.enrich_role_with_counts") as mock_enrich:
@@ -221,8 +197,8 @@ class TestSearchRolesInCache:
         from azurerbac.web.services.dashboard import search_roles_in_cache
 
         cached_roles = {
-            "id1": _make_cached_role("id1", "Test Role 1", "active"),
-            "id2": _make_cached_role("id2", "Test Role 2", "deleted"),
+            "id1": make_cached_role("id1", "Test Role 1", "active"),
+            "id2": make_cached_role("id2", "Test Role 2", "deleted"),
         }
 
         with patch("azurerbac.web.services.dashboard.enrich_role_with_counts") as mock_enrich:
@@ -241,7 +217,7 @@ class TestSearchRolesInCache:
             )
 
             assert total == 1
-            assert roles[0].status == "active"
+            assert roles[0].status == RoleStatus.ACTIVE
 
     def test_search_by_role_id(self):
         """Test searching by role ID (GUID)."""
@@ -249,8 +225,8 @@ class TestSearchRolesInCache:
 
         test_guid = "12345678-1234-1234-1234-123456789abc"
         cached_roles = {
-            test_guid: _make_cached_role(test_guid, "Some Role"),
-            "other-id": _make_cached_role("other-id", "Other Role"),
+            test_guid: make_cached_role(test_guid, "Some Role"),
+            "other-id": make_cached_role("other-id", "Other Role"),
         }
 
         with patch("azurerbac.web.services.dashboard.enrich_role_with_counts") as mock_enrich:
@@ -352,7 +328,7 @@ class TestRecentPagePagination:
                 id=i,
                 role_id=f"event_{i}",
                 role_name=f"Event {i}",
-                event_type="updated",
+                event_type=EventType.UPDATED,
                 azure_updated_on=now - dt.timedelta(days=i % 25),
                 scan_timestamp=now - dt.timedelta(days=i % 25),
             )
@@ -360,7 +336,7 @@ class TestRecentPagePagination:
         ]
 
         deps = MagicMock()
-        deps.app_cache.get_role_by_id.return_value = _make_cached_role("test-id", "Test Role")
+        deps.app_cache.get_role_by_id.return_value = make_cached_role("test-id", "Test Role")
 
         result = filter_cached_events(cached_events, deps, cutoff, "all")
 

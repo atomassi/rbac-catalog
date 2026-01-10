@@ -12,7 +12,6 @@ These tests verify:
 9. EngineRegistry decorator-based registration
 """
 
-import math
 from unittest.mock import MagicMock
 
 import pytest
@@ -61,22 +60,24 @@ class TestEngineRegistry:
 class TestCosineSimilarity:
     """Tests for cosine similarity function."""
 
-    def test_identical_vectors(self):
-        """Test cosine similarity of identical vectors is 1.0."""
-        vec = [1.0, 2.0, 3.0]
-        assert cosine_similarity(vec, vec) == pytest.approx(1.0)
-
-    def test_orthogonal_vectors(self):
-        """Test cosine similarity of orthogonal vectors is 0.0."""
-        vec1 = [1.0, 0.0, 0.0]
-        vec2 = [0.0, 1.0, 0.0]
-        assert cosine_similarity(vec1, vec2) == pytest.approx(0.0)
-
-    def test_opposite_vectors(self):
-        """Test cosine similarity of opposite vectors is -1.0."""
-        vec1 = [1.0, 2.0, 3.0]
-        vec2 = [-1.0, -2.0, -3.0]
-        assert cosine_similarity(vec1, vec2) == pytest.approx(-1.0)
+    @pytest.mark.parametrize(
+        ("vec1", "vec2", "expected"),
+        [
+            pytest.param([1.0, 2.0, 3.0], [1.0, 2.0, 3.0], 1.0, id="identical"),
+            pytest.param([1.0, 0.0, 0.0], [0.0, 1.0, 0.0], 0.0, id="orthogonal"),
+            pytest.param([1.0, 2.0, 3.0], [-1.0, -2.0, -3.0], -1.0, id="opposite"),
+            pytest.param([1.0, 2.0, 3.0], [0.0, 0.0, 0.0], 0.0, id="zero_vector"),
+            pytest.param(
+                [1.0, 0.0],
+                [0.7071067811865476, 0.7071067811865476],
+                0.7071067811865476,
+                id="45_degrees",
+            ),
+        ],
+    )
+    def test_cosine_similarity_values(self, vec1: list[float], vec2: list[float], expected: float):
+        """Test cosine similarity for various vector relationships."""
+        assert cosine_similarity(vec1, vec2) == pytest.approx(expected, rel=1e-6)
 
     def test_similar_vectors(self):
         """Test cosine similarity of similar vectors is close to 1.0."""
@@ -84,20 +85,6 @@ class TestCosineSimilarity:
         vec2 = [1.1, 2.1, 3.1]  # Slightly different
         sim = cosine_similarity(vec1, vec2)
         assert sim > 0.99  # Very similar
-
-    def test_zero_vector(self):
-        """Test cosine similarity with zero vector returns 0.0."""
-        vec1 = [1.0, 2.0, 3.0]
-        vec2 = [0.0, 0.0, 0.0]
-        assert cosine_similarity(vec1, vec2) == 0.0
-
-    def test_normalized_vectors(self):
-        """Test with normalized vectors (unit length)."""
-        # Unit vectors at 45 degrees
-        vec1 = [1.0, 0.0]
-        vec2 = [math.sqrt(2) / 2, math.sqrt(2) / 2]
-        sim = cosine_similarity(vec1, vec2)
-        assert sim == pytest.approx(math.sqrt(2) / 2, rel=1e-6)
 
     def test_mismatched_length_raises(self):
         """Test that mismatched vector lengths raise ValueError."""
@@ -110,18 +97,24 @@ class TestCosineSimilarity:
 class TestTopKSimilar:
     """Tests for top_k_similar function."""
 
-    def test_empty_embeddings(self):
-        """Test with empty embeddings returns empty list."""
-        query = [1.0, 2.0, 3.0]
-        result = top_k_similar(query, {}, k=5)
-        assert result == []
-
-    def test_k_larger_than_embeddings(self):
-        """Test when k is larger than number of embeddings."""
-        query = [1.0, 0.0]
-        embeddings = {"doc1": [1.0, 0.0], "doc2": [0.0, 1.0]}
-        result = top_k_similar(query, embeddings, k=10)
-        assert len(result) == 2
+    @pytest.mark.parametrize(
+        ("query", "embeddings", "k", "expected_len"),
+        [
+            pytest.param([1.0, 2.0, 3.0], {}, 5, 0, id="empty_embeddings"),
+            pytest.param([0.0, 0.0, 0.0], {"doc1": [1.0, 2.0, 3.0]}, 5, 0, id="zero_query"),
+            pytest.param(
+                [1.0, 0.0],
+                {"doc1": [1.0, 0.0], "doc2": [0.0, 1.0]},
+                10,
+                2,
+                id="k_larger_than_embeddings",
+            ),
+        ],
+    )
+    def test_edge_cases(self, query: list[float], embeddings: dict, k: int, expected_len: int):
+        """Test edge cases for top_k_similar."""
+        result = top_k_similar(query, embeddings, k=k)
+        assert len(result) == expected_len
 
     def test_returns_sorted_by_similarity(self):
         """Test that results are sorted by similarity descending."""
@@ -145,13 +138,6 @@ class TestTopKSimilar:
         embeddings = {f"doc{i}": [float(i), 0.0] for i in range(10)}
         result = top_k_similar(query, embeddings, k=3)
         assert len(result) == 3
-
-    def test_zero_query_returns_empty(self):
-        """Test with zero query vector returns empty list."""
-        query = [0.0, 0.0, 0.0]
-        embeddings = {"doc1": [1.0, 2.0, 3.0]}
-        result = top_k_similar(query, embeddings, k=5)
-        assert result == []
 
 
 class TestComputeDocumentsHash:

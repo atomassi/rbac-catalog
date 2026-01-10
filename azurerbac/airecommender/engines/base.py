@@ -9,7 +9,9 @@ import logging
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Final
+from typing import TYPE_CHECKING, Final
+
+from azurerbac.core.types import JsonDict
 
 # Type alias for embedding vectors (tuple for hashability in LRU cache)
 type Embedding = tuple[float, ...]
@@ -174,9 +176,11 @@ class BaseRecommenderEngine(ABC):
             Embedding tuple if successful, None if model unavailable.
             Returns tuple (not list) for LRU cache hashability.
         """
-        if self.embedding_model is None or not self.embedding_model.is_loaded:
+        if not self.is_embeddings_available:
             logger.warning("%s: Embedding model not loaded", self.__class__.__name__)
             return None
+        # Type narrowing: is_embeddings_available guarantees embedding_model is not None
+        assert self.embedding_model is not None
         return self.embedding_model.encode_single_cached(text)
 
     @staticmethod
@@ -239,7 +243,7 @@ class BaseRecommenderEngine(ABC):
         """Check if embedding model is loaded and available."""
         return self.embedding_model is not None and self.embedding_model.is_loaded
 
-    def get_role_document(self, role_id: str) -> dict[str, Any] | None:
+    def get_role_document(self, role_id: str) -> JsonDict | None:
         """Get role document from knowledge base."""
         return self.knowledge_base.role_documents.get(role_id)
 

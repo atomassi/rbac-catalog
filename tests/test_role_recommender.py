@@ -5,46 +5,13 @@ Covers: pattern matching, action types, notActions, high privilege roles, sortin
 
 import pytest
 
-from azurerbac.azure.models import RoleDefinition
 from azurerbac.core.patterns import matches_pattern, pattern_to_regex
 from azurerbac.matching import recommend_roles
 from azurerbac.matching.role_matching import (
     check_operation_allowed,
     operation_matches_any_pattern,
 )
-
-# =============================================================================
-# Helper Functions
-# =============================================================================
-
-
-def make_role(
-    name: str,
-    role_id: str,
-    actions: list,
-    not_actions: list | None = None,
-    data_actions: list | None = None,
-    not_data_actions: list | None = None,
-) -> RoleDefinition:
-    """Helper to create a RoleDefinition object for testing."""
-    role_dict = {
-        "name": role_id,
-        "properties": {
-            "roleName": name,
-            "type": "BuiltInRole",
-            "description": f"Test role: {name}",
-            "permissions": [
-                {
-                    "actions": actions or [],
-                    "notActions": not_actions or [],
-                    "dataActions": data_actions or [],
-                    "notDataActions": not_data_actions or [],
-                }
-            ],
-        },
-    }
-    return RoleDefinition.model_validate(role_dict)
-
+from tests.conftest import make_role_definition
 
 # =============================================================================
 # Pattern Matching Tests
@@ -160,13 +127,13 @@ class TestUserSelectionScenarios:
 
     def test_empty_selection_returns_empty(self, sample_operations):
         """Empty selection returns empty results."""
-        roles = [make_role("Reader", "r1", ["*/read"])]
+        roles = [make_role_definition("Reader", "r1", ["*/read"])]
         result = recommend_roles([], roles, sample_operations)
         assert result == []
 
     def test_single_operation_selection(self, sample_operations):
         """Single operation selection returns matching roles."""
-        roles = [make_role("Reader", "r1", ["*/read"])]
+        roles = [make_role_definition("Reader", "r1", ["*/read"])]
         result = recommend_roles(
             ["Microsoft.Storage/storageAccounts/read"], roles, sample_operations
         )
@@ -176,8 +143,8 @@ class TestUserSelectionScenarios:
     def test_multiple_operations_selection(self, sample_operations):
         """Multiple operations selection with partial and full matches."""
         roles = [
-            make_role("Storage Admin", "r1", ["Microsoft.Storage/*"]),
-            make_role("Reader", "r2", ["*/read"]),
+            make_role_definition("Storage Admin", "r1", ["Microsoft.Storage/*"]),
+            make_role_definition("Reader", "r2", ["*/read"]),
         ]
         result = recommend_roles(
             ["Microsoft.Storage/storageAccounts/read", "Microsoft.Storage/storageAccounts/write"],
@@ -198,7 +165,11 @@ class TestActionTypes:
 
     def test_control_plane_only_role(self, sample_operations):
         """Control plane role matches control plane operations."""
-        roles = [make_role("Control Only", "r1", actions=["Microsoft.Storage/*"], data_actions=[])]
+        roles = [
+            make_role_definition(
+                "Control Only", "r1", actions=["Microsoft.Storage/*"], data_actions=[]
+            )
+        ]
         result = recommend_roles(
             ["Microsoft.Storage/storageAccounts/read"], roles, sample_operations
         )
@@ -208,7 +179,7 @@ class TestActionTypes:
     def test_data_plane_only_role(self, sample_operations):
         """Data plane role matches data plane operations."""
         roles = [
-            make_role(
+            make_role_definition(
                 "Data Only",
                 "r1",
                 actions=[],
@@ -225,7 +196,11 @@ class TestActionTypes:
 
     def test_control_plane_not_matched_by_data_role(self, sample_operations):
         """Control plane operation not matched by data plane role."""
-        roles = [make_role("Data Only", "r1", actions=[], data_actions=["Microsoft.Storage/*"])]
+        roles = [
+            make_role_definition(
+                "Data Only", "r1", actions=[], data_actions=["Microsoft.Storage/*"]
+            )
+        ]
         result = recommend_roles(
             ["Microsoft.Storage/storageAccounts/read"], roles, sample_operations
         )
@@ -234,7 +209,7 @@ class TestActionTypes:
     def test_mixed_control_and_data(self, sample_operations):
         """Mixed role matches both control and data plane."""
         roles = [
-            make_role(
+            make_role_definition(
                 "Mixed",
                 "r1",
                 actions=["Microsoft.Storage/storageAccounts/read"],
@@ -281,7 +256,7 @@ class TestHighPrivilegeRoles:
         self, sample_operations, role_name, actions, not_actions, expected_high_privilege
     ):
         """Test that high privilege roles are correctly identified."""
-        roles = [make_role(role_name, "r1", actions, not_actions)]
+        roles = [make_role_definition(role_name, "r1", actions, not_actions)]
         # Use an operation that will match
         result = recommend_roles(
             ["Microsoft.Storage/storageAccounts/read"], roles, sample_operations
@@ -292,8 +267,8 @@ class TestHighPrivilegeRoles:
     def test_high_privilege_roles_sorted_last(self, sample_operations):
         """Non-high-privilege roles should appear before high-privilege roles."""
         roles = [
-            make_role("Owner", "r1", ["*"]),
-            make_role("Storage Admin", "r2", ["Microsoft.Storage/*"]),
+            make_role_definition("Owner", "r1", ["*"]),
+            make_role_definition("Storage Admin", "r2", ["Microsoft.Storage/*"]),
         ]
         result = recommend_roles(
             ["Microsoft.Storage/storageAccounts/read"], roles, sample_operations
@@ -318,7 +293,7 @@ class TestNotActionsExclusions:
     def test_not_action_excludes_operation(self, sample_operations):
         """notAction excludes specific operation."""
         roles = [
-            make_role(
+            make_role_definition(
                 "No Delete",
                 "r1",
                 ["Microsoft.Storage/*"],
@@ -333,7 +308,7 @@ class TestNotActionsExclusions:
     def test_not_action_allows_other_operations(self, sample_operations):
         """notAction doesn't affect non-excluded operations."""
         roles = [
-            make_role(
+            make_role_definition(
                 "No Delete",
                 "r1",
                 ["Microsoft.Storage/*"],
@@ -360,8 +335,8 @@ class TestSortingAndRanking:
     def test_full_matches_before_partial(self, sample_operations):
         """Full matches should appear before partial matches."""
         roles = [
-            make_role("Partial", "r1", ["Microsoft.Storage/*/read"]),
-            make_role("Full", "r2", ["Microsoft.Storage/*"]),
+            make_role_definition("Partial", "r1", ["Microsoft.Storage/*/read"]),
+            make_role_definition("Full", "r2", ["Microsoft.Storage/*"]),
         ]
         result = recommend_roles(
             ["Microsoft.Storage/storageAccounts/read", "Microsoft.Storage/storageAccounts/write"],
@@ -375,7 +350,7 @@ class TestSortingAndRanking:
 
     def test_no_match_returns_empty(self, sample_operations):
         """No role matches returns empty list."""
-        roles = [make_role("Compute Only", "r1", ["Microsoft.Compute/*"])]
+        roles = [make_role_definition("Compute Only", "r1", ["Microsoft.Compute/*"])]
         result = recommend_roles(
             ["Microsoft.Storage/storageAccounts/read"], roles, sample_operations
         )

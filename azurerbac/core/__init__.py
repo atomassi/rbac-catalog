@@ -1,6 +1,12 @@
 """Core business logic: models, database, diffing, configuration, constants, patterns."""
 
-from .constants import HIGH_PRIVILEGE_ROLES, EventType, RoleStatus
+from .constants import (
+    DEFAULT_ROLE_TYPE,
+    HIGH_PRIVILEGE_ROLES,
+    ROLE_DEFINITION_TYPE,
+    EventType,
+    RoleStatus,
+)
 from .db import DBEngine, EngineFactory, create_sessionmaker
 from .models import (
     Base,
@@ -18,14 +24,18 @@ from .patterns import (
 )
 from .schema import ensure_db
 from .singleton import ThreadSafeSingleton
+from .types import JsonDict
 from .utils import ensure_utc, ensure_utc_or_min, format_iso_z, normalize_uuid_or_none, utcnow
 
 __all__ = [
+    "DEFAULT_ROLE_TYPE",
     "HIGH_PRIVILEGE_ROLES",
+    "ROLE_DEFINITION_TYPE",
     "Base",
     "DBEngine",
     "EngineFactory",
     "EventType",
+    "JsonDict",
     "Operation",
     "OperationScanStatus",
     "Role",

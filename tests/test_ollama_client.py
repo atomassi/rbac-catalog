@@ -59,28 +59,23 @@ def client_with_roles() -> OllamaClient:
 class TestFindClosestRole:
     """Tests for OllamaClient.find_closest_role method."""
 
-    def test_exact_match_case_sensitive(self, client_with_roles):
-        """Test exact match returns score 1.0."""
-        role, score = client_with_roles.find_closest_role("Storage Blob Data Reader")
-        assert role == "Storage Blob Data Reader"
-        assert score == 1.0
-
-    def test_exact_match_case_insensitive(self, client_with_roles):
-        """Test case-insensitive exact match returns score 1.0."""
-        role, score = client_with_roles.find_closest_role("storage blob data reader")
-        assert role == "Storage Blob Data Reader"
-        assert score == 1.0
-
-    def test_exact_match_uppercase(self, client_with_roles):
-        """Test uppercase input returns exact match."""
-        role, score = client_with_roles.find_closest_role("CONTRIBUTOR")
-        assert role == "Contributor"
-        assert score == 1.0
-
-    def test_exact_match_with_whitespace(self, client_with_roles):
-        """Test whitespace is trimmed for matching."""
-        role, score = client_with_roles.find_closest_role("  Reader  ")
-        assert role == "Reader"
+    @pytest.mark.parametrize(
+        ("input_name", "expected_role"),
+        [
+            pytest.param(
+                "Storage Blob Data Reader", "Storage Blob Data Reader", id="case_sensitive"
+            ),
+            pytest.param("storage blob data reader", "Storage Blob Data Reader", id="lowercase"),
+            pytest.param("CONTRIBUTOR", "Contributor", id="uppercase"),
+            pytest.param("  Reader  ", "Reader", id="whitespace"),
+        ],
+    )
+    def test_exact_match_returns_score_1(
+        self, client_with_roles, input_name: str, expected_role: str
+    ):
+        """Test exact match (with various casings/whitespace) returns score 1.0."""
+        role, score = client_with_roles.find_closest_role(input_name)
+        assert role == expected_role
         assert score == 1.0
 
     def test_substring_match_single_role_in_mashup(self, client_with_roles):
@@ -186,15 +181,33 @@ class TestSetKnownRoleNames:
 class TestParseJsonWithRepair:
     """Tests for parse_json_with_repair function."""
 
-    def test_valid_json(self):
-        """Test parsing valid JSON."""
+    @pytest.mark.parametrize(
+        ("raw", "expected_role"),
+        [
+            pytest.param(
+                '{"role": "Reader", "confidence_class": "high"}', "Reader", id="valid_json"
+            ),
+            pytest.param(
+                '{"role": "Reader"} and some extra text here', "Reader", id="trailing_text"
+            ),
+            pytest.param('Here is the answer: {"role": "Reader"}', "Reader", id="leading_text"),
+            pytest.param(
+                '{"role": "Reader", "confidence_class": "high"', "Reader", id="missing_brace"
+            ),
+            pytest.param(
+                '{"role": "Storage Blob Data Reader", broken json here',
+                "Storage Blob Data Reader",
+                id="regex_fallback",
+            ),
+        ],
+    )
+    def test_json_extraction_and_repair(self, raw: str, expected_role: str):
+        """Test JSON parsing with extraction and repair for various formats."""
         from azurerbac.airecommender.llm.json_repair import parse_json_with_repair
 
-        raw = '{"role": "Reader", "confidence_class": "high"}'
         result = parse_json_with_repair(raw)
         assert result is not None
-        assert result["role"] == "Reader"
-        assert result["confidence_class"] == "high"
+        assert result["role"] == expected_role
 
     def test_valid_json_with_arrays(self):
         """Test parsing valid JSON with arrays."""
@@ -204,42 +217,6 @@ class TestParseJsonWithRepair:
         result = parse_json_with_repair(raw)
         assert result is not None
         assert result["signals_matched"] == ["read", "view"]
-
-    def test_json_with_trailing_text(self):
-        """Test extracting JSON object with trailing text."""
-        from azurerbac.airecommender.llm.json_repair import parse_json_with_repair
-
-        raw = '{"role": "Reader"} and some extra text here'
-        result = parse_json_with_repair(raw)
-        assert result is not None
-        assert result["role"] == "Reader"
-
-    def test_json_with_leading_text(self):
-        """Test extracting JSON object with leading text."""
-        from azurerbac.airecommender.llm.json_repair import parse_json_with_repair
-
-        raw = 'Here is the answer: {"role": "Reader"}'
-        result = parse_json_with_repair(raw)
-        assert result is not None
-        assert result["role"] == "Reader"
-
-    def test_missing_closing_brace(self):
-        """Test repairing JSON with missing closing brace."""
-        from azurerbac.airecommender.llm.json_repair import parse_json_with_repair
-
-        raw = '{"role": "Reader", "confidence_class": "high"'
-        result = parse_json_with_repair(raw)
-        assert result is not None
-        assert result["role"] == "Reader"
-
-    def test_regex_fallback_role_extraction(self):
-        """Test regex fallback for extracting role from malformed JSON."""
-        from azurerbac.airecommender.llm.json_repair import parse_json_with_repair
-
-        raw = '{"role": "Storage Blob Data Reader", broken json here'
-        result = parse_json_with_repair(raw)
-        assert result is not None
-        assert result["role"] == "Storage Blob Data Reader"
 
     def test_regex_fallback_with_confidence(self):
         """Test regex fallback extracts confidence class too."""

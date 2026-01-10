@@ -14,42 +14,14 @@ Fixtures used from conftest.py:
 
 import pytest
 
-from azurerbac.azure.models import OperationData, RoleDefinition
+from azurerbac.azure.models import OperationData
 from azurerbac.cache import (
     app_cache,
     clear_computed_caches,
     precompute_all_caches,
 )
 from azurerbac.matching import recommend_roles
-
-
-def make_role(
-    name: str,
-    role_id: str,
-    actions: list,
-    not_actions: list | None = None,
-    data_actions: list | None = None,
-    not_data_actions: list | None = None,
-) -> RoleDefinition:
-    """Helper to create a RoleDefinition for testing."""
-    role_dict = {
-        "name": role_id,
-        "properties": {
-            "roleName": name,
-            "type": "BuiltInRole",
-            "description": f"Test role: {name}",
-            "permissions": [
-                {
-                    "actions": actions or [],
-                    "notActions": not_actions or [],
-                    "dataActions": data_actions or [],
-                    "notDataActions": not_data_actions or [],
-                }
-            ],
-        },
-    }
-    return RoleDefinition.model_validate(role_dict)
-
+from tests.conftest import make_role_definition
 
 # =============================================================================
 # Tests for max_results Parameter
@@ -63,7 +35,7 @@ class TestMaxResultsParameter:
         """max_results=None should return ALL roles that fully match."""
         # Create 25 roles that all grant the same permission
         roles = [
-            make_role(
+            make_role_definition(
                 f"Role {i}",
                 f"role-id-{i}",
                 ["Microsoft.Test/resource/read"],
@@ -84,7 +56,7 @@ class TestMaxResultsParameter:
     def test_explicit_limit_is_respected(self, large_operations):
         """max_results=10 should return at most 10 roles."""
         roles = [
-            make_role(
+            make_role_definition(
                 f"Role {i}",
                 f"role-id-{i}",
                 ["Microsoft.Test/resource/read"],
@@ -104,7 +76,7 @@ class TestMaxResultsParameter:
     def test_default_returns_all_matches(self, large_operations):
         """Default (no max_results) should return all matching roles."""
         roles = [
-            make_role(
+            make_role_definition(
                 f"Role {i}",
                 f"role-id-{i}",
                 ["Microsoft.Authorization/roleAssignments/delete"],
@@ -289,7 +261,7 @@ class TestMissingOperationsExpanded:
     def test_zero_coverage_wildcard_has_expanded_ops(self, large_operations):
         """When a role has 0 coverage for a wildcard, expanded ops should be populated."""
         # Role with NO data plane permissions
-        reader_role = make_role(
+        reader_role = make_role_definition(
             "Reader",
             "reader-id",
             actions=["*/read"],
@@ -321,7 +293,7 @@ class TestMissingOperationsExpanded:
 
     def test_expanded_ops_same_with_cache(self, large_operations):
         """Test that missing_operations_expanded is same with and without cache."""
-        reader_role = make_role(
+        reader_role = make_role_definition(
             "Reader",
             "reader-id",
             actions=["*/read"],
@@ -360,7 +332,7 @@ class TestPartialWildcardCoverage:
     def test_partial_coverage_detected(self, large_operations):
         """Test that partial coverage is correctly detected."""
         # Role that only covers some */read operations
-        partial_role = make_role(
+        partial_role = make_role_definition(
             "Partial Reader",
             "partial-id",
             actions=["Microsoft.Storage/*/read"],  # Only Storage reads
@@ -383,7 +355,7 @@ class TestPartialWildcardCoverage:
 
     def test_partial_coverage_counts_with_cache(self, large_operations):
         """Test partial coverage counts are same with and without cache."""
-        partial_role = make_role(
+        partial_role = make_role_definition(
             "Partial Reader",
             "partial-id",
             actions=["Microsoft.Storage/*/read"],
@@ -426,7 +398,7 @@ class TestNotActionsExclusions:
 
     def test_not_actions_consistency(self, large_operations):
         """Test notActions are handled same with and without cache."""
-        contributor_role = make_role(
+        contributor_role = make_role_definition(
             "Contributor",
             "contrib-id",
             actions=["*"],
@@ -463,7 +435,7 @@ class TestNotActionsExclusions:
 
     def test_total_permissions_with_exclusions(self, large_operations):
         """Test total permission counts account for exclusions correctly."""
-        role_with_exclusions = make_role(
+        role_with_exclusions = make_role_definition(
             "Limited",
             "limited-id",
             actions=["Microsoft.Storage/*"],
@@ -791,7 +763,7 @@ class TestReaderRoleSpecificCases:
 
     def test_reader_control_plane_only_full_match(self, reader_test_ops):
         """Reader with control plane */read should be 100% match for control only."""
-        reader = make_role("Reader", "reader", actions=["*/read"], data_actions=[])
+        reader = make_role_definition("Reader", "reader", actions=["*/read"], data_actions=[])
 
         clear_computed_caches()
 
@@ -809,7 +781,7 @@ class TestReaderRoleSpecificCases:
 
     def test_reader_both_planes_partial_match(self, reader_test_ops):
         """Reader requesting both planes should show partial match."""
-        reader = make_role("Reader", "reader", actions=["*/read"], data_actions=[])
+        reader = make_role_definition("Reader", "reader", actions=["*/read"], data_actions=[])
 
         clear_computed_caches()
 
@@ -831,7 +803,7 @@ class TestReaderRoleSpecificCases:
 
     def test_reader_data_plane_only_no_match(self, reader_test_ops):
         """Reader with data plane only request should not match."""
-        reader = make_role("Reader", "reader", actions=["*/read"], data_actions=[])
+        reader = make_role_definition("Reader", "reader", actions=["*/read"], data_actions=[])
 
         clear_computed_caches()
 
@@ -847,7 +819,7 @@ class TestReaderRoleSpecificCases:
 
     def test_reader_consistency_across_cache_states(self, reader_test_ops):
         """Test Reader results are consistent regardless of cache state."""
-        reader = make_role("Reader", "reader", actions=["*/read"], data_actions=[])
+        reader = make_role_definition("Reader", "reader", actions=["*/read"], data_actions=[])
 
         # Test all three scenarios with and without cache
         for flags_desc, flags in [

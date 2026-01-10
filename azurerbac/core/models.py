@@ -160,15 +160,12 @@ class Role(Base):
 
     @property
     def role_type(self) -> str | None:
-        """Get role type from role JSON (works for deleted roles too)."""
+        """Role type from role JSON (works for deleted roles)."""
         return self.last_known_json.get("properties", {}).get("type")
 
     @property
     def created_on(self) -> dt.datetime | None:
-        """Get Azure's createdOn timestamp from role JSON.
-
-        Works for deleted roles by using last known JSON.
-        """
+        """Azure's createdOn timestamp. Works for deleted roles via last_known_json."""
         created_str = self.last_known_json.get("properties", {}).get("createdOn")
         if created_str:
             try:
@@ -179,13 +176,12 @@ class Role(Base):
 
     @property
     def updated_on(self) -> dt.datetime | None:
-        """Get Azure's updatedOn from current version."""
         cv = self.current_version
         return cv.azure_updated_on if cv else None
 
     @property
     def first_seen_at(self) -> dt.datetime | None:
-        """Get when this role was first seen (oldest history entry's scan)."""
+        """When this role was first seen (oldest history entry's scan)."""
         if self.history:
             # history is ordered by version_number DESC, so last item is oldest
             oldest = self.history[-1]
@@ -194,26 +190,18 @@ class Role(Base):
 
     @property
     def last_seen_at(self) -> dt.datetime | None:
-        """Get last seen timestamp from current version's scan."""
         cv = self.current_version
         return cv.scan.scan_timestamp if cv and cv.scan else None
 
     @property
     def role_definition(self) -> RoleDefinition | None:
-        """Get RoleDefinition from current version.
-
-        Returns None for deleted roles (where role_json is NULL).
-        """
+        """RoleDefinition from current version. None for deleted roles."""
         cv = self.current_version
         return cv.role_definition if cv else None
 
     @property
     def last_known_definition(self) -> RoleDefinition | None:
-        """Get the most recent RoleDefinition, even for deleted roles.
-
-        For deleted roles, returns the definition from before deletion.
-        For active roles, returns the current definition.
-        """
+        """Most recent RoleDefinition, even for deleted roles."""
         lkv = self.last_known_version
         return lkv.role_definition if lkv else None
 

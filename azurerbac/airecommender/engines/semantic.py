@@ -25,13 +25,11 @@ class SemanticEngine(BaseRecommenderEngine):
     @property
     @override
     def requires_llm(self) -> bool:
-        """Return whether LLM is required."""
         return False
 
     @property
     @override
     def requires_embeddings(self) -> bool:
-        """Return whether embeddings are required."""
         return True
 
     @override

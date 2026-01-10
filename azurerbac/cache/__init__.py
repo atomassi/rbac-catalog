@@ -10,6 +10,8 @@ from azurerbac.cache.models import (
     build_indexes,
     compute_operations_hash,
     compute_roles_hash,
+    format_datetime,
+    parse_datetime,
 )
 from azurerbac.cache.persistence import (
     delete_cache_file,
@@ -50,12 +52,14 @@ __all__ = [
     "compute_operations_hash",
     "compute_roles_hash",
     "delete_cache_file",
+    "format_datetime",
     "get_cache_dir",
     "get_cache_file_mtime",
     "get_cache_file_path",
     "get_matching_operations",
     "invalidate_and_rebuild_cache",
     "load_cache_from_disk",
+    "parse_datetime",
     "precompute_all_caches",
     "rebuild_cache",
     "save_cache_to_disk",

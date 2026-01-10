@@ -31,19 +31,16 @@ class TFIDFEngine(BaseRecommenderEngine):
     @property
     @override
     def name(self) -> str:
-        """Return the engine name."""
         return "Enhanced TF-IDF + BM25"
 
     @property
     @override
     def requires_llm(self) -> bool:
-        """Return whether this engine requires an LLM."""
         return False
 
     @property
     @override
     def requires_embeddings(self) -> bool:
-        """Return whether this engine requires embeddings."""
         return False
 
     @override

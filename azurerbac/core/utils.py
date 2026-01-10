@@ -69,3 +69,20 @@ def format_iso_z(d: dt.datetime | None) -> str | None:
         d = d.replace(tzinfo=dt.UTC)
     # Format with milliseconds precision and Z suffix (matching Azure format)
     return d.isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
+def parse_datetime(val: str | dt.datetime | None) -> dt.datetime | None:
+    """Parse datetime from string, datetime, or None.
+
+    Used for deserializing cached data from disk (ISO format strings).
+    """
+    if val is None:
+        return None
+    if isinstance(val, dt.datetime):
+        return val
+    return dt.datetime.fromisoformat(val)
+
+
+def format_datetime(val: dt.datetime | None) -> str | None:
+    """Format datetime to ISO string for serialization."""
+    return val.isoformat() if val else None

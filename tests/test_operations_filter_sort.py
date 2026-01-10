@@ -13,31 +13,11 @@ from azurerbac.web.services.pages import (
     operation_matches_search,
     sort_operations,
 )
+from tests.conftest import make_operation
 
 # =============================================================================
 # Test Fixtures
 # =============================================================================
-
-
-def make_operation(
-    name: str,
-    display_name: str | None = None,
-    description: str | None = None,
-    provider_display_name: str = "",
-    resource_type_display_name: str | None = None,
-    is_data_action: bool = False,
-) -> OperationData:
-    """Create an OperationData object for testing."""
-    return OperationData(
-        name=name,
-        display_name=display_name,
-        description=description,
-        origin=None,
-        provider_display_name=provider_display_name,
-        resource_type=None,
-        resource_type_display_name=resource_type_display_name,
-        is_data_action=is_data_action,
-    )
 
 
 @pytest.fixture

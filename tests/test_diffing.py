@@ -109,24 +109,36 @@ def test_real_change_with_metadata_is_detected():
     assert "properties.description" in paths
 
 
-def test_assignable_scopes_are_order_insensitive():
+@pytest.mark.parametrize(
+    ("old_scopes", "new_scopes"),
+    [
+        pytest.param(["/a", "/b", "/c"], ["/c", "/a", "/b"], id="assignable_scopes"),
+    ],
+)
+def test_assignable_scopes_are_order_insensitive(old_scopes, new_scopes):
     old_dict = _reader_role_dict()
     new_dict = copy.deepcopy(old_dict)
 
-    old_dict["properties"]["assignableScopes"] = ["/a", "/b", "/c"]
-    new_dict["properties"]["assignableScopes"] = ["/c", "/a", "/b"]
+    old_dict["properties"]["assignableScopes"] = old_scopes
+    new_dict["properties"]["assignableScopes"] = new_scopes
 
     d = diff_roles(_to_model(old_dict), _to_model(new_dict))
     assert d["changed"] is False
 
 
-def test_permissions_actions_order_is_ignored():
+@pytest.mark.parametrize(
+    ("old_actions", "new_actions"),
+    [
+        pytest.param(["b", "a"], ["a", "b"], id="actions"),
+    ],
+)
+def test_permissions_actions_order_is_ignored(old_actions, new_actions):
     old_dict = _reader_role_dict()
     new_dict = copy.deepcopy(old_dict)
 
     old_dict["properties"]["permissions"] = [
         {
-            "actions": ["b", "a"],
+            "actions": old_actions,
             "notActions": [],
             "dataActions": [],
             "notDataActions": [],
@@ -134,7 +146,7 @@ def test_permissions_actions_order_is_ignored():
     ]
     new_dict["properties"]["permissions"] = [
         {
-            "actions": ["a", "b"],
+            "actions": new_actions,
             "notActions": [],
             "dataActions": [],
             "notDataActions": [],
@@ -182,25 +194,25 @@ def test_condition_change_detected(test_id):
     if test_id == "added":
         # Old has no condition, new has condition
         new_dict = copy.deepcopy(old_dict)
-        new_dict["properties"]["permissions"][0][
-            "condition"
-        ] = "@Request[Microsoft.Authorization/roleAssignments:RoleDefinitionId] GuidEquals '123'"
+        new_dict["properties"]["permissions"][0]["condition"] = (
+            "@Request[Microsoft.Authorization/roleAssignments:RoleDefinitionId] GuidEquals '123'"
+        )
         new_dict["properties"]["permissions"][0]["conditionVersion"] = "2.0"
     elif test_id == "changed":
         # Old has condition A, new has condition B
-        old_dict["properties"]["permissions"][0][
-            "condition"
-        ] = "@Resource[Microsoft.Authorization/roleAssignments:RoleDefinitionId] GuidEquals 'abc'"
+        old_dict["properties"]["permissions"][0]["condition"] = (
+            "@Resource[Microsoft.Authorization/roleAssignments:RoleDefinitionId] GuidEquals 'abc'"
+        )
         old_dict["properties"]["permissions"][0]["conditionVersion"] = "2.0"
         new_dict = copy.deepcopy(old_dict)
-        new_dict["properties"]["permissions"][0][
-            "condition"
-        ] = "@Resource[Microsoft.Authorization/roleAssignments:RoleDefinitionId] GuidEquals 'xyz'"
+        new_dict["properties"]["permissions"][0]["condition"] = (
+            "@Resource[Microsoft.Authorization/roleAssignments:RoleDefinitionId] GuidEquals 'xyz'"
+        )
     else:  # removed
         # Old has condition, new has none
-        old_dict["properties"]["permissions"][0][
-            "condition"
-        ] = "@Request[Microsoft.Authorization/roleAssignments:RoleDefinitionId] GuidEquals '123'"
+        old_dict["properties"]["permissions"][0]["condition"] = (
+            "@Request[Microsoft.Authorization/roleAssignments:RoleDefinitionId] GuidEquals '123'"
+        )
         old_dict["properties"]["permissions"][0]["conditionVersion"] = "2.0"
         new_dict = copy.deepcopy(old_dict)
         del new_dict["properties"]["permissions"][0]["condition"]
@@ -224,9 +236,9 @@ def test_diff_timestamps_use_z_suffix():
     updated_change = next(c for c in d["changes"] if c["path"] == "properties.updatedOn")
 
     # Both from and to should use Z suffix (not +00:00)
-    assert updated_change["from"].endswith(
-        "Z"
-    ), f"Expected 'Z' suffix, got: {updated_change['from']}"
+    assert updated_change["from"].endswith("Z"), (
+        f"Expected 'Z' suffix, got: {updated_change['from']}"
+    )
     assert updated_change["to"].endswith("Z"), f"Expected 'Z' suffix, got: {updated_change['to']}"
     assert "+00:00" not in updated_change["from"]
     assert "+00:00" not in updated_change["to"]

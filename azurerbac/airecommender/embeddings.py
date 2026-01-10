@@ -48,12 +48,10 @@ class EmbeddingModel:
 
     @property
     def is_loaded(self) -> bool:
-        """Check if model is loaded."""
         return self._loaded
 
     @property
     def embeddings(self) -> dict[str, list[float]]:
-        """Get the stored embeddings."""
         return self._embeddings
 
     def try_load(self) -> bool:

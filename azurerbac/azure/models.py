@@ -7,6 +7,8 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from azurerbac.core.constants import DEFAULT_ROLE_TYPE, ROLE_DEFINITION_TYPE
+from azurerbac.core.types import JsonDict
 from azurerbac.core.utils import format_iso_z
 
 # Mapping of lowercase field names to canonical Python attribute names
@@ -84,9 +86,9 @@ class Permission(BaseModel):
                 normalized[key] = value
         return normalized
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> JsonDict:
         """Export to dict with canonical field names and order matching Azure API."""
-        result: dict[str, Any] = {
+        result: JsonDict = {
             "actions": self.actions,
             "notActions": self.not_actions,
             "dataActions": self.data_actions,
@@ -98,9 +100,9 @@ class Permission(BaseModel):
             result["conditionVersion"] = self.condition_version
         return result
 
-    def to_comparable_dict(self) -> dict[str, Any]:
+    def to_comparable_dict(self) -> JsonDict:
         """Export to dict with sorted lists for comparison/diffing."""
-        result: dict[str, Any] = {
+        result: JsonDict = {
             "actions": sorted(self.actions),
             "notActions": sorted(self.not_actions),
             "dataActions": sorted(self.data_actions),
@@ -183,7 +185,7 @@ class RoleDefinition(BaseModel):
 
     id: str = Field(default="")
     name: str = Field(default="")
-    type: str = Field(default="Microsoft.Authorization/roleDefinitions")
+    type: str = Field(default=ROLE_DEFINITION_TYPE)
     properties: RoleProperties = Field(default_factory=RoleProperties)
 
     @model_validator(mode="before")
@@ -232,7 +234,7 @@ class RoleDefinition(BaseModel):
         return cls(
             id=normalized_id,
             name=name,
-            type="Microsoft.Authorization/roleDefinitions",
+            type=ROLE_DEFINITION_TYPE,
             properties=RoleProperties.model_validate(
                 {
                     "roleName": props.get("roleName", ""),
@@ -251,7 +253,7 @@ class RoleDefinition(BaseModel):
             ),
         )
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> JsonDict:
         """Export to dict with canonical field names and order matching Azure API."""
         props = self.properties
         return {
@@ -273,28 +275,24 @@ class RoleDefinition(BaseModel):
 
     @property
     def role_id(self) -> str:
-        """Get the role ID (GUID). Alias for 'name' field."""
+        """Role ID (GUID) - alias for 'name' field."""
         return self.name
 
     @property
     def role_name(self) -> str:
-        """Get the role display name."""
         return self.properties.role_name
 
     @property
     def description(self) -> str:
-        """Get the role description."""
         return self.properties.description
 
     @property
     def role_type(self) -> str:
-        """Get the role type (BuiltInRole, CustomRole, etc.)."""
         return self.properties.type
 
     @property
     def is_builtin(self) -> bool:
-        """Check if this is a built-in role."""
-        return self.properties.type == "BuiltInRole"
+        return self.properties.type == DEFAULT_ROLE_TYPE
 
 
 class OperationData(BaseModel):
@@ -339,7 +337,7 @@ class OperationData(BaseModel):
             }
         )
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> JsonDict:
         """Export to dict for database storage."""
         return {
             "name": self.name,

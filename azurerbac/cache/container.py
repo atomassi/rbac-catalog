@@ -1,18 +1,21 @@
-"""In-memory application cache."""
+"""In-memory cache container.
+
+Pure in-memory container that holds the CacheData.
+No I/O, no sync logic - just swap() and accessors.
+"""
 
 from __future__ import annotations
 
 import asyncio
 import fnmatch
 import logging
-import threading
 from dataclasses import replace
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Self
+from typing import TYPE_CHECKING, Any
 
-from azurerbac.cache.backends import get_cache_backend
 from azurerbac.cache.models import CacheData, CachedChangeEvent, CachedRole
 from azurerbac.core.constants import DEFAULT_SEARCH_LIMIT
+from azurerbac.core.singleton import ThreadSafeSingleton
 from azurerbac.telemetry import track_cache_hit
 
 if TYPE_CHECKING:
@@ -21,52 +24,42 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class AppCache:
-    """Thread-safe in-memory cache with atomic refresh (Singleton).
+class CacheContainer:
+    """Thread-safe in-memory cache with atomic refresh.
 
     All data is stored in a single CacheData object that can be atomically
     swapped. This prevents race conditions where readers see partially
     updated data during refresh.
 
-    This class implements the Singleton pattern - calling AppCache() always
-    returns the same instance.
-
     Usage:
         # Read data (capture reference for consistent reads)
-        cache = app_cache.cache
+        cache = container.cache
         ops = cache.all_operations
         coverage = cache.role_coverage.get(role_id)
 
-        # Atomic refresh
+        # Atomic refresh (called by build.py)
         new_cache = CacheData(...)
-        app_cache.swap(new_cache)
+        container.swap(new_cache)
     """
 
-    _instance: AppCache | None = None
-    _init_lock = threading.Lock()
-
-    def __new__(cls) -> Self:
-        """Ensure only one instance exists (Singleton pattern)."""
-        if cls._instance is None:
-            with cls._init_lock:
-                # Double-check locking for thread safety
-                if cls._instance is None:
-                    cls._instance = super().__new__(cls)
-        return cls._instance  # type: ignore[return-value]
+    __slots__ = (
+        "_cache",
+        "_loaded_version",
+        "_misc_cache",
+        "_pending_reload",
+        "_preloaded",
+        "_reload_lock",
+        "_role_pages",
+    )
 
     def __init__(self) -> None:
-        # Only initialize once (singleton may call __init__ multiple times)
-        if getattr(self, "_initialized", False):
-            return
-
         self._cache: CacheData = CacheData()
         self._role_pages: dict[str, list] = {}  # Paginated role listings
-        self._misc_cache: dict[str, Any] = {}  # Dynamic key-value cache (roles_allowing_op, etc.)
+        self._misc_cache: dict[str, Any] = {}  # Dynamic key-value cache
         self._preloaded = False
-        self._loaded_cache_version: str | None = None  # Track loaded version to detect updates
-        self._reload_lock = asyncio.Lock()  # Async lock for reloads
+        self._loaded_version: str | None = None  # Track loaded version
+        self._reload_lock = asyncio.Lock()  # Async lock for reload coordination
         self._pending_reload = False  # Flag set by file watcher
-        self._initialized = True
 
     # ─────────────────────────────────────────────────────────────────────────
     # Public accessors for internal state
@@ -81,12 +74,12 @@ class AppCache:
         self._preloaded = value
 
     @property
-    def loaded_cache_version(self) -> str | None:
-        return self._loaded_cache_version
+    def loaded_version(self) -> str | None:
+        return self._loaded_version
 
-    @loaded_cache_version.setter
-    def loaded_cache_version(self, version: str | None) -> None:
-        self._loaded_cache_version = version
+    @loaded_version.setter
+    def loaded_version(self, version: str | None) -> None:
+        self._loaded_version = version
 
     @property
     def pending_reload(self) -> bool:
@@ -98,7 +91,7 @@ class AppCache:
 
     @property
     def reload_lock(self) -> asyncio.Lock:
-        """Async lock for reload operations."""
+        """Async lock for reload operations (used by build.py)."""
         return self._reload_lock
 
     # ─────────────────────────────────────────────────────────────────────────
@@ -277,9 +270,13 @@ class AppCache:
         self._role_pages.clear()
         self._misc_cache.clear()
         self._preloaded = False
-        self._loaded_cache_version = None
+        self._loaded_version = None
+        self._pending_reload = False
 
-    async def invalidate_all(self) -> None:
-        """Reset cache and delete disk cache file."""
-        self.reset()
-        await get_cache_backend().delete()
+
+_cache_singleton: ThreadSafeSingleton[CacheContainer] = ThreadSafeSingleton(CacheContainer)
+
+
+def get_cache_container() -> CacheContainer:
+    """Get the global cache container instance (thread-safe singleton)."""
+    return _cache_singleton.get()

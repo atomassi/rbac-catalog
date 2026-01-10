@@ -1,8 +1,4 @@
-"""Cache data models.
-
-Single unified cache container that holds all data - both raw and computed.
-Everything is swapped atomically to prevent race conditions.
-"""
+"""Cache data models."""
 
 from __future__ import annotations
 
@@ -14,30 +10,12 @@ from typing import TYPE_CHECKING, Final
 
 from azurerbac.core.constants import RoleStatus
 from azurerbac.core.types import JsonDict
+from azurerbac.core.utils import format_datetime, parse_datetime
 
 if TYPE_CHECKING:
     from azurerbac.azure.models import OperationData, RoleDefinition
 
-CACHE_VERSION: Final[str] = (
-    "v7"  # Bump to force cache rebuild (simplified CachedRole, OperationData)
-)
-
-
-def parse_datetime(val: str | datetime | None) -> datetime | None:
-    """Parse datetime from string, datetime, or None.
-
-    Used for deserializing cached data from disk (ISO format strings).
-    """
-    if val is None:
-        return None
-    if isinstance(val, datetime):
-        return val
-    return datetime.fromisoformat(val)
-
-
-def format_datetime(val: datetime | None) -> str | None:
-    """Format datetime to ISO string for serialization."""
-    return val.isoformat() if val else None
+CACHE_VERSION: Final[str] = "v7"
 
 
 @dataclass(slots=True)

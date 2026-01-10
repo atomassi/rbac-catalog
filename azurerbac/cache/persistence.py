@@ -1,223 +1,246 @@
-"""Disk persistence for cache data."""
+"""Cache persistence and synchronization.
+
+This module handles:
+- Saving/loading cache data to/from the configured backend
+- Detecting when the backend was updated (e.g., by worker process)
+- Reloading cache into app_cache when backend changes
+
+For low-level backend operations, use get_cache_backend() directly.
+"""
 
 from __future__ import annotations
 
 import logging
+import time
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from azurerbac.settings import Settings, is_running_in_azure
+# Re-export backend for convenience
+from azurerbac.cache.backends import (
+    CACHE_FILENAME,
+    CacheBackend,
+    FileCacheBackend,
+    get_cache_backend,
+    set_cache_backend_factory,
+)
 
 if TYPE_CHECKING:
     from azurerbac.cache.models import CacheData
 
 logger = logging.getLogger(__name__)
 
+# Re-export for backward compatibility
+__all__ = [
+    "CACHE_FILENAME",
+    "CacheBackend",
+    "FileCacheBackend",
+    "delete_cache_file",
+    "get_cache_backend",
+    "get_cache_dir",
+    "get_cache_file_mtime",
+    "get_cache_file_path",
+    "load_cache_from_disk",
+    "mark_pending_reload",
+    "needs_reload_from_backend",
+    "reload_from_backend_if_needed",
+    "save_cache_to_disk",
+    "set_cache_backend_factory",
+]
+
 
 def get_cache_dir() -> Path:
-    """Get the cache directory, creating it if needed."""
+    """Get the cache directory path.
+
+    Delegates to the configured cache backend.
+    """
+    backend = get_cache_backend()
+    if isinstance(backend, FileCacheBackend):
+        return backend.cache_dir
+    # Fallback for non-file backends
+    from azurerbac.settings import Settings, is_running_in_azure
+
     settings = Settings.get()
-
-    # Allow override via settings (from CACHE_DIR env var)
     if settings.cache_dir:
-        cache_dir = Path(settings.cache_dir)
-    elif is_running_in_azure():
-        # Azure App Service - use /home for persistence across restarts
-        cache_dir = Path("/home/cache")
-    else:
-        # Local development - azurerbac/.cache
-        cache_dir = Path(__file__).parent.parent / ".cache"
-
-    cache_dir.mkdir(parents=True, exist_ok=True)
-    return cache_dir
-
-
-def _get_cache_file() -> Path:
-    """Get the path to the cache file."""
-    return get_cache_dir() / "app_cache.msgpack"
+        return Path(settings.cache_dir)
+    if is_running_in_azure():
+        return Path("/home/cache")
+    return Path(__file__).parent.parent / ".cache"
 
 
 def get_cache_file_path() -> Path:
-    """Get the path to the cache file."""
-    return _get_cache_file()
+    """Get the path to the cache file.
 
-
-def save_cache_to_disk(data: CacheData) -> bool:
-    """Save cache data to disk. Returns True if successful.
-
-    The complete CacheData is saved including all computed fields.
-    On reload, no recomputation is needed.
+    Only meaningful for FileCacheBackend.
     """
-    # Validate cache has data before saving (prevent saving empty cache)
-    if not data.roles_by_id or not data.all_operations:
-        logger.warning(
-            "Refusing to save incomplete cache: %d roles, %d ops",
-            len(data.roles_by_id),
-            len(data.all_operations),
-        )
-        return False
-
-    try:
-        # Write to temp file first, then rename (atomic)
-        cache_file = _get_cache_file()
-        temp_file = cache_file.with_suffix(".tmp")
-
-        # Convert dataclass to dict and serialize
-        from dataclasses import asdict
-
-        from azurerbac.cache.serialization import packb
-
-        data_dict = asdict(data)
-
-        # Convert CachedRole objects to dicts for serialization
-        # asdict doesn't handle nested dataclasses with custom to_dict()
-        if data.roles_by_id:
-            data_dict["roles_by_id"] = {
-                role_id: role.to_dict() for role_id, role in data.roles_by_id.items()
-            }
-
-        # Convert OperationData Pydantic models to dicts for serialization
-        if data.all_operations:
-            data_dict["all_operations"] = [op.to_dict() for op in data.all_operations]
-
-        # Convert ops_by_name_lower (OperationData values) to dicts
-        if data.ops_by_name_lower:
-            data_dict["ops_by_name_lower"] = {
-                k: v.to_dict() for k, v in data.ops_by_name_lower.items()
-            }
-
-        # Convert ops_by_prefix (lists of OperationData) to lists of dicts
-        if data.ops_by_prefix:
-            data_dict["ops_by_prefix"] = {
-                k: [op.to_dict() for op in v] for k, v in data.ops_by_prefix.items()
-            }
-
-        # Convert CachedChangeEvent objects to dicts for serialization
-        if data.all_change_events:
-            data_dict["all_change_events"] = [ev.to_dict() for ev in data.all_change_events]
-
-        packed = packb(data_dict)
-
-        with open(temp_file, "wb") as f:
-            f.write(packed)
-        temp_file.rename(cache_file)
-        logger.info("Saved cache to disk: %s", cache_file)
-        return True
-    except Exception as e:
-        logger.exception("Failed to save cache to disk: %s", e)
-        return False
-
-
-def load_cache_from_disk() -> CacheData | None:
-    """Load cache from disk. Returns None if no valid cache exists.
-
-    Returns the complete CacheData with all computed fields.
-    No recomputation is needed after loading.
-    """
-    cache_file = _get_cache_file()
-    if not cache_file.exists():
-        logger.info("No cache file found")
-        return None
-
-    try:
-        with open(cache_file, "rb") as f:
-            packed = f.read()
-
-        from azurerbac.cache.serialization import unpackb
-
-        data_dict = unpackb(packed)
-
-        # Reconstruct dataclass from dict
-        from azurerbac.azure.models import OperationData
-        from azurerbac.cache.models import CacheData, CachedChangeEvent, CachedRole, CacheMetadata
-
-        metadata_dict = data_dict.pop("metadata", {})
-        metadata = CacheMetadata(**metadata_dict)
-
-        # Convert roles_by_id dicts back to CachedRole objects
-        if roles_by_id_raw := data_dict.get("roles_by_id"):
-            data_dict["roles_by_id"] = {
-                role_id: CachedRole.from_dict(role_data)
-                for role_id, role_data in roles_by_id_raw.items()
-            }
-
-        # Convert all_operations dicts back to OperationData objects
-        if ops_raw := data_dict.get("all_operations"):
-            data_dict["all_operations"] = [OperationData.model_validate(op) for op in ops_raw]
-
-        # Convert ops_by_name_lower dicts back to OperationData objects
-        if ops_by_name_raw := data_dict.get("ops_by_name_lower"):
-            data_dict["ops_by_name_lower"] = {
-                k: OperationData.model_validate(v) for k, v in ops_by_name_raw.items()
-            }
-
-        # Convert ops_by_prefix lists of dicts back to lists of OperationData
-        if ops_by_prefix_raw := data_dict.get("ops_by_prefix"):
-            data_dict["ops_by_prefix"] = {
-                k: [OperationData.model_validate(op) for op in v]
-                for k, v in ops_by_prefix_raw.items()
-            }
-
-        # Convert all_change_events dicts back to CachedChangeEvent objects
-        if events_raw := data_dict.get("all_change_events"):
-            data_dict["all_change_events"] = [CachedChangeEvent.from_dict(ev) for ev in events_raw]
-
-        # Post-process fields with tuple values
-        # role_coverage: dict[str, tuple[set, set]] - values are tuples of sets
-        if role_coverage := data_dict.get("role_coverage"):
-            data_dict["role_coverage"] = {
-                k: (
-                    set(v[0]) if isinstance(v[0], list) else v[0],
-                    set(v[1]) if isinstance(v[1], list) else v[1],
-                )
-                for k, v in role_coverage.items()
-            }
-
-        # role_net_permissions: dict[str, tuple[int, int]] - values are tuples of ints
-        if role_net_perms := data_dict.get("role_net_permissions"):
-            data_dict["role_net_permissions"] = {k: tuple(v) for k, v in role_net_perms.items()}
-
-        # partial_coverage values are tuples: (int, int, int, list)
-        if partial_cov := data_dict.get("partial_coverage"):
-            data_dict["partial_coverage"] = {k: tuple(v) for k, v in partial_cov.items()}
-
-        # cache_ops_count is a list (expected as list, no change needed)
-
-        data = CacheData(metadata=metadata, **data_dict)
-
-        logger.info("Loaded cache from disk: %s", cache_file)
-        logger.info(
-            "  Roles: %d, Operations: %d",
-            data.metadata.roles_count,
-            data.metadata.operations_count,
-        )
-        return data
-    except Exception as e:
-        logger.exception("Failed to load cache from disk: %s", e)
-        return None
-
-
-def delete_cache_file() -> None:
-    """Delete the cache file from disk."""
-    cache_file = _get_cache_file()
-    if cache_file.exists():
-        try:
-            cache_file.unlink()
-            logger.info("Deleted cache file")
-        except Exception as e:
-            logger.exception("Failed to delete cache file: %s", e)
+    backend = get_cache_backend()
+    if isinstance(backend, FileCacheBackend):
+        return backend.cache_file
+    return get_cache_dir() / CACHE_FILENAME
 
 
 def get_cache_file_mtime() -> float | None:
-    """Get the modification time of the cache file.
+    """Get the modification time of the cache.
 
-    Returns:
-        The mtime as a float (seconds since epoch), or None if file doesn't exist.
+    Only available for FileCacheBackend. Returns None for other backends.
     """
-    cache_file = _get_cache_file()
-    if cache_file.exists():
+    backend = get_cache_backend()
+    if isinstance(backend, FileCacheBackend):
+        return backend.get_mtime()
+    # For non-file backends, try to parse version as float (if it's a timestamp)
+    version = backend.get_version()
+    if version:
         try:
-            return cache_file.stat().st_mtime
-        except OSError:
+            return float(version)
+        except ValueError:
             return None
     return None
+
+
+async def load_cache_from_disk() -> CacheData | None:
+    """Load cache from storage asynchronously.
+
+    Delegates to the configured cache backend.
+    """
+    return await get_cache_backend().load()
+
+
+async def save_cache_to_disk(data: CacheData) -> bool:
+    """Save cache to storage asynchronously.
+
+    Delegates to the configured cache backend.
+    """
+    return await get_cache_backend().save(data)
+
+
+async def delete_cache_file() -> None:
+    """Delete the cached data.
+
+    Delegates to the configured cache backend.
+    """
+    await get_cache_backend().delete()
+
+
+# ============================================================================
+# Backend sync functions (for web app detecting worker updates)
+# ============================================================================
+
+
+def needs_reload_from_backend() -> bool:
+    """Check if backend cache was updated by another process.
+
+    Compares loaded version with current backend version.
+
+    Returns:
+        True if cache version changed since last load.
+    """
+    from azurerbac.cache import app_cache
+
+    current_version = get_cache_backend().get_version()
+
+    # No cache in backend
+    if current_version is None:
+        return False
+
+    # Cache exists but we haven't loaded any yet (worker created it)
+    if app_cache.loaded_cache_version is None:
+        logger.info("New cache detected from worker (version: %s)", current_version)
+        return True
+
+    # Cache version changed since we last loaded
+    if current_version != app_cache.loaded_cache_version:
+        logger.info(
+            "Cache updated (version: %s != %s)",
+            current_version,
+            app_cache.loaded_cache_version,
+        )
+        return True
+    return False
+
+
+def mark_pending_reload() -> None:
+    """Mark that a reload is pending (called by backend watcher).
+
+    This is called from the watchdog thread when a cache change
+    is detected. The actual reload happens on the next async check.
+    """
+    from azurerbac.cache import app_cache
+
+    app_cache.pending_reload = True
+    logger.debug("Cache reload marked as pending (watcher triggered)")
+
+
+async def reload_from_backend_if_needed() -> bool:
+    """Reload cache from backend if updated by another process.
+
+    Uses AppCache's async lock to prevent concurrent reloads.
+    The backend contains the complete CacheData with all computed fields.
+    No recomputation is needed - just load and swap.
+
+    Returns:
+        True if cache was reloaded, False otherwise.
+    """
+    from azurerbac.cache import app_cache
+    from azurerbac.cache.models import CACHE_VERSION
+
+    # Quick check without lock - prefer pending_reload flag from watcher
+    if not app_cache.pending_reload and not needs_reload_from_backend():
+        return False
+
+    # Use AppCache's lock to prevent concurrent reloads
+    reload_lock = app_cache.reload_lock
+    if reload_lock.locked():
+        logger.debug("Cache reload already in progress, skipping")
+        return False
+
+    async with reload_lock:
+        # Clear pending flag
+        app_cache.pending_reload = False
+
+        # Double-check after acquiring lock
+        if not needs_reload_from_backend():
+            return False
+
+        logger.info("Reloading cache from backend...")
+        start_time = time.time()
+
+        backend = get_cache_backend()
+        cached = await backend.load()
+        if cached is None:
+            logger.warning("Failed to load cache from backend")
+            return False
+
+        # Get current version BEFORE validation so we can update it even on failure
+        # This prevents retry loops when a bad cache exists
+        current_version = backend.get_version()
+
+        # Validate required data
+        if not cached.roles_by_id or not cached.all_operations:
+            logger.warning("Loaded cache incomplete, keeping current")
+            # Update version to prevent retry loop on same bad data
+            app_cache.loaded_cache_version = current_version
+            return False
+
+        # Check version - if outdated, need fresh rebuild
+        if cached.metadata.version != CACHE_VERSION:
+            logger.warning(
+                f"Cache version mismatch: {cached.metadata.version} != {CACHE_VERSION}, "
+                "keeping current (worker will rebuild)"
+            )
+            # Update version to prevent retry loop
+            app_cache.loaded_cache_version = current_version
+            return False
+
+        # Backend contains complete CacheData with all computed fields.
+        # Just swap it in - no recomputation needed!
+        app_cache.swap(cached)
+
+        app_cache.loaded_cache_version = current_version
+        app_cache.is_preloaded = True
+
+        elapsed = time.time() - start_time
+        logger.info(
+            f"Cache reloaded in {elapsed:.2f}s: {len(cached.roles_by_id)} roles, "
+            f"{len(cached.all_operations)} ops, "
+            f"{len(cached.role_coverage)} role coverages (precomputed)"
+        )
+        return True

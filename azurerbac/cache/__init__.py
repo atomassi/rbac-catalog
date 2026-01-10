@@ -1,6 +1,37 @@
-"""Cache package for Azure RBAC application."""
+"""Cache package for Azure RBAC application.
 
-from azurerbac.cache.app_cache import AppCache
+Architecture:
+    - models.py:       Data classes
+    - serialization.py: Msgpack serialization
+    - container.py:    In-memory singleton (CacheContainer)
+    - build.py:        All cache building & refresh operations
+    - backends/:       Storage abstraction (file-based by default)
+"""
+
+from azurerbac.cache.backends import (
+    CACHE_FILENAME,
+    CacheBackend,
+    CacheBackendType,
+    CacheFileWatcher,
+    FileCacheBackend,
+    get_cache_backend,
+    get_cache_watcher,
+)
+from azurerbac.cache.build import (
+    build_from_db,
+    build_operations_prefix_index,
+    get_matching_operations,
+    invalidate_all,
+    invalidate_and_rebuild,
+    mark_pending_reload,
+    precompute_all,
+    rebuild_and_save,
+    rebuild_in_memory,
+    reload_if_needed,
+    save,
+    swap_in_memory,
+)
+from azurerbac.cache.container import CacheContainer, get_cache_container
 from azurerbac.cache.models import (
     CACHE_VERSION,
     CacheData,
@@ -10,57 +41,47 @@ from azurerbac.cache.models import (
     build_indexes,
     compute_operations_hash,
     compute_roles_hash,
-    format_datetime,
-    parse_datetime,
 )
-from azurerbac.cache.persistence import (
-    delete_cache_file,
-    get_cache_dir,
-    get_cache_file_mtime,
-    get_cache_file_path,
-    load_cache_from_disk,
-    save_cache_to_disk,
+from azurerbac.cache.serialization import (
+    deserialize_from_bytes,
+    serialize_to_bytes,
 )
-from azurerbac.cache.precompute import (
-    clear_computed_caches,
-    precompute_all_caches,
-)
-from azurerbac.cache.refresh import (
-    invalidate_and_rebuild_cache,
-    rebuild_cache,
-)
-from azurerbac.cache.utils import (
-    build_operations_prefix_index,
-    get_matching_operations,
-)
-
-# Singleton app cache instance - the single source of truth for all cached data.
-# All data (raw + indexes + computed) is in app_cache.cache (a CacheData object).
-app_cache = AppCache()
 
 __all__ = [
+    # Backends
+    "CACHE_FILENAME",
+    # Models
     "CACHE_VERSION",
-    "AppCache",
+    "CacheBackend",
+    "CacheBackendType",
+    # Container
+    "CacheContainer",
     "CacheData",
+    "CacheFileWatcher",
     "CacheMetadata",
     "CachedChangeEvent",
     "CachedRole",
-    "app_cache",
+    "FileCacheBackend",
+    # Build operations
+    "build_from_db",
     "build_indexes",
     "build_operations_prefix_index",
-    "clear_computed_caches",
     "compute_operations_hash",
     "compute_roles_hash",
-    "delete_cache_file",
-    "format_datetime",
-    "get_cache_dir",
-    "get_cache_file_mtime",
-    "get_cache_file_path",
+    # Serialization
+    "deserialize_from_bytes",
+    "get_cache_backend",
+    "get_cache_container",
+    "get_cache_watcher",
     "get_matching_operations",
-    "invalidate_and_rebuild_cache",
-    "load_cache_from_disk",
-    "parse_datetime",
-    "precompute_all_caches",
-    "rebuild_cache",
-    "save_cache_to_disk",
+    "invalidate_all",
+    "invalidate_and_rebuild",
+    "mark_pending_reload",
+    "precompute_all",
+    "rebuild_and_save",
+    "rebuild_in_memory",
+    "reload_if_needed",
+    "save",
+    "serialize_to_bytes",
+    "swap_in_memory",
 ]

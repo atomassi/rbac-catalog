@@ -1,31 +1,40 @@
-"""MessagePack serialization helpers for cache data.
+"""Msgpack serialization for cache data.
 
-Provides custom encoding/decoding for Python types not natively supported by msgpack:
+Provides custom encoding/decoding for Python types not natively supported:
 - set -> list (restored as set on decode)
 - tuple -> list (restored as tuple on decode)
 - datetime -> UTC ISO format string (restored as timezone-aware)
 - dict with tuple keys -> list of [key, value] pairs (restored on decode)
-
-Note: This module is for internal cache serialization only, not untrusted input.
 """
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Final
 
 import msgpack
 
 from azurerbac.core.types import JsonDict
 
+__all__ = [
+    "deserialize_from_bytes",
+    "serialize_to_bytes",
+]
+
 # Marker tags for msgpack ExtType custom types
-TAG_SET = 1
-TAG_TUPLE = 2
-TAG_DATETIME = 3
-TAG_TUPLE_KEY_DICT = 4
+TAG_SET: Final[int] = 1
+TAG_TUPLE: Final[int] = 2
+TAG_DATETIME: Final[int] = 3
+TAG_TUPLE_KEY_DICT: Final[int] = 4
 
 # Fields in CacheData that use tuple keys (need special handling)
-TUPLE_KEY_FIELDS = frozenset({"pattern_match", "partial_coverage", "wildcard_count"})
+TUPLE_KEY_FIELDS: Final[frozenset[str]] = frozenset(
+    {
+        "pattern_match",
+        "partial_coverage",
+        "wildcard_count",
+    }
+)
 
 
 def encode_ext(obj: Any) -> msgpack.ExtType:
@@ -71,12 +80,12 @@ def prepare_for_msgpack(data_dict: JsonDict) -> JsonDict:
     return result
 
 
-def packb(data: JsonDict) -> bytes:
+def serialize_to_bytes(data: JsonDict) -> bytes:
     """Serialize a dictionary to msgpack bytes."""
     prepared = prepare_for_msgpack(data)
     return msgpack.packb(prepared, default=encode_ext, strict_types=False)  # type: ignore[return-value]
 
 
-def unpackb(data: bytes) -> JsonDict:
+def deserialize_from_bytes(data: bytes) -> JsonDict:
     """Deserialize msgpack bytes to a dictionary."""
     return msgpack.unpackb(data, ext_hook=decode_ext, strict_map_key=False)

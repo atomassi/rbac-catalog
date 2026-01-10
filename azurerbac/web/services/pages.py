@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Final
@@ -21,7 +20,7 @@ if TYPE_CHECKING:
     from fastapi import Request
     from sqlalchemy.ext.asyncio import async_sessionmaker
 
-    from azurerbac.cache import AppCache
+    from azurerbac.cache import CacheContainer
     from azurerbac.core.models import Role, RoleHistory
 
 # =============================================================================
@@ -100,7 +99,7 @@ def sort_operations(
     operations: list[OperationData],
     sort: str,
     order: str,
-    app_cache: AppCache,
+    cache: CacheContainer,
 ) -> list[tuple[OperationData, int]]:
     """Sort operations based on sort field and order.
 
@@ -108,13 +107,13 @@ def sort_operations(
         operations: List of OperationData objects to sort
         sort: Sort field - "name", "provider", "type", or "roles"
         order: Sort order - "asc" or "desc"
-        app_cache: The application cache instance
+        cache: The cache container instance
 
     Returns:
         List of (operation, role_count) tuples, sorted as requested
     """
     # Build tuples with role count for sorting (needed for "roles" sort and enrichment)
-    ops_with_count = [(op, app_cache.get_operation_role_count(op.name)) for op in operations]
+    ops_with_count = [(op, cache.get_operation_role_count(op.name)) for op in operations]
 
     if sort == "roles":
         # Sort by role count
@@ -132,7 +131,7 @@ def sort_operations(
 
 
 def compute_role_effective_permissions(
-    role: RoleDefinition, all_operations: list[OperationData], app_cache: AppCache
+    role: RoleDefinition, all_operations: list[OperationData], cache: CacheContainer
 ) -> RoleEffectivePermissions:
     """Compute the effective permissions for a role.
 
@@ -143,7 +142,7 @@ def compute_role_effective_permissions(
     Args:
         role: The RoleDefinition Pydantic model.
         all_operations: List of all known Azure operations.
-        app_cache: The application cache instance.
+        cache: The cache container instance.
 
     Returns:
         RoleEffectivePermissions with control/data plane actions and metadata.
@@ -166,7 +165,7 @@ def compute_role_effective_permissions(
     has_conditions = any(perm.condition for perm in permissions)
 
     # Try to get from cache first (already computed during startup)
-    if cached_coverage := app_cache.get_role_coverage(role_id):
+    if cached_coverage := cache.get_role_coverage(role_id):
         control_effective, data_effective = cached_coverage
     else:
         # Fallback: compute manually (shouldn't happen if precompute_all_caches ran)
@@ -252,7 +251,7 @@ def _operation_in_set(operation_lower: str, operation_set: set[str]) -> bool:
 
 
 def get_roles_allowing_operation(
-    operation_name: str, is_data_action: bool, app_cache: AppCache
+    operation_name: str, is_data_action: bool, cache: CacheContainer
 ) -> list[RoleAllowingOperation]:
     """Find all roles that allow a specific operation.
 
@@ -263,17 +262,17 @@ def get_roles_allowing_operation(
     Args:
         operation_name: The name of the operation to search for.
         is_data_action: Whether this is a data action (vs control plane action).
-        app_cache: The application cache instance.
+        cache: The cache container instance.
 
     Returns:
         List of RoleAllowingOperation with role details and matched pattern.
     """
     # Check cache first
     cache_key = f"roles_allowing_op:{operation_name.lower()}:{is_data_action}"
-    if (cached := app_cache.get(cache_key)) is not None:
+    if (cached := cache.get(cache_key)) is not None:
         return cached
 
-    if not (all_roles := app_cache.get_all_roles()):
+    if not (all_roles := cache.get_all_roles()):
         return []
 
     allowing_roles: list[RoleAllowingOperation] = []
@@ -281,7 +280,7 @@ def get_roles_allowing_operation(
 
     for role in all_roles:
         role_id = role.name
-        cached_coverage = app_cache.get_role_coverage(role_id)
+        cached_coverage = cache.get_role_coverage(role_id)
         if not cached_coverage:
             continue
 
@@ -312,46 +311,16 @@ def get_roles_allowing_operation(
     allowing_roles.sort(key=lambda x: x.role_name.lower())
 
     # Cache result
-    app_cache.set(cache_key, allowing_roles)
+    cache.set(cache_key, allowing_roles)
 
     return allowing_roles
-
-
-async def get_unique_providers(
-    app_cache: AppCache, get_all_operations: Callable[[], Awaitable[list[OperationData]]]
-) -> list[str]:
-    """Get unique provider names from all operations.
-
-    Args:
-        app_cache: The application cache instance.
-        get_all_operations: Async function to get all operations.
-
-    Returns:
-        Sorted list of unique provider display names.
-    """
-    # Check cache first (direct field access)
-    cached = app_cache.cache.unique_providers
-    if cached:
-        return cached
-
-    all_ops = await get_all_operations()
-    providers = set()
-    for op in all_ops:
-        if op.provider_display_name:
-            providers.add(op.provider_display_name)
-    result = sorted(providers, key=str.casefold)
-
-    # Cache result via set_metadata
-    app_cache.set_metadata(unique_providers=result)
-
-    return result
 
 
 # =============================================================================
 # Role Detail Helpers
 # =============================================================================
 async def get_role_from_cache_or_db(
-    app_cache: AppCache,
+    cache: CacheContainer,
     session_local: async_sessionmaker,
     role_snapshot_model: type[Role],
     role_history_model: type[RoleHistory],
@@ -361,7 +330,7 @@ async def get_role_from_cache_or_db(
     """Get role data from cache or fallback to database.
 
     Args:
-        app_cache: The application cache instance.
+        cache: The cache container instance.
         session_local: Async session factory.
         role_snapshot_model: Role SQLAlchemy model.
         role_history_model: RoleHistory SQLAlchemy model.
@@ -379,17 +348,16 @@ async def get_role_from_cache_or_db(
 
     logger = logging.getLogger(__name__)
 
-    app_cache.reload_from_disk_if_needed()
-    cached_role = app_cache.get_role_by_id(role_id)
-    cache_size = len(app_cache.cache.roles_by_id)
+    cached_role = cache.get_role_by_id(role_id)
+    cache_size = len(cache.cache.roles_by_id)
     logger.info(
         f"Role detail request: role_id={role_id}, "
         f"cache_size={cache_size}, cache_hit={cached_role is not None}"
     )
 
     if cached_role:
-        first_scan = app_cache.cache.first_scan
-        cached_events = app_cache.get_events_for_role(role_id)
+        first_scan = cache.cache.first_scan
+        cached_events = cache.get_events_for_role(role_id)
         events_raw = cached_events[:max_events]
         return cached_role, cached_role.definition, events_raw, first_scan
 

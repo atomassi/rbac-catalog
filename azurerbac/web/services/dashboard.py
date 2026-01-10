@@ -24,7 +24,7 @@ from azurerbac.web.services.models import DashboardSummary, RoleWithCounts
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
-    from azurerbac.cache import AppCache
+    from azurerbac.cache import CacheContainer
     from azurerbac.core.models import Role, RoleHistory
     from azurerbac.web.dependencies import DashboardDeps
 
@@ -142,7 +142,9 @@ async def _execute_paginated_role_query(
     return [enrich_role_with_counts(r) for r in db_roles]
 
 
-def enrich_role_with_counts(role: Role | Any, app_cache: AppCache | None = None) -> RoleWithCounts:
+def enrich_role_with_counts(
+    role: Role | Any, cache: CacheContainer | None = None
+) -> RoleWithCounts:
     """Enrich a role object with actions_count and data_actions_count.
 
     Uses the pre-computed role net permissions cache from the recommender.
@@ -151,18 +153,18 @@ def enrich_role_with_counts(role: Role | Any, app_cache: AppCache | None = None)
     Args:
         role: A role object (SQLAlchemy model or cached dict-like object)
               with role_id, role_name, role_type, status, updated_on
-        app_cache: Optional cache instance. If None, imports the singleton.
+        cache: Optional cache instance. If None, imports the singleton.
 
     Returns:
         RoleWithCounts with role data and action counts
     """
     # Get counts from the recommender cache
-    if app_cache is None:
-        from azurerbac.cache import app_cache as _app_cache
+    if cache is None:
+        from azurerbac.cache import get_cache_container
 
-        app_cache = _app_cache
+        cache = get_cache_container()
 
-    net_perms = app_cache.get_role_net_permissions(role.role_id)
+    net_perms = cache.get_role_net_permissions(role.role_id)
     if net_perms:
         actions_count, data_actions_count = net_perms
     else:
@@ -193,9 +195,6 @@ async def get_common_dashboard_data(deps: DashboardDeps) -> DashboardSummary:
     Returns:
         DashboardSummary with total_roles, total_operations, last_scan, first_scan
     """
-    # Check for disk cache updates
-    deps.app_cache.reload_from_disk_if_needed()
-
     return DashboardSummary(
         total_roles=len(deps.app_cache.cache.roles_by_id),
         total_operations=len(deps.app_cache.get_all_operations()),

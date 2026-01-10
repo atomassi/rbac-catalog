@@ -36,7 +36,7 @@ from starlette.middleware.gzip import GZipMiddleware
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from azurerbac import __version__
-from azurerbac.cache import app_cache
+from azurerbac.cache import get_cache_container
 from azurerbac.core import (
     DBEngine,
     Operation,
@@ -47,7 +47,7 @@ from azurerbac.core import (
 )
 from azurerbac.settings import Settings, is_running_in_azure, is_running_in_pytest
 from azurerbac.web.constants import GZIP_MIN_SIZE, SITE_URL
-from azurerbac.web.dependencies import APIDeps, DashboardDeps, PagesDeps
+from azurerbac.web.dependencies import BaseDeps, DashboardDeps, PagesDeps
 from azurerbac.web.filters import diff_lines, format_date, format_datetime, full_json_diff
 from azurerbac.web.middleware import (
     add_cache_headers,
@@ -59,10 +59,6 @@ from azurerbac.web.routes import dashboard as dashboard_routes
 from azurerbac.web.routes import health as health_routes
 from azurerbac.web.routes import pages as pages_routes
 from azurerbac.web.routes import static as static_routes
-from azurerbac.web.services.cache import (
-    get_all_operations,
-    get_all_roles,
-)
 from azurerbac.web.services.startup import (
     cache_refresh_task,
     ensure_db,
@@ -91,8 +87,6 @@ settings = Settings.get()
 # Get singleton database engine (handles SQLite, PostgreSQL, and MSI)
 engine = DBEngine.get()
 SessionLocal = create_sessionmaker(engine)
-
-# app_cache is now imported from azurerbac.cache (singleton instance)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Templates Setup
@@ -157,8 +151,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:  # pylint: disable=unus
 
 app = FastAPI(title="Azure RBAC Built-in Role Change Monitor", lifespan=lifespan)
 
-# Store app_cache in app.state for access by route handlers via request.app.state
-app.state.app_cache = app_cache
+# Store cache accessor in app.state for access by route handlers via request.app.state
+app.state.app_cache = get_cache_container()
 
 # Store SessionLocal on app.state so tests can patch it in one place
 app.state.session_local = SessionLocal
@@ -168,15 +162,13 @@ app.state.session_local = SessionLocal
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Store typed dependency containers on app.state for FastAPI dependency injection
-app.state.api_deps = APIDeps(
-    app_cache=app_cache,
+app.state.api_deps = BaseDeps(
+    app_cache=get_cache_container(),
     SessionLocal=SessionLocal,
-    get_all_operations=get_all_operations,
-    get_all_roles=get_all_roles,
 )
 
 app.state.dashboard_deps = DashboardDeps(
-    app_cache=app_cache,
+    app_cache=get_cache_container(),
     SessionLocal=SessionLocal,
     Role=Role,
     RoleHistory=RoleHistory,
@@ -186,13 +178,12 @@ app.state.dashboard_deps = DashboardDeps(
 )
 
 app.state.pages_deps = PagesDeps(
-    app_cache=app_cache,
+    app_cache=get_cache_container(),
     SessionLocal=SessionLocal,
     Role=Role,
     RoleHistory=RoleHistory,
     Operation=Operation,
     templates=templates,
-    get_all_operations=get_all_operations,
 )
 
 # ─────────────────────────────────────────────────────────────────────────────

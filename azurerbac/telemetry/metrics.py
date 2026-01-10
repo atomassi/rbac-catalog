@@ -36,7 +36,7 @@ from azurerbac.settings import Settings, is_running_in_azure
 from azurerbac.telemetry.sender import MetricsSender
 
 if TYPE_CHECKING:
-    from azurerbac.cache import AppCache
+    from azurerbac.cache import CacheContainer
 
 logger = logging.getLogger(__name__)
 
@@ -170,11 +170,11 @@ def track_event(name: str, properties: dict[str, Any] | None = None) -> None:
         logger.exception("Failed to track event %s: %s", name, e)
 
 
-def track_cache_stats(app_cache: AppCache) -> None:
+def track_cache_stats(app_cache: CacheContainer) -> None:
     """Track cache statistics as custom metrics.
 
     Args:
-        app_cache: The AppCache instance to get stats from.
+        app_cache: The CacheContainer instance to get stats from.
     """
     if not _metrics_enabled():
         logger.debug("Skipping track_cache_stats: metrics disabled")

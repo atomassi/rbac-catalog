@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from azurerbac.azure.models import RoleDefinition
 from azurerbac.backgroundjobs.models import RoleScanResult
-from azurerbac.cache import invalidate_and_rebuild_cache
+from azurerbac.cache import invalidate_and_rebuild
 from azurerbac.core import (
     EventType,
     Role,
@@ -268,7 +268,7 @@ async def apply_role_scan(session: AsyncSession, roles: list[dict]) -> RoleScanR
             updated,
             deleted_count,
         )
-        await invalidate_and_rebuild_cache(session)
+        await invalidate_and_rebuild(session)
 
     return RoleScanResult(
         created=created,

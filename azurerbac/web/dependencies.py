@@ -5,17 +5,16 @@ functions to inject shared resources into route handlers without using
 global variables.
 
 Usage in route handlers:
-    from azurerbac.web.dependencies import get_api_deps, APIDeps
+    from azurerbac.web.dependencies import get_api_deps, BaseDeps
 
     @router.get("/some-endpoint")
-    async def endpoint(deps: APIDeps = Depends(get_api_deps)):
-        await deps.get_all_operations()
+    async def endpoint(deps: BaseDeps = Depends(get_api_deps)):
+        deps.app_cache.get_all_operations()
         deps.app_cache.search_operations(...)
 """
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -25,8 +24,7 @@ if TYPE_CHECKING:
     from fastapi.templating import Jinja2Templates
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-    from azurerbac.azure.models import OperationData, RoleDefinition
-    from azurerbac.cache import AppCache
+    from azurerbac.cache import CacheContainer
     from azurerbac.core.models import Operation, Role, RoleHistory, RoleScanStatus
 
 
@@ -34,19 +32,8 @@ if TYPE_CHECKING:
 class BaseDeps:
     """Common dependencies shared across all route types."""
 
-    app_cache: AppCache
+    app_cache: CacheContainer
     SessionLocal: async_sessionmaker[AsyncSession]
-
-
-@dataclass(slots=True)
-class APIDeps(BaseDeps):
-    """Dependencies for API routes (/api/*).
-
-    Provides cache access and service functions for API endpoints.
-    """
-
-    get_all_operations: Callable[[], Awaitable[list[OperationData]]]
-    get_all_roles: Callable[[], Awaitable[list[RoleDefinition]]]
 
 
 @dataclass(slots=True)
@@ -65,19 +52,15 @@ class DashboardDeps(BaseDeps):
 
 @dataclass(slots=True)
 class PagesDeps(BaseDeps):
-    """Dependencies for page routes (/roles/{id}, /operations, etc).
-
-    Provides models, templates, and operations service.
-    """
+    """Dependencies for page routes (/roles/{id}, /operations, etc)."""
 
     Role: type[Role]
     RoleHistory: type[RoleHistory]
     Operation: type[Operation]
     templates: Jinja2Templates
-    get_all_operations: Callable[[], Awaitable[list[OperationData]]]
 
 
-def get_api_deps(request: Request) -> APIDeps:
+def get_api_deps(request: Request) -> BaseDeps:
     """FastAPI dependency that returns API dependencies from app.state.
 
     Updates SessionLocal from app.state.session_local to support test patching.

@@ -26,7 +26,7 @@ from azurerbac.web.constants import (
     MIN_AI_QUERY_CHARS,
     MIN_SEARCH_CHARS,
 )
-from azurerbac.web.dependencies import APIDeps, get_api_deps
+from azurerbac.web.dependencies import BaseDeps, get_api_deps
 from azurerbac.web.limiter import limiter
 from azurerbac.web.routes.models import (
     AIEngineInfo,
@@ -55,7 +55,7 @@ type SearchLimit = Annotated[int, Query(ge=1, le=MAX_SEARCH_LIMIT)]
 
 @router.get("/operations/search", response_model=OperationSearchResponse)
 async def api_search_operations(
-    deps: Annotated[APIDeps, Depends(get_api_deps)],
+    deps: Annotated[BaseDeps, Depends(get_api_deps)],
     q: SearchQuery = "",
     limit: SearchLimit = DEFAULT_SEARCH_LIMIT,
 ) -> OperationSearchResponse:
@@ -69,9 +69,6 @@ async def api_search_operations(
     # Early return for insufficient query length
     if len(q) < MIN_SEARCH_CHARS:
         return empty_search_response(ErrorMessages.SEARCH_TOO_SHORT)
-
-    # Ensure operations are loaded (builds index if needed)
-    await deps.get_all_operations()
 
     # Perform indexed search
     is_wildcard = is_wildcard_pattern(q)
@@ -93,7 +90,7 @@ async def api_search_operations(
 
 @router.get("/operations/count-matches", response_model=CountMatchesResponse)
 async def api_count_wildcard_matches(
-    deps: Annotated[APIDeps, Depends(get_api_deps)],
+    deps: Annotated[BaseDeps, Depends(get_api_deps)],
     pattern: SearchQuery,
     is_data_action: bool = False,
 ) -> CountMatchesResponse:
@@ -105,9 +102,6 @@ async def api_count_wildcard_matches(
     if not pattern or not is_wildcard_pattern(pattern):
         return CountMatchesResponse(pattern=pattern, count=0, is_data_action=is_data_action)
 
-    # Ensure operations are loaded
-    await deps.get_all_operations()
-
     # Fast indexed count
     count = deps.app_cache.count_wildcard_matches(pattern, is_data_action)
 
@@ -117,7 +111,7 @@ async def api_count_wildcard_matches(
 @router.post("/recommend-roles", response_model=RecommendRolesResponse)
 async def api_recommend_roles(
     request: RecommendRolesRequest,
-    deps: Annotated[APIDeps, Depends(get_api_deps)],
+    deps: Annotated[BaseDeps, Depends(get_api_deps)],
 ) -> RecommendRolesResponse:
     """Recommend roles based on selected operations.
 
@@ -127,10 +121,8 @@ async def api_recommend_roles(
     requested_ops, data_flags = request.parse_operations()
 
     # Get data from cache (preloaded at startup)
-    roles, all_operations = await asyncio.gather(
-        deps.get_all_roles(),
-        deps.get_all_operations(),
-    )
+    roles = deps.app_cache.get_all_roles()
+    all_operations = deps.app_cache.get_all_operations()
 
     # Run CPU-bound recommendation in thread pool to avoid blocking event loop
     loop = asyncio.get_running_loop()
@@ -168,7 +160,7 @@ async def api_recommend_roles(
 async def ai_recommend_endpoint(
     request: Request,
     body: AIRecommendRequest,
-    deps: Annotated[APIDeps, Depends(get_api_deps)],
+    deps: Annotated[BaseDeps, Depends(get_api_deps)],
 ) -> AIRecommendResponse:
     """AI-powered role recommendations based on natural language query.
 
@@ -198,7 +190,7 @@ async def ai_recommend_endpoint(
         else RecommenderMode.LLM.value
     )
     top_k = clamp(body.top_k, 1, MAX_TOP_K)
-    roles = await deps.get_all_roles()
+    roles = deps.app_cache.get_all_roles()
 
     # ─── Execute AI Recommendation ────────────────────────────────────────────
     # Run CPU-bound AI recommendation in thread pool to avoid blocking event loop

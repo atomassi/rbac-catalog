@@ -27,7 +27,6 @@ from azurerbac.web.services.pages import (
     filter_operations,
     get_role_from_cache_or_db,
     get_roles_allowing_operation,
-    get_unique_providers,
     sort_operations,
 )
 from azurerbac.web.utils import clamp, role_json_pretty, slugify
@@ -96,7 +95,7 @@ async def role_detail(
 
     # Use RoleDefinition for clean output (excludes isServiceRole)
     display_json = role_def.to_dict() if role_def else {}
-    all_ops = await deps.get_all_operations()
+    all_ops = deps.app_cache.get_all_operations()
     effective_perms = (
         compute_role_effective_permissions(role_def, all_ops, deps.app_cache) if role_def else None
     )
@@ -132,19 +131,17 @@ async def operations_list(
 ) -> Response:
     """Operations list page - shows all Azure RBAC operations."""
     logger.info("Operations list: q='%s' page=%d provider=%s", q or "", page, provider or "all")
-    # Check for disk cache updates
-    deps.app_cache.reload_from_disk_if_needed()
 
     # Enforce bounds on pagination parameters
     page_size = clamp(limit, 1, MAX_PAGE_SIZE)
     page = clamp(page, 1, MAX_PAGE_NUMBER)
 
-    # Get all operations from cache (as OperationData objects - no to_dict yet)
-    all_operations = await deps.get_all_operations()
+    # Get all operations from cache
+    all_operations = deps.app_cache.get_all_operations()
     total_operations = len(all_operations)
 
-    # Get unique providers for filter dropdown
-    providers = await get_unique_providers(deps.app_cache, deps.get_all_operations)
+    # Get unique providers for filter dropdown (precomputed during cache build)
+    providers = deps.app_cache.cache.unique_providers
 
     # Parse is_data_action filter
     is_data_action_filter = _BOOL_MAP.get(is_data_action)

@@ -3,10 +3,6 @@
 This package contains business logic separated from route handlers.
 """
 
-from azurerbac.web.services.cache import (
-    get_all_operations,
-    get_all_roles,
-)
 from azurerbac.web.services.dashboard import (
     enrich_role_with_counts,
     ensure_scan_metadata,
@@ -28,7 +24,6 @@ from azurerbac.web.services.models import (
 from azurerbac.web.services.pages import (
     compute_role_effective_permissions,
     get_roles_allowing_operation,
-    get_unique_providers,
 )
 from azurerbac.web.services.startup import (
     cache_refresh_task,
@@ -50,11 +45,8 @@ __all__ = [
     "fetch_events_from_db",
     "fetch_roles_paginated",
     "filter_cached_events",
-    "get_all_operations",
-    "get_all_roles",
     "get_common_dashboard_data",
     "get_roles_allowing_operation",
-    "get_unique_providers",
     "preload_cache",
     "search_roles",
     "search_roles_in_cache",

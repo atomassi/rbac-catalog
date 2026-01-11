@@ -150,7 +150,7 @@ class TestSearchRolesInCache:
         with patch("azurerbac.web.services.dashboard.enrich_role_with_counts") as mock_enrich:
             mock_enrich.side_effect = _mock_enrich_role
 
-            roles, total, _ = search_roles_in_cache(
+            result = search_roles_in_cache(
                 cached_roles,
                 q="storage",
                 status_filter="active",
@@ -161,9 +161,9 @@ class TestSearchRolesInCache:
                 exact_match=None,
             )
 
-            assert total == 2
-            assert len(roles) == 2
-            assert all("storage" in r.role_name.lower() for r in roles)
+            assert result.total_count == 2
+            assert len(result.items) == 2
+            assert all("storage" in r.role_name.lower() for r in result.items)
 
     def test_search_exact_match(self):
         """Test exact match search."""
@@ -177,7 +177,7 @@ class TestSearchRolesInCache:
         with patch("azurerbac.web.services.dashboard.enrich_role_with_counts") as mock_enrich:
             mock_enrich.side_effect = _mock_enrich_role
 
-            roles, total, _ = search_roles_in_cache(
+            result = search_roles_in_cache(
                 cached_roles,
                 q="Reader",
                 status_filter="active",
@@ -189,8 +189,8 @@ class TestSearchRolesInCache:
             )
 
             # Only exact match "Reader" should be returned
-            assert total == 1
-            assert roles[0].role_name == "Reader"
+            assert result.total_count == 1
+            assert result.items[0].role_name == "Reader"
 
     def test_search_respects_status_filter(self):
         """Test that status filter is applied."""
@@ -205,7 +205,7 @@ class TestSearchRolesInCache:
             mock_enrich.side_effect = _mock_enrich_role
 
             # Filter for active only
-            roles, total, _ = search_roles_in_cache(
+            result = search_roles_in_cache(
                 cached_roles,
                 q="test",
                 status_filter="active",
@@ -216,8 +216,8 @@ class TestSearchRolesInCache:
                 exact_match=None,
             )
 
-            assert total == 1
-            assert roles[0].status == RoleStatus.ACTIVE
+            assert result.total_count == 1
+            assert result.items[0].status == RoleStatus.ACTIVE
 
     def test_search_by_role_id(self):
         """Test searching by role ID (GUID)."""
@@ -232,7 +232,7 @@ class TestSearchRolesInCache:
         with patch("azurerbac.web.services.dashboard.enrich_role_with_counts") as mock_enrich:
             mock_enrich.side_effect = _mock_enrich_role
 
-            roles, total, _ = search_roles_in_cache(
+            result = search_roles_in_cache(
                 cached_roles,
                 q=test_guid,
                 status_filter="active",
@@ -243,8 +243,8 @@ class TestSearchRolesInCache:
                 exact_match=None,
             )
 
-            assert total == 1
-            assert roles[0].role_id == test_guid
+            assert result.total_count == 1
+            assert result.items[0].role_id == test_guid
 
 
 class TestRecentPageDefaults:

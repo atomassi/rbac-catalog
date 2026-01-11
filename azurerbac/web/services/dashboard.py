@@ -5,28 +5,38 @@ from __future__ import annotations
 import datetime as dt
 import math
 from collections.abc import Callable
+from dataclasses import dataclass, replace
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any, Final
+from typing import TYPE_CHECKING, Any, Final, Protocol
 
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.sql import Select
 from sqlalchemy.sql.elements import ColumnElement
 
 from azurerbac.cache.models import CachedChangeEvent, CachedRole
-from azurerbac.core.constants import DEFAULT_ROLE_TYPE, RoleStatus
+from azurerbac.core.constants import DEFAULT_ROLE_TYPE, EventType, RoleStatus
 from azurerbac.core.utils import (
     ensure_utc,
     ensure_utc_or_min,
     normalize_uuid_or_none,
 )
-from azurerbac.web.services.models import DashboardSummary, RoleWithCounts
+from azurerbac.web.services.models import (
+    DashboardSummary,
+    PaginatedResult,
+    RoleWithCounts,
+    ScanMetadata,
+)
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
-    from azurerbac.cache import CacheContainer
     from azurerbac.core.models import Role, RoleHistory
     from azurerbac.web.dependencies import DashboardDeps
+
+
+# =============================================================================
+# Enums and Constants
+# =============================================================================
 
 
 class SortField(StrEnum):
@@ -39,9 +49,32 @@ class SortField(StrEnum):
     NAME = "name"
 
 
-# Sort key functions for enriched roles (maps SortField -> sort key function)
-# For UPDATED, use a minimum datetime for None values to ensure consistent comparison
+class SortOrder(StrEnum):
+    """Sort order direction."""
+
+    ASC = "asc"
+    DESC = "desc"
+
+
+class StatusFilter(StrEnum):
+    """Valid status filters for role listings."""
+
+    ACTIVE = "active"
+    DELETED = "deleted"
+    ALL = "all"
+
+
+class EventTypeFilter(StrEnum):
+    """Valid event type filters for recent changes."""
+
+    CREATED = "created"
+    UPDATED = "updated"
+    DELETED = "deleted"
+    ALL = "all"
+
+
 _MIN_DATETIME: Final[dt.datetime] = dt.datetime.min.replace(tzinfo=dt.UTC)
+
 _ROLE_SORT_KEYS: Final[dict[str, Callable[[RoleWithCounts], Any]]] = {
     SortField.ACTIONS: lambda r: r.actions_count,
     SortField.DATA_ACTIONS: lambda r: r.data_actions_count,
@@ -51,126 +84,72 @@ _ROLE_SORT_KEYS: Final[dict[str, Callable[[RoleWithCounts], Any]]] = {
 }
 
 
-def _calculate_total_pages(total_count: int, page_size: int) -> int:
-    """Calculate total pages, ensuring at least 1 page."""
-    return max(1, math.ceil(total_count / page_size))
+# =============================================================================
+# Protocols for dependency injection (testability)
+# =============================================================================
 
 
-def _build_status_filter(role_snapshot: type[Role], status_filter: str) -> Select[tuple[Role]]:
-    """Build SQLAlchemy select statement with status filter.
+class PermissionsCacheProtocol(Protocol):
+    """Protocol for cache objects that provide role net permissions."""
 
-    Args:
-        role_snapshot: The Role model class.
-        status_filter: "active", "deleted", or "all".
-
-    Returns:
-        SQLAlchemy select statement.
-    """
-    stmt = select(role_snapshot)
-    if status_filter == RoleStatus.DELETED:
-        return stmt.where(role_snapshot.status == RoleStatus.DELETED)
-    if status_filter != "all":
-        return stmt.where(role_snapshot.status == RoleStatus.ACTIVE)
-    return stmt
+    def get_role_net_permissions(self, role_id: str) -> tuple[int, int] | None: ...
 
 
-def _get_sort_column(role_snapshot: type[Role], sort: str) -> Any:
-    """Get the SQLAlchemy column for sorting.
-
-    Args:
-        role_snapshot: The Role model class.
-        sort: Sort field name ("name", "id", "updated").
-
-    Returns:
-        SQLAlchemy column.
-    """
-    if sort == "id":
-        return role_snapshot.role_id
-    if sort == "updated":
-        return role_snapshot.updated_on
-    return role_snapshot.role_name
+# =============================================================================
+# Pagination dataclass (reduces parameter counts)
+# =============================================================================
 
 
-def _sort_enriched_roles(enriched_roles: list[RoleWithCounts], *, sort: str, order: str) -> None:
-    """Sort enriched roles in-place by the specified field."""
-    key_func = _ROLE_SORT_KEYS.get(sort, _ROLE_SORT_KEYS[SortField.NAME])
-    enriched_roles.sort(key=key_func, reverse=(order == "desc"))
+@dataclass(frozen=True, slots=True)
+class PaginationParams:
+    """Pagination parameters."""
+
+    page: int
+    page_size: int
+    sort: str | SortField = SortField.NAME
+    order: str | SortOrder = SortOrder.ASC
+
+    @property
+    def offset(self) -> int:
+        return (self.page - 1) * self.page_size
+
+    @property
+    def is_descending(self) -> bool:
+        return self.order == SortOrder.DESC
 
 
-async def _execute_paginated_role_query(
-    session: AsyncSession,
-    deps: DashboardDeps,
-    stmt: Select[tuple[Role]],
-    *,
-    sort: str,
-    order: str,
-    page: int,
-    page_size: int,
-    needs_python_sort: bool,
-) -> list[RoleWithCounts]:
-    """Execute a role query with sorting and pagination.
+# =============================================================================
+# Role enrichment
+# =============================================================================
 
-    Args:
-        session: SQLAlchemy async session
-        deps: Dashboard dependencies
-        stmt: Base SQLAlchemy select statement
-        sort: Sort field
-        order: "asc" or "desc"
-        page: Page number (1-indexed)
-        page_size: Items per page
-        needs_python_sort: If True, fetch all and sort in Python
 
-    Returns:
-        List of RoleWithCounts for the requested page
-    """
-    offset = (page - 1) * page_size
+def _get_default_cache() -> PermissionsCacheProtocol:
+    """Get the default cache singleton."""
+    from azurerbac.cache import get_cache_service
 
-    if needs_python_sort:
-        stmt = stmt.order_by(deps.Role.role_name.asc())
-        all_roles = (await session.execute(stmt)).scalars().all()
-        enriched_roles = [enrich_role_with_counts(r) for r in all_roles]
-        _sort_enriched_roles(enriched_roles, sort=sort, order=order)
-        return enriched_roles[offset : offset + page_size]
-
-    sort_column = _get_sort_column(deps.Role, sort)
-    if order == "desc":
-        stmt = stmt.order_by(sort_column.desc())
-    else:
-        stmt = stmt.order_by(sort_column.asc())
-    stmt = stmt.offset(offset).limit(page_size)
-    db_roles = (await session.execute(stmt)).scalars().all()
-    return [enrich_role_with_counts(r) for r in db_roles]
+    return get_cache_service().container
 
 
 def enrich_role_with_counts(
-    role: Role | Any, cache: CacheContainer | None = None
+    role: Role | Any,
+    cache: PermissionsCacheProtocol | None = None,
 ) -> RoleWithCounts:
     """Enrich a role object with actions_count and data_actions_count.
 
     Uses the pre-computed role net permissions cache from the recommender.
-    Returns a RoleWithCounts with all role attributes plus counts.
 
     Args:
-        role: A role object (SQLAlchemy model or cached dict-like object)
-              with role_id, role_name, role_type, status, updated_on
-        cache: Optional cache instance. If None, imports the singleton.
+        role: A role object with role_id, role_name, role_type, status, updated_on
+        cache: Optional cache instance for testing. If None, uses singleton.
 
     Returns:
         RoleWithCounts with role data and action counts
     """
-    # Get counts from the recommender cache
     if cache is None:
-        from azurerbac.cache import get_cache_service
-
-        cache = get_cache_service().container
+        cache = _get_default_cache()
 
     net_perms = cache.get_role_net_permissions(role.role_id)
-    if net_perms:
-        actions_count, data_actions_count = net_perms
-    else:
-        # Cache miss - counts not available (role_json stored in RoleHistory)
-        actions_count = 0
-        data_actions_count = 0
+    actions_count, data_actions_count = net_perms if net_perms else (0, 0)
 
     # Handle status - could be RoleStatus enum or string
     status_value = role.status.value if hasattr(role.status, "value") else str(role.status)
@@ -186,15 +165,280 @@ def enrich_role_with_counts(
     )
 
 
-async def get_common_dashboard_data(deps: DashboardDeps) -> DashboardSummary:
-    """Get common data used by both recent and roles pages.
+# =============================================================================
+# Sorting helpers
+# =============================================================================
+
+
+def _sort_enriched_roles(
+    enriched_roles: list[RoleWithCounts],
+    *,
+    sort: str | SortField,
+    order: str | SortOrder,
+) -> None:
+    """Sort enriched roles in-place by the specified field."""
+    try:
+        sort_field = SortField(sort)
+    except ValueError:
+        sort_field = SortField.NAME
+    key_func = _ROLE_SORT_KEYS.get(sort_field, _ROLE_SORT_KEYS[SortField.NAME])
+    enriched_roles.sort(key=key_func, reverse=(order == SortOrder.DESC))
+
+
+def _get_sort_column(role_model: type[Role], sort: str | SortField) -> Any:
+    """Get the SQLAlchemy column for sorting."""
+    columns: dict[str | SortField, Any] = {
+        SortField.ID: role_model.role_id,
+        SortField.UPDATED: role_model.updated_on,
+    }
+    return columns.get(sort, role_model.role_name)
+
+
+# =============================================================================
+# Status filtering
+# =============================================================================
+
+
+def _matches_status(role_status: str, status_filter: str | StatusFilter) -> bool:
+    """Check if a role status matches the filter."""
+    if status_filter == StatusFilter.ALL:
+        return True
+    return role_status == status_filter
+
+
+def _build_status_filter(
+    role_model: type[Role], status_filter: str | StatusFilter
+) -> Select[tuple[Role]]:
+    """Build SQLAlchemy select statement with status filter."""
+    stmt = select(role_model)
+    if status_filter == StatusFilter.DELETED:
+        return stmt.where(role_model.status == RoleStatus.DELETED)
+    if status_filter != StatusFilter.ALL:
+        return stmt.where(role_model.status == RoleStatus.ACTIVE)
+    return stmt
+
+
+# =============================================================================
+# Pagination helpers
+# =============================================================================
+
+
+def _calculate_total_pages(total_count: int, page_size: int) -> int:
+    """Calculate total pages, ensuring at least 1 page."""
+    return max(1, math.ceil(total_count / page_size))
+
+
+def _paginate_list[T](items: list[T], params: PaginationParams) -> PaginatedResult[T]:
+    """Apply pagination to a list."""
+    total_count = len(items)
+    total_pages = _calculate_total_pages(total_count, params.page_size)
+    page_items = items[params.offset : params.offset + params.page_size]
+    return PaginatedResult(items=page_items, total_count=total_count, total_pages=total_pages)
+
+
+# =============================================================================
+# Event filtering
+# =============================================================================
+
+
+def _get_event_timestamp(
+    ev_type: str | EventType | None,
+    azure_updated: dt.datetime | None,
+    scan_ts: dt.datetime | None,
+) -> dt.datetime | None:
+    """Get the relevant timestamp for an event type."""
+    match ev_type:
+        case EventType.DELETED:
+            return scan_ts
+        case _:
+            return azure_updated
+
+
+def _event_matches_filter(
+    ev_type: str | EventType | None,
+    event_type_filter: str | EventTypeFilter,
+    azure_updated: dt.datetime | None,
+    scan_timestamp: dt.datetime | None,
+    cutoff: dt.datetime,
+) -> bool:
+    """Check if an event matches the requested type filter and cutoff."""
+    # initial_scan events are never shown in recent changes
+    if ev_type == EventType.INITIAL_SCAN:
+        return False
+
+    # Determine which timestamp to use for this event type
+    relevant_timestamp = _get_event_timestamp(ev_type, azure_updated, scan_timestamp)
+    if relevant_timestamp is None or relevant_timestamp < cutoff:
+        return False
+
+    # Match specific filter or "all"
+    return event_type_filter in {EventTypeFilter.ALL, ev_type}
+
+
+def _get_event_sort_key(e: CachedChangeEvent) -> dt.datetime:
+    """Get sort key for events (newest first)."""
+    dt_val = e.azure_updated_on or e.scan_timestamp
+    return ensure_utc_or_min(dt_val)
+
+
+def filter_cached_events(
+    cached_events: list[CachedChangeEvent],
+    deps: DashboardDeps,
+    cutoff: dt.datetime,
+    event_type: str | EventTypeFilter,
+) -> list[CachedChangeEvent]:
+    """Filter cached events by type and date.
 
     Args:
-        deps: Dashboard dependencies
+        cached_events: List of CachedChangeEvent from cache
+        deps: Dashboard dependencies (for role name lookup)
+        cutoff: Datetime cutoff - events must be after this
+        event_type: EventTypeFilter enum or string: "created", "updated", "deleted", or "all"
 
     Returns:
-        DashboardSummary with total_roles, total_operations, last_scan, first_scan
+        List of filtered CachedChangeEvent sorted by date descending
     """
+    filtered_events: list[CachedChangeEvent] = []
+
+    for ev in cached_events:
+        azure_updated = ensure_utc(ev.azure_updated_on)
+        scan_timestamp = ensure_utc(ev.scan_timestamp)
+
+        matches = _event_matches_filter(
+            ev.event_type, event_type, azure_updated, scan_timestamp, cutoff
+        )
+        if not matches:
+            continue
+
+        # Update role_name from cache if available (role may have been renamed)
+        role_data = deps.app_cache.get_role_by_id(ev.role_id) if ev.role_id else None
+        if role_data and role_data.role_name != ev.role_name:
+            enriched_ev = replace(ev, role_name=role_data.role_name)
+            filtered_events.append(enriched_ev)
+        else:
+            filtered_events.append(ev)
+
+    filtered_events.sort(key=_get_event_sort_key, reverse=True)
+    return filtered_events
+
+
+# =============================================================================
+# Database queries
+# =============================================================================
+
+
+def _build_event_condition(
+    history_model: type[RoleHistory],
+    scan_model: type,
+    ev_type: str | EventType,
+    cutoff: dt.datetime,
+) -> ColumnElement[bool]:
+    """Build a single event type condition for database query."""
+    match ev_type:
+        case EventType.DELETED:
+            return and_(
+                history_model.event_type == ev_type,
+                scan_model.scan_timestamp >= cutoff,
+            )
+        case _:
+            return and_(
+                history_model.event_type == ev_type,
+                history_model.azure_updated_on >= cutoff,
+            )
+
+
+async def fetch_events_from_db(
+    session: AsyncSession,
+    deps: DashboardDeps,
+    cutoff: dt.datetime,
+    event_type: str | EventTypeFilter,
+) -> list[RoleHistory]:
+    """Fetch events from database when cache is empty.
+
+    Args:
+        session: SQLAlchemy async session
+        deps: Dashboard dependencies
+        cutoff: Datetime cutoff for filtering
+        event_type: EventTypeFilter value (created, updated, deleted, or all)
+
+    Returns:
+        List of RoleHistory objects
+    """
+    # Determine which event types to include
+    match event_type:
+        case EventTypeFilter.ALL:
+            event_types: list[str | EventType] = [
+                EventType.CREATED,
+                EventType.UPDATED,
+                EventType.DELETED,
+            ]
+        case _:
+            event_types = [event_type]
+
+    # Build conditions for each event type
+    conditions = [
+        _build_event_condition(deps.RoleHistory, deps.RoleScanStatus, et, cutoff)
+        for et in event_types
+    ]
+
+    # Join with RoleScanStatus for ordering and deleted event filtering
+    result = await session.execute(
+        select(deps.RoleHistory)
+        .join(
+            deps.RoleScanStatus,
+            deps.RoleHistory.scan_id == deps.RoleScanStatus.id,
+            isouter=True,
+        )
+        .where(or_(*conditions))
+        .order_by(deps.RoleScanStatus.scan_timestamp.desc())
+    )
+    return list(result.scalars().all())
+
+
+async def _execute_paginated_role_query(
+    session: AsyncSession,
+    deps: DashboardDeps,
+    stmt: Select[tuple[Role]],
+    params: PaginationParams,
+    needs_python_sort: bool,
+) -> list[RoleWithCounts]:
+    """Execute a role query with sorting and pagination.
+
+    Args:
+        session: SQLAlchemy async session
+        deps: Dashboard dependencies
+        stmt: Base SQLAlchemy select statement
+        params: Pagination parameters
+        needs_python_sort: If True, fetch all and sort in Python
+
+    Returns:
+        List of RoleWithCounts for the requested page
+    """
+    if needs_python_sort:
+        stmt = stmt.order_by(deps.Role.role_name.asc())
+        all_roles = (await session.execute(stmt)).scalars().all()
+        enriched_roles = [enrich_role_with_counts(r) for r in all_roles]
+        _sort_enriched_roles(enriched_roles, sort=params.sort, order=params.order)
+        return enriched_roles[params.offset : params.offset + params.page_size]
+
+    sort_column = _get_sort_column(deps.Role, params.sort)
+    if params.order == SortOrder.DESC:
+        stmt = stmt.order_by(sort_column.desc())
+    else:
+        stmt = stmt.order_by(sort_column.asc())
+
+    stmt = stmt.offset(params.offset).limit(params.page_size)
+    db_roles = (await session.execute(stmt)).scalars().all()
+    return [enrich_role_with_counts(r) for r in db_roles]
+
+
+# =============================================================================
+# Dashboard data
+# =============================================================================
+
+
+async def get_common_dashboard_data(deps: DashboardDeps) -> DashboardSummary:
+    """Get common data used by both recent and roles pages."""
     return DashboardSummary(
         total_roles=len(deps.app_cache.cache.roles_by_id),
         total_operations=len(deps.app_cache.get_all_operations()),
@@ -208,18 +452,8 @@ async def ensure_scan_metadata(
     deps: DashboardDeps,
     last_scan: dt.datetime | None,
     first_scan: dt.datetime | None,
-) -> tuple[dt.datetime | None, dt.datetime | None]:
-    """Ensure last_scan and first_scan are populated from DB if not cached.
-
-    Args:
-        session: SQLAlchemy async session
-        deps: Dashboard dependencies
-        last_scan: Current last_scan value (may be None)
-        first_scan: Current first_scan value (may be None)
-
-    Returns:
-        tuple of (last_scan, first_scan) with values populated
-    """
+) -> ScanMetadata:
+    """Ensure last_scan and first_scan are populated from DB if not cached."""
     if last_scan is None:
         last_scan = await session.scalar(
             select(deps.RoleScanStatus.scan_timestamp)
@@ -236,192 +470,25 @@ async def ensure_scan_metadata(
             first_scan = first_scan.replace(microsecond=0)
         deps.app_cache.set_metadata(first_scan=first_scan)
 
-    return last_scan, first_scan
+    return ScanMetadata(last_scan=last_scan, first_scan=first_scan)
 
 
-def _event_matches_type(
-    ev_type: str | None,
-    event_type_filter: str,
-    azure_updated: dt.datetime | None,
-    scan_timestamp: dt.datetime | None,
-    cutoff: dt.datetime,
-) -> bool:
-    """Check if an event matches the requested type filter and cutoff.
-
-    Event types:
-    - "created": Truly new roles (azure created == updated at detection time)
-    - "initial_scan": Pre-existing roles discovered on first scan
-    - "updated": Role was modified
-    - "deleted": Role was deleted
-
-    For created/updated/initial_scan, we use azure_updated_on for cutoff.
-    For deleted events, we use scan_timestamp (when we detected the deletion).
-    """
-    if event_type_filter == "created":
-        return ev_type == "created" and azure_updated is not None and azure_updated >= cutoff
-    if event_type_filter == "updated":
-        return ev_type == "updated" and azure_updated is not None and azure_updated >= cutoff
-    if event_type_filter == "deleted":
-        return ev_type == "deleted" and scan_timestamp is not None and scan_timestamp >= cutoff
-    # "all" - match created, updated, deleted (but NOT initial_scan for recent changes)
-    if ev_type == "created":
-        return azure_updated is not None and azure_updated >= cutoff
-    if ev_type == "updated":
-        return azure_updated is not None and azure_updated >= cutoff
-    if ev_type == "deleted":
-        return scan_timestamp is not None and scan_timestamp >= cutoff
-    return False
-
-
-def filter_cached_events(
-    cached_events: list[CachedChangeEvent],
-    deps: DashboardDeps,
-    cutoff: dt.datetime,
-    event_type: str,
-) -> list[CachedChangeEvent]:
-    """Filter cached events by type and date.
-
-    Args:
-        cached_events: List of CachedChangeEvent from cache
-        deps: Dashboard dependencies (for role name lookup)
-        cutoff: Datetime cutoff - events must be after this
-        event_type: "created", "updated", "deleted", or "all"
-
-    Returns:
-        List of filtered CachedChangeEvent sorted by date descending
-    """
-    filtered_events: list[CachedChangeEvent] = []
-    for ev in cached_events:
-        ev_type = ev.event_type
-        azure_updated = ensure_utc(ev.azure_updated_on)
-        scan_timestamp = ensure_utc(ev.scan_timestamp)
-
-        if _event_matches_type(ev_type, event_type, azure_updated, scan_timestamp, cutoff):
-            # Update role_name from cache if available (role may have been renamed)
-            role_data = deps.app_cache.get_role_by_id(ev.role_id) if ev.role_id else None
-            if role_data and role_data.role_name != ev.role_name:
-                # Create new event with updated role_name (dataclass is immutable with slots)
-                from dataclasses import replace
-
-                enriched_ev = replace(ev, role_name=role_data.role_name)
-                filtered_events.append(enriched_ev)
-            else:
-                filtered_events.append(ev)
-
-    def get_sort_key(e: CachedChangeEvent) -> dt.datetime:
-        dt_val = e.azure_updated_on or e.scan_timestamp
-        return ensure_utc_or_min(dt_val)
-
-    filtered_events.sort(key=get_sort_key, reverse=True)
-    return filtered_events
-
-
-async def fetch_events_from_db(
-    session: AsyncSession,
-    deps: DashboardDeps,
-    cutoff: dt.datetime,
-    event_type: str,
-) -> list[RoleHistory]:
-    """Fetch events from database when cache is empty.
-
-    Args:
-        session: SQLAlchemy async session
-        deps: Dashboard dependencies
-        cutoff: Datetime cutoff for filtering
-        event_type: "created", "updated", "deleted", or "all"
-
-    Returns:
-        List of RoleHistory objects
-    """
-    # RoleHistory now contains both version and event data
-    # For created/updated events we use azure_updated_on, for deleted we use scan_timestamp
-
-    time_conditions = []
-
-    if event_type == "created":
-        # Truly new roles (event_type is already "created" vs "initial_scan")
-        time_conditions.append(
-            and_(
-                deps.RoleHistory.event_type == "created",
-                deps.RoleHistory.azure_updated_on >= cutoff,
-            )
-        )
-    elif event_type == "updated":
-        time_conditions.append(
-            and_(
-                deps.RoleHistory.event_type == "updated",
-                deps.RoleHistory.azure_updated_on >= cutoff,
-            )
-        )
-    elif event_type == "deleted":
-        # For deleted events, filter by scan timestamp via join
-        time_conditions.append(
-            and_(
-                deps.RoleHistory.event_type == "deleted",
-                deps.RoleScanStatus.scan_timestamp >= cutoff,
-            )
-        )
-    else:
-        # "all" - created, updated, deleted (but NOT initial_scan)
-        time_conditions = [
-            and_(
-                deps.RoleHistory.event_type == "created",
-                deps.RoleHistory.azure_updated_on >= cutoff,
-            ),
-            and_(
-                deps.RoleHistory.event_type == "updated",
-                deps.RoleHistory.azure_updated_on >= cutoff,
-            ),
-            and_(
-                deps.RoleHistory.event_type == "deleted",
-                deps.RoleScanStatus.scan_timestamp >= cutoff,
-            ),
-        ]
-
-    # Join with RoleScanStatus for ordering and deleted event filtering
-    return list(
-        (
-            await session.execute(
-                select(deps.RoleHistory)
-                .join(
-                    deps.RoleScanStatus,
-                    deps.RoleHistory.scan_id == deps.RoleScanStatus.id,
-                    isouter=True,
-                )
-                .where(or_(*time_conditions))
-                .order_by(deps.RoleScanStatus.scan_timestamp.desc())
-            )
-        )
-        .scalars()
-        .all()
-    )
+# =============================================================================
+# Role fetching (paginated)
+# =============================================================================
 
 
 async def fetch_roles_paginated(
     session: AsyncSession,
     deps: DashboardDeps,
-    status_filter: str,
-    sort: str,
-    order: str,
+    status_filter: str | StatusFilter,
+    sort: str | SortField,
+    order: str | SortOrder,
     page: int,
     page_size: int,
     needs_python_sort: bool,
-) -> tuple[list[RoleWithCounts], int, int]:
-    """Fetch paginated roles, using cache when possible.
-
-    Args:
-        session: SQLAlchemy async session
-        deps: Dashboard dependencies
-        status_filter: "active", "deleted", or "all"
-        sort: Sort field ("name", "id", "updated", "actions", "data_actions")
-        order: "asc" or "desc"
-        page: Page number (1-indexed)
-        page_size: Number of items per page
-        needs_python_sort: Whether sorting requires Python (for actions/data_actions)
-
-    Returns:
-        tuple of (roles list, total count, total pages)
-    """
+) -> PaginatedResult[RoleWithCounts]:
+    """Fetch paginated roles, using cache when possible."""
     cache_key = f"roles:{status_filter}::{sort}:{order}:{page}:{page_size}"
     count_cache_key = f"roles_count:{status_filter}:"
 
@@ -430,7 +497,7 @@ async def fetch_roles_paginated(
 
     if cached_roles is not None and cached_count is not None:
         total_pages = _calculate_total_pages(int(cached_count), page_size)
-        return cached_roles, int(cached_count), total_pages
+        return PaginatedResult(cached_roles, int(cached_count), total_pages)
 
     # Cache miss - fetch from database
     stmt = _build_status_filter(deps.Role, status_filter)
@@ -441,50 +508,47 @@ async def fetch_roles_paginated(
 
     total_pages = _calculate_total_pages(total_filtered_roles, page_size)
 
-    roles = await _execute_paginated_role_query(
-        session,
-        deps,
-        stmt,
-        sort=sort,
-        order=order,
-        page=page,
-        page_size=page_size,
-        needs_python_sort=needs_python_sort,
-    )
+    params = PaginationParams(page=page, page_size=page_size, sort=sort, order=order)
+    roles = await _execute_paginated_role_query(session, deps, stmt, params, needs_python_sort)
 
     deps.app_cache.set_role_page(cache_key, roles)
-    return roles, total_filtered_roles, total_pages
+    return PaginatedResult(roles, total_filtered_roles, total_pages)
+
+
+# =============================================================================
+# Role search
+# =============================================================================
+
+
+def _role_matches_search(
+    role: CachedRole,
+    query_lower: str,
+    normalized_guid: str | None,
+    exact_match: bool,
+) -> bool:
+    """Check if a role matches the search query."""
+    role_name_lower = role.role_name.lower()
+    role_id_lower = role.role_id.lower()
+    guid_match = normalized_guid is not None and role.role_id == normalized_guid
+
+    if exact_match:
+        return query_lower in {role_name_lower, role_id_lower} or guid_match
+    return query_lower in role_name_lower or query_lower in role_id_lower or guid_match
 
 
 async def search_roles(
     session: AsyncSession,
     deps: DashboardDeps,
     q: str,
-    status_filter: str,
-    sort: str,
-    order: str,
+    status_filter: str | StatusFilter,
+    sort: str | SortField,
+    order: str | SortOrder,
     page: int,
     page_size: int,
     needs_python_sort: bool,
     exact_match: str | None,
-) -> tuple[list[RoleWithCounts], int, int]:
-    """Search roles using cache first, fallback to DB.
-
-    Args:
-        session: SQLAlchemy async session
-        deps: Dashboard dependencies
-        q: Search query string
-        status_filter: "active", "deleted", or "all"
-        sort: Sort field
-        order: "asc" or "desc"
-        page: Page number (1-indexed)
-        page_size: Number of items per page
-        needs_python_sort: Whether sorting requires Python
-        exact_match: If set, perform exact match search
-
-    Returns:
-        tuple of (roles list, total count, total pages)
-    """
+) -> PaginatedResult[RoleWithCounts]:
+    """Search roles using cache first, fallback to DB."""
     cached_roles = deps.app_cache.cache.roles_by_id
 
     if cached_roles:
@@ -508,98 +572,50 @@ async def search_roles(
 def search_roles_in_cache(
     cached_roles: dict[str, CachedRole],
     q: str,
-    status_filter: str,
-    sort: str,
-    order: str,
+    status_filter: str | StatusFilter,
+    sort: str | SortField,
+    order: str | SortOrder,
     page: int,
     page_size: int,
     exact_match: str | None,
-) -> tuple[list[RoleWithCounts], int, int]:
-    """Search roles in memory cache.
-
-    Args:
-        cached_roles: Dict of role_id -> CachedRole
-        q: Search query string
-        status_filter: "active", "deleted", or "all"
-        sort: Sort field
-        order: "asc" or "desc"
-        page: Page number (1-indexed)
-        page_size: Number of items per page
-        exact_match: If set, perform exact match search
-
-    Returns:
-        tuple of (roles list, total count, total pages)
-    """
-    q_lower = q.strip().lower()
-
+) -> PaginatedResult[RoleWithCounts]:
+    """Search roles in memory cache."""
+    query_lower = q.strip().lower()
     normalized_guid = normalize_uuid_or_none(q)
+    is_exact = exact_match is not None
 
-    matching_roles: list[CachedRole] = []
-    for role in cached_roles.values():
-        role_name_lower = role.role_name.lower()
-        role_id_lower = role.role_id.lower()
+    # Filter roles matching search and status
+    matching_roles = [
+        role
+        for role in cached_roles.values()
+        if _matches_status(role.status, status_filter)
+        and _role_matches_search(role, query_lower, normalized_guid, is_exact)
+    ]
 
-        # Apply status filter
-        if status_filter == "deleted" and role.status != "deleted":
-            continue
-        if status_filter == "active" and role.status != "active":
-            continue
-
-        # Check for GUID match
-        guid_match = normalized_guid is not None and role.role_id == normalized_guid
-
-        # Apply search filter
-        if exact_match:
-            if q_lower in {role_name_lower, role_id_lower} or guid_match:
-                matching_roles.append(role)
-        elif q_lower in role_name_lower or q_lower in role_id_lower or guid_match:
-            matching_roles.append(role)
-
-    total_filtered_roles = len(matching_roles)
-    total_pages = _calculate_total_pages(total_filtered_roles, page_size)
-
-    # Enrich with counts - CachedRole has all fields needed by enrich_role_with_counts
+    # Enrich with counts
     enriched_roles = [enrich_role_with_counts(r) for r in matching_roles]
 
     # Sort
     _sort_enriched_roles(enriched_roles, sort=sort, order=order)
 
     # Paginate
-    offset = (page - 1) * page_size
-    roles = enriched_roles[offset : offset + page_size]
-
-    return roles, total_filtered_roles, total_pages
+    params = PaginationParams(page=page, page_size=page_size)
+    return _paginate_list(enriched_roles, params)
 
 
 async def search_roles_in_db(
     session: AsyncSession,
     deps: DashboardDeps,
     q: str,
-    status_filter: str,
-    sort: str,
-    order: str,
+    status_filter: str | StatusFilter,
+    sort: str | SortField,
+    order: str | SortOrder,
     page: int,
     page_size: int,
     needs_python_sort: bool,
     exact_match: str | None,
-) -> tuple[list[RoleWithCounts], int, int]:
-    """Search roles in database (fallback when cache is empty).
-
-    Args:
-        session: SQLAlchemy async session
-        deps: Dashboard dependencies
-        q: Search query string
-        status_filter: "active", "deleted", or "all"
-        sort: Sort field
-        order: "asc" or "desc"
-        page: Page number (1-indexed)
-        page_size: Number of items per page
-        needs_python_sort: Whether sorting requires Python
-        exact_match: If set, perform exact match search
-
-    Returns:
-        tuple of (roles list, total count, total pages)
-    """
+) -> PaginatedResult[RoleWithCounts]:
+    """Search roles in database (fallback when cache is empty)."""
     stmt = _build_status_filter(deps.Role, status_filter)
 
     conditions: list[ColumnElement[bool]]
@@ -625,15 +641,7 @@ async def search_roles_in_db(
     total_filtered_roles = await session.scalar(count_stmt) or 0
     total_pages = _calculate_total_pages(total_filtered_roles, page_size)
 
-    roles = await _execute_paginated_role_query(
-        session,
-        deps,
-        stmt,
-        sort=sort,
-        order=order,
-        page=page,
-        page_size=page_size,
-        needs_python_sort=needs_python_sort,
-    )
+    params = PaginationParams(page=page, page_size=page_size, sort=sort, order=order)
+    roles = await _execute_paginated_role_query(session, deps, stmt, params, needs_python_sort)
 
-    return roles, total_filtered_roles, total_pages
+    return PaginatedResult(roles, total_filtered_roles, total_pages)

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from typing import Annotated, Final
+from typing import Annotated
 from urllib.parse import unquote
 
 from fastapi import APIRouter, Depends, Request
@@ -19,8 +19,13 @@ from azurerbac.web.constants import (
     MAX_ROLE_EVENTS,
 )
 from azurerbac.web.dependencies import PagesDeps, get_pages_deps
+from azurerbac.web.routes.models import OperationWithCount
+from azurerbac.web.services.dashboard import SortOrder
+from azurerbac.web.services.models import PaginationInfo
 from azurerbac.web.services.pages import (
+    DataActionFilter,
     OperationSearchParams,
+    OperationSortField,
     build_role_redirect_url,
     compute_role_effective_permissions,
     enrich_event_with_diff,
@@ -34,9 +39,6 @@ from azurerbac.web.utils import clamp, role_json_pretty, slugify
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["pages"])
-
-# String to bool mapping for query params
-_BOOL_MAP: Final[dict[str | None, bool | None]] = {"1": True, "0": False}
 
 
 @router.get("/roles/{role_id}", response_class=HTMLResponse, name="role_detail")
@@ -59,7 +61,7 @@ async def role_detail(
         return deps.templates.TemplateResponse(request, "404.html", status_code=404)
 
     # Get role from cache or database
-    role, role_def, events_raw, first_scan = await get_role_from_cache_or_db(
+    result = await get_role_from_cache_or_db(
         deps.app_cache,
         deps.SessionLocal,
         deps.Role,
@@ -68,8 +70,11 @@ async def role_detail(
         max_events=MAX_ROLE_EVENTS,
     )
 
-    if role is None:
+    if result.cached_role is None:
         return deps.templates.TemplateResponse(request, "404.html", status_code=404)
+
+    role = result.cached_role
+    role_def = result.definition
 
     # SEO: Validate slug and redirect if necessary
     role_name = getattr(role, "role_name", "") or (role_def.role_name if role_def else "")
@@ -91,7 +96,7 @@ async def role_detail(
         return RedirectResponse(url=url, status_code=301)
 
     # Enrich events with processed diff_json
-    enriched = [enrich_event_with_diff(ev) for ev in events_raw]
+    enriched = [enrich_event_with_diff(ev) for ev in result.events]
 
     # Use RoleDefinition for clean output (excludes isServiceRole)
     display_json = role_def.to_dict() if role_def else {}
@@ -106,7 +111,7 @@ async def role_detail(
         {
             "role": role,
             "events": enriched,
-            "first_scan": first_scan,
+            "first_scan": result.first_scan,
             "role_json_pretty": role_json_pretty(display_json),
             "effective_perms": effective_perms,
             "q": q,
@@ -126,8 +131,8 @@ async def operations_list(
     limit: int = DEFAULT_LIMIT,
     is_data_action: str | None = None,
     provider: str | None = None,
-    sort: str = "name",
-    order: str = "asc",
+    sort: str = OperationSortField.NAME,
+    order: str = SortOrder.ASC,
 ) -> Response:
     """Operations list page - shows all Azure RBAC operations."""
     logger.info("Operations list: q='%s' page=%d provider=%s", q or "", page, provider or "all")
@@ -144,7 +149,7 @@ async def operations_list(
     providers = deps.app_cache.cache.unique_providers
 
     # Parse is_data_action filter
-    is_data_action_filter = _BOOL_MAP.get(is_data_action)
+    is_data_action_filter = DataActionFilter.parse(is_data_action)
 
     # Build search params and filter operations (operates on OperationData)
     search_params = OperationSearchParams(
@@ -160,19 +165,13 @@ async def operations_list(
     sorted_ops_with_counts = sort_operations(filtered_ops, sort, order, deps.app_cache)
 
     total_filtered = len(sorted_ops_with_counts)
-    total_pages = max(1, (total_filtered + page_size - 1) // page_size)
+    pagination = PaginationInfo.compute(total_filtered, page, page_size)
+    page_slice = sorted_ops_with_counts[pagination.start_idx : pagination.end_idx]
 
-    # Paginate FIRST, then convert to dicts (only ~25 conversions instead of ~20,000)
-    start_idx = (page - 1) * page_size
-    end_idx = start_idx + page_size
-    page_slice = sorted_ops_with_counts[start_idx:end_idx]
-
-    # Convert only the paginated slice to dicts, with role_count already computed
-    page_operations = []
-    for op, role_count in page_slice:
-        op_dict = op.to_dict()
-        op_dict["role_count"] = role_count
-        page_operations.append(op_dict)
+    # Convert only the paginated slice to typed models
+    page_operations = [
+        OperationWithCount.from_operation(op, role_count) for op, role_count in page_slice
+    ]
 
     return deps.templates.TemplateResponse(
         request,
@@ -184,7 +183,7 @@ async def operations_list(
             "total_filtered": total_filtered,
             "page": page,
             "limit": page_size,
-            "total_pages": total_pages,
+            "total_pages": pagination.total_pages,
             "q": q,
             "is_data_action": is_data_action_filter,
             "provider": provider,
@@ -216,7 +215,7 @@ async def operation_detail(
     decoded_name = unquote(operation_name)
 
     # Parse is_data_action filter for template
-    is_data_action_filter = _BOOL_MAP.get(is_data_action)
+    is_data_action_filter = DataActionFilter.parse(is_data_action)
 
     # Find the operation by name using the indexed lookup
     operation = deps.app_cache.cache.ops_by_name_lower.get(decoded_name.lower())

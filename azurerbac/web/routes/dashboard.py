@@ -19,6 +19,9 @@ from azurerbac.web.constants import (
 )
 from azurerbac.web.dependencies import DashboardDeps, get_dashboard_deps
 from azurerbac.web.services.dashboard import (
+    SortField,
+    SortOrder,
+    StatusFilter,
     ensure_scan_metadata,
     fetch_events_from_db,
     fetch_roles_paginated,
@@ -26,6 +29,7 @@ from azurerbac.web.services.dashboard import (
     get_common_dashboard_data,
     search_roles,
 )
+from azurerbac.web.services.models import PaginationInfo
 from azurerbac.web.utils import clamp
 
 logger = logging.getLogger(__name__)
@@ -70,9 +74,9 @@ async def roles_list(
     q: str | None = None,
     page: int = DEFAULT_PAGE,
     limit: int = DEFAULT_LIMIT,
-    sort: str = "name",
-    order: str = "asc",
-    status_filter: str = "active",
+    sort: str = SortField.NAME,
+    order: str = SortOrder.ASC,
+    status_filter: str = StatusFilter.ACTIVE,
     ai: int | None = None,
     exact_match: str | None = None,
 ) -> Response:
@@ -134,17 +138,13 @@ async def _render_recent(
             # Fallback to database query
             events = await fetch_events_from_db(session, deps, cutoff, event_type)
 
-        last_scan, first_scan = await ensure_scan_metadata(
-            session, deps, common.last_scan, common.first_scan
-        )
+        scan_meta = await ensure_scan_metadata(session, deps, common.last_scan, common.first_scan)
+        last_scan, first_scan = scan_meta.last_scan, scan_meta.first_scan
 
     # Pagination: calculate total and slice
     total_events = len(events)
-    total_pages = max(1, (total_events + limit - 1) // limit)
-    page = min(page, total_pages)  # Clamp to available pages
-    start_idx = (page - 1) * limit
-    end_idx = start_idx + limit
-    paginated_events = events[start_idx:end_idx]
+    pagination = PaginationInfo.compute(total_events, page, limit)
+    paginated_events = events[pagination.start_idx : pagination.end_idx]
 
     return deps.templates.TemplateResponse(
         request,
@@ -161,7 +161,7 @@ async def _render_recent(
             "tab": "recent",
             "page": page,
             "limit": limit,
-            "total_pages": total_pages,
+            "total_pages": pagination.total_pages,
             "days": days,
             "sort": "name",
             "order": "asc",
@@ -201,12 +201,12 @@ async def _render_roles(
     async with deps.SessionLocal() as session:
         if not q:
             # No search - use pagination cache
-            roles, _, total_pages = await fetch_roles_paginated(
+            result = await fetch_roles_paginated(
                 session, deps, status_filter, sort, order, page, page_size, needs_python_sort
             )
         else:
             # Search query - use cache first
-            roles, _, total_pages = await search_roles(
+            result = await search_roles(
                 session,
                 deps,
                 q,
@@ -219,9 +219,11 @@ async def _render_roles(
                 exact_match,
             )
 
-        last_scan, first_scan = await ensure_scan_metadata(
-            session, deps, common.last_scan, common.first_scan
-        )
+        roles = result.items
+        total_pages = result.total_pages
+
+        scan_meta = await ensure_scan_metadata(session, deps, common.last_scan, common.first_scan)
+        last_scan, first_scan = scan_meta.last_scan, scan_meta.first_scan
 
     return deps.templates.TemplateResponse(
         request,

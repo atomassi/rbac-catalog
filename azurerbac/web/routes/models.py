@@ -2,7 +2,33 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from pydantic import BaseModel, Field
+
+if TYPE_CHECKING:
+    from azurerbac.azure.models import OperationData
+
+# =============================================================================
+# Health Check Models
+# =============================================================================
+
+
+class HealthResponse(BaseModel):
+    """Response model for health check endpoint."""
+
+    ok: bool
+
+
+class VersionResponse(BaseModel):
+    """Response model for version endpoint."""
+
+    version: str
+
+
+# =============================================================================
+# Operation Models
+# =============================================================================
 
 
 class OperationItem(BaseModel):
@@ -10,6 +36,44 @@ class OperationItem(BaseModel):
 
     name: str
     is_data_action: bool = False
+
+
+class OperationWithCount(BaseModel):
+    """Operation data enriched with role count for display.
+
+    Used when listing operations with their associated role counts.
+    """
+
+    name: str
+    display_name: str | None
+    description: str | None
+    is_data_action: bool
+    provider_display_name: str
+    resource_type: str | None
+    resource_type_display_name: str | None
+    role_count: int
+
+    @classmethod
+    def from_operation(cls, op: OperationData, role_count: int) -> OperationWithCount:
+        """Create from an OperationData and role count.
+
+        Args:
+            op: The OperationData object from cache.
+            role_count: Number of roles that grant this operation.
+
+        Returns:
+            OperationWithCount instance.
+        """
+        return cls(
+            name=op.name,
+            display_name=op.display_name,
+            description=op.description,
+            is_data_action=op.is_data_action,
+            provider_display_name=op.provider_display_name,
+            resource_type=op.resource_type,
+            resource_type_display_name=op.resource_type_display_name,
+            role_count=role_count,
+        )
 
 
 class RecommendRolesRequest(BaseModel):
@@ -105,11 +169,21 @@ class AIEngineInfo(BaseModel):
     missing_components: list[str] | None = None
 
 
+class AIRecommendationItem(BaseModel):
+    """A single AI role recommendation result."""
+
+    role_id: str
+    role_name: str
+    description: str
+    score: float
+    matched_keywords: list[str] = Field(default_factory=list)
+
+
 class AIRecommendResponse(BaseModel):
     """Response model for AI recommend endpoint."""
 
     query: str | None = None
-    recommendations: list = Field(default_factory=list)
+    recommendations: list[AIRecommendationItem] = Field(default_factory=list)
     total: int = 0
     engine: AIEngineInfo | None = None
     error: str | None = None

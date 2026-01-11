@@ -30,11 +30,13 @@ from azurerbac.web.dependencies import BaseDeps, get_api_deps
 from azurerbac.web.limiter import limiter
 from azurerbac.web.routes.models import (
     AIEngineInfo,
+    AIRecommendationItem,
     AIRecommendResponse,
     CountMatchesResponse,
     OperationSearchResponse,
     RecommendRolesRequest,
     RecommendRolesResponse,
+    RoleMatchResponse,
 )
 from azurerbac.web.routes.responses import (
     ErrorMessages,
@@ -151,7 +153,7 @@ async def api_recommend_roles(
         requested_operations=requested_ops,
         requested_operations_count=requested_ops_count,
         total_matches=len(matches),
-        roles=[m.to_dict() for m in matches],  # type: ignore[arg-type]
+        roles=[RoleMatchResponse.model_validate(m.to_dict()) for m in matches],
     )
 
 
@@ -230,7 +232,7 @@ async def ai_recommend_endpoint(
 
     return AIRecommendResponse(
         query=query,
-        recommendations=recommendations,
+        recommendations=[AIRecommendationItem.model_validate(r) for r in recommendations],
         total=len(recommendations),
         engine=AIEngineInfo(mode=actual_mode, fallback=actual_mode != requested_mode),
     )

@@ -8,8 +8,85 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from azurerbac.core.types import JsonDict
+
+if TYPE_CHECKING:
+    from azurerbac.azure.models import RoleDefinition
+    from azurerbac.cache.models import CachedChangeEvent, CachedRole
+
+
+@dataclass(frozen=True, slots=True)
+class PaginationInfo:
+    """Computed pagination metadata.
+
+    Holds derived values (total_pages, start/end indices) to avoid
+    repeating the same calculations in multiple routes.
+    """
+
+    total_pages: int
+    start_idx: int
+    end_idx: int
+
+    @staticmethod
+    def compute(total_items: int, page: int, page_size: int) -> PaginationInfo:
+        """Compute pagination values from item count and page parameters.
+
+        Args:
+            total_items: Total number of items before pagination.
+            page: Current page number (1-based).
+            page_size: Number of items per page.
+
+        Returns:
+            PaginationInfo with total_pages, start_idx, end_idx.
+        """
+        total_pages = max(1, (total_items + page_size - 1) // page_size)
+        # Clamp page to available pages
+        clamped_page = min(page, total_pages)
+        start_idx = (clamped_page - 1) * page_size
+        end_idx = start_idx + page_size
+        return PaginationInfo(
+            total_pages=total_pages,
+            start_idx=start_idx,
+            end_idx=end_idx,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class PaginatedResult[T]:
+    """Generic paginated result container.
+
+    Replaces tuple[list[T], int, int] returns with a typed dataclass.
+    """
+
+    items: list[T]
+    total_count: int
+    total_pages: int
+
+
+@dataclass(frozen=True, slots=True)
+class PatternMatchResult:
+    """Result of finding a pattern that matches an operation.
+
+    Used when checking which permission pattern grants an operation
+    and whether conditions apply.
+    """
+
+    matched_pattern: str | None
+    has_condition: bool
+    condition_text: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class ScanMetadata:
+    """Scan timestamp metadata from cache or database.
+
+    Contains first and last scan timestamps for display purposes.
+    """
+
+    last_scan: datetime | None
+    first_scan: datetime | None
 
 
 @dataclass(slots=True)
@@ -156,3 +233,16 @@ class DashboardSummary:
             "last_scan": self.last_scan,
             "first_scan": self.first_scan,
         }
+
+
+@dataclass(slots=True)
+class RoleDetailResult:
+    """Result of fetching role detail data from cache or database.
+
+    Replaces tuple return from get_role_from_cache_or_db for better type safety.
+    """
+
+    cached_role: CachedRole | None
+    definition: RoleDefinition | None
+    events: list[CachedChangeEvent]
+    first_scan: datetime | None

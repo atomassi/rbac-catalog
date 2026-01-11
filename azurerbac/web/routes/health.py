@@ -5,12 +5,13 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from azurerbac import __version__
+from azurerbac.web.routes.models import HealthResponse, VersionResponse
 
 router = APIRouter(tags=["health"])
 
 
 @router.api_route("/healthz", methods=["GET", "HEAD"])
-async def healthz() -> dict[str, bool]:
+async def healthz() -> HealthResponse:
     """Health check endpoint.
 
     Returns a simple JSON response indicating the service is healthy.
@@ -22,11 +23,11 @@ async def healthz() -> dict[str, bool]:
 
     Supports HEAD method for lightweight health checks.
     """
-    return {"ok": True}
+    return HealthResponse(ok=True)
 
 
 @router.api_route("/version", methods=["GET", "HEAD"])
-async def version() -> dict[str, str]:
+async def version() -> VersionResponse:
     """Version endpoint.
 
     Returns the current application version.
@@ -34,4 +35,4 @@ async def version() -> dict[str, str]:
 
     Supports HEAD method for lightweight version checks.
     """
-    return {"version": __version__}
+    return VersionResponse(version=__version__)

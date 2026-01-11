@@ -9,8 +9,8 @@ from typing import TYPE_CHECKING, Any, Final
 from azurerbac.azure.models import OperationData, Permission, RoleDefinition
 from azurerbac.cache.models import CachedChangeEvent, CachedRole
 from azurerbac.core.constants import DEFAULT_ROLE_TYPE
+from azurerbac.core.enums import SortOrder
 from azurerbac.core.patterns import is_wildcard_pattern, matches_pattern
-from azurerbac.web.services.dashboard import SortOrder
 from azurerbac.web.services.models import (
     EnrichedChangeEvent,
     PatternMatchResult,
@@ -196,38 +196,78 @@ def _expand_patterns_to_operations(patterns: list[str], all_ops: set[str]) -> se
 
 @dataclass(frozen=True, slots=True)
 class RawPermissions:
-    """Raw permission patterns extracted from a role definition."""
+    """Raw permission patterns extracted from a role definition.
+
+    Provides methods to compute effective permissions and check for wildcards.
+    """
 
     actions: list[str]
     not_actions: list[str]
     data_actions: list[str]
     not_data_actions: list[str]
 
+    @classmethod
+    def from_permissions(cls, permissions: list[Permission]) -> RawPermissions:
+        """Extract raw permission patterns from role permissions.
 
-def _extract_raw_permissions(permissions: list[Permission]) -> RawPermissions:
-    """Extract raw permission patterns from role permissions.
+        Args:
+            permissions: List of Permission objects from role definition
 
-    Args:
-        permissions: List of Permission objects from role definition
+        Returns:
+            RawPermissions containing all action patterns
+        """
+        actions: list[str] = []
+        not_actions: list[str] = []
+        data_actions: list[str] = []
+        not_data_actions: list[str] = []
+        for perm in permissions:
+            actions.extend(perm.actions)
+            not_actions.extend(perm.not_actions)
+            data_actions.extend(perm.data_actions)
+            not_data_actions.extend(perm.not_data_actions)
+        return cls(
+            actions=actions,
+            not_actions=not_actions,
+            data_actions=data_actions,
+            not_data_actions=not_data_actions,
+        )
 
-    Returns:
-        RawPermissions containing all action patterns
-    """
-    actions: list[str] = []
-    not_actions: list[str] = []
-    data_actions: list[str] = []
-    not_data_actions: list[str] = []
-    for perm in permissions:
-        actions.extend(perm.actions)
-        not_actions.extend(perm.not_actions)
-        data_actions.extend(perm.data_actions)
-        not_data_actions.extend(perm.not_data_actions)
-    return RawPermissions(
-        actions=actions,
-        not_actions=not_actions,
-        data_actions=data_actions,
-        not_data_actions=not_data_actions,
-    )
+    @property
+    def all_patterns(self) -> list[str]:
+        """Get all patterns (actions + not_actions + data + not_data)."""
+        return self.actions + self.not_actions + self.data_actions + self.not_data_actions
+
+    @property
+    def has_wildcards(self) -> bool:
+        """Check if any patterns contain wildcards."""
+        return any(is_wildcard_pattern(p) or p == "*" for p in self.all_patterns)
+
+    @property
+    def has_defined_permissions(self) -> bool:
+        """Check if role has any defined permissions (actions or data_actions)."""
+        return bool(self.actions or self.data_actions)
+
+    def compute_effective(
+        self, control_ops: set[str], data_ops: set[str]
+    ) -> tuple[set[str], set[str]]:
+        """Compute effective permissions after applying exclusions.
+
+        Args:
+            control_ops: Set of all control plane operation names
+            data_ops: Set of all data plane operation names
+
+        Returns:
+            Tuple of (control_effective, data_effective) operation sets
+        """
+        control_granted = _expand_patterns_to_operations(self.actions, control_ops)
+        control_excluded = _expand_patterns_to_operations(self.not_actions, control_ops)
+        control_effective = control_granted - control_excluded
+
+        data_granted = _expand_patterns_to_operations(self.data_actions, data_ops)
+        data_excluded = _expand_patterns_to_operations(self.not_data_actions, data_ops)
+        data_effective = data_granted - data_excluded
+
+        return control_effective, data_effective
 
 
 def compute_role_effective_permissions(
@@ -250,8 +290,8 @@ def compute_role_effective_permissions(
     role_id = role.name
     permissions = role.properties.permissions
 
-    # Extract raw patterns from the role
-    raw = _extract_raw_permissions(permissions)
+    # Extract raw patterns from the role using factory method
+    raw = RawPermissions.from_permissions(permissions)
 
     # Check for ABAC conditions
     has_conditions = any(perm.condition for perm in permissions)
@@ -263,24 +303,11 @@ def compute_role_effective_permissions(
         # Fallback: compute manually (shouldn't happen if precompute_all_caches ran)
         all_control_ops = {op.name for op in all_operations if not op.is_data_action}
         all_data_ops = {op.name for op in all_operations if op.is_data_action}
-
-        # Calculate effective permissions
-        control_granted = _expand_patterns_to_operations(raw.actions, all_control_ops)
-        control_excluded = _expand_patterns_to_operations(raw.not_actions, all_control_ops)
-        control_effective = control_granted - control_excluded
-
-        data_granted = _expand_patterns_to_operations(raw.data_actions, all_data_ops)
-        data_excluded = _expand_patterns_to_operations(raw.not_data_actions, all_data_ops)
-        data_effective = data_granted - data_excluded
-
-    # Check if any patterns contain wildcards
-    all_patterns = raw.actions + raw.not_actions + raw.data_actions + raw.not_data_actions
-    has_wildcards = any(is_wildcard_pattern(p) or p == "*" for p in all_patterns)
+        control_effective, data_effective = raw.compute_effective(all_control_ops, all_data_ops)
 
     # Detect if role has defined permissions but none could be resolved
-    has_defined_permissions = bool(raw.actions or raw.data_actions)
     has_resolved_operations = bool(control_effective or data_effective)
-    has_unresolved_permissions = has_defined_permissions and not has_resolved_operations
+    has_unresolved_permissions = raw.has_defined_permissions and not has_resolved_operations
 
     return RoleEffectivePermissions(
         control_plane_actions=sorted(control_effective),
@@ -288,7 +315,7 @@ def compute_role_effective_permissions(
         control_plane_count=len(control_effective),
         data_plane_count=len(data_effective),
         has_conditions=has_conditions,
-        has_wildcards=has_wildcards,
+        has_wildcards=raw.has_wildcards,
         has_unresolved_permissions=has_unresolved_permissions,
         raw_actions=raw.actions,
         raw_not_actions=raw.not_actions,
@@ -373,15 +400,13 @@ def get_roles_allowing_operation(
         )
 
         allowing_roles.append(
-            RoleAllowingOperation(
+            RoleAllowingOperation.from_match(
                 role_id=role_id,
                 role_name=role.properties.role_name,
                 role_type=role.properties.type or DEFAULT_ROLE_TYPE,
-                matched_pattern=match_result.matched_pattern or "*",
-                actions_count=len(control_effective),
-                data_actions_count=len(data_effective),
-                has_condition=match_result.has_condition,
-                condition_text=match_result.condition_text,
+                control_count=len(control_effective),
+                data_count=len(data_effective),
+                match_result=match_result,
             )
         )
 

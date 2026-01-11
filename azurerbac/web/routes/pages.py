@@ -10,6 +10,7 @@ from urllib.parse import unquote
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
+from azurerbac.core.enums import SortOrder
 from azurerbac.web.constants import (
     DEFAULT_DAYS,
     DEFAULT_LIMIT,
@@ -20,7 +21,6 @@ from azurerbac.web.constants import (
 )
 from azurerbac.web.dependencies import PagesDeps, get_pages_deps
 from azurerbac.web.routes.models import OperationWithCount
-from azurerbac.web.services.dashboard import SortOrder
 from azurerbac.web.services.models import PaginationInfo
 from azurerbac.web.services.pages import (
     DataActionFilter,

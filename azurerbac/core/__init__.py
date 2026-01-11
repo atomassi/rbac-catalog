@@ -8,6 +8,11 @@ from .constants import (
     RoleStatus,
 )
 from .db import DBEngine, EngineFactory, create_sessionmaker
+from .enums import (
+    EventTypeFilter,
+    SortOrder,
+    StatusFilter,
+)
 from .models import (
     Base,
     Operation,
@@ -35,6 +40,7 @@ __all__ = [
     "DBEngine",
     "EngineFactory",
     "EventType",
+    "EventTypeFilter",
     "JsonDict",
     "Operation",
     "OperationScanStatus",
@@ -42,6 +48,8 @@ __all__ = [
     "RoleHistory",
     "RoleScanStatus",
     "RoleStatus",
+    "SortOrder",
+    "StatusFilter",
     "ThreadSafeSingleton",
     "create_sessionmaker",
     "ensure_db",

@@ -171,6 +171,40 @@ class RoleAllowingOperation:
     has_condition: bool
     condition_text: str | None
 
+    @classmethod
+    def from_match(
+        cls,
+        role_id: str,
+        role_name: str,
+        role_type: str,
+        control_count: int,
+        data_count: int,
+        match_result: PatternMatchResult,
+    ) -> RoleAllowingOperation:
+        """Create from role data and pattern match result.
+
+        Args:
+            role_id: The role's unique identifier.
+            role_name: Display name of the role.
+            role_type: Type of the role (e.g., "BuiltInRole").
+            control_count: Number of control plane actions.
+            data_count: Number of data plane actions.
+            match_result: The pattern match result.
+
+        Returns:
+            RoleAllowingOperation instance.
+        """
+        return cls(
+            role_id=role_id,
+            role_name=role_name,
+            role_type=role_type,
+            matched_pattern=match_result.matched_pattern or "*",
+            actions_count=control_count,
+            data_actions_count=data_count,
+            has_condition=match_result.has_condition,
+            condition_text=match_result.condition_text,
+        )
+
     def to_dict(self) -> JsonDict:
         """Convert to dict for template rendering."""
         return {

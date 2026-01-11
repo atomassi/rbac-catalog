@@ -15,6 +15,7 @@ from sqlalchemy.sql.elements import ColumnElement
 
 from azurerbac.cache.models import CachedChangeEvent, CachedRole
 from azurerbac.core.constants import DEFAULT_ROLE_TYPE, EventType, RoleStatus
+from azurerbac.core.enums import EventTypeFilter, SortOrder, StatusFilter
 from azurerbac.core.utils import (
     ensure_utc,
     ensure_utc_or_min,
@@ -47,30 +48,6 @@ class SortField(StrEnum):
     ID = "id"
     UPDATED = "updated"
     NAME = "name"
-
-
-class SortOrder(StrEnum):
-    """Sort order direction."""
-
-    ASC = "asc"
-    DESC = "desc"
-
-
-class StatusFilter(StrEnum):
-    """Valid status filters for role listings."""
-
-    ACTIVE = "active"
-    DELETED = "deleted"
-    ALL = "all"
-
-
-class EventTypeFilter(StrEnum):
-    """Valid event type filters for recent changes."""
-
-    CREATED = "created"
-    UPDATED = "updated"
-    DELETED = "deleted"
-    ALL = "all"
 
 
 _MIN_DATETIME: Final[dt.datetime] = dt.datetime.min.replace(tzinfo=dt.UTC)

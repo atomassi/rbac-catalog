@@ -33,7 +33,7 @@ warnings.filterwarnings("ignore", message=".*CUDA is not available.*", category=
 
 from azurerbac.airecommender.engines.base import BaseRecommenderEngine, RankedRole
 from azurerbac.airecommender.engines.common import normalize_with_sigmoid
-from azurerbac.airecommender.engines.config import COLBERT_THRESHOLDS
+from azurerbac.airecommender.engines.config import COLBERT_SIGMOID, COLBERT_THRESHOLDS
 from azurerbac.airecommender.engines.registry import EngineRegistry
 from azurerbac.airecommender.knowledge import extract_keywords
 from azurerbac.airecommender.modes import RecommenderMode
@@ -91,18 +91,14 @@ class ColBERTEngine(BaseRecommenderEngine):
     def _normalize_scores(candidates: list[RankedRole]) -> list[RankedRole]:
         """Normalize ColBERT MaxSim scores to 0-1 confidence range.
 
-        Uses sigmoid on raw scores. Based on empirical testing:
-        - Raw scores ~28+ are excellent matches (->90-97%)
-        - Raw scores ~22-28 are good matches (->80-90%)
-        - Raw scores ~15-22 are moderate matches (->55-80%)
-        - Raw scores <15 are poor matches (->30-55%)
+        Uses COLBERT_SIGMOID config for sigmoid normalization parameters.
         """
         candidates = normalize_with_sigmoid(
             candidates,
-            midpoint=18.0,
-            steepness=0.30,
-            output_min=0.30,
-            output_max=0.97,
+            midpoint=COLBERT_SIGMOID.midpoint,
+            steepness=COLBERT_SIGMOID.steepness,
+            output_min=COLBERT_SIGMOID.output_min,
+            output_max=COLBERT_SIGMOID.output_max,
         )
         logger.info(
             "Normalized %d ColBERT scores: [%s]",

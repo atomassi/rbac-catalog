@@ -18,6 +18,7 @@ from azurerbac.core.types import JsonDict
 
 if TYPE_CHECKING:
     from azurerbac.azure.models import RoleDefinition
+    from azurerbac.cache import CacheContainer
 
 logger = logging.getLogger(__name__)
 
@@ -121,16 +122,24 @@ class RoleKnowledgeBase:
     def build_from_roles(
         self,
         roles: list[RoleDefinition],
+        *,
+        cache: CacheContainer | None = None,
     ) -> None:
         """Build searchable knowledge base from role definitions.
 
         Uses EFFECTIVE permissions from the precomputed cache and
         curated USE_CASE_PATTERNS to build document text for embeddings.
         Also precomputes word sets for fuzzy name matching.
+
+        Args:
+            roles: List of role definitions to index.
+            cache: Optional cache container. If None, uses global singleton.
         """
         # Import inside function to avoid circular import:
         # cache.service imports airecommender, airecommender imports knowledge_base
         from azurerbac.cache import get_cache_service
+
+        cache_resolved = cache if cache is not None else get_cache_service().container
 
         # Reset state for fresh build
         self._role_documents = {}
@@ -152,7 +161,7 @@ class RoleKnowledgeBase:
             raw_data_actions = first_perm.data_actions if first_perm else []
 
             # Get EFFECTIVE permissions from precomputed cache
-            cached_coverage = get_cache_service().container.get_role_coverage(role_id)
+            cached_coverage = cache_resolved.get_role_coverage(role_id)
             if cached_coverage:
                 effective_control, effective_data = cached_coverage
             else:

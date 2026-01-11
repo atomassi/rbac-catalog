@@ -13,9 +13,6 @@ from typing import Final
 # Global Defaults
 # =============================================================================
 
-# Default number of results to return from recommend() methods
-DEFAULT_TOP_K: Final[int] = 5
-
 # Score normalization output range (60-95%)
 SCORE_FLOOR: Final[float] = 0.60
 SCORE_CEILING: Final[float] = 0.95
@@ -81,12 +78,16 @@ TFIDF_CONFIG: Final = TFIDFConfig(
 # =============================================================================
 # Sigmoid Normalization Parameters
 # =============================================================================
-# Used by engines with unbounded raw scores (ColBERT, cross-encoder)
+# Used by engines with unbounded raw scores (ColBERT, cross-encoder).
+# Sigmoid maps unbounded scores to (0, 1) range.
 
 
 @dataclass(frozen=True, slots=True)
 class SigmoidParams:
-    """Parameters for sigmoid score normalization."""
+    """Parameters for sigmoid score normalization.
+
+    The sigmoid function: output = 1 / (1 + exp(-steepness * (score - midpoint)))
+    """
 
     midpoint: float
     """Score at which sigmoid outputs 0.5."""
@@ -94,9 +95,24 @@ class SigmoidParams:
     steepness: float
     """Controls transition sharpness (higher = sharper)."""
 
+    output_min: float = 0.30
+    """Minimum output score."""
 
-# ColBERT MaxSim scores typically range 15-35
-COLBERT_SIGMOID: Final = SigmoidParams(midpoint=25.0, steepness=0.15)
+    output_max: float = 0.97
+    """Maximum output score."""
+
+
+# ColBERT MaxSim scores typically range 15-35 based on empirical testing:
+# - Raw scores ~28+ are excellent matches (->90-97%)
+# - Raw scores ~22-28 are good matches (->80-90%)
+# - Raw scores ~15-22 are moderate matches (->55-80%)
+# - Raw scores <15 are poor matches (->30-55%)
+COLBERT_SIGMOID: Final = SigmoidParams(
+    midpoint=18.0,
+    steepness=0.30,
+    output_min=0.30,
+    output_max=0.97,
+)
 
 
 # =============================================================================
@@ -129,6 +145,3 @@ HYBRID_WEIGHTS: Final = ScoreWeights(primary_weight=0.7, secondary_weight=0.3)
 
 # Cross-encoder: CE reranking weighted higher than bi-encoder similarity
 CROSSENCODER_WEIGHTS: Final = ScoreWeights(primary_weight=0.7, secondary_weight=0.3)
-
-# Cross-encoder logit scores typically range -5 to +5
-CROSSENCODER_SIGMOID: Final = SigmoidParams(midpoint=0.0, steepness=1.0)

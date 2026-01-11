@@ -51,3 +51,6 @@ tenacity==9.1.2
 
 # Serialization
 msgpack==1.1.2
+
+# File watching for cache invalidation
+watchdog==6.0.0

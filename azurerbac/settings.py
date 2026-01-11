@@ -43,18 +43,15 @@ class EnvVars:
     OLLAMA_BASE_URL: Final = "OLLAMA_BASE_URL"
     OLLAMA_MODEL: Final = "OLLAMA_MODEL"
 
-    # Logging and debug
+    # Logging
     LOG_LEVEL: Final = "LOG_LEVEL"
-    AZURERBAC_DEBUG: Final = "AZURERBAC_DEBUG"
 
     # Cache
-    CACHE_DIR: Final = "CACHE_DIR"
     CACHE_BACKEND: Final = "CACHE_BACKEND"
     CACHE_CHECK_INTERVAL_SECONDS: Final = "CACHE_CHECK_INTERVAL_SECONDS"
     DB_REBUILD_INTERVAL_SECONDS: Final = "DB_REBUILD_INTERVAL_SECONDS"
 
-    # Embeddings
-    AZURERBAC_DISABLE_EMBEDDINGS: Final = "AZURERBAC_DISABLE_EMBEDDINGS"
+    # Embeddings (test-only flag)
     AZURERBAC_ENABLE_EMBEDDINGS_IN_TESTS: Final = "AZURERBAC_ENABLE_EMBEDDINGS_IN_TESTS"
 
     # Telemetry
@@ -135,12 +132,6 @@ class Settings(BaseModel):
     # Logging
     log_level: str = "INFO"
 
-    # Debug mode
-    debug: bool = False
-
-    # Cache directory (optional override)
-    cache_dir: str | None = None
-
     # Cache backend type (file, redis, etc.)
     cache_backend: str = "file"
 
@@ -148,13 +139,11 @@ class Settings(BaseModel):
     cache_check_interval_seconds: int = Field(default=30, gt=0)
     db_rebuild_interval_seconds: int = Field(default=3600, gt=0)
 
-    # Embeddings configuration
-    disable_embeddings: bool = False
+    # Embeddings: skip loading in tests unless opted-in
     enable_embeddings_in_tests: bool = False
 
     # Telemetry
     app_insights_connection_string: str = ""
-    telemetry_flush_timeout_ms: int = Field(default=10000, gt=0)
 
     # Environment
     is_production: bool = False
@@ -214,14 +203,10 @@ def _load_settings() -> Settings:
         ollama_model=os.getenv(EnvVars.OLLAMA_MODEL, "qwen-rbac-v5"),
         # Logging
         log_level=os.getenv(EnvVars.LOG_LEVEL, "INFO").upper(),
-        # Debug
-        debug=_get_bool(EnvVars.AZURERBAC_DEBUG, False),
         # Cache
-        cache_dir=os.getenv(EnvVars.CACHE_DIR),
         cache_check_interval_seconds=_get_int(EnvVars.CACHE_CHECK_INTERVAL_SECONDS, 30),
         db_rebuild_interval_seconds=_get_int(EnvVars.DB_REBUILD_INTERVAL_SECONDS, 3600),
         # Embeddings
-        disable_embeddings=_get_bool(EnvVars.AZURERBAC_DISABLE_EMBEDDINGS, False),
         enable_embeddings_in_tests=_get_bool(EnvVars.AZURERBAC_ENABLE_EMBEDDINGS_IN_TESTS, False),
         # Telemetry
         app_insights_connection_string=app_insights,

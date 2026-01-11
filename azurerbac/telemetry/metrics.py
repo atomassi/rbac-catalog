@@ -70,13 +70,15 @@ def flush_metrics(timeout_ms: int | None = None) -> bool:
 
     Args:
         timeout_ms: Timeout in milliseconds for the flush operation.
-                   Defaults to settings.telemetry_flush_timeout_ms.
+                   Defaults to TELEMETRY_FLUSH_TIMEOUT_MS (10000ms).
 
     Returns:
         True if flush succeeded, False otherwise.
     """
     if timeout_ms is None:
-        timeout_ms = Settings.get().telemetry_flush_timeout_ms
+        from azurerbac.telemetry.sender import TELEMETRY_FLUSH_TIMEOUT_MS
+
+        timeout_ms = TELEMETRY_FLUSH_TIMEOUT_MS
     return MetricsSender.flush(timeout_ms)
 
 

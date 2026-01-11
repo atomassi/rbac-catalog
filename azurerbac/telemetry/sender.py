@@ -8,9 +8,12 @@ via OpenTelemetry.
 from __future__ import annotations
 
 import logging
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Final
 
 from azurerbac.settings import Settings, is_running_in_azure
+
+# Default timeout for flushing metrics to Azure Monitor
+TELEMETRY_FLUSH_TIMEOUT_MS: Final = 10000
 
 logger = logging.getLogger(__name__)
 
@@ -140,7 +143,7 @@ class MetricsSender:
 
         Args:
             timeout_ms: Timeout in milliseconds for the flush operation.
-                       Defaults to settings.telemetry_flush_timeout_ms.
+                       Defaults to TELEMETRY_FLUSH_TIMEOUT_MS (10000ms).
 
         Returns:
             True if flush succeeded, False otherwise.
@@ -152,7 +155,7 @@ class MetricsSender:
             from opentelemetry import metrics
 
             if timeout_ms is None:
-                timeout_ms = Settings.get().telemetry_flush_timeout_ms
+                timeout_ms = TELEMETRY_FLUSH_TIMEOUT_MS
 
             provider = metrics.get_meter_provider()
             if hasattr(provider, "force_flush"):

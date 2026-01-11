@@ -58,10 +58,6 @@ class EmbeddingModel:
         """Try to load the sentence transformer model. Returns True on success."""
         settings = Settings.get()
 
-        if settings.disable_embeddings:
-            logger.info("Embeddings disabled via AZURERBAC_DISABLE_EMBEDDINGS=1")
-            return False
-
         # Unit tests should not pay the cost of importing torch/transformers
         # unless explicitly opted-in via environment variable.
         if is_running_in_pytest() and not settings.enable_embeddings_in_tests:

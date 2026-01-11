@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
 from azurerbac.cache.backends.base import CacheBackend
-from azurerbac.settings import Settings, is_running_in_azure
+from azurerbac.settings import is_running_in_azure
 
 if TYPE_CHECKING:
     from azurerbac.cache.models import CacheData
@@ -65,11 +65,8 @@ class FileCacheBackend(CacheBackend):
         if self._cache_dir is not None:
             return self._cache_dir
 
-        settings = Settings.get()
-
-        if settings.cache_dir:
-            self._cache_dir = Path(settings.cache_dir)
-        elif is_running_in_azure():
+        # Use /home/cache in Azure, .cache locally
+        if is_running_in_azure():
             self._cache_dir = Path("/home/cache")
         else:
             self._cache_dir = Path(__file__).parent.parent.parent / ".cache"

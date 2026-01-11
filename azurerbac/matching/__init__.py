@@ -12,6 +12,13 @@ Main components:
 - OperationSets: Value object for pre-computed operation sets
 """
 
+from azurerbac.matching.models import (
+    ClassifiedOperations,
+    OperationSets,
+    RoleMatch,
+    WildcardCoverage,
+    WildcardCoverageResult,
+)
 from azurerbac.matching.recommendation_service import (
     RoleEvaluationContext,
     RoleRecommendationService,
@@ -26,15 +33,7 @@ from azurerbac.matching.role_matching import (
     has_any_wildcard_coverage,
     pattern_covers_pattern,
 )
-from azurerbac.matching.role_recommender import (
-    RoleMatch,
-    recommend_roles,
-)
-from azurerbac.matching.types import (
-    ClassifiedOperations,
-    OperationSets,
-    WildcardCoverage,
-)
+from azurerbac.matching.role_recommender import recommend_roles
 
 __all__ = [
     "ClassifiedOperations",
@@ -43,6 +42,7 @@ __all__ = [
     "RoleMatch",
     "RoleRecommendationService",
     "WildcardCoverage",
+    "WildcardCoverageResult",
     "check_operation_allowed",
     "check_wildcard_operation_allowed",
     "count_net_permissions",

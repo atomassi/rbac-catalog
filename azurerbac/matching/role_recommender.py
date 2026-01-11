@@ -6,67 +6,13 @@ The heavy lifting is delegated to RoleRecommendationService.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-
 from azurerbac.azure.models import OperationData, RoleDefinition
 from azurerbac.core import HIGH_PRIVILEGE_ROLES
-from azurerbac.core.types import JsonDict
+from azurerbac.matching.models import RoleMatch
 from azurerbac.matching.recommendation_service import (
     RoleEvaluationContext,
     RoleRecommendationService,
 )
-
-
-@dataclass(slots=True)
-class RoleMatch:
-    """Represents a role that matches the requested permissions.
-
-    This is the result object returned by recommend_roles, containing
-    all information about how well a role matches the requested operations.
-    """
-
-    role_id: str
-    role_name: str
-    description: str
-    matched_operations: list[str] = field(default_factory=list)
-    missing_operations: list[str] = field(default_factory=list)
-    total_permissions_granted: int = 0
-    control_plane_permissions: int = 0
-    data_plane_permissions: int = 0
-    is_high_privilege: bool = False
-    match_percentage: float = 0.0
-    has_conditions: bool = False
-    matched_operations_count: int = 0
-    requested_operations_count: int = 0
-    missing_operations_expanded: list[str] = field(default_factory=list)
-    missing_operations_count: int = 0
-    has_partial_wildcard_match: bool = False
-
-    @property
-    def is_full_match(self) -> bool:
-        """Check if all requested operations are covered."""
-        return len(self.missing_operations) == 0
-
-    def to_dict(self) -> JsonDict:
-        """Convert to dictionary for API response."""
-        return {
-            "role_id": self.role_id,
-            "role_name": self.role_name,
-            "matched_operations": self.matched_operations,
-            "missing_operations": self.missing_operations,
-            "missing_operations_expanded": self.missing_operations_expanded,
-            "missing_operations_count": self.missing_operations_count,
-            "has_partial_wildcard_match": self.has_partial_wildcard_match,
-            "total_permissions": self.total_permissions_granted,
-            "control_plane_permissions": self.control_plane_permissions,
-            "data_plane_permissions": self.data_plane_permissions,
-            "is_high_privilege": self.is_high_privilege,
-            "has_conditions": self.has_conditions,
-            "match_percentage": self.match_percentage,
-            "is_full_match": self.is_full_match,
-            "matched_operations_count": self.matched_operations_count,
-            "requested_operations_count": self.requested_operations_count,
-        }
 
 
 def recommend_roles(

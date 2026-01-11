@@ -369,7 +369,7 @@ class TestClassifiedOperations:
         """ClassifiedOperations should be immutable (frozen)."""
         from dataclasses import FrozenInstanceError
 
-        from azurerbac.matching.types import ClassifiedOperations
+        from azurerbac.matching.models import ClassifiedOperations
 
         classified = ClassifiedOperations(
             control=frozenset(["op1"]),
@@ -380,7 +380,7 @@ class TestClassifiedOperations:
 
     def test_all_requested_combines_all_sets(self):
         """all_requested should combine all operation sets."""
-        from azurerbac.matching.types import ClassifiedOperations
+        from azurerbac.matching.models import ClassifiedOperations
 
         classified = ClassifiedOperations(
             control=frozenset(["ctrl1"]),
@@ -392,7 +392,7 @@ class TestClassifiedOperations:
 
     def test_len_returns_total_count(self):
         """len() should return total operation count."""
-        from azurerbac.matching.types import ClassifiedOperations
+        from azurerbac.matching.models import ClassifiedOperations
 
         classified = ClassifiedOperations(
             control=frozenset(["c1", "c2"]),
@@ -407,7 +407,7 @@ class TestOperationSets:
 
     def test_from_operations_creates_correct_sets(self, sample_operations):
         """from_operations should separate control and data plane operations."""
-        from azurerbac.matching.types import OperationSets
+        from azurerbac.matching.models import OperationSets
 
         op_sets = OperationSets.from_operations(sample_operations)
 
@@ -424,7 +424,7 @@ class TestOperationSets:
 
     def test_cache_keys_are_different(self, sample_operations):
         """Control and data cache keys should be different."""
-        from azurerbac.matching.types import OperationSets
+        from azurerbac.matching.models import OperationSets
 
         op_sets = OperationSets.from_operations(sample_operations)
         assert op_sets.control_cache_key != op_sets.data_cache_key

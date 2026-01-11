@@ -831,28 +831,16 @@
                     {% endif %}
                 {% else %}
                     <!-- Recent Changes Filter -->
-                    <div class="px-4 sm:px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
-                        <div class="flex flex-wrap items-center justify-between gap-4 sm:gap-6">
+                    <div class="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
+                        <div class="flex flex-wrap items-center gap-2 sm:gap-4 sm:justify-between">
                             <!-- Event Type Filter -->
                             <div class="flex items-center gap-2">
                                 <span class="text-xs font-medium text-slate-400 uppercase tracking-wider hidden sm:inline">Show</span>
                                 <div class="inline-flex rounded-lg bg-white border border-slate-200 p-1 shadow-sm">
-                                    <a href="{{ build_recent_url(new_page=1, new_event_type='all') }}" 
-                                       class="px-3 py-1.5 text-xs font-medium rounded-md transition-all {{ 'bg-azure-500 text-white shadow-sm' if event_type == 'all' else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}">
-                                        All
-                                    </a>
-                                    <a href="{{ build_recent_url(new_page=1, new_event_type='created') }}" 
-                                       class="px-3 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-emerald-500 text-white shadow-sm' if event_type == 'created' else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}">
-                                        Created
-                                    </a>
-                                    <a href="{{ build_recent_url(new_page=1, new_event_type='updated') }}" 
-                                       class="px-3 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-blue-500 text-white shadow-sm' if event_type == 'updated' else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}">
-                                        Updated
-                                    </a>
-                                    <a href="{{ build_recent_url(new_page=1, new_event_type='deleted') }}" 
-                                       class="px-3 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-red-500 text-white shadow-sm' if event_type == 'deleted' else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}">
-                                        Deleted
-                                    </a>
+                                    <a href="{{ build_recent_url(new_page=1, new_event_type='all') }}" class="px-2 sm:px-3 py-1.5 text-xs font-medium rounded-md transition-all {{ 'bg-azure-500 text-white shadow-sm' if event_type == 'all' else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}">All</a>
+                                    <a href="{{ build_recent_url(new_page=1, new_event_type='created') }}" class="px-2 sm:px-3 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-emerald-500 text-white shadow-sm' if event_type == 'created' else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}"><span class="hidden sm:inline">Created</span><span class="sm:hidden">New</span></a>
+                                    <a href="{{ build_recent_url(new_page=1, new_event_type='updated') }}" class="px-2 sm:px-3 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-blue-500 text-white shadow-sm' if event_type == 'updated' else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}"><span class="hidden sm:inline">Updated</span><span class="sm:hidden">Edit</span></a>
+                                    <a href="{{ build_recent_url(new_page=1, new_event_type='deleted') }}" class="px-2 sm:px-3 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-red-500 text-white shadow-sm' if event_type == 'deleted' else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}"><span class="hidden sm:inline">Deleted</span><span class="sm:hidden">Del</span></a>
                                 </div>
                             </div>
                             
@@ -860,26 +848,11 @@
                             <div class="flex items-center gap-2">
                                 <span class="text-xs font-medium text-slate-400 uppercase tracking-wider hidden sm:inline">From</span>
                                 <div class="inline-flex rounded-lg bg-white border border-slate-200 p-1 shadow-sm">
-                                    <a href="{{ build_recent_url(new_page=1, new_days=7) }}" 
-                                       class="px-3 py-1.5 text-xs font-medium rounded-md transition-all {{ 'bg-slate-700 text-white shadow-sm' if days == 7 else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}">
-                                        7 days
-                                    </a>
-                                    <a href="{{ build_recent_url(new_page=1, new_days=15) }}" 
-                                       class="px-3 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-slate-700 text-white shadow-sm' if days == 15 else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}">
-                                        15 days
-                                    </a>
-                                    <a href="{{ build_recent_url(new_page=1, new_days=30) }}" 
-                                       class="px-3 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-slate-700 text-white shadow-sm' if days == 30 else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}">
-                                        30 days
-                                    </a>
-                                    <a href="{{ build_recent_url(new_page=1, new_days=90) }}" 
-                                       class="px-3 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-slate-700 text-white shadow-sm' if days == 90 else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}">
-                                        90 days
-                                    </a>
-                                    <a href="{{ build_recent_url(new_page=1, new_days=365) }}" 
-                                       class="px-3 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-slate-700 text-white shadow-sm' if days == 365 else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}">
-                                        1 year
-                                    </a>
+                                    <a href="{{ build_recent_url(new_page=1, new_days=7) }}" class="px-1.5 sm:px-3 py-1.5 text-xs font-medium rounded-md transition-all {{ 'bg-slate-700 text-white shadow-sm' if days == 7 else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}"><span class="hidden sm:inline">7 days</span><span class="sm:hidden">7d</span></a>
+                                    <a href="{{ build_recent_url(new_page=1, new_days=15) }}" class="px-1.5 sm:px-3 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-slate-700 text-white shadow-sm' if days == 15 else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}"><span class="hidden sm:inline">15 days</span><span class="sm:hidden">15d</span></a>
+                                    <a href="{{ build_recent_url(new_page=1, new_days=30) }}" class="px-1.5 sm:px-3 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-slate-700 text-white shadow-sm' if days == 30 else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}"><span class="hidden sm:inline">30 days</span><span class="sm:hidden">30d</span></a>
+                                    <a href="{{ build_recent_url(new_page=1, new_days=90) }}" class="px-1.5 sm:px-3 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-slate-700 text-white shadow-sm' if days == 90 else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}"><span class="hidden sm:inline">90 days</span><span class="sm:hidden">90d</span></a>
+                                    <a href="{{ build_recent_url(new_page=1, new_days=365) }}" class="px-1.5 sm:px-3 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-slate-700 text-white shadow-sm' if days == 365 else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}"><span class="hidden sm:inline">1 year</span><span class="sm:hidden">1y</span></a>
                                 </div>
                             </div>
                             
@@ -887,29 +860,21 @@
                             <div class="flex items-center gap-2">
                                 <span class="text-xs font-medium text-slate-400 uppercase tracking-wider hidden sm:inline">Show</span>
                                 <div class="inline-flex rounded-lg bg-white border border-slate-200 p-1 shadow-sm">
-                                    <a href="{{ build_recent_url(new_page=1, new_limit=25) }}" 
-                                       class="px-3 py-1.5 text-xs font-medium rounded-md transition-all {{ 'bg-slate-700 text-white shadow-sm' if limit == 25 else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}">
-                                        25
-                                    </a>
-                                    <a href="{{ build_recent_url(new_page=1, new_limit=100) }}" 
-                                       class="px-3 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-slate-700 text-white shadow-sm' if limit == 100 else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}">
-                                        100
-                                    </a>
-                                    <a href="{{ build_recent_url(new_page=1, new_limit=500) }}" 
-                                       class="px-3 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-slate-700 text-white shadow-sm' if limit == 500 else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}">
-                                        500
-                                    </a>
+                                    <a href="{{ build_recent_url(new_page=1, new_limit=25) }}" class="px-2 py-1.5 text-xs font-medium rounded-md transition-all {{ 'bg-slate-700 text-white shadow-sm' if limit == 25 else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}">25</a>
+                                    <a href="{{ build_recent_url(new_page=1, new_limit=100) }}" class="px-2 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-slate-700 text-white shadow-sm' if limit == 100 else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}">100</a>
+                                    <a href="{{ build_recent_url(new_page=1, new_limit=500) }}" class="px-2 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-slate-700 text-white shadow-sm' if limit == 500 else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}">500</a>
                                 </div>
                                 <span class="text-xs text-slate-400 hidden sm:inline">per page</span>
                             </div>
                             
-                            <!-- Results count - pushed right -->
-                            <div class="ml-auto pl-4 flex items-center gap-3">
-                                <span class="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">
+                            <!-- Results count -->
+                            <div class="sm:ml-auto pl-0 sm:pl-4 flex items-center gap-3">
+                                <span class="inline-flex items-center px-2 sm:px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">
                                     {{ total_events }} changes
                                 </span>
                                 {% if total_pages > 1 %}
-                                <span class="text-xs text-slate-400">Page {{ page }} of {{ total_pages }}</span>
+                                <span class="text-xs text-slate-400 hidden sm:inline">Page {{ page }} of {{ total_pages }}</span>
+                                <span class="text-xs text-slate-400 sm:hidden">Page {{ page }}/{{ total_pages }}</span>
                                 {% endif %}
                             </div>
                         </div>
@@ -920,49 +885,33 @@
                             <table class="min-w-full">
                                 <thead>
                                     <tr class="bg-slate-50 border-b border-slate-100">
-                                        <th scope="col" class="px-4 sm:px-6 py-3 sm:py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider whitespace-nowrap">Event Date</th>
-                                        <th scope="col" class="px-4 sm:px-6 py-3 sm:py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Role</th>
-                                        <th scope="col" class="px-4 sm:px-6 py-3 sm:py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider whitespace-nowrap">Event</th>
+                                        <th scope="col" class="px-2 sm:px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider whitespace-nowrap">Date</th>
+                                        <th scope="col" class="px-2 sm:px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Role</th>
+                                        <th scope="col" class="px-2 sm:px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider whitespace-nowrap">Event</th>
                                     </tr>
                                 </thead>
                                 <tbody class="divide-y divide-slate-100">
                                     {% for ev in events %}
                                     <tr class="hover:bg-slate-50/50 transition-colors">
-                                        <td class="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm font-mono tabular-nums text-slate-500">
-                                            {# Deleted events use scan_timestamp (no Azure timestamp for deletions) #}
-                                            {# Other events prefer azure_updated_on but fall back to scan_timestamp #}
+                                        <td class="px-2 sm:px-6 py-3 whitespace-nowrap text-xs sm:text-sm text-slate-500">
                                             {% set event_date = ev.azure_updated_on or ev.scan_timestamp %}
                                             {{ event_date.strftime('%Y-%m-%d') if event_date else '' }}
                                         </td>
-                                        <td class="px-4 sm:px-6 py-3 sm:py-4">
-                                            <div class="text-sm font-semibold text-azure-600">
+                                        <td class="px-2 sm:px-6 py-3">
+                                            <div class="text-sm font-medium text-azure-600">
                                                 <a href="{{ role_url(ev.role_id, ev.role_name) }}" onclick="NavState.setBackContext('recent')" class="hover:text-azure-700 hover:underline">{{ ev.role_name }}</a>
                                             </div>
                                             <code class="text-xs font-mono text-slate-400 hidden sm:block">{{ ev.role_id }}</code>
                                         </td>
-                                        <td class="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
+                                        <td class="px-2 sm:px-6 py-3 whitespace-nowrap">
                                             {% if ev.event_type == 'created' %}
-                                                <span class="inline-flex items-center px-2 sm:px-3 py-1 rounded-full text-xs font-semibold bg-gradient-to-r from-emerald-50 to-teal-50 text-emerald-700 border border-emerald-200">
-                                                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1 sm:mr-2"></span>
-                                                    <span class="hidden sm:inline">Created</span>
-                                                    <span class="sm:hidden">New</span>
-                                                </span>
+                                                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-700">New</span>
                                             {% elif ev.event_type == 'updated' %}
-                                                <span class="inline-flex items-center px-2 sm:px-3 py-1 rounded-full text-xs font-semibold bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 border border-blue-200">
-                                                    <span class="w-1.5 h-1.5 rounded-full bg-blue-500 mr-1 sm:mr-2"></span>
-                                                    <span class="hidden sm:inline">Updated</span>
-                                                    <span class="sm:hidden">Edit</span>
-                                                </span>
+                                                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700">Edit</span>
                                             {% elif ev.event_type == 'deleted' %}
-                                                <span class="inline-flex items-center px-2 sm:px-3 py-1 rounded-full text-xs font-semibold bg-gradient-to-r from-red-50 to-rose-50 text-red-700 border border-red-200">
-                                                    <span class="w-1.5 h-1.5 rounded-full bg-red-500 mr-1 sm:mr-2"></span>
-                                                    <span class="hidden sm:inline">Deleted</span>
-                                                    <span class="sm:hidden">Del</span>
-                                                </span>
+                                                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700">Del</span>
                                             {% else %}
-                                                <span class="inline-flex items-center px-2 sm:px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700">
-                                                    {{ ev.event_type }}
-                                                </span>
+                                                <span class="text-xs text-slate-600">{{ ev.event_type }}</span>
                                             {% endif %}
                                         </td>
                                     </tr>

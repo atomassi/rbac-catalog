@@ -349,3 +349,22 @@ class OperationData(BaseModel):
             "resource_type_display_name": self.resource_type_display_name,
             "is_data_action": self.is_data_action,
         }
+
+    def matches_search(self, query_lower: str) -> bool:
+        """Check if operation matches a text search query (case-insensitive).
+
+        Searches across name, display_name, description, provider, and resource type.
+
+        Args:
+            query_lower: Lowercase search query string
+
+        Returns:
+            True if query matches any searchable field
+        """
+        return (
+            query_lower in self.name.lower()
+            or query_lower in (self.display_name or "").lower()
+            or query_lower in (self.description or "").lower()
+            or query_lower in (self.provider_display_name or "").lower()
+            or query_lower in (self.resource_type_display_name or "").lower()
+        )

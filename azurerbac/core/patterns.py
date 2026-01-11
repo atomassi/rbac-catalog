@@ -41,3 +41,26 @@ def wildcard_to_sql_like(pattern: str) -> str:
     pattern = pattern.replace("%", r"\%").replace("_", r"\_")
     # Convert Azure RBAC wildcard
     return pattern.replace("*", "%")
+
+
+def expand_patterns_to_operations(patterns: list[str], all_ops: set[str]) -> set[str]:
+    """Expand permission patterns (including wildcards) to actual operations.
+
+    Args:
+        patterns: List of permission patterns (may include wildcards like *)
+        all_ops: Set of all known operation names to match against
+
+    Returns:
+        Set of operation names that match the patterns
+    """
+    result: set[str] = set()
+    for pattern in patterns:
+        if pattern == "*":
+            result.update(all_ops)
+        elif is_wildcard_pattern(pattern):
+            for op in all_ops:
+                if matches_pattern(op, pattern):
+                    result.add(op)
+        elif pattern in all_ops:
+            result.add(pattern)
+    return result

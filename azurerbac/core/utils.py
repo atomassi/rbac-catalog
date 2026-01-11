@@ -48,6 +48,18 @@ def utcnow() -> dt.datetime:
     return dt.datetime.now(dt.UTC)
 
 
+def truncate_microseconds(d: dt.datetime | None) -> dt.datetime | None:
+    """Remove microseconds from datetime for cleaner display.
+
+    Args:
+        d: Datetime to truncate
+
+    Returns:
+        Datetime with microseconds set to 0, or None if input is None
+    """
+    return d.replace(microsecond=0) if d else None
+
+
 def format_iso_z(d: dt.datetime | None) -> str | None:
     """Format datetime as ISO 8601 with 'Z' suffix for UTC.
 

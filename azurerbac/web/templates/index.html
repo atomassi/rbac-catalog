@@ -831,78 +831,85 @@
                     {% endif %}
                 {% else %}
                     <!-- Recent Changes Filter -->
-                    <div class="px-4 sm:px-6 py-4 border-b border-slate-100 bg-slate-50/50">
-                        <div class="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-3 sm:gap-4">
-                            <!-- Event Type Pills -->
-                            <div class="flex flex-col sm:flex-row sm:items-center gap-2">
-                                <span class="text-xs font-medium text-slate-500 uppercase tracking-wide">Type</span>
-                                <div class="flex rounded-lg bg-white border border-slate-200 p-0.5 shadow-sm">
+                    <div class="px-4 sm:px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
+                        <div class="flex flex-wrap items-center justify-between gap-4 sm:gap-6">
+                            <!-- Event Type Filter -->
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs font-medium text-slate-400 uppercase tracking-wider hidden sm:inline">Show</span>
+                                <div class="inline-flex rounded-lg bg-white border border-slate-200 p-1 shadow-sm">
                                     <a href="{{ build_recent_url(new_page=1, new_event_type='all') }}" 
-                                       class="flex-1 sm:flex-none px-3 sm:px-3 py-2 sm:py-1.5 text-xs font-medium rounded-md transition-all text-center {{ 'bg-azure-500 text-white shadow-sm' if event_type == 'all' else 'text-slate-600 hover:text-slate-900 hover:bg-slate-50' }}">
+                                       class="px-3 py-1.5 text-xs font-medium rounded-md transition-all {{ 'bg-azure-500 text-white shadow-sm' if event_type == 'all' else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}">
                                         All
                                     </a>
                                     <a href="{{ build_recent_url(new_page=1, new_event_type='created') }}" 
-                                       class="flex-1 sm:flex-none px-3 sm:px-3 py-2 sm:py-1.5 text-xs font-medium rounded-md transition-all text-center {{ 'bg-emerald-500 text-white shadow-sm' if event_type == 'created' else 'text-slate-600 hover:text-slate-900 hover:bg-slate-50' }}">
+                                       class="px-3 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-emerald-500 text-white shadow-sm' if event_type == 'created' else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}">
                                         Created
                                     </a>
                                     <a href="{{ build_recent_url(new_page=1, new_event_type='updated') }}" 
-                                       class="flex-1 sm:flex-none px-3 sm:px-3 py-2 sm:py-1.5 text-xs font-medium rounded-md transition-all text-center {{ 'bg-blue-500 text-white shadow-sm' if event_type == 'updated' else 'text-slate-600 hover:text-slate-900 hover:bg-slate-50' }}">
+                                       class="px-3 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-blue-500 text-white shadow-sm' if event_type == 'updated' else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}">
                                         Updated
                                     </a>
                                     <a href="{{ build_recent_url(new_page=1, new_event_type='deleted') }}" 
-                                       class="flex-1 sm:flex-none px-3 sm:px-3 py-2 sm:py-1.5 text-xs font-medium rounded-md transition-all text-center {{ 'bg-red-500 text-white shadow-sm' if event_type == 'deleted' else 'text-slate-600 hover:text-slate-900 hover:bg-slate-50' }}">
+                                       class="px-3 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-red-500 text-white shadow-sm' if event_type == 'deleted' else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}">
                                         Deleted
                                     </a>
                                 </div>
                             </div>
                             
-                            <!-- Time Range Pills -->
-                            <div class="flex flex-col sm:flex-row sm:items-center gap-2">
-                                <span class="text-xs font-medium text-slate-500 uppercase tracking-wide">Period</span>
-                                <div class="flex rounded-lg bg-white border border-slate-200 p-0.5 shadow-sm">
+                            <!-- Time Range Filter -->
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs font-medium text-slate-400 uppercase tracking-wider hidden sm:inline">From</span>
+                                <div class="inline-flex rounded-lg bg-white border border-slate-200 p-1 shadow-sm">
                                     <a href="{{ build_recent_url(new_page=1, new_days=7) }}" 
-                                       class="flex-1 sm:flex-none px-3 sm:px-3 py-2 sm:py-1.5 text-xs font-medium rounded-md transition-all text-center {{ 'bg-slate-700 text-white shadow-sm' if days == 7 else 'text-slate-600 hover:text-slate-900 hover:bg-slate-50' }}">
-                                        7d
+                                       class="px-3 py-1.5 text-xs font-medium rounded-md transition-all {{ 'bg-slate-700 text-white shadow-sm' if days == 7 else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}">
+                                        7 days
                                     </a>
                                     <a href="{{ build_recent_url(new_page=1, new_days=15) }}" 
-                                       class="flex-1 sm:flex-none px-3 sm:px-3 py-2 sm:py-1.5 text-xs font-medium rounded-md transition-all text-center {{ 'bg-slate-700 text-white shadow-sm' if days == 15 else 'text-slate-600 hover:text-slate-900 hover:bg-slate-50' }}">
-                                        15d
+                                       class="px-3 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-slate-700 text-white shadow-sm' if days == 15 else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}">
+                                        15 days
                                     </a>
                                     <a href="{{ build_recent_url(new_page=1, new_days=30) }}" 
-                                       class="flex-1 sm:flex-none px-3 sm:px-3 py-2 sm:py-1.5 text-xs font-medium rounded-md transition-all text-center {{ 'bg-slate-700 text-white shadow-sm' if days == 30 else 'text-slate-600 hover:text-slate-900 hover:bg-slate-50' }}">
-                                        30d
+                                       class="px-3 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-slate-700 text-white shadow-sm' if days == 30 else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}">
+                                        30 days
                                     </a>
                                     <a href="{{ build_recent_url(new_page=1, new_days=90) }}" 
-                                       class="flex-1 sm:flex-none px-3 sm:px-3 py-2 sm:py-1.5 text-xs font-medium rounded-md transition-all text-center {{ 'bg-slate-700 text-white shadow-sm' if days == 90 else 'text-slate-600 hover:text-slate-900 hover:bg-slate-50' }}">
-                                        90d
+                                       class="px-3 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-slate-700 text-white shadow-sm' if days == 90 else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}">
+                                        90 days
                                     </a>
                                     <a href="{{ build_recent_url(new_page=1, new_days=365) }}" 
-                                       class="flex-1 sm:flex-none px-3 sm:px-3 py-2 sm:py-1.5 text-xs font-medium rounded-md transition-all text-center {{ 'bg-slate-700 text-white shadow-sm' if days == 365 else 'text-slate-600 hover:text-slate-900 hover:bg-slate-50' }}">
-                                        1y
+                                       class="px-3 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-slate-700 text-white shadow-sm' if days == 365 else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}">
+                                        1 year
                                     </a>
                                 </div>
                             </div>
                             
-                            <!-- Rows dropdown -->
-                            <div class="flex items-center border border-slate-200 rounded-lg bg-white shadow-sm">
-                                <div class="pl-3 pr-2 py-2 border-r border-slate-200">
-                                    <svg class="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
-                                    </svg>
+                            <!-- Per Page Filter -->
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs font-medium text-slate-400 uppercase tracking-wider hidden sm:inline">Show</span>
+                                <div class="inline-flex rounded-lg bg-white border border-slate-200 p-1 shadow-sm">
+                                    <a href="{{ build_recent_url(new_page=1, new_limit=25) }}" 
+                                       class="px-3 py-1.5 text-xs font-medium rounded-md transition-all {{ 'bg-slate-700 text-white shadow-sm' if limit == 25 else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}">
+                                        25
+                                    </a>
+                                    <a href="{{ build_recent_url(new_page=1, new_limit=100) }}" 
+                                       class="px-3 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-slate-700 text-white shadow-sm' if limit == 100 else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}">
+                                        100
+                                    </a>
+                                    <a href="{{ build_recent_url(new_page=1, new_limit=500) }}" 
+                                       class="px-3 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-slate-700 text-white shadow-sm' if limit == 500 else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}">
+                                        500
+                                    </a>
                                 </div>
-                                <select onchange="window.location.href=this.value" class="pl-2 pr-8 py-2 text-sm text-slate-600 bg-transparent border-0 focus:outline-none focus:ring-0 cursor-pointer appearance-none" style="background-image: url('data:image/svg+xml;charset=UTF-8,%3csvg xmlns=%27http://www.w3.org/2000/svg%27 fill=%27none%27 viewBox=%270 0 24 24%27 stroke=%27%236b7280%27%3e%3cpath stroke-linecap=%27round%27 stroke-linejoin=%27round%27 stroke-width=%272%27 d=%27M19 9l-7 7-7-7%27/%3e%3c/svg%3e'); background-repeat: no-repeat; background-position: right 0.5rem center; background-size: 1rem;">
-                                    <option value="{{ build_recent_url(new_page=1, new_limit=25) }}" {% if limit == 25 %}selected{% endif %}>25 rows</option>
-                                    <option value="{{ build_recent_url(new_page=1, new_limit=100) }}" {% if limit == 100 %}selected{% endif %}>100 rows</option>
-                                    <option value="{{ build_recent_url(new_page=1, new_limit=500) }}" {% if limit == 500 %}selected{% endif %}>500 rows</option>
-                                    <option value="{{ build_recent_url(new_page=1, new_limit=1000) }}" {% if limit == 1000 %}selected{% endif %}>1000 rows</option>
-                                </select>
+                                <span class="text-xs text-slate-400 hidden sm:inline">per page</span>
                             </div>
                             
-                            <!-- Results count -->
-                            <div class="sm:ml-auto text-sm text-slate-500 pt-1 sm:pt-0">
-                                <span class="font-semibold text-slate-700">{{ total_events }}</span> changes found
+                            <!-- Results count - pushed right -->
+                            <div class="ml-auto pl-4 flex items-center gap-3">
+                                <span class="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">
+                                    {{ total_events }} changes
+                                </span>
                                 {% if total_pages > 1 %}
-                                <span class="text-slate-400 ml-1">(page {{ page }} of {{ total_pages }})</span>
+                                <span class="text-xs text-slate-400">Page {{ page }} of {{ total_pages }}</span>
                                 {% endif %}
                             </div>
                         </div>

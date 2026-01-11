@@ -708,12 +708,12 @@ test.describe('Recent Page Pagination', () => {
     await page.goto('/recent');
     await page.waitForLoadState('domcontentloaded');
     // Check for pagination info - "Page X of Y" text, "Showing X to Y of Z" text, page links,
-    // or "changes found" text (for single-page results)
+    // or "changes" text (for results count)
     const hasPageText = await page.getByText(/page \d+ of \d+/i).first().isVisible();
     const hasShowingText = await page.getByText(/showing \d+ to \d+ of/i).first().isVisible();
     const hasPageLinks = await page.locator('a[href*="page="]').first().isVisible();
-    const hasChangesFound = await page.getByText(/\d+.*changes found/i).first().isVisible();
-    expect(hasPageText || hasShowingText || hasPageLinks || hasChangesFound).toBe(true);
+    const hasChangesText = await page.getByText(/\d+\s*changes/i).first().isVisible();
+    expect(hasPageText || hasShowingText || hasPageLinks || hasChangesText).toBe(true);
   });
 
   test('should have rows dropdown with correct options', async ({ page }) => {

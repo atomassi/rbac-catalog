@@ -39,7 +39,7 @@ from azurerbac.telemetry import (
 logger = logging.getLogger("azurerbac.worker")
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class JobSpec:
     name: str
     enabled: bool

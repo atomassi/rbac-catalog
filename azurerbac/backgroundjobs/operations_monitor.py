@@ -15,6 +15,17 @@ from azurerbac.core import Operation, OperationScanStatus, utcnow
 
 logger = logging.getLogger(__name__)
 
+# Fields to sync between OperationData and Operation
+_OPERATION_FIELDS = (
+    "display_name",
+    "description",
+    "origin",
+    "provider_display_name",
+    "resource_type",
+    "resource_type_display_name",
+    "is_data_action",
+)
+
 
 def _deduplicate_operations(
     operations: list[OperationData],
@@ -31,39 +42,15 @@ def _deduplicate_operations(
     return ops_by_name, duplicates
 
 
-def _try_update(existing_op: Operation, op_data: OperationData, now: dt.datetime) -> bool:
-    """Update operation fields if they changed. Returns True if changed."""
+def _sync_operation_fields(existing_op: Operation, op_data: OperationData) -> bool:
+    """Sync operation fields from source data. Returns True if any changed."""
     changed = False
-
-    if existing_op.display_name != op_data.display_name:
-        existing_op.display_name = op_data.display_name
-        changed = True
-
-    if existing_op.description != op_data.description:
-        existing_op.description = op_data.description
-        changed = True
-
-    if existing_op.origin != op_data.origin:
-        existing_op.origin = op_data.origin
-        changed = True
-
-    if existing_op.provider_display_name != op_data.provider_display_name:
-        existing_op.provider_display_name = op_data.provider_display_name
-        changed = True
-
-    if existing_op.resource_type != op_data.resource_type:
-        existing_op.resource_type = op_data.resource_type
-        changed = True
-
-    if existing_op.resource_type_display_name != op_data.resource_type_display_name:
-        existing_op.resource_type_display_name = op_data.resource_type_display_name
-        changed = True
-
-    if existing_op.is_data_action != op_data.is_data_action:
-        existing_op.is_data_action = op_data.is_data_action
-        changed = True
-
-    existing_op.last_seen_at = now
+    for field in _OPERATION_FIELDS:
+        old_val = getattr(existing_op, field)
+        new_val = getattr(op_data, field)
+        if old_val != new_val:
+            setattr(existing_op, field, new_val)
+            changed = True
     return changed
 
 
@@ -117,8 +104,10 @@ async def apply_operations_scan(
         if existing_op is None:
             session.add(_create_operation(op_data, now))
             created += 1
-        elif _try_update(existing_op, op_data, now):
-            updated += 1
+        else:
+            if _sync_operation_fields(existing_op, op_data):
+                updated += 1
+            existing_op.last_seen_at = now
 
     # Count unique providers
     providers = {

@@ -46,7 +46,7 @@ class BaseTimer(ABC):
         self,
         exc_type: type[BaseException] | None,
         exc_val: BaseException | None,
-        exc_tb: TracebackType | None,
+        _exc_tb: TracebackType | None,
     ) -> None:
         self._on_exit(time.time() - self._start_time, exc_type)
 
@@ -58,7 +58,7 @@ class BaseTimer(ABC):
         self,
         exc_type: type[BaseException] | None,
         exc_val: BaseException | None,
-        exc_tb: TracebackType | None,
+        _exc_tb: TracebackType | None,
     ) -> None:
         self._on_exit(time.time() - self._start_time, exc_type)
 

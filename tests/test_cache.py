@@ -456,7 +456,6 @@ class TestPreloadCacheIntegration:
         mock_service = MagicMock()
         mock_container = MagicMock(spec=CacheContainer)
         mock_container.cache = CacheData()
-        mock_container._preloaded = False
         mock_service.container = mock_container
         mock_service.rebuild_in_memory = AsyncMock(return_value=True)
 

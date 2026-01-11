@@ -25,6 +25,7 @@ from azurerbac.cache.models import (
 )
 from azurerbac.core.constants import RoleStatus
 from azurerbac.core.patterns import is_wildcard_pattern, matches_pattern
+from azurerbac.core.utils import truncate_microseconds
 
 if TYPE_CHECKING:
     pass
@@ -468,8 +469,8 @@ async def build_from_db(session: AsyncSession) -> CacheData:
         metadata=metadata,
         roles_by_id=roles_by_id,
         all_change_events=all_change_events,
-        last_scan=last_scan.replace(microsecond=0) if last_scan else None,
-        first_scan=first_scan.replace(microsecond=0) if first_scan else None,
+        last_scan=truncate_microseconds(last_scan),
+        first_scan=truncate_microseconds(first_scan),
     )
 
     logger.info(

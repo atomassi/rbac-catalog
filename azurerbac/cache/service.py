@@ -118,7 +118,6 @@ class CacheService:
         """Swap cache data into the in-memory container."""
         self._container.swap(cache_data)
         self._container.loaded_version = self._backend.get_version()
-        self._container.is_preloaded = True
         logger.debug("Cache swapped into memory")
 
     async def save_to_backend(self, cache_data: CacheData) -> bool:
@@ -291,7 +290,6 @@ class CacheService:
             # Swap in the loaded cache
             self._container.swap(cached)
             self._container.loaded_version = current_version
-            self._container.is_preloaded = True
 
             elapsed = time.time() - start_time
             logger.info(

@@ -46,7 +46,6 @@ class CacheContainer:
         "_loaded_version",
         "_misc_cache",
         "_pending_reload",
-        "_preloaded",
         "_reload_lock",
         "_role_pages",
     )
@@ -55,22 +54,13 @@ class CacheContainer:
         self._cache: CacheData = CacheData()
         self._role_pages: dict[str, list] = {}  # Paginated role listings
         self._misc_cache: dict[str, Any] = {}  # Dynamic key-value cache
-        self._preloaded = False
-        self._loaded_version: str | None = None  # Track loaded version
-        self._reload_lock = asyncio.Lock()  # Async lock for reload coordination
-        self._pending_reload = False  # Flag set by file watcher
+        self._loaded_version: str | None = None
+        self._reload_lock = asyncio.Lock()
+        self._pending_reload = False
 
     # ─────────────────────────────────────────────────────────────────────────
     # Public accessors for internal state
     # ─────────────────────────────────────────────────────────────────────────
-
-    @property
-    def is_preloaded(self) -> bool:
-        return self._preloaded
-
-    @is_preloaded.setter
-    def is_preloaded(self, value: bool) -> None:
-        self._preloaded = value
 
     @property
     def loaded_version(self) -> str | None:
@@ -231,17 +221,7 @@ class CacheContainer:
                 source = list(cache.ops_by_name_lower.values())
             matching = [op for op in source if fnmatch.fnmatch(op.name.lower(), q_lower)]
         else:
-            matching = [
-                op
-                for op in cache.ops_by_name_lower.values()
-                if (
-                    q_lower in op.name.lower()
-                    or q_lower in (op.display_name or "").lower()
-                    or q_lower in (op.description or "").lower()
-                    or q_lower in (op.provider_display_name or "").lower()
-                    or q_lower in (op.resource_type_display_name or "").lower()
-                )
-            ]
+            matching = [op for op in cache.ops_by_name_lower.values() if op.matches_search(q_lower)]
 
         matching.sort(key=lambda x: x.name)
         return matching[:limit]
@@ -264,10 +244,9 @@ class CacheContainer:
         )
 
     def reset(self) -> None:
-        """Reset in-memory cache to empty state. Used for testing."""
+        """Reset in-memory cache to empty state."""
         self._cache = CacheData()
         self._role_pages.clear()
         self._misc_cache.clear()
-        self._preloaded = False
         self._loaded_version = None
         self._pending_reload = False

@@ -8,13 +8,318 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+from enum import StrEnum
 from typing import TYPE_CHECKING
 
+from azurerbac.core.enums import SortOrder
 from azurerbac.core.types import JsonDict
 
 if TYPE_CHECKING:
-    from azurerbac.azure.models import RoleDefinition
+    from azurerbac.azure.models import OperationData, Permission, RoleDefinition
+    from azurerbac.cache import CacheContainer
     from azurerbac.cache.models import CachedChangeEvent, CachedRole
+
+# Note: CacheContainer is used in RolePermissionAnalyzer._cache property return type
+
+
+# =============================================================================
+# Operation Search/Filter Types
+# =============================================================================
+
+
+class OperationSortField(StrEnum):
+    """Valid sort fields for operation listings."""
+
+    NAME = "name"
+    PROVIDER = "provider"
+    TYPE = "type"
+    ROLES = "roles"
+
+
+class DataActionFilter(StrEnum):
+    """Filter for data vs control plane actions.
+
+    Maps query string values to boolean filters:
+    - "1" -> True (data plane only)
+    - "0" -> False (control plane only)
+    - None/other -> all actions
+    """
+
+    DATA = "1"
+    CONTROL = "0"
+
+    @classmethod
+    def parse(cls, value: str | None) -> bool | None:
+        """Parse a query string value to a boolean filter.
+
+        Args:
+            value: Query string value ("1", "0", or None)
+
+        Returns:
+            True for data actions, False for control actions, None for all.
+        """
+        if value == cls.DATA:
+            return True
+        if value == cls.CONTROL:
+            return False
+        return None
+
+
+@dataclass(frozen=True, slots=True)
+class OperationSearchParams:
+    """Parameters for operation search and filtering.
+
+    Encapsulates all filter/sort parameters that often travel together.
+    """
+
+    query: str | None = None
+    is_data_action: bool | None = None  # None = all, True = data, False = control
+    provider: str | None = None
+    sort: str | OperationSortField = OperationSortField.NAME
+    order: str | SortOrder = SortOrder.ASC
+
+
+class RawPermissions:
+    """Raw permission patterns extracted from a role definition.
+
+    Provides methods to compute effective permissions and check for wildcards.
+    """
+
+    __slots__ = ("actions", "data_actions", "not_actions", "not_data_actions")
+
+    def __init__(
+        self,
+        actions: list[str],
+        not_actions: list[str],
+        data_actions: list[str],
+        not_data_actions: list[str],
+    ) -> None:
+        self.actions = actions
+        self.not_actions = not_actions
+        self.data_actions = data_actions
+        self.not_data_actions = not_data_actions
+
+    @classmethod
+    def from_permissions(cls, permissions: list[Permission]) -> RawPermissions:
+        """Extract raw permission patterns from role permissions."""
+        actions: list[str] = []
+        not_actions: list[str] = []
+        data_actions: list[str] = []
+        not_data_actions: list[str] = []
+        for perm in permissions:
+            actions.extend(perm.actions)
+            not_actions.extend(perm.not_actions)
+            data_actions.extend(perm.data_actions)
+            not_data_actions.extend(perm.not_data_actions)
+        return cls(actions, not_actions, data_actions, not_data_actions)
+
+    @property
+    def all_patterns(self) -> list[str]:
+        """Get all patterns (actions + not_actions + data + not_data)."""
+        return self.actions + self.not_actions + self.data_actions + self.not_data_actions
+
+    @property
+    def has_wildcards(self) -> bool:
+        """Check if any patterns contain wildcards."""
+        from azurerbac.core.patterns import is_wildcard_pattern
+
+        return any(is_wildcard_pattern(p) or p == "*" for p in self.all_patterns)
+
+    @property
+    def has_defined_permissions(self) -> bool:
+        """Check if role has any defined permissions (actions or data_actions)."""
+        return bool(self.actions or self.data_actions)
+
+    def compute_effective(
+        self, control_ops: set[str], data_ops: set[str]
+    ) -> tuple[set[str], set[str]]:
+        """Compute effective permissions after applying exclusions."""
+        from azurerbac.core.patterns import expand_patterns_to_operations
+
+        control_granted = expand_patterns_to_operations(self.actions, control_ops)
+        control_excluded = expand_patterns_to_operations(self.not_actions, control_ops)
+        control_effective = control_granted - control_excluded
+
+        data_granted = expand_patterns_to_operations(self.data_actions, data_ops)
+        data_excluded = expand_patterns_to_operations(self.not_data_actions, data_ops)
+        data_effective = data_granted - data_excluded
+
+        return control_effective, data_effective
+
+    def to_effective_permissions(
+        self,
+        control_effective: set[str],
+        data_effective: set[str],
+        *,
+        has_conditions: bool,
+    ) -> RoleEffectivePermissions:
+        """Build RoleEffectivePermissions from computed effective sets.
+
+        Args:
+            control_effective: Set of effective control plane operation names.
+            data_effective: Set of effective data plane operation names.
+            has_conditions: Whether the role has ABAC conditions.
+
+        Returns:
+            RoleEffectivePermissions with all metadata populated.
+        """
+        has_resolved = bool(control_effective or data_effective)
+        has_unresolved = self.has_defined_permissions and not has_resolved
+
+        return RoleEffectivePermissions(
+            control_plane_actions=sorted(control_effective),
+            data_plane_actions=sorted(data_effective),
+            control_plane_count=len(control_effective),
+            data_plane_count=len(data_effective),
+            has_conditions=has_conditions,
+            has_wildcards=self.has_wildcards,
+            has_unresolved_permissions=has_unresolved,
+            raw_actions=self.actions,
+            raw_not_actions=self.not_actions,
+            raw_data_actions=self.data_actions,
+            raw_not_data_actions=self.not_data_actions,
+        )
+
+
+class RolePermissionAnalyzer:
+    """Analyzes a role's permissions using cache-backed operation data.
+
+    Encapsulates the logic for computing effective permissions and
+    finding pattern matches. Uses the global cache singleton by default,
+    but accepts an optional cache parameter for testing.
+
+    Example:
+        analyzer = RolePermissionAnalyzer(role)
+        effective = analyzer.get_effective_permissions(all_operations)
+        match = analyzer.find_matching_pattern("Microsoft.Storage/read", is_data_action=False)
+
+        # For testing with a mock cache:
+        analyzer = RolePermissionAnalyzer(role, cache=mock_cache)
+    """
+
+    __slots__ = ("_cache_override", "_raw_permissions", "_role")
+
+    def __init__(
+        self,
+        role: RoleDefinition,
+        *,
+        cache: CacheContainer | None = None,
+    ) -> None:
+        """Initialize the analyzer.
+
+        Args:
+            role: The RoleDefinition to analyze.
+            cache: Optional cache container. If None, uses the global singleton.
+        """
+        self._role = role
+        self._cache_override = cache
+        self._raw_permissions = RawPermissions.from_permissions(role.properties.permissions)
+
+    @property
+    def _cache(self) -> CacheContainer:
+        """Get the cache container (override or global singleton)."""
+        if self._cache_override is not None:
+            return self._cache_override
+        from azurerbac.cache import get_cache_service
+
+        return get_cache_service().container
+
+    @property
+    def role_id(self) -> str:
+        """Get the role's unique identifier."""
+        return self._role.name
+
+    @property
+    def permissions(self) -> list[Permission]:
+        """Get the role's permission list."""
+        return self._role.properties.permissions
+
+    @property
+    def raw(self) -> RawPermissions:
+        """Get the extracted raw permission patterns."""
+        return self._raw_permissions
+
+    @property
+    def has_conditions(self) -> bool:
+        """Check if any permissions have ABAC conditions."""
+        return any(perm.condition for perm in self.permissions)
+
+    def get_cached_coverage(self) -> tuple[set[str], set[str]] | None:
+        """Get pre-computed coverage from cache if available."""
+        return self._cache.get_role_coverage(self.role_id)
+
+    def compute_coverage(self, all_operations: list[OperationData]) -> tuple[set[str], set[str]]:
+        """Compute coverage manually from operation list.
+
+        Args:
+            all_operations: List of all known Azure operations.
+
+        Returns:
+            Tuple of (control_effective, data_effective) operation sets.
+        """
+        all_control_ops = {op.name for op in all_operations if not op.is_data_action}
+        all_data_ops = {op.name for op in all_operations if op.is_data_action}
+        return self.raw.compute_effective(all_control_ops, all_data_ops)
+
+    def get_effective_permissions(
+        self, all_operations: list[OperationData]
+    ) -> RoleEffectivePermissions:
+        """Compute the effective permissions for this role.
+
+        Uses cached coverage when available, falls back to manual computation.
+
+        Args:
+            all_operations: List of all known Azure operations.
+
+        Returns:
+            RoleEffectivePermissions with control/data plane actions and metadata.
+        """
+        # Try cache first
+        if cached := self.get_cached_coverage():
+            control_effective, data_effective = cached
+        else:
+            control_effective, data_effective = self.compute_coverage(all_operations)
+
+        return self.raw.to_effective_permissions(
+            control_effective,
+            data_effective,
+            has_conditions=self.has_conditions,
+        )
+
+    def find_matching_pattern(
+        self, operation_name: str, *, is_data_action: bool
+    ) -> PatternMatchResult:
+        """Find the pattern that grants an operation and check for conditions.
+
+        Args:
+            operation_name: The operation name to match.
+            is_data_action: Whether this is a data plane action.
+
+        Returns:
+            PatternMatchResult with matched pattern and condition info.
+        """
+        from azurerbac.core.patterns import matches_pattern
+
+        operation_lower = operation_name.lower()
+
+        for perm in self.permissions:
+            actions = perm.data_actions if is_data_action else perm.actions
+            for pattern in actions:
+                if matches_pattern(operation_name, pattern):
+                    condition = perm.condition or ""
+                    has_condition = bool(condition and operation_lower in condition.lower())
+                    return PatternMatchResult(
+                        matched_pattern=pattern,
+                        has_condition=has_condition,
+                        condition_text=condition if has_condition else None,
+                    )
+
+        return PatternMatchResult(matched_pattern=None, has_condition=False, condition_text=None)
+
+
+# =============================================================================
+# Pagination Models
+# =============================================================================
 
 
 @dataclass(frozen=True, slots=True)

@@ -2,21 +2,22 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from enum import StrEnum
+import logging
 from typing import TYPE_CHECKING, Any, Final
 
-from azurerbac.azure.models import OperationData, Permission, RoleDefinition
+from azurerbac.azure.models import OperationData, RoleDefinition
 from azurerbac.cache.models import CachedChangeEvent, CachedRole
 from azurerbac.core.constants import DEFAULT_ROLE_TYPE
 from azurerbac.core.enums import SortOrder
-from azurerbac.core.patterns import is_wildcard_pattern, matches_pattern
+from azurerbac.core.utils import truncate_microseconds
 from azurerbac.web.services.models import (
     EnrichedChangeEvent,
-    PatternMatchResult,
+    OperationSearchParams,
+    OperationSortField,
     RoleAllowingOperation,
     RoleDetailResult,
     RoleEffectivePermissions,
+    RolePermissionAnalyzer,
 )
 
 if TYPE_CHECKING:
@@ -26,75 +27,22 @@ if TYPE_CHECKING:
     from azurerbac.cache import CacheContainer
     from azurerbac.core.models import Role, RoleHistory
 
+logger = logging.getLogger(__name__)
+
+
 # =============================================================================
-# Operation Search/Filter Types
+# Operation Search Helpers
 # =============================================================================
-
-
-class OperationSortField(StrEnum):
-    """Valid sort fields for operation listings."""
-
-    NAME = "name"
-    PROVIDER = "provider"
-    TYPE = "type"
-    ROLES = "roles"
-
-
-class DataActionFilter(StrEnum):
-    """Filter for data vs control plane actions.
-
-    Maps query string values to boolean filters:
-    - "1" -> True (data plane only)
-    - "0" -> False (control plane only)
-    - None/other -> all actions
-    """
-
-    DATA = "1"
-    CONTROL = "0"
-
-    @classmethod
-    def parse(cls, value: str | None) -> bool | None:
-        """Parse a query string value to a boolean filter.
-
-        Args:
-            value: Query string value ("1", "0", or None)
-
-        Returns:
-            True for data actions, False for control actions, None for all.
-        """
-        if value == cls.DATA:
-            return True
-        if value == cls.CONTROL:
-            return False
-        return None
-
-
-@dataclass(frozen=True, slots=True)
-class OperationSearchParams:
-    """Parameters for operation search and filtering.
-
-    Encapsulates all filter/sort parameters that often travel together.
-    """
-
-    query: str | None = None
-    is_data_action: bool | None = None  # None = all, True = data, False = control
-    provider: str | None = None
-    sort: str | OperationSortField = OperationSortField.NAME
-    order: str | SortOrder = SortOrder.ASC
 
 
 def operation_matches_search(op: OperationData, query_lower: str) -> bool:
     """Check if an OperationData matches a text search query.
 
     Searches across name, display_name, description, provider, and resource type.
+
+    Note: This delegates to OperationData.matches_search() for consistency.
     """
-    return (
-        query_lower in op.name.lower()
-        or query_lower in (op.display_name or "").lower()
-        or query_lower in (op.description or "").lower()
-        or query_lower in (op.provider_display_name or "").lower()
-        or query_lower in (op.resource_type_display_name or "").lower()
-    )
+    return op.matches_search(query_lower)
 
 
 def filter_operations(
@@ -140,7 +88,7 @@ def sort_operations(
     operations: list[OperationData],
     sort: str | OperationSortField,
     order: str | SortOrder,
-    cache: CacheContainer,
+    cache: CacheContainer | None = None,
 ) -> list[tuple[OperationData, int]]:
     """Sort operations based on sort field and order.
 
@@ -148,13 +96,17 @@ def sort_operations(
         operations: List of OperationData objects to sort
         sort: Sort field - OperationSortField enum or string
         order: Sort order - SortOrder enum or string
-        cache: The cache container instance
+        cache: Optional cache container. If None, uses global singleton.
 
     Returns:
         List of (operation, role_count) tuples, sorted as requested
     """
+    from azurerbac.cache import get_cache_service
+
+    cache_resolved = cache if cache is not None else get_cache_service().container
+
     # Build tuples with role count for sorting (needed for "roles" sort and enrichment)
-    ops_with_count = [(op, cache.get_operation_role_count(op.name)) for op in operations]
+    ops_with_count = [(op, cache_resolved.get_operation_role_count(op.name)) for op in operations]
 
     if sort == OperationSortField.ROLES:
         # Sort by role count
@@ -171,182 +123,25 @@ def sort_operations(
 # =============================================================================
 
 
-def _expand_patterns_to_operations(patterns: list[str], all_ops: set[str]) -> set[str]:
-    """Expand permission patterns (including wildcards) to actual operations.
-
-    Args:
-        patterns: List of permission patterns (may include wildcards like *)
-        all_ops: Set of all known operation names to match against
-
-    Returns:
-        Set of operation names that match the patterns
-    """
-    result: set[str] = set()
-    for pattern in patterns:
-        if pattern == "*":
-            result.update(all_ops)
-        elif is_wildcard_pattern(pattern):
-            for op in all_ops:
-                if matches_pattern(op, pattern):
-                    result.add(op)
-        elif pattern in all_ops:
-            result.add(pattern)
-    return result
-
-
-@dataclass(frozen=True, slots=True)
-class RawPermissions:
-    """Raw permission patterns extracted from a role definition.
-
-    Provides methods to compute effective permissions and check for wildcards.
-    """
-
-    actions: list[str]
-    not_actions: list[str]
-    data_actions: list[str]
-    not_data_actions: list[str]
-
-    @classmethod
-    def from_permissions(cls, permissions: list[Permission]) -> RawPermissions:
-        """Extract raw permission patterns from role permissions.
-
-        Args:
-            permissions: List of Permission objects from role definition
-
-        Returns:
-            RawPermissions containing all action patterns
-        """
-        actions: list[str] = []
-        not_actions: list[str] = []
-        data_actions: list[str] = []
-        not_data_actions: list[str] = []
-        for perm in permissions:
-            actions.extend(perm.actions)
-            not_actions.extend(perm.not_actions)
-            data_actions.extend(perm.data_actions)
-            not_data_actions.extend(perm.not_data_actions)
-        return cls(
-            actions=actions,
-            not_actions=not_actions,
-            data_actions=data_actions,
-            not_data_actions=not_data_actions,
-        )
-
-    @property
-    def all_patterns(self) -> list[str]:
-        """Get all patterns (actions + not_actions + data + not_data)."""
-        return self.actions + self.not_actions + self.data_actions + self.not_data_actions
-
-    @property
-    def has_wildcards(self) -> bool:
-        """Check if any patterns contain wildcards."""
-        return any(is_wildcard_pattern(p) or p == "*" for p in self.all_patterns)
-
-    @property
-    def has_defined_permissions(self) -> bool:
-        """Check if role has any defined permissions (actions or data_actions)."""
-        return bool(self.actions or self.data_actions)
-
-    def compute_effective(
-        self, control_ops: set[str], data_ops: set[str]
-    ) -> tuple[set[str], set[str]]:
-        """Compute effective permissions after applying exclusions.
-
-        Args:
-            control_ops: Set of all control plane operation names
-            data_ops: Set of all data plane operation names
-
-        Returns:
-            Tuple of (control_effective, data_effective) operation sets
-        """
-        control_granted = _expand_patterns_to_operations(self.actions, control_ops)
-        control_excluded = _expand_patterns_to_operations(self.not_actions, control_ops)
-        control_effective = control_granted - control_excluded
-
-        data_granted = _expand_patterns_to_operations(self.data_actions, data_ops)
-        data_excluded = _expand_patterns_to_operations(self.not_data_actions, data_ops)
-        data_effective = data_granted - data_excluded
-
-        return control_effective, data_effective
-
-
 def compute_role_effective_permissions(
-    role: RoleDefinition, all_operations: list[OperationData], cache: CacheContainer
+    role: RoleDefinition,
+    all_operations: list[OperationData],
+    cache: CacheContainer | None = None,
 ) -> RoleEffectivePermissions:
     """Compute the effective permissions for a role.
 
-    Applies the same logic as the recommender:
-    - actions - notActions for control plane
-    - dataActions - notDataActions for data plane
+    Delegates to RolePermissionAnalyzer for the actual computation.
 
     Args:
         role: The RoleDefinition Pydantic model.
         all_operations: List of all known Azure operations.
-        cache: The cache container instance.
+        cache: Optional cache container. If None, uses global singleton.
 
     Returns:
         RoleEffectivePermissions with control/data plane actions and metadata.
     """
-    role_id = role.name
-    permissions = role.properties.permissions
-
-    # Extract raw patterns from the role using factory method
-    raw = RawPermissions.from_permissions(permissions)
-
-    # Check for ABAC conditions
-    has_conditions = any(perm.condition for perm in permissions)
-
-    # Try to get from cache first (already computed during startup)
-    if cached_coverage := cache.get_role_coverage(role_id):
-        control_effective, data_effective = cached_coverage
-    else:
-        # Fallback: compute manually (shouldn't happen if precompute_all_caches ran)
-        all_control_ops = {op.name for op in all_operations if not op.is_data_action}
-        all_data_ops = {op.name for op in all_operations if op.is_data_action}
-        control_effective, data_effective = raw.compute_effective(all_control_ops, all_data_ops)
-
-    # Detect if role has defined permissions but none could be resolved
-    has_resolved_operations = bool(control_effective or data_effective)
-    has_unresolved_permissions = raw.has_defined_permissions and not has_resolved_operations
-
-    return RoleEffectivePermissions(
-        control_plane_actions=sorted(control_effective),
-        data_plane_actions=sorted(data_effective),
-        control_plane_count=len(control_effective),
-        data_plane_count=len(data_effective),
-        has_conditions=has_conditions,
-        has_wildcards=raw.has_wildcards,
-        has_unresolved_permissions=has_unresolved_permissions,
-        raw_actions=raw.actions,
-        raw_not_actions=raw.not_actions,
-        raw_data_actions=raw.data_actions,
-        raw_not_data_actions=raw.not_data_actions,
-    )
-
-
-def _find_matching_pattern_and_condition(
-    operation_name: str,
-    operation_lower: str,
-    is_data_action: bool,
-    permissions: list[Permission],
-) -> PatternMatchResult:
-    """Find the pattern that matches the operation and check for conditions.
-
-    Returns:
-        PatternMatchResult with matched pattern, condition flag, and condition text.
-    """
-    for perm in permissions:
-        actions = perm.data_actions if is_data_action else perm.actions
-        for pattern in actions:
-            if matches_pattern(operation_name, pattern):
-                condition = perm.condition or ""
-                has_condition = bool(condition and operation_lower in condition.lower())
-                return PatternMatchResult(
-                    matched_pattern=pattern,
-                    has_condition=has_condition,
-                    condition_text=condition if has_condition else None,
-                )
-    return PatternMatchResult(matched_pattern=None, has_condition=False, condition_text=None)
+    analyzer = RolePermissionAnalyzer(role, cache=cache)
+    return analyzer.get_effective_permissions(all_operations)
 
 
 def _operation_in_set(operation_lower: str, operation_set: set[str]) -> bool:
@@ -354,8 +149,19 @@ def _operation_in_set(operation_lower: str, operation_set: set[str]) -> bool:
     return any(op.lower() == operation_lower for op in operation_set)
 
 
+def _get_cache(cache: CacheContainer | None) -> CacheContainer:
+    """Get the cache container (provided or global singleton)."""
+    if cache is not None:
+        return cache
+    from azurerbac.cache import get_cache_service
+
+    return get_cache_service().container
+
+
 def get_roles_allowing_operation(
-    operation_name: str, is_data_action: bool, cache: CacheContainer
+    operation_name: str,
+    is_data_action: bool,
+    cache: CacheContainer | None = None,
 ) -> list[RoleAllowingOperation]:
     """Find all roles that allow a specific operation.
 
@@ -366,25 +172,27 @@ def get_roles_allowing_operation(
     Args:
         operation_name: The name of the operation to search for.
         is_data_action: Whether this is a data action (vs control plane action).
-        cache: The cache container instance.
+        cache: Optional cache container. If None, uses global singleton.
 
     Returns:
         List of RoleAllowingOperation with role details and matched pattern.
     """
+    cache_resolved = _get_cache(cache)
+
     # Check cache first
     cache_key = f"roles_allowing_op:{operation_name.lower()}:{is_data_action}"
-    if (cached := cache.get(cache_key)) is not None:
+    if (cached := cache_resolved.get(cache_key)) is not None:
         return cached
 
-    if not (all_roles := cache.get_all_roles()):
+    if not (all_roles := cache_resolved.get_all_roles()):
         return []
 
     allowing_roles: list[RoleAllowingOperation] = []
     operation_lower = operation_name.lower()
 
     for role in all_roles:
-        role_id = role.name
-        cached_coverage = cache.get_role_coverage(role_id)
+        analyzer = RolePermissionAnalyzer(role, cache=cache_resolved)
+        cached_coverage = analyzer.get_cached_coverage()
         if not cached_coverage:
             continue
 
@@ -394,14 +202,11 @@ def get_roles_allowing_operation(
         if not _operation_in_set(operation_lower, operation_set):
             continue
 
-        permissions = role.properties.permissions
-        match_result = _find_matching_pattern_and_condition(
-            operation_name, operation_lower, is_data_action, permissions
-        )
+        match_result = analyzer.find_matching_pattern(operation_name, is_data_action=is_data_action)
 
         allowing_roles.append(
             RoleAllowingOperation.from_match(
-                role_id=role_id,
+                role_id=analyzer.role_id,
                 role_name=role.properties.role_name,
                 role_type=role.properties.type or DEFAULT_ROLE_TYPE,
                 control_count=len(control_effective),
@@ -413,7 +218,7 @@ def get_roles_allowing_operation(
     allowing_roles.sort(key=lambda x: x.role_name.lower())
 
     # Cache result
-    cache.set(cache_key, allowing_roles)
+    cache_resolved.set(cache_key, allowing_roles)
 
     return allowing_roles
 
@@ -422,44 +227,46 @@ def get_roles_allowing_operation(
 # Role Detail Helpers
 # =============================================================================
 async def get_role_from_cache_or_db(
-    cache: CacheContainer,
     session_local: async_sessionmaker,
     role_snapshot_model: type[Role],
     role_history_model: type[RoleHistory],
     role_id: str,
     max_events: int = 200,
+    *,
+    cache: CacheContainer | None = None,
 ) -> RoleDetailResult:
     """Get role data from cache or fallback to database.
 
+    Uses the global cache singleton. Falls back to database on cache miss.
+
     Args:
-        cache: The cache container instance.
         session_local: Async session factory.
         role_snapshot_model: Role SQLAlchemy model.
         role_history_model: RoleHistory SQLAlchemy model.
         role_id: The role ID to fetch.
         max_events: Maximum number of events to return.
+        cache: Optional cache container (defaults to global singleton).
 
     Returns:
         RoleDetailResult containing cached_role, definition, events, and first_scan.
     """
-    import logging
-
     from sqlalchemy import func, select
 
+    from azurerbac.cache import get_cache_service
     from azurerbac.telemetry import TimedDbQuery
 
-    logger = logging.getLogger(__name__)
+    cache_resolved = cache if cache is not None else get_cache_service().container
 
-    cached_role = cache.get_role_by_id(role_id)
-    cache_size = len(cache.cache.roles_by_id)
+    cached_role = cache_resolved.get_role_by_id(role_id)
+    cache_size = len(cache_resolved.cache.roles_by_id)
     logger.info(
         f"Role detail request: role_id={role_id}, "
         f"cache_size={cache_size}, cache_hit={cached_role is not None}"
     )
 
     if cached_role:
-        first_scan = cache.cache.first_scan
-        cached_events = cache.get_events_for_role(role_id)
+        first_scan = cache_resolved.cache.first_scan
+        cached_events = cache_resolved.get_events_for_role(role_id)
         events_raw = cached_events[:max_events]
         return RoleDetailResult(
             cached_role=cached_role,
@@ -490,8 +297,7 @@ async def get_role_from_cache_or_db(
         from azurerbac.core import RoleScanStatus
 
         first_scan = await session.scalar(select(func.min(RoleScanStatus.scan_timestamp)))
-        if first_scan:
-            first_scan = first_scan.replace(microsecond=0)
+        first_scan = truncate_microseconds(first_scan)
 
         # Get history entries for this role - RoleHistory has role_id directly
         async with TimedDbQuery("fetch_role_history") as timer:

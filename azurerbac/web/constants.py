@@ -26,7 +26,6 @@ MAX_DAYS: Final = 365
 DEFAULT_PAGE: Final = 1
 DEFAULT_LIMIT: Final = 25
 DEFAULT_DAYS: Final = 30
-DEFAULT_FROM_PAGE: Final = "recent"
 
 # Query and search limits
 MAX_ROLE_EVENTS: Final = 200

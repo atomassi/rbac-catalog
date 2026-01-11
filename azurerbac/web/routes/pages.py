@@ -21,11 +21,13 @@ from azurerbac.web.constants import (
 )
 from azurerbac.web.dependencies import PagesDeps, get_pages_deps
 from azurerbac.web.routes.models import OperationWithCount
-from azurerbac.web.services.models import PaginationInfo
-from azurerbac.web.services.pages import (
+from azurerbac.web.services.models import (
     DataActionFilter,
     OperationSearchParams,
     OperationSortField,
+    PaginationInfo,
+)
+from azurerbac.web.services.pages import (
     build_role_redirect_url,
     compute_role_effective_permissions,
     enrich_event_with_diff,
@@ -62,7 +64,6 @@ async def role_detail(
 
     # Get role from cache or database
     result = await get_role_from_cache_or_db(
-        deps.app_cache,
         deps.SessionLocal,
         deps.Role,
         deps.RoleHistory,
@@ -101,9 +102,7 @@ async def role_detail(
     # Use RoleDefinition for clean output (excludes isServiceRole)
     display_json = role_def.to_dict() if role_def else {}
     all_ops = deps.app_cache.get_all_operations()
-    effective_perms = (
-        compute_role_effective_permissions(role_def, all_ops, deps.app_cache) if role_def else None
-    )
+    effective_perms = compute_role_effective_permissions(role_def, all_ops) if role_def else None
 
     return deps.templates.TemplateResponse(
         request,
@@ -162,7 +161,7 @@ async def operations_list(
     filtered_ops = filter_operations(all_operations, search_params)
 
     # Sort operations - returns list of (OperationData, role_count) tuples
-    sorted_ops_with_counts = sort_operations(filtered_ops, sort, order, deps.app_cache)
+    sorted_ops_with_counts = sort_operations(filtered_ops, sort, order)
 
     total_filtered = len(sorted_ops_with_counts)
     pagination = PaginationInfo.compute(total_filtered, page, page_size)
@@ -244,9 +243,7 @@ async def operation_detail(
         )
 
     # Find roles that allow this operation
-    allowing_roles = get_roles_allowing_operation(
-        operation.name, operation.is_data_action, deps.app_cache
-    )
+    allowing_roles = get_roles_allowing_operation(operation.name, operation.is_data_action)
 
     return deps.templates.TemplateResponse(
         request,

@@ -20,6 +20,7 @@ from azurerbac.core.utils import (
     ensure_utc,
     ensure_utc_or_min,
     normalize_uuid_or_none,
+    truncate_microseconds,
 )
 from azurerbac.web.services.models import (
     DashboardSummary,
@@ -437,14 +438,12 @@ async def ensure_scan_metadata(
             .order_by(deps.RoleScanStatus.scan_timestamp.desc())
             .limit(1)
         )
-        if last_scan:
-            last_scan = last_scan.replace(microsecond=0)
+        last_scan = truncate_microseconds(last_scan)
         deps.app_cache.set_metadata(last_scan=last_scan)
 
     if first_scan is None:
         first_scan = await session.scalar(select(func.min(deps.RoleScanStatus.scan_timestamp)))
-        if first_scan:
-            first_scan = first_scan.replace(microsecond=0)
+        first_scan = truncate_microseconds(first_scan)
         deps.app_cache.set_metadata(first_scan=first_scan)
 
     return ScanMetadata(last_scan=last_scan, first_scan=first_scan)

@@ -22,7 +22,6 @@ from azurerbac.matching import recommend_roles
 from azurerbac.web.constants import (
     MAX_QUERY_LENGTH,
     MAX_SEARCH_LIMIT,
-    MAX_TOP_K,
     MIN_AI_QUERY_CHARS,
     MIN_SEARCH_CHARS,
 )
@@ -43,7 +42,6 @@ from azurerbac.web.routes.responses import (
     ai_error_response,
     empty_search_response,
 )
-from azurerbac.web.utils import clamp
 
 logger = logging.getLogger(__name__)
 
@@ -152,10 +150,8 @@ async def ai_recommend_endpoint(
     deps: Annotated[BaseDeps, Depends(get_api_deps)],
 ) -> AIRecommendResponse:
     """AI-powered role recommendations from natural language query."""
-    query = (body.query or "").strip()[:MAX_QUERY_LENGTH]
+    query = body.query.strip()
 
-    if not query:
-        return ai_error_response(ErrorMessages.QUERY_EMPTY)
     if len(query) < MIN_AI_QUERY_CHARS:
         return ai_error_response(ErrorMessages.QUERY_TOO_SHORT)
 
@@ -164,7 +160,6 @@ async def ai_recommend_endpoint(
         if RecommenderMode.is_valid(body.recommender_mode)
         else RecommenderMode.LLM.value
     )
-    top_k = clamp(body.top_k, 1, MAX_TOP_K)
     roles = deps.app_cache.get_all_roles()
 
     try:
@@ -175,7 +170,7 @@ async def ai_recommend_endpoint(
                 ai_recommend_roles,
                 query=query,
                 roles=roles,
-                top_k=top_k,
+                top_k=body.top_k,
                 requested_mode=requested_mode,
             ),
         )

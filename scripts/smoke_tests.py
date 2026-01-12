@@ -107,6 +107,20 @@ EDGE_CASES: Final = [
     ("API: Invalid count pattern", "/api/operations/count-matches?pattern=", (200,)),
 ]
 
+# Input validation - expected to return 400 for invalid parameters
+INPUT_VALIDATION_TESTS: Final = [
+    ("Roles: negative page", "/roles?page=-1", (400,)),
+    ("Roles: huge page", "/roles?page=999999999", (400,)),
+    ("Roles: zero limit", "/roles?limit=0", (400,)),
+    ("Roles: excessive limit", "/roles?limit=99999", (400,)),
+    ("Operations: negative page", "/operations?page=-1", (400,)),
+    ("Operations: excessive limit", "/operations?limit=99999", (400,)),
+    ("Recent: zero days", "/recent?days=0", (400,)),
+    ("Recent: excessive days", "/recent?days=1000", (400,)),
+    ("Recent: negative page", "/recent?page=-1", (400,)),
+    ("API search: query too long", "/api/operations/search?q=" + "A" * 200, (400,)),
+]
+
 # AI Recommender POST endpoint tests (different modes)
 AI_RECOMMENDER_TESTS: Final = [
     ("AI: TFIDF mode", {"query": "read storage blobs", "top_k": 3, "recommender_mode": "tfidf"}),
@@ -613,7 +627,14 @@ async def _run_edge_and_security_tests(
         print_result(result, verbose)
         results.append(result)
 
-    print("\n🔒 Testing Security Headers...")
+    print("\n�️  Testing Input Validation...")
+    print("-" * 40)
+    for name, path, expected_codes in INPUT_VALIDATION_TESTS:
+        result = await test_edge_case(client, name, path, expected_codes)
+        print_result(result, verbose)
+        results.append(result)
+
+    print("\n�🔒 Testing Security Headers...")
     print("-" * 40)
     security_results = await test_security_headers(client)
     for result in security_results:

@@ -1,21 +1,4 @@
-"""Cache package for Azure RBAC application.
-
-Architecture:
-    - models.py:       Data classes (CacheData, CachedRole, etc.)
-    - serialization.py: Msgpack serialization
-    - container.py:    In-memory cache container (CacheContainer)
-    - service.py:      Orchestrator (CacheService) - THE singleton entry point
-    - build.py:        Pure computation functions (precompute_all, build_from_db)
-    - backends/:       Storage abstraction (FileCacheBackend, CacheFileWatcher)
-
-Usage:
-    from azurerbac.cache import get_cache_service
-
-    service = get_cache_service()
-    role = service.container.get_role_by_id(role_id)
-    ops = service.container.get_all_operations()
-    await service.reload_if_needed()
-"""
+"""Cache package for Azure RBAC."""
 
 from azurerbac.cache.backends import (
     CACHE_FILENAME,
@@ -42,10 +25,7 @@ from azurerbac.cache.models import (
     compute_operations_hash,
     compute_roles_hash,
 )
-from azurerbac.cache.serialization import (
-    deserialize_from_bytes,
-    serialize_to_bytes,
-)
+from azurerbac.cache.serialization import deserialize_from_bytes, serialize_to_bytes
 from azurerbac.cache.service import CacheService, get_cache_service
 
 __all__ = [

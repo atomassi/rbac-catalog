@@ -3,88 +3,97 @@
 from __future__ import annotations
 
 from collections.abc import Set as AbstractSet
-from typing import Final
+from itertools import islice
+from typing import TYPE_CHECKING, Final
 
-from azurerbac.cache import CacheData, get_cache_service
 from azurerbac.core.constants import MAX_UNCOVERED_SAMPLE
 from azurerbac.core.patterns import is_wildcard_pattern, matches_pattern
-from azurerbac.matching.models import WildcardCoverageResult
+from azurerbac.matching.models import PartialCoverageCacheKey, WildcardCoverageResult
 
-# Type aliases
+if TYPE_CHECKING:
+    from azurerbac.cache import CacheData
+
 type OperationName = str
 type Pattern = str
 
-# Constants for sampling limits
-_QUICK_SAMPLE_SIZE: Final[int] = 10
 _EXTENDED_SAMPLE_SIZE: Final[int] = 100
 
 
+def _get_cache(caches: CacheData | None = None) -> CacheData:
+    """Get cache data, using provided override or global singleton.
+
+    This function centralizes cache access, making it easier to mock in tests
+    and reducing scattered singleton access throughout the module.
+    """
+    if caches is not None:
+        return caches
+    from azurerbac.cache import get_cache_service
+
+    return get_cache_service().container.cache
+
+
 def _suffix_pattern_covers(role_pattern: str, requested_pattern: str) -> bool:
-    """Check if a suffix pattern (*/suffix) covers the requested pattern."""
-    role_suffix = role_pattern[1:]  # e.g., "/read"
-    return requested_pattern.endswith(role_suffix)
+    """Check if a suffix pattern (*/suffix) covers the requested pattern.
+
+    Example: '*/read' covers 'Microsoft.Storage/accounts/read'
+    """
+    if not role_pattern.startswith("*/"):
+        return False
+    return requested_pattern.endswith(role_pattern[1:])
 
 
 def _prefix_pattern_covers(role_pattern: str, requested_pattern: str) -> bool:
-    """Check if a prefix pattern (prefix/*) covers the requested pattern."""
-    role_prefix = role_pattern[:-1]  # e.g., "Microsoft.Storage/"
-    return requested_pattern.startswith(role_prefix)
+    """Check if a prefix pattern (prefix/*) covers the requested pattern.
+
+    Example: 'Microsoft.Storage/*' covers 'Microsoft.Storage/accounts/read'
+    """
+    if not role_pattern.endswith("/*"):
+        return False
+    return requested_pattern.startswith(role_pattern[:-1])
 
 
-def _compare_segments(role_parts_lower: list[str], requested_parts_lower: list[str]) -> bool:
-    """Compare pre-lowercased pattern segments to determine if role covers requested."""
-    for i, role_seg in enumerate(role_parts_lower):
+def _segment_pattern_covers(role_pattern: str, requested_pattern: str) -> bool:
+    """Check if role pattern covers requested by comparing path segments.
+
+    Example: 'Microsoft.Storage/*/read' covers 'Microsoft.Storage/accounts/read'
+    """
+    role_parts = role_pattern.lower().split("/")
+    requested_parts = requested_pattern.lower().split("/")
+
+    if len(role_parts) > len(requested_parts):
+        return False
+
+    for i, role_seg in enumerate(role_parts):
         if role_seg == "*":
-            # Last segment is *, covers everything after
-            if i == len(role_parts_lower) - 1:
+            # Trailing wildcard matches everything after
+            if i == len(role_parts) - 1:
                 return True
             continue
-        if i < len(requested_parts_lower):
-            req_seg = requested_parts_lower[i]
-            if req_seg == "*" and role_seg != "*":
-                # Requested has wildcard, role has specific - role doesn't cover
-                return False
-            if req_seg not in (role_seg, "*"):
-                return False
-        else:
+
+        if i >= len(requested_parts):
             return False
+
+        req_seg = requested_parts[i]
+        # Requested has wildcard but role has specific - role can't cover
+        if req_seg == "*" and role_seg != "*":
+            return False
+        # Segments must match (or role has wildcard, handled above)
+        if req_seg not in (role_seg, "*"):
+            return False
+
     return True
 
 
 def pattern_covers_pattern(role_pattern: str, requested_pattern: str) -> bool:
-    """Check if a role's action pattern covers a requested wildcard pattern.
-
-    For example:
-    - 'Microsoft.Storage/*' covers 'Microsoft.Storage/*/read' (role grants more)
-    - '*' covers anything
-    - '*/read' covers 'Microsoft.Storage/*/read' (anything ending in /read)
-    - 'Microsoft.Storage/storageAccounts/*' covers 'Microsoft.Storage/storageAccounts/read'
-    - 'Microsoft.Storage/storageAccounts/read' does NOT cover 'Microsoft.Storage/*/read'
-
-    The logic: role_pattern covers requested_pattern if every operation that matches
-    requested_pattern would also match role_pattern.
-    """
-    # Fast path: trivial matches
+    """Check if a role's action pattern covers a requested wildcard pattern."""
     if role_pattern in ("*", requested_pattern):
         return True
 
-    # Handle suffix patterns like */read
-    if role_pattern.startswith("*/") and _suffix_pattern_covers(role_pattern, requested_pattern):
-        return True
-
-    # Handle prefix patterns like Microsoft.Storage/*
-    if role_pattern.endswith("/*") and _prefix_pattern_covers(role_pattern, requested_pattern):
-        return True
-
-    # Segment-by-segment comparison (pre-lowercase for O(1) comparison)
-    role_parts_lower = [s.lower() for s in role_pattern.split("/")]
-    requested_parts_lower = [s.lower() for s in requested_pattern.split("/")]
-
-    # Role pattern must have same or fewer segments
-    if len(role_parts_lower) > len(requested_parts_lower):
-        return False
-
-    return _compare_segments(role_parts_lower, requested_parts_lower)
+    return (
+        _suffix_pattern_covers(role_pattern, requested_pattern)
+        or _prefix_pattern_covers(role_pattern, requested_pattern)
+        or _segment_pattern_covers(role_pattern, requested_pattern)
+    )
 
 
 def operation_matches_any_pattern(operation: OperationName, patterns: list[Pattern]) -> bool:
@@ -129,12 +138,12 @@ def get_matching_operations(
     so subsequent calls with the same pattern are instant.
 
     Args:
-        pattern: The pattern to match operations against
-        all_operations: Set of all operation names to search
-        cache_key: Optional key for cache lookup (typically operation count)
-        caches: Optional cache container to use (defaults to get_cache_service().container.cache)
+        pattern: The pattern to match operations against.
+        all_operations: Set of all operation names to search.
+        cache_key: Optional key for cache lookup (typically operation count).
+        caches: Optional cache container (defaults to global singleton).
     """
-    cache = caches if caches is not None else get_cache_service().container.cache
+    cache = _get_cache(caches)
 
     key = (pattern.lower(), cache_key) if cache_key is not None else None
     if key is not None and key in cache.pattern_match:
@@ -165,20 +174,9 @@ def has_any_wildcard_coverage(
     if not matching_ops:
         return False
 
-    # Check if at least one operation is allowed (check quick sample first)
-    sample = list(matching_ops)[:_QUICK_SAMPLE_SIZE]
-    for op in sample:
-        if check_operation_allowed(op, actions, not_actions):
-            return True
-
-    # If none of the first sample match, check extended sample
-    if len(matching_ops) > _QUICK_SAMPLE_SIZE:
-        sample = list(matching_ops)[_QUICK_SAMPLE_SIZE:_EXTENDED_SAMPLE_SIZE]
-        for op in sample:
-            if check_operation_allowed(op, actions, not_actions):
-                return True
-
-    return False
+    # Check extended sample for any allowed operation (islice avoids list conversion)
+    sample = islice(matching_ops, _EXTENDED_SAMPLE_SIZE)
+    return any(check_operation_allowed(op, actions, not_actions) for op in sample)
 
 
 def check_wildcard_operation_allowed(
@@ -196,13 +194,7 @@ def check_wildcard_operation_allowed(
     definitely grants all operations matching the requested pattern.
     """
     # Check if any action pattern covers the requested pattern
-    covered = False
-    for action in actions:
-        if pattern_covers_pattern(action, requested_pattern):
-            covered = True
-            break
-
-    if not covered:
+    if not any(pattern_covers_pattern(action, requested_pattern) for action in actions):
         return False
 
     # Check if any notAction might exclude parts of the requested pattern
@@ -319,23 +311,32 @@ def count_wildcard_partial_coverage(
     *,
     caches: CacheData | None = None,
 ) -> WildcardCoverageResult:
-    """Count how many operations matching a wildcard pattern are granted by the actions."""
-    cache = caches if caches is not None else get_cache_service().container.cache
-    partial_cache_key = None
+    """Count how many operations matching a wildcard pattern are granted by the actions.
 
-    # Use cache if available
-    if cache_key is not None:
-        partial_cache_key = (
-            requested_pattern,
-            cache_key,
-            tuple(sorted(actions)),
-            tuple(sorted(not_actions)),
-        )
-        if partial_cache_key in cache.partial_coverage:
-            cached = cache.partial_coverage[partial_cache_key]
-            return WildcardCoverageResult(*cached)
+    Args:
+        requested_pattern: The wildcard pattern to check coverage for.
+        actions: List of action patterns from the role.
+        not_actions: List of notAction patterns from the role.
+        all_operations: Set of all valid operations.
+        cache_key: Optional cache key for lookup.
+        max_uncovered_sample: Maximum uncovered operations to sample.
+        caches: Optional cache container.
 
-    # Get matching operations from cache (fast after first call)
+    Returns:
+        WildcardCoverageResult with coverage statistics.
+    """
+    cache = _get_cache(caches)
+    partial_cache_key = PartialCoverageCacheKey.build(
+        requested_pattern, cache_key, actions, not_actions
+    )
+
+    # Check cache
+    if partial_cache_key is not None:
+        cached = cache.partial_coverage.get(partial_cache_key)
+        if cached is not None:
+            return cached
+
+    # Get matching operations
     matching_ops = get_matching_operations(
         requested_pattern, all_operations, cache_key, caches=cache
     )
@@ -373,10 +374,7 @@ def count_operations_matching_pattern(
 ) -> int:
     """Count how many actual operations match a pattern (explicit or wildcard)."""
     if not is_wildcard_pattern(pattern):
-        # Explicit operation - either matches 1 or 0
         return 1 if pattern in all_operations else 0
-
-    # For wildcards, count exact matches
     return count_wildcard_matches(pattern, all_operations, cache_key)
 
 
@@ -388,73 +386,26 @@ def count_wildcard_matches(
     caches: CacheData | None = None,
 ) -> int:
     """Count how many operations match a wildcard pattern (exact count)."""
-    cache = caches if caches is not None else get_cache_service().container.cache
-
-    # Use the pattern match cache - this is fast after first call
+    cache = _get_cache(caches)
     matching = get_matching_operations(pattern, all_operations, cache_key, caches=cache)
     count = len(matching)
 
-    # Also update the count cache for compatibility
     if cache_key is not None:
-        cache_entry = (pattern.lower(), cache_key)
-        cache.wildcard_count[cache_entry] = count
+        cache.wildcard_count[(pattern.lower(), cache_key)] = count
 
     return count
 
 
-def _count_all_actions_grant(
-    not_actions: list[str],
+def _count_pattern(
+    pattern: str,
     all_operations: AbstractSet[str],
     cache_key: int | None,
-    caches: CacheData | None = None,
+    cache: CacheData,
 ) -> int:
-    """Count when actions contains '*' (grants all operations)."""
-    if not not_actions:
-        return len(all_operations)
-    excluded = sum(
-        (
-            count_wildcard_matches(p, all_operations, cache_key, caches=caches)
-            if is_wildcard_pattern(p)
-            else (1 if p in all_operations else 0)
-        )
-        for p in not_actions
-    )
-    return max(0, len(all_operations) - excluded)
-
-
-def _count_action_grants(
-    actions: list[str],
-    all_operations: AbstractSet[str],
-    cache_key: int | None,
-    caches: CacheData | None = None,
-) -> tuple[int, list[str], list[str]]:
-    """Count grants from explicit and wildcard actions."""
-    explicit_actions = [a for a in actions if not is_wildcard_pattern(a)]
-    wildcard_patterns = [a for a in actions if is_wildcard_pattern(a)]
-    count = len(explicit_actions)
-    for pattern in wildcard_patterns:
-        count += count_wildcard_matches(pattern, all_operations, cache_key, caches=caches)
-    return count, explicit_actions, wildcard_patterns
-
-
-def _subtract_not_actions(
-    count: int,
-    not_actions: list[str],
-    explicit_actions: list[str],
-    wildcard_patterns: list[str],
-    all_operations: AbstractSet[str],
-    cache_key: int | None,
-    caches: CacheData | None = None,
-) -> int:
-    """Subtract exclusions from notActions."""
-    for not_pattern in not_actions:
-        if is_wildcard_pattern(not_pattern):
-            count -= count_wildcard_matches(not_pattern, all_operations, cache_key, caches=caches)
-        elif not_pattern in explicit_actions or any(
-            matches_pattern(not_pattern, wp) for wp in wildcard_patterns
-        ):
-            count -= 1
-    return max(0, count)
+    """Count matching operations for a pattern (explicit or wildcard)."""
+    if is_wildcard_pattern(pattern):
+        return count_wildcard_matches(pattern, all_operations, cache_key, caches=cache)
+    return 1 if pattern in all_operations else 0
 
 
 def count_net_permissions(
@@ -467,34 +418,42 @@ def count_net_permissions(
 ) -> int:
     """Count the net number of operations granted (actions minus notActions).
 
-    This provides a count for ranking purposes.
+    Args:
+        actions: List of action patterns that grant access.
+        not_actions: List of notAction patterns that deny access.
+        all_operations: Set of all valid operations.
+        cache_key: Optional cache key for lookups.
+        caches: Optional cache container.
 
-    For explicit actions (no wildcards), we count them directly.
-    For wildcard patterns, we estimate matching known operations.
-    Then we subtract any operations excluded by notActions.
+    Returns:
+        Net count of granted operations.
     """
     if not actions:
         return 0
 
+    cache = _get_cache(caches)
+
     # Handle wildcard * that matches everything
     if "*" in actions:
-        return _count_all_actions_grant(not_actions, all_operations, cache_key, caches)
+        if not not_actions:
+            return len(all_operations)
+        excluded = sum(_count_pattern(p, all_operations, cache_key, cache) for p in not_actions)
+        return max(0, len(all_operations) - excluded)
 
-    # Count explicit and wildcard actions
-    count, explicit_actions, wildcard_patterns = _count_action_grants(
-        actions, all_operations, cache_key, caches
+    # Separate explicit and wildcard actions
+    explicit = [a for a in actions if not is_wildcard_pattern(a)]
+    wildcards = [a for a in actions if is_wildcard_pattern(a)]
+
+    # Count total granted
+    count = len(explicit) + sum(
+        _count_pattern(p, all_operations, cache_key, cache) for p in wildcards
     )
 
     # Subtract exclusions
-    if not_actions:
-        count = _subtract_not_actions(
-            count,
-            not_actions,
-            explicit_actions,
-            wildcard_patterns,
-            all_operations,
-            cache_key,
-            caches,
-        )
+    for not_pattern in not_actions:
+        if is_wildcard_pattern(not_pattern):
+            count -= _count_pattern(not_pattern, all_operations, cache_key, cache)
+        elif not_pattern in explicit or any(matches_pattern(not_pattern, wp) for wp in wildcards):
+            count -= 1
 
-    return count
+    return max(0, count)

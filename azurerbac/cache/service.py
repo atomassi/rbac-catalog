@@ -1,26 +1,4 @@
-"""Cache service - orchestrates container and backend.
-
-The CacheService is the main entry point for all cache operations.
-It owns both the in-memory CacheContainer and the CacheBackend (disk I/O).
-
-Architecture:
-    CacheService (orchestrator)
-    ├── CacheContainer (in-memory data + accessors)
-    └── CacheBackend (disk I/O - FileCacheBackend by default)
-
-Usage:
-    from azurerbac.cache import get_cache_service
-
-    service = get_cache_service()
-
-    # Access in-memory data
-    role = service.container.get_role_by_id(role_id)
-    ops = service.container.get_all_operations()
-
-    # High-level operations
-    await service.reload_if_needed()
-    await service.rebuild_in_memory(session)
-"""
+"""Cache service."""
 
 from __future__ import annotations
 
@@ -45,17 +23,7 @@ _REBUILD_LOCK: Final[threading.Lock] = threading.Lock()
 
 
 class CacheService:
-    """Orchestrates cache container and backend.
-
-    Provides high-level cache operations:
-    - Build cache from database
-    - Save/load cache to/from backend
-    - Reload cache when backend updates (worker → web app)
-    - Invalidate and rebuild
-
-    The service owns both the container (in-memory) and backend (disk I/O).
-    Access the container for read operations, use service methods for writes.
-    """
+    """Orchestrates cache container and backend."""
 
     __slots__ = ("_backend", "_container")
 
@@ -64,20 +32,11 @@ class CacheService:
         container: CacheContainer | None = None,
         backend: CacheBackend | None = None,
     ) -> None:
-        """Initialize the cache service.
-
-        Args:
-            container: In-memory cache container. Creates new instance if not provided.
-            backend: Storage backend. Creates based on settings if not provided.
-        """
+        """Initialize the cache service."""
         from azurerbac.cache.backends.base import create_backend
 
         self._container = container or CacheContainer()
         self._backend = backend or create_backend()
-
-    # ─────────────────────────────────────────────────────────────────────────
-    # Properties
-    # ─────────────────────────────────────────────────────────────────────────
 
     @property
     def container(self) -> CacheContainer:
@@ -89,30 +48,12 @@ class CacheService:
         """The storage backend."""
         return self._backend
 
-    # ─────────────────────────────────────────────────────────────────────────
-    # Build from database
-    # ─────────────────────────────────────────────────────────────────────────
-
     async def build_from_db(self, session: AsyncSession) -> CacheData:
-        """Build complete cache data from database.
-
-        Fetches all data from DB and precomputes derived data.
-        Does NOT swap into memory or save to backend - caller decides.
-
-        Args:
-            session: SQLAlchemy async session
-
-        Returns:
-            Complete CacheData ready for use
-        """
+        """Build complete cache data from database."""
         # Import here to avoid circular dependencies
         from azurerbac.cache.build import build_from_db
 
         return await build_from_db(session)
-
-    # ─────────────────────────────────────────────────────────────────────────
-    # Swap and save
-    # ─────────────────────────────────────────────────────────────────────────
 
     def swap_in_memory(self, cache_data: CacheData) -> None:
         """Swap cache data into the in-memory container."""
@@ -126,10 +67,6 @@ class CacheService:
         if success:
             logger.debug("Cache saved to backend")
         return success
-
-    # ─────────────────────────────────────────────────────────────────────────
-    # High-level rebuild operations
-    # ─────────────────────────────────────────────────────────────────────────
 
     async def rebuild_in_memory(self, session: AsyncSession) -> bool:
         """Build cache from DB and swap into memory (web app startup).
@@ -198,18 +135,8 @@ class CacheService:
         self._container.reset()
         await self._backend.delete()
 
-    # ─────────────────────────────────────────────────────────────────────────
-    # Reload from backend (web app detecting worker update)
-    # ─────────────────────────────────────────────────────────────────────────
-
     def needs_reload(self) -> bool:
-        """Check if backend cache was updated by worker.
-
-        Compares loaded version with current backend version.
-
-        Returns:
-            True if cache version changed since last load.
-        """
+        """Check if backend cache was updated by worker."""
         current_version = self._backend.get_version()
 
         if current_version is None:
@@ -230,23 +157,12 @@ class CacheService:
         return False
 
     def mark_pending_reload(self) -> None:
-        """Mark that a reload is pending (called by backend watcher).
-
-        Called from the watchdog thread when a cache change is detected.
-        The actual reload happens on the next async check.
-        """
+        """Mark that a reload is pending (called by backend watcher)."""
         self._container.pending_reload = True
         logger.debug("Cache reload marked as pending (watcher triggered)")
 
     async def reload_if_needed(self) -> bool:
-        """Reload cache from backend if updated by worker.
-
-        Uses async lock to prevent concurrent reloads.
-        The backend file contains complete CacheData - no recomputation needed.
-
-        Returns:
-            True if cache was reloaded, False otherwise.
-        """
+        """Reload cache from backend if updated by worker."""
         # Quick check without lock
         if not self._container.pending_reload and not self.needs_reload():
             return False
@@ -299,10 +215,6 @@ class CacheService:
             )
             return True
 
-    # ─────────────────────────────────────────────────────────────────────────
-    # Private helpers
-    # ─────────────────────────────────────────────────────────────────────────
-
     def _initialize_ai_recommender(self, cache_data: CacheData) -> None:
         """Re-initialize AI recommender with updated role data."""
         try:
@@ -319,10 +231,6 @@ class CacheService:
         except Exception as e:
             logger.exception("Failed to re-initialize AI recommender: %s", e)
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Singleton access
-# ─────────────────────────────────────────────────────────────────────────────
 
 _service_singleton: ThreadSafeSingleton[CacheService] = ThreadSafeSingleton(CacheService)
 

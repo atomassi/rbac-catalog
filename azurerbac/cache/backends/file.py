@@ -23,18 +23,50 @@ CACHE_FILENAME: Final[str] = "app_cache.msgpack"
 
 
 class FileCacheBackend(CacheBackend):
-    """File-based cache backend using msgpack and watchdog.
-
-    Stores cache as a single msgpack file on disk.
-    Uses watchdog for instant change detection (no polling).
-    Thread pool for non-blocking file I/O.
-    """
+    """File-based cache backend using msgpack and watchdog."""
 
     def __init__(self) -> None:
         """Initialize the file cache backend."""
         self._cache_dir: Path | None = None
         self._executor: concurrent.futures.ThreadPoolExecutor | None = None
         self._watcher_started = False
+
+    @staticmethod
+    def _reconstruct_operations(data_dict: dict) -> None:
+        """Reconstruct operation objects from raw dicts in place."""
+        from azurerbac.azure.models import OperationData
+
+        if ops_raw := data_dict.get("all_operations"):
+            data_dict["all_operations"] = [OperationData.model_validate(op) for op in ops_raw]
+        if ops_by_name_raw := data_dict.get("ops_by_name_lower"):
+            data_dict["ops_by_name_lower"] = {
+                k: OperationData.model_validate(v) for k, v in ops_by_name_raw.items()
+            }
+        if ops_by_prefix_raw := data_dict.get("ops_by_prefix"):
+            data_dict["ops_by_prefix"] = {
+                k: [OperationData.model_validate(op) for op in v]
+                for k, v in ops_by_prefix_raw.items()
+            }
+
+    @staticmethod
+    def _reconstruct_coverage_data(data_dict: dict) -> None:
+        """Reconstruct coverage-related NamedTuples from raw data in place."""
+        from azurerbac.matching.models import RoleCoverage, RoleNetPermissions
+
+        if role_coverage := data_dict.get("role_coverage"):
+            data_dict["role_coverage"] = {
+                k: RoleCoverage(
+                    control=set(v[0]) if isinstance(v[0], list) else v[0],
+                    data=set(v[1]) if isinstance(v[1], list) else v[1],
+                )
+                for k, v in role_coverage.items()
+            }
+        if role_net_perms := data_dict.get("role_net_permissions"):
+            data_dict["role_net_permissions"] = {
+                k: RoleNetPermissions(v[0], v[1]) for k, v in role_net_perms.items()
+            }
+        if partial_cov := data_dict.get("partial_coverage"):
+            data_dict["partial_coverage"] = {k: tuple(v) for k, v in partial_cov.items()}
 
     @property
     def cache_dir(self) -> Path:
@@ -137,7 +169,6 @@ class FileCacheBackend(CacheBackend):
             return None
 
         try:
-            from azurerbac.azure.models import OperationData
             from azurerbac.cache.models import (
                 CacheData,
                 CachedChangeEvent,
@@ -159,35 +190,15 @@ class FileCacheBackend(CacheBackend):
                     role_id: CachedRole.from_dict(role_data)
                     for role_id, role_data in roles_raw.items()
                 }
-            if ops_raw := data_dict.get("all_operations"):
-                data_dict["all_operations"] = [OperationData.model_validate(op) for op in ops_raw]
-            if ops_by_name_raw := data_dict.get("ops_by_name_lower"):
-                data_dict["ops_by_name_lower"] = {
-                    k: OperationData.model_validate(v) for k, v in ops_by_name_raw.items()
-                }
-            if ops_by_prefix_raw := data_dict.get("ops_by_prefix"):
-                data_dict["ops_by_prefix"] = {
-                    k: [OperationData.model_validate(op) for op in v]
-                    for k, v in ops_by_prefix_raw.items()
-                }
+
+            self._reconstruct_operations(data_dict)
+
             if events_raw := data_dict.get("all_change_events"):
                 data_dict["all_change_events"] = [
                     CachedChangeEvent.from_dict(ev) for ev in events_raw
                 ]
 
-            # Convert lists back to sets/tuples where needed
-            if role_coverage := data_dict.get("role_coverage"):
-                data_dict["role_coverage"] = {
-                    k: (
-                        set(v[0]) if isinstance(v[0], list) else v[0],
-                        set(v[1]) if isinstance(v[1], list) else v[1],
-                    )
-                    for k, v in role_coverage.items()
-                }
-            if role_net_perms := data_dict.get("role_net_permissions"):
-                data_dict["role_net_permissions"] = {k: tuple(v) for k, v in role_net_perms.items()}
-            if partial_cov := data_dict.get("partial_coverage"):
-                data_dict["partial_coverage"] = {k: tuple(v) for k, v in partial_cov.items()}
+            self._reconstruct_coverage_data(data_dict)
 
             data = CacheData(metadata=metadata, **data_dict)
             logger.info(

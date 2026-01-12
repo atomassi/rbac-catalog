@@ -10,11 +10,16 @@ from azurerbac.core.constants import DEFAULT_SEARCH_LIMIT
 from azurerbac.core.patterns import is_wildcard_pattern
 from azurerbac.matching.models import (
     ClassifiedOperations,
+    ExpandedMissing,
     OperationSets,
     PartialCoverageInfo,
     Plane,
+    PlaneActions,
     PlaneContext,
+    RoleCoverage,
     RoleEvaluationContext,
+    RoleInfo,
+    RoleNetPermissions,
 )
 from azurerbac.matching.role_matching import (
     check_operation_allowed,
@@ -32,17 +37,83 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class RoleRecommendationService:
-    """Service for recommending least-privilege roles based on requested operations.
+def _get_default_cache() -> CacheData:
+    """Get the default cache from the global singleton."""
+    from azurerbac.cache import get_cache_service
 
-    Design:
-    - Uses PlaneContext to eliminate control/data plane code duplication
-    - Methods have single responsibilities (classify, evaluate, calculate)
-    - Caching concerns are isolated from evaluation logic
-    """
+    return get_cache_service().container.cache
+
+
+class PlaneContextFactory:
+    """Factory for creating PlaneContext objects - eliminates duplication."""
+
+    __slots__ = ("control_wildcard_ops", "data_wildcard_ops", "op_sets")
+
+    def __init__(
+        self,
+        op_sets: OperationSets,
+        control_wildcard_ops: dict[str, set[str]],
+        data_wildcard_ops: dict[str, set[str]],
+    ) -> None:
+        self.op_sets = op_sets
+        self.control_wildcard_ops = control_wildcard_ops
+        self.data_wildcard_ops = data_wildcard_ops
+
+    def create(
+        self,
+        classified: ClassifiedOperations,
+        cached_coverage: RoleCoverage | None,
+    ) -> tuple[PlaneContext, PlaneContext]:
+        """Create PlaneContext objects for both planes."""
+        control = PlaneContext(
+            plane=Plane.CONTROL,
+            all_ops=self.op_sets.all_control,
+            cache_key=self.op_sets.control_cache_key,
+            wildcards=classified.control_wildcards,
+            wildcard_ops_map=self.control_wildcard_ops,
+            cached_ops=cached_coverage.control if cached_coverage else None,
+        )
+        data = PlaneContext(
+            plane=Plane.DATA,
+            all_ops=self.op_sets.all_data,
+            cache_key=self.op_sets.data_cache_key,
+            wildcards=classified.data_wildcards,
+            wildcard_ops_map=self.data_wildcard_ops,
+            cached_ops=cached_coverage.data if cached_coverage else None,
+        )
+        return control, data
+
+
+class PermissionAggregator:
+    """Aggregates permission lists from a role - used in multiple places."""
+
+    __slots__ = ("actions", "data_actions", "not_actions", "not_data_actions")
+
+    def __init__(self, permissions: list[Permission]) -> None:
+        self.actions: list[str] = []
+        self.not_actions: list[str] = []
+        self.data_actions: list[str] = []
+        self.not_data_actions: list[str] = []
+
+        for perm in permissions:
+            self.actions.extend(perm.actions)
+            self.not_actions.extend(perm.not_actions)
+            self.data_actions.extend(perm.data_actions)
+            self.not_data_actions.extend(perm.not_data_actions)
+
+    def for_plane(self, plane: Plane) -> PlaneActions:
+        """Get actions and exclusions for the specified plane."""
+        if plane == Plane.CONTROL:
+            return PlaneActions(self.actions, self.not_actions)
+        return PlaneActions(self.data_actions, self.not_data_actions)
+
+
+class RoleRecommendationService:
+    """Service for recommending least-privilege roles based on requested operations."""
 
     __slots__ = (
-        "_caches_override",
+        "_cache",
+        "_plane_factory",
         "control_wildcard_ops",
         "data_wildcard_ops",
         "op_sets",
@@ -61,56 +132,35 @@ class RoleRecommendationService:
         Args:
             all_operations: List of all Azure operations.
             requested_ops_data_flags: Mapping of operation names to is_data_action flags.
-            caches: Optional cache data. If None, uses global singleton.
+            caches: Optional cache data. If None, uses global singleton (lazy).
         """
         self.op_sets = OperationSets.from_operations(all_operations)
         self.requested_ops_data_flags = requested_ops_data_flags or {}
-        self._caches_override = caches
+        self._cache = caches
 
         # Pre-computed wildcard matches (populated by compute_wildcard_matches)
         self.control_wildcard_ops: dict[str, set[str]] = {}
         self.data_wildcard_ops: dict[str, set[str]] = {}
 
+        # Factory for creating plane contexts (eliminates duplication)
+        self._plane_factory = PlaneContextFactory(
+            self.op_sets, self.control_wildcard_ops, self.data_wildcard_ops
+        )
+
     @property
     def _caches(self) -> CacheData:
-        """Get the cache data (override or global singleton)."""
-        if self._caches_override is not None:
-            return self._caches_override
-        from azurerbac.cache import get_cache_service
-
-        return get_cache_service().container.cache
-
-    # =========================================================================
-    # Plane Context Factory
-    # =========================================================================
+        """Get the cache data (injected or global singleton)."""
+        if self._cache is not None:
+            return self._cache
+        return _get_default_cache()
 
     def _get_plane_contexts(
         self,
         classified: ClassifiedOperations,
-        cached_coverage: tuple[set[str], set[str]] | None,
+        cached_coverage: RoleCoverage | None,
     ) -> tuple[PlaneContext, PlaneContext]:
         """Create PlaneContext objects for control and data planes."""
-        control_ctx = PlaneContext(
-            plane=Plane.CONTROL,
-            all_ops=self.op_sets.all_control,
-            cache_key=self.op_sets.control_cache_key,
-            wildcards=classified.control_wildcards,
-            wildcard_ops_map=self.control_wildcard_ops,
-            cached_ops=cached_coverage[0] if cached_coverage else None,
-        )
-        data_ctx = PlaneContext(
-            plane=Plane.DATA,
-            all_ops=self.op_sets.all_data,
-            cache_key=self.op_sets.data_cache_key,
-            wildcards=classified.data_wildcards,
-            wildcard_ops_map=self.data_wildcard_ops,
-            cached_ops=cached_coverage[1] if cached_coverage else None,
-        )
-        return control_ctx, data_ctx
-
-    # =========================================================================
-    # Classification
-    # =========================================================================
+        return self._plane_factory.create(classified, cached_coverage)
 
     def classify_operations(
         self,
@@ -119,7 +169,7 @@ class RoleRecommendationService:
         """Classify requested operations by plane (control/data) and type (explicit/wildcard).
 
         Returns:
-            ClassifiedOperations with operations in appropriate categories
+            ClassifiedOperations with operations in appropriate categories.
         """
         control: set[str] = set()
         data: set[str] = set()
@@ -127,36 +177,7 @@ class RoleRecommendationService:
         data_wildcards: set[str] = set()
 
         for op in requested_operations:
-            is_wildcard = is_wildcard_pattern(op)
-            has_explicit_flag = op in self.requested_ops_data_flags
-
-            if has_explicit_flag:
-                is_data_action = self.requested_ops_data_flags[op]
-                if is_wildcard:
-                    (data_wildcards if is_data_action else control_wildcards).add(op)
-                else:
-                    (data if is_data_action else control).add(op)
-            elif is_wildcard:
-                # Wildcards without explicit flags can match both planes
-                matches_control = bool(
-                    get_matching_operations(
-                        op, self.op_sets.all_control, self.op_sets.control_cache_key
-                    )
-                )
-                matches_data = bool(
-                    get_matching_operations(op, self.op_sets.all_data, self.op_sets.data_cache_key)
-                )
-
-                if matches_control:
-                    control_wildcards.add(op)
-                if matches_data:
-                    data_wildcards.add(op)
-                if not matches_control and not matches_data:
-                    control_wildcards.add(op)  # Default to control
-            elif op in self.op_sets.all_data:
-                data.add(op)
-            else:
-                control.add(op)
+            self._classify_single_operation(op, control, data, control_wildcards, data_wildcards)
 
         return ClassifiedOperations(
             control=frozenset(control),
@@ -165,14 +186,71 @@ class RoleRecommendationService:
             data_wildcards=frozenset(data_wildcards),
         )
 
+    def _classify_single_operation(
+        self,
+        op: str,
+        control: set[str],
+        data: set[str],
+        control_wildcards: set[str],
+        data_wildcards: set[str],
+    ) -> None:
+        """Classify a single operation into the appropriate bucket.
+
+        Extracted for clarity and testability (SRP).
+        """
+        is_wildcard = is_wildcard_pattern(op)
+
+        # Case 1: Explicit data action flag provided
+        if op in self.requested_ops_data_flags:
+            is_data_action = self.requested_ops_data_flags[op]
+            target_set = (
+                (data_wildcards if is_wildcard else data)
+                if is_data_action
+                else (control_wildcards if is_wildcard else control)
+            )
+            target_set.add(op)
+            return
+
+        # Case 2: Wildcard without explicit flag - check both planes
+        if is_wildcard:
+            self._classify_wildcard_to_planes(op, control_wildcards, data_wildcards)
+            return
+
+        # Case 3: Explicit operation - classify by lookup
+        if op in self.op_sets.all_data:
+            data.add(op)
+        else:
+            control.add(op)
+
+    def _classify_wildcard_to_planes(
+        self,
+        op: str,
+        control_wildcards: set[str],
+        data_wildcards: set[str],
+    ) -> None:
+        """Classify a wildcard to control/data planes based on matching operations."""
+        matches_control = bool(
+            get_matching_operations(op, self.op_sets.all_control, self.op_sets.control_cache_key)
+        )
+        matches_data = bool(
+            get_matching_operations(op, self.op_sets.all_data, self.op_sets.data_cache_key)
+        )
+
+        if matches_control:
+            control_wildcards.add(op)
+        if matches_data:
+            data_wildcards.add(op)
+        if not matches_control and not matches_data:
+            control_wildcards.add(op)  # Default to control
+
     def compute_wildcard_matches(self, classified: ClassifiedOperations) -> int:
         """Pre-compute wildcard pattern matches and return total requested count.
 
         Args:
-            classified: The classified operations
+            classified: The classified operations.
 
         Returns:
-            Total count of requested operations (expanding wildcards)
+            Total count of requested operations (expanding wildcards).
         """
         total_count = 0
 
@@ -181,22 +259,37 @@ class RoleRecommendationService:
         total_count += len(classified.data & self.op_sets.all_data)
 
         # Control plane wildcards
-        for pattern in classified.control_wildcards:
-            ops = get_matching_operations(
-                pattern, self.op_sets.all_control, self.op_sets.control_cache_key
-            )
-            self.control_wildcard_ops[pattern] = ops
-            total_count += len(ops)
+        total_count += self._compute_plane_wildcard_matches(
+            classified.control_wildcards,
+            self.op_sets.all_control,
+            self.op_sets.control_cache_key,
+            self.control_wildcard_ops,
+        )
 
         # Data plane wildcards
-        for pattern in classified.data_wildcards:
-            ops = get_matching_operations(
-                pattern, self.op_sets.all_data, self.op_sets.data_cache_key
-            )
-            self.data_wildcard_ops[pattern] = ops
-            total_count += len(ops)
+        total_count += self._compute_plane_wildcard_matches(
+            classified.data_wildcards,
+            self.op_sets.all_data,
+            self.op_sets.data_cache_key,
+            self.data_wildcard_ops,
+        )
 
         return total_count
+
+    def _compute_plane_wildcard_matches(
+        self,
+        wildcards: frozenset[str],
+        all_ops: frozenset[str],
+        cache_key: int,
+        wildcard_ops_map: dict[str, set[str]],
+    ) -> int:
+        """Compute wildcard matches for a single plane (DRY extraction)."""
+        count = 0
+        for pattern in wildcards:
+            ops = get_matching_operations(pattern, all_ops, cache_key)
+            wildcard_ops_map[pattern] = ops
+            count += len(ops)
+        return count
 
     def _evaluate_wildcards_fast(
         self,
@@ -234,7 +327,7 @@ class RoleRecommendationService:
         self,
         ctx: RoleEvaluationContext,
         classified: ClassifiedOperations,
-        cached_coverage: tuple[set[str], set[str]],
+        cached_coverage: RoleCoverage,
     ) -> None:
         """Evaluate role coverage using cached coverage data (fast path).
 
@@ -243,8 +336,8 @@ class RoleRecommendationService:
         control_plane, data_plane = self._get_plane_contexts(classified, cached_coverage)
 
         # Check explicit operations
-        ctx.matched_ops.update(classified.control & cached_coverage[0])
-        ctx.matched_ops.update(classified.data & cached_coverage[1])
+        ctx.matched_ops.update(classified.control & cached_coverage.control)
+        ctx.matched_ops.update(classified.data & cached_coverage.data)
 
         # Check wildcard patterns for each plane
         self._evaluate_wildcards_fast(ctx, control_plane)
@@ -257,7 +350,7 @@ class RoleRecommendationService:
         self,
         ctx: RoleEvaluationContext,
         classified: ClassifiedOperations,
-        cached_coverage: tuple[set[str], set[str]] | None,
+        cached_coverage: RoleCoverage | None,
     ) -> None:
         """Evaluate role coverage by iterating permissions (slow path).
 
@@ -267,27 +360,38 @@ class RoleRecommendationService:
         control_plane, data_plane = self._get_plane_contexts(classified, cached_coverage)
 
         for perm in ctx.permissions:
-            has_condition = perm.has_condition
+            self._evaluate_permission_both_planes(ctx, perm, classified, control_plane, data_plane)
 
-            # Control plane: check explicit ops and wildcards
-            self._evaluate_permission_for_plane(
-                ctx=ctx,
-                plane=control_plane,
-                explicit_ops=classified.control,
-                actions=perm.actions,
-                not_actions=perm.not_actions,
-                has_condition=has_condition,
-            )
+    def _evaluate_permission_both_planes(
+        self,
+        ctx: RoleEvaluationContext,
+        perm: Permission,
+        classified: ClassifiedOperations,
+        control_plane: PlaneContext,
+        data_plane: PlaneContext,
+    ) -> None:
+        """Evaluate a permission's coverage for both planes."""
+        has_condition = perm.has_condition
 
-            # Data plane: check explicit ops and wildcards
-            self._evaluate_permission_for_plane(
-                ctx=ctx,
-                plane=data_plane,
-                explicit_ops=classified.data,
-                actions=perm.data_actions,
-                not_actions=perm.not_data_actions,
-                has_condition=has_condition,
-            )
+        # Control plane
+        self._evaluate_permission_for_plane(
+            ctx=ctx,
+            plane=control_plane,
+            explicit_ops=classified.control,
+            actions=perm.actions,
+            not_actions=perm.not_actions,
+            has_condition=has_condition,
+        )
+
+        # Data plane
+        self._evaluate_permission_for_plane(
+            ctx=ctx,
+            plane=data_plane,
+            explicit_ops=classified.data,
+            actions=perm.data_actions,
+            not_actions=perm.not_data_actions,
+            has_condition=has_condition,
+        )
 
     def _evaluate_permission_for_plane(
         self,
@@ -332,8 +436,7 @@ class RoleRecommendationService:
     ) -> None:
         """Check wildcard pattern coverage for a single permission.
 
-        Uses PlaneContext to access plane-specific data, reducing parameter count
-        from 10 to 6 and improving readability.
+        Uses PlaneContext to access plane-specific data, reducing parameter count.
         """
         key = plane.make_key(pattern)
 
@@ -350,8 +453,7 @@ class RoleRecommendationService:
             return
 
         # Check for partial coverage
-        has_coverage = self._has_partial_coverage(plane, pattern, actions, not_actions)
-        if has_coverage:
+        if self._has_partial_coverage(plane, pattern, actions, not_actions):
             ctx.wildcard_partial_coverage[key] = PartialCoverageInfo(
                 covered=1, total=0, uncovered=0, samples=[]
             )
@@ -402,25 +504,25 @@ class RoleRecommendationService:
         missing: set[str],
     ) -> None:
         """Check if a wildcard pattern has missing operations in either plane."""
+        planes_to_check = []
         if op in classified.control_wildcards:
-            key = f"{Plane.CONTROL.value}:{op}"
-            if key not in ctx.fully_covered_wildcards:
-                missing.add(op)
-
+            planes_to_check.append(Plane.CONTROL)
         if op in classified.data_wildcards:
-            key = f"{Plane.DATA.value}:{op}"
+            planes_to_check.append(Plane.DATA)
+
+        for plane in planes_to_check:
+            key = plane.make_key(op)
             if key not in ctx.fully_covered_wildcards:
                 missing.add(op)
+                return  # Only need to add once
 
     def calculate_matched_ops_count(
         self,
         ctx: RoleEvaluationContext,
-        cached_coverage: tuple[set[str], set[str]] | None,
+        cached_coverage: RoleCoverage | None,
     ) -> int:
         """Calculate the total count of matched operations (expanding wildcards)."""
-        actions, not_actions, data_actions, not_data_actions = self._aggregate_permissions(
-            ctx.permissions
-        )
+        aggregator = PermissionAggregator(ctx.permissions)
 
         count = 0
         for op in ctx.matched_ops:
@@ -428,29 +530,46 @@ class RoleRecommendationService:
                 count += 1
                 continue
 
-            # Count coverage in control plane
-            count += self._count_wildcard_coverage(
-                ctx=ctx,
-                op=op,
-                plane=Plane.CONTROL,
-                all_ops=self.op_sets.all_control,
-                cache_key=self.op_sets.control_cache_key,
-                actions=actions,
-                not_actions=not_actions,
-                cached_ops=cached_coverage[0] if cached_coverage else None,
-            )
+            # Count coverage in both planes
+            count += self._count_wildcard_coverage_both_planes(ctx, op, aggregator, cached_coverage)
 
-            # Count coverage in data plane
-            count += self._count_wildcard_coverage(
-                ctx=ctx,
-                op=op,
-                plane=Plane.DATA,
-                all_ops=self.op_sets.all_data,
-                cache_key=self.op_sets.data_cache_key,
-                actions=data_actions,
-                not_actions=not_data_actions,
-                cached_ops=cached_coverage[1] if cached_coverage else None,
-            )
+        return count
+
+    def _count_wildcard_coverage_both_planes(
+        self,
+        ctx: RoleEvaluationContext,
+        op: str,
+        aggregator: PermissionAggregator,
+        cached_coverage: RoleCoverage | None,
+    ) -> int:
+        """Count wildcard coverage for both planes."""
+        count = 0
+
+        # Control plane
+        actions, not_actions = aggregator.for_plane(Plane.CONTROL)
+        count += self._count_wildcard_coverage(
+            ctx=ctx,
+            op=op,
+            plane=Plane.CONTROL,
+            all_ops=self.op_sets.all_control,
+            cache_key=self.op_sets.control_cache_key,
+            actions=actions,
+            not_actions=not_actions,
+            cached_ops=cached_coverage.control if cached_coverage else None,
+        )
+
+        # Data plane
+        data_actions, not_data_actions = aggregator.for_plane(Plane.DATA)
+        count += self._count_wildcard_coverage(
+            ctx=ctx,
+            op=op,
+            plane=Plane.DATA,
+            all_ops=self.op_sets.all_data,
+            cache_key=self.op_sets.data_cache_key,
+            actions=data_actions,
+            not_actions=not_data_actions,
+            cached_ops=cached_coverage.data if cached_coverage else None,
+        )
 
         return count
 
@@ -469,7 +588,7 @@ class RoleRecommendationService:
 
         Handles both partial and full coverage cases, using cache when available.
         """
-        key = f"{plane.value}:{op}"
+        key = plane.make_key(op)
 
         if key in ctx.wildcard_partial_coverage:
             if cached_ops is not None:
@@ -485,35 +604,11 @@ class RoleRecommendationService:
 
         return 0
 
-    def _aggregate_permissions(
-        self, permissions: list[Permission]
-    ) -> tuple[list[str], list[str], list[str], list[str]]:
-        """Aggregate all action lists from role permissions.
-
-        Returns (actions, not_actions, data_actions, not_data_actions).
-        """
-        actions: list[str] = []
-        not_actions: list[str] = []
-        data_actions: list[str] = []
-        not_data_actions: list[str] = []
-
-        for perm in permissions:
-            actions.extend(perm.actions)
-            not_actions.extend(perm.not_actions)
-            data_actions.extend(perm.data_actions)
-            not_data_actions.extend(perm.not_data_actions)
-
-        return actions, not_actions, data_actions, not_data_actions
-
     def calculate_permissions_count(
         self,
         ctx: RoleEvaluationContext,
-    ) -> tuple[int, int]:
-        """Calculate control and data plane permission counts.
-
-        Returns:
-            Tuple of (control_plane_count, data_plane_count)
-        """
+    ) -> RoleNetPermissions:
+        """Calculate control and data plane permission counts."""
         cached_perms = self._caches.role_net_permissions.get(ctx.role_id)
         if cached_perms:
             return cached_perms
@@ -537,27 +632,30 @@ class RoleRecommendationService:
                 caches=self._caches,
             )
 
-        return control_count, data_count
+        return RoleNetPermissions(control_count, data_count)
 
     def check_cache_staleness(self) -> bool:
         """Check if the role coverage cache is stale and invalidate if needed.
 
         Returns:
-            True if cache was invalidated
+            True if cache was invalidated.
         """
-        cached_control_count = self._caches.cache_ops_count[0]
-        cached_data_count = self._caches.cache_ops_count[1]
+        cached_control_count, cached_data_count = self._caches.cache_ops_count
+        current_control_count = len(self.op_sets.all_control)
+        current_data_count = len(self.op_sets.all_data)
 
         cache_is_stale = cached_control_count > 0 and (
-            len(self.op_sets.all_control) != cached_control_count
-            or len(self.op_sets.all_data) != cached_data_count
+            current_control_count != cached_control_count or current_data_count != cached_data_count
         )
 
         if cache_is_stale:
             logger.warning(
-                f"Role coverage cache is stale: control ops {cached_control_count} "
-                f"-> {len(self.op_sets.all_control)}, data ops {cached_data_count} "
-                f"-> {len(self.op_sets.all_data)}. Invalidating cache."
+                "Role coverage cache is stale: control ops %d -> %d, data ops %d -> %d. "
+                "Invalidating cache.",
+                cached_control_count,
+                current_control_count,
+                cached_data_count,
+                current_data_count,
             )
             self._caches.role_coverage.clear()
             self._caches.role_net_permissions.clear()
@@ -565,32 +663,25 @@ class RoleRecommendationService:
 
         return False
 
-    # =========================================================================
-    # Helper Methods
-    # =========================================================================
+    def has_full_cache(self) -> bool:
+        """Check if full role coverage cache is available."""
+        return len(self._caches.role_coverage) > 0
+
+    def get_cached_coverage(self, role_id: str) -> RoleCoverage | None:
+        """Get cached coverage for a role, if available."""
+        return self._caches.role_coverage.get(role_id)
 
     def expand_missing_operations(
         self,
         ctx: RoleEvaluationContext,
         missing_ops: set[str],
         classified: ClassifiedOperations,
-    ) -> tuple[list[str], int]:
+    ) -> ExpandedMissing:
         """Expand missing operations to show individual uncovered operations.
 
         For wildcards, this expands to show which specific operations are not covered.
-
-        Args:
-            ctx: Role evaluation context
-            missing_ops: Set of missing operation patterns
-            classified: Classified operations
-
-        Returns:
-            Tuple of (expanded operations list, total missing count)
         """
-        actions, not_actions, data_actions, not_data_actions = self._aggregate_permissions(
-            ctx.permissions
-        )
-
+        aggregator = PermissionAggregator(ctx.permissions)
         expanded: list[str] = []
         total_count = 0
 
@@ -600,69 +691,60 @@ class RoleRecommendationService:
                 total_count += 1
                 continue
 
-            # Expand wildcard to individual missing operations
-            ops, count = self._expand_wildcard_missing(
-                ctx=ctx,
-                op=op,
-                classified=classified,
-                actions=actions,
-                not_actions=not_actions,
-                data_actions=data_actions,
-                not_data_actions=not_data_actions,
-            )
-
-            if ops:
-                self._extend_unique_sorted(expanded, ops)
-                total_count += count
+            result = self._expand_wildcard_missing(ctx, op, classified, aggregator)
+            if result.operations:
+                self._extend_unique_sorted(expanded, result.operations)
+                total_count += result.total
             else:
                 expanded.append(op)
                 total_count += 1
 
-        return expanded, total_count
+        return ExpandedMissing(expanded, total_count)
 
     def _expand_wildcard_missing(
         self,
         ctx: RoleEvaluationContext,
         op: str,
         classified: ClassifiedOperations,
-        actions: list[str],
-        not_actions: list[str],
-        data_actions: list[str],
-        not_data_actions: list[str],
-    ) -> tuple[list[str], int]:
+        aggregator: PermissionAggregator,
+    ) -> ExpandedMissing:
         """Expand a wildcard pattern to its uncovered operations."""
         expanded: list[str] = []
         total = 0
 
         # Control plane
-        ctrl_ops, ctrl_count = self._get_plane_uncovered(
-            ctx=ctx,
-            op=op,
-            plane=Plane.CONTROL,
-            in_plane=op in classified.control_wildcards,
-            all_ops=self.op_sets.all_control,
-            cache_key=self.op_sets.control_cache_key,
-            actions=actions,
-            not_actions=not_actions,
-        )
-        expanded.extend(ctrl_ops)
-        total += ctrl_count
+        if op in classified.control_wildcards:
+            plane_actions = aggregator.for_plane(Plane.CONTROL)
+            ctrl = self._get_plane_uncovered(
+                ctx=ctx,
+                op=op,
+                plane=Plane.CONTROL,
+                in_plane=True,
+                all_ops=self.op_sets.all_control,
+                cache_key=self.op_sets.control_cache_key,
+                actions=plane_actions.actions,
+                not_actions=plane_actions.not_actions,
+            )
+            expanded.extend(ctrl.operations)
+            total += ctrl.total
 
         # Data plane
-        data_ops, data_count = self._get_plane_uncovered(
-            ctx=ctx,
-            op=op,
-            plane=Plane.DATA,
-            in_plane=op in classified.data_wildcards,
-            all_ops=self.op_sets.all_data,
-            cache_key=self.op_sets.data_cache_key,
-            actions=data_actions,
-            not_actions=not_data_actions,
-        )
-        expanded.extend(data_ops)
-        total += data_count
+        if op in classified.data_wildcards:
+            plane_actions = aggregator.for_plane(Plane.DATA)
+            data = self._get_plane_uncovered(
+                ctx=ctx,
+                op=op,
+                plane=Plane.DATA,
+                in_plane=True,
+                all_ops=self.op_sets.all_data,
+                cache_key=self.op_sets.data_cache_key,
+                actions=plane_actions.actions,
+                not_actions=plane_actions.not_actions,
+            )
+            expanded.extend(data.operations)
+            total += data.total
 
-        return expanded, total
+        return ExpandedMissing(expanded, total)
 
     def _get_plane_uncovered(
         self,
@@ -674,28 +756,24 @@ class RoleRecommendationService:
         cache_key: int,
         actions: list[str],
         not_actions: list[str],
-    ) -> tuple[list[str], int]:
+    ) -> ExpandedMissing:
         """Get uncovered operations for a wildcard in one plane."""
-        key = f"{plane.value}:{op}"
+        key = plane.make_key(op)
 
         if key in ctx.wildcard_partial_coverage:
             result = count_wildcard_partial_coverage(
                 op, actions, not_actions, all_ops, cache_key, caches=self._caches
             )
-            return list(result.uncovered_samples), result.uncovered
+            return ExpandedMissing(list(result.uncovered_samples), result.uncovered)
 
         if in_plane and key not in ctx.fully_covered_wildcards:
             matching = get_matching_operations(op, all_ops, cache_key, caches=self._caches)
-            return sorted(matching), len(matching)
+            return ExpandedMissing(sorted(matching), len(matching))
 
-        return [], 0
+        return ExpandedMissing([], 0)
 
-    # =========================================================================
-    # Cache and Utility Methods
-    # =========================================================================
-
+    @staticmethod
     def _extend_unique_sorted(
-        self,
         dst: list[str],
         values: set[str] | list[str],
         *,
@@ -708,30 +786,25 @@ class RoleRecommendationService:
                 dst.append(v)
                 existing.add(v)
 
-    def has_full_cache(self) -> bool:
-        """Check if full role coverage cache is available."""
-        return len(self._caches.role_coverage) > 0
-
-    def get_cached_coverage(self, role_id: str) -> tuple[set[str], set[str]] | None:
-        """Get cached coverage for a role, if available."""
-        return self._caches.role_coverage.get(role_id)
-
     def finalize_partial_coverage(self, ctx: RoleEvaluationContext) -> None:
         """Add partially covered wildcards to matched_ops for display."""
         for key, info in ctx.wildcard_partial_coverage.items():
             if info.covered > 0:
+                # Extract pattern from key (e.g., "ctrl:pattern" -> "pattern")
                 pattern = key.split(":", 1)[1] if ":" in key else key
                 ctx.matched_ops.add(pattern)
 
-    def is_builtin_role(self, role: RoleDefinition) -> bool:
+    @staticmethod
+    def is_builtin_role(role: RoleDefinition) -> bool:
         """Check if a role is a built-in role."""
         return role.is_builtin
 
-    def extract_role_info(self, role: RoleDefinition) -> tuple[str, str, str, list[Permission]]:
+    @staticmethod
+    def extract_role_info(role: RoleDefinition) -> RoleInfo:
         """Extract role information from a RoleDefinition."""
-        return (
-            role.role_id,
-            role.role_name,
-            role.description,
-            role.properties.permissions,
+        return RoleInfo(
+            role_id=role.role_id,
+            role_name=role.role_name,
+            description=role.description,
+            permissions=role.properties.permissions,
         )

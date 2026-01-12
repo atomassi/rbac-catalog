@@ -1,16 +1,4 @@
-"""Role matching module for Azure RBAC role recommendations.
-
-This module provides pattern-based exact matching for Azure RBAC roles.
-The main entry point is `recommend_roles()` which finds roles granting
-specific operations, sorted by least privilege.
-
-Main components:
-- recommend_roles: Find roles granting specific operations (main entry point)
-- RoleMatch: Result object with detailed match information
-- RoleRecommendationService: Service class with focused matching methods
-- ClassifiedOperations: Value object for classified operation sets
-- OperationSets: Value object for pre-computed operation sets
-"""
+"""Role matching for Azure RBAC recommendations."""
 
 from azurerbac.matching.models import (
     ClassifiedOperations,

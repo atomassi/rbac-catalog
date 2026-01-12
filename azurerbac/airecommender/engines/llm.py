@@ -1,4 +1,4 @@
-"""LLM recommendation engine."""
+"""LLM recommendation engine using fine-tuned Qwen model."""
 
 from __future__ import annotations
 
@@ -19,38 +19,25 @@ _MAX_LLM_RESULTS: Final[int] = 3
 
 @EngineRegistry.register(RecommenderMode.LLM)
 class LLMEngine(BaseRecommenderEngine):
-    """LLM-based recommendation engine using fine-tuned Qwen model.
-
-    The engine queries a fine-tuned Ollama model that outputs structured JSON
-    with role predictions. Results are validated against the knowledge base
-    to filter hallucinated roles.
-    """
+    """LLM-based engine using fine-tuned Qwen model with JSON output."""
 
     @property
     @override
     def name(self) -> str:
-        """Return engine name including the model identifier."""
         model = self.ollama_client.model if self.ollama_client else "unknown"
         return f"{model} LLM"
 
     @property
     @override
     def requires_llm(self) -> bool:
-        """LLM engine requires an active Ollama connection."""
         return True
 
     @property
     @override
     def requires_embeddings(self) -> bool:
-        """LLM engine operates without embeddings."""
         return False
 
     def _ensure_role_names_initialized(self) -> None:
-        """Lazily initialize role names for fuzzy matching if needed.
-
-        Role names may be missing after hot-reload. This method ensures
-        the Ollama client has the full role name list for post-processing.
-        """
         if self.ollama_client is None:
             raise OllamaClientNotAvailableError("LLM")
 
@@ -65,16 +52,6 @@ class LLMEngine(BaseRecommenderEngine):
             logger.warning("LLM: No role names available for fuzzy matching")
 
     def _query_llm(self, query: str, top_k: int) -> list[tuple[str, float, str, list[str]]]:
-        """Query the Ollama LLM for role recommendations.
-
-        Args:
-            query: Natural language query
-            top_k: Maximum results to request
-
-        Returns:
-            List of (role_name, score, explanation, signals_matched) tuples,
-            or empty list on failure.
-        """
         if self.ollama_client is None:
             raise OllamaClientNotAvailableError("LLM")
         logger.debug("LLM: Querying Ollama %s model", self.ollama_client.model)
@@ -91,8 +68,6 @@ class LLMEngine(BaseRecommenderEngine):
         signals_matched: list[str],
         exclude_owner: bool,
     ) -> RankedRole | None:
-        """Map an LLM prediction to a validated RankedRole."""
-        # Validate role exists (no fuzzy matching - causes semantic drift)
         role_id = self.knowledge_base.find_role_id_by_name(role_name)
         if not role_id:
             logger.debug("LLM: Role '%s' not found (hallucinated)", role_name)
@@ -122,21 +97,6 @@ class LLMEngine(BaseRecommenderEngine):
         top_k: int = 5,
         exclude_owner: bool = True,
     ) -> list[RankedRole]:
-        """Get recommendations using fine-tuned LLM.
-
-        The qwen-rbac model returns structured JSON with:
-        - role: The exact Azure built-in role name
-        - confidence_class: Converted to percentage (very_high=95%, high=80%, etc.)
-        - signals_matched: Keywords from query that match the role
-
-        Args:
-            query: Natural language query
-            top_k: Number of recommendations to return (capped at _MAX_LLM_RESULTS)
-            exclude_owner: Whether to exclude Owner role
-
-        Returns:
-            List of RankedRole objects sorted by LLM confidence
-        """
         self._log_start(query, top_k)
 
         if not self.is_llm_available:

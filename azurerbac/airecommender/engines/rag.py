@@ -13,13 +13,12 @@ from azurerbac.airecommender.modes import RecommenderMode
 
 logger = logging.getLogger(__name__)
 
-# Default number of candidates to retrieve for LLM re-ranking
 _DEFAULT_RETRIEVAL_K: Final = 20
 
 
 @EngineRegistry.register(RecommenderMode.RAG)
 class RAGEngine(BaseRecommenderEngine):
-    """Retrieval-Augmented Generation recommendation engine."""
+    """Semantic search + LLM re-ranking engine."""
 
     @property
     @override
@@ -44,17 +43,6 @@ class RAGEngine(BaseRecommenderEngine):
         exclude_owner: bool = True,
         retrieval_k: int | None = None,
     ) -> list[RankedRole]:
-        """Get recommendations using RAG pipeline.
-
-        Args:
-            query: Natural language query
-            top_k: Number of final recommendations
-            exclude_owner: Whether to exclude Owner role
-            retrieval_k: Number of candidates to retrieve for LLM re-ranking
-
-        Returns:
-            List of RankedRole objects sorted by final score
-        """
         retrieval_k = retrieval_k or _DEFAULT_RETRIEVAL_K
         self._log_start(query, top_k)
 

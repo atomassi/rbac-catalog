@@ -151,7 +151,7 @@ REQUIRED_SECURITY_HEADERS: Final = [
 ]
 
 
-@dataclass
+@dataclass(slots=True)
 class TestResult:
     """Result of a single smoke test."""
 
@@ -531,146 +531,157 @@ async def test_method_restriction(
         )
 
 
-async def run_smoke_tests(base_url: str, verbose: bool = False) -> bool:
-    """Run all smoke tests against the given base URL.
-
-    All tests run to completion regardless of failures.
-    Returns True only if all tests pass.
-    """
-    print(f"🧪 Running smoke tests against: {base_url}")
-    print("=" * 60)
-
+async def _run_page_tests(
+    client: httpx.AsyncClient, verbose: bool
+) -> tuple[list[TestResult], list[tuple[str, float]]]:
+    """Run page availability tests with content validation."""
+    print("\n📄 Testing Pages with Content Validation...")
+    print("-" * 40)
     results: list[TestResult] = []
     slow_responses: list[tuple[str, float]] = []
+    for name, path, expected_content in PAGES_WITH_CONTENT:
+        result = await test_page_with_content(client, name, path, expected_content)
+        print_result(result, verbose)
+        results.append(result)
+        if result.response_time > MAX_RESPONSE_TIME:
+            slow_responses.append((name, result.response_time))
+    return results, slow_responses
 
-    async with httpx.AsyncClient(
-        base_url=base_url, timeout=TIMEOUT, follow_redirects=True
-    ) as client:
-        # 1. Page availability with content validation
-        print("\n📄 Testing Pages with Content Validation...")
-        print("-" * 40)
-        for name, path, expected_content in PAGES_WITH_CONTENT:
-            result = await test_page_with_content(client, name, path, expected_content)
-            print_result(result, verbose)
-            results.append(result)
-            if result.response_time > MAX_RESPONSE_TIME:
-                slow_responses.append((name, result.response_time))
 
-        # 2. Static assets
-        print("\n📦 Testing Static Assets...")
-        print("-" * 40)
-        for name, path in STATIC_ASSETS:
-            result = await test_static_asset(client, name, path)
-            print_result(result, verbose)
-            results.append(result)
+async def _run_static_tests(client: httpx.AsyncClient, verbose: bool) -> list[TestResult]:
+    """Run static asset tests."""
+    print("\n📦 Testing Static Assets...")
+    print("-" * 40)
+    results: list[TestResult] = []
+    for name, path in STATIC_ASSETS:
+        result = await test_static_asset(client, name, path)
+        print_result(result, verbose)
+        results.append(result)
+    return results
 
-        # 3. API JSON endpoints
-        print("\n🔌 Testing API Endpoints...")
-        print("-" * 40)
-        for name, path, expected_keys in API_ENDPOINTS_JSON:
-            result = await test_api_json(client, name, path, expected_keys)
-            print_result(result, verbose)
-            results.append(result)
 
-        # 4. Search and filter tests
-        print("\n🔍 Testing Search & Filters...")
-        print("-" * 40)
-        for name, path, expected_content in SEARCH_FILTER_TESTS:
-            result = await test_page_with_content(client, name, path, expected_content)
-            print_result(result, verbose)
-            results.append(result)
+async def _run_api_tests(client: httpx.AsyncClient, verbose: bool) -> list[TestResult]:
+    """Run API and search/filter tests."""
+    results: list[TestResult] = []
 
-        # 5. Role recommend API
-        print("\n📊 Testing Role Recommend API...")
-        print("-" * 40)
-        for name, operations in ROLE_RECOMMEND_TESTS:
-            result = await test_role_recommend(client, name, operations)
-            print_result(result, verbose)
-            results.append(result)
+    print("\n🔌 Testing API Endpoints...")
+    print("-" * 40)
+    for name, path, expected_keys in API_ENDPOINTS_JSON:
+        result = await test_api_json(client, name, path, expected_keys)
+        print_result(result, verbose)
+        results.append(result)
 
-        # 6. AI Recommender tests (different modes)
-        print("\n🤖 Testing AI Recommender Modes...")
-        print("-" * 40)
-        for name, request_body in AI_RECOMMENDER_TESTS:
-            result = await test_ai_recommender(client, name, request_body)
-            print_result(result, verbose)
-            results.append(result)
+    print("\n🔍 Testing Search & Filters...")
+    print("-" * 40)
+    for name, path, expected_content in SEARCH_FILTER_TESTS:
+        result = await test_page_with_content(client, name, path, expected_content)
+        print_result(result, verbose)
+        results.append(result)
 
-        # 7. Edge cases
-        print("\n⚠️  Testing Edge Cases...")
-        print("-" * 40)
-        for name, path, expected_codes in EDGE_CASES:
-            result = await test_edge_case(client, name, path, expected_codes)
-            print_result(result, verbose)
-            results.append(result)
+    print("\n📊 Testing Role Recommend API...")
+    print("-" * 40)
+    for name, operations in ROLE_RECOMMEND_TESTS:
+        result = await test_role_recommend(client, name, operations)
+        print_result(result, verbose)
+        results.append(result)
 
-        # 8. Security headers
-        print("\n🔒 Testing Security Headers...")
-        print("-" * 40)
-        security_results = await test_security_headers(client)
-        for result in security_results:
-            print_result(result, verbose)
-            results.append(result)
+    return results
 
-        # 9. Version endpoint
-        print("\n📌 Testing Version Endpoint...")
-        print("-" * 40)
-        try:
-            response = await client.get("/version")
-            version = response.text.strip()
-            # Extract version if it matches expected format
-            version_match = re.match(r"^[a-f0-9]{7,40}$", version)
+
+async def _run_ai_tests(client: httpx.AsyncClient, verbose: bool) -> list[TestResult]:
+    """Run AI recommender tests for all modes."""
+    print("\n🤖 Testing AI Recommender Modes...")
+    print("-" * 40)
+    results: list[TestResult] = []
+    for name, request_body in AI_RECOMMENDER_TESTS:
+        result = await test_ai_recommender(client, name, request_body)
+        print_result(result, verbose)
+        results.append(result)
+    return results
+
+
+async def _run_edge_and_security_tests(
+    client: httpx.AsyncClient, verbose: bool
+) -> list[TestResult]:
+    """Run edge case and security tests."""
+    results: list[TestResult] = []
+
+    print("\n⚠️  Testing Edge Cases...")
+    print("-" * 40)
+    for name, path, expected_codes in EDGE_CASES:
+        result = await test_edge_case(client, name, path, expected_codes)
+        print_result(result, verbose)
+        results.append(result)
+
+    print("\n🔒 Testing Security Headers...")
+    print("-" * 40)
+    security_results = await test_security_headers(client)
+    for result in security_results:
+        print_result(result, verbose)
+        results.append(result)
+
+    return results
+
+
+async def _run_infra_tests(client: httpx.AsyncClient, verbose: bool) -> list[TestResult]:
+    """Run infrastructure tests (version, health, method restrictions)."""
+    results: list[TestResult] = []
+
+    print("\n📌 Testing Version Endpoint...")
+    print("-" * 40)
+    try:
+        response = await client.get("/version")
+        version = response.text.strip()
+        version_match = re.match(r"^[a-f0-9]{7,40}$", version)
+        result = TestResult(
+            name="Version endpoint",
+            passed=response.status_code == 200,
+            status_code=response.status_code,
+            details={"version": version if version_match else "non-sha-format"},
+        )
+    except httpx.RequestError as e:
+        result = TestResult(name="Version endpoint", passed=False, message=str(e))
+    print_result(result, verbose)
+    results.append(result)
+
+    print("\n❤️  Testing Health Endpoint...")
+    print("-" * 40)
+    try:
+        response = await client.get("/healthz")
+        if response.status_code == 200:
+            result = TestResult(name="Health endpoint", passed=True, status_code=200)
+        elif response.status_code == 404:
             result = TestResult(
-                name="Version endpoint",
-                passed=response.status_code == 200,
-                status_code=response.status_code,
-                details={"version": version if version_match else "non-sha-format"},
+                name="Health endpoint",
+                passed=True,
+                status_code=404,
+                message="Not implemented (optional)",
             )
-            print_result(result, verbose)
-            results.append(result)
-        except httpx.RequestError as e:
-            result = TestResult(name="Version endpoint", passed=False, message=str(e))
+        else:
+            result = TestResult(
+                name="Health endpoint",
+                passed=False,
+                status_code=response.status_code,
+                expected=200,
+            )
+    except httpx.RequestError as e:
+        result = TestResult(name="Health endpoint", passed=False, message=str(e))
+    print_result(result, verbose)
+    results.append(result)
+
+    print("\n🚫 Testing Method Restrictions...")
+    print("-" * 40)
+    for path in ["/", "/roles", "/operations"]:
+        for method in ["DELETE", "PUT"]:
+            result = await test_method_restriction(client, path, method)
             print_result(result, verbose)
             results.append(result)
 
-        # 10. Health endpoint
-        print("\n❤️  Testing Health Endpoint...")
-        print("-" * 40)
-        try:
-            response = await client.get("/healthz")
-            if response.status_code == 200:
-                result = TestResult(name="Health endpoint", passed=True, status_code=200)
-            elif response.status_code == 404:
-                result = TestResult(
-                    name="Health endpoint",
-                    passed=True,
-                    status_code=404,
-                    message="Not implemented (optional)",
-                )
-            else:
-                result = TestResult(
-                    name="Health endpoint",
-                    passed=False,
-                    status_code=response.status_code,
-                    expected=200,
-                )
-            print_result(result, verbose)
-            results.append(result)
-        except httpx.RequestError as e:
-            result = TestResult(name="Health endpoint", passed=False, message=str(e))
-            print_result(result, verbose)
-            results.append(result)
+    return results
 
-        # 11. Method restrictions
-        print("\n🚫 Testing Method Restrictions...")
-        print("-" * 40)
-        for path in ["/", "/roles", "/operations"]:
-            for method in ["DELETE", "PUT"]:
-                result = await test_method_restriction(client, path, method)
-                print_result(result, verbose)
-                results.append(result)
 
-    # ─── Summary ──────────────────────────────────────────────────────────────
+def _print_summary(results: list[TestResult], slow_responses: list[tuple[str, float]]) -> bool:
+    """Print test summary and return True if all tests passed."""
     passed = sum(1 for r in results if r.passed)
     failed = len(results) - passed
 
@@ -686,7 +697,6 @@ async def run_smoke_tests(base_url: str, verbose: bool = False) -> bool:
 
     if failed > 0:
         print("\033[91m❌ Smoke tests FAILED\033[0m")
-        # Print failed tests with full details
         print("\nFailed tests:")
         for r in results:
             if not r.passed:
@@ -694,13 +704,40 @@ async def run_smoke_tests(base_url: str, verbose: bool = False) -> bool:
                 print(f"   - {r.name}: {msg}")
                 if r.details:
                     for key, value in r.details.items():
-                        # Truncate long values
                         val_str = str(value)[:200]
                         print(f"       {key}: {val_str}")
         return False
     else:
         print("\033[92m🎉 All smoke tests PASSED\033[0m")
         return True
+
+
+async def run_smoke_tests(base_url: str, verbose: bool = False) -> bool:
+    """Run all smoke tests against the given base URL.
+
+    All tests run to completion regardless of failures.
+    Returns True only if all tests pass.
+    """
+    print(f"🧪 Running smoke tests against: {base_url}")
+    print("=" * 60)
+
+    results: list[TestResult] = []
+    slow_responses: list[tuple[str, float]] = []
+
+    async with httpx.AsyncClient(
+        base_url=base_url, timeout=TIMEOUT, follow_redirects=True
+    ) as client:
+        page_results, page_slow = await _run_page_tests(client, verbose)
+        results.extend(page_results)
+        slow_responses.extend(page_slow)
+
+        results.extend(await _run_static_tests(client, verbose))
+        results.extend(await _run_api_tests(client, verbose))
+        results.extend(await _run_ai_tests(client, verbose))
+        results.extend(await _run_edge_and_security_tests(client, verbose))
+        results.extend(await _run_infra_tests(client, verbose))
+
+    return _print_summary(results, slow_responses)
 
 
 async def main() -> int:

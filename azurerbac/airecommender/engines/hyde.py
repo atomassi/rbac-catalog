@@ -20,10 +20,7 @@ from azurerbac.airecommender.modes import RecommenderMode
 
 logger = logging.getLogger(__name__)
 
-# HyDE LLM model - qwen2.5 for Azure terminology accuracy
 HYDE_MODEL: Final = "qwen2.5:0.5b"
-
-# Prompt template for generating hypothetical role descriptions
 HYDE_PROMPT_TEMPLATE: Final = """Complete this Azure role description in ONE sentence:
 
 For "{query}": Lets you"""
@@ -31,7 +28,7 @@ For "{query}": Lets you"""
 
 @EngineRegistry.register(RecommenderMode.HYDE)
 class HyDEEngine(BaseRecommenderEngine):
-    """HyDE (Hypothetical Document Embeddings) recommendation engine."""
+    """Hypothetical document embeddings engine."""
 
     @property
     @override
@@ -55,16 +52,6 @@ class HyDEEngine(BaseRecommenderEngine):
         top_k: int = 5,
         exclude_owner: bool = True,
     ) -> list[RankedRole]:
-        """Get recommendations using HyDE approach.
-
-        Args:
-            query: Natural language query (can be vague)
-            top_k: Number of final recommendations
-            exclude_owner: Whether to exclude Owner role
-
-        Returns:
-            List of RankedRole objects sorted by similarity to hypothetical doc
-        """
         self._log_start(query, top_k)
 
         if not self.is_embeddings_available:
@@ -98,17 +85,6 @@ class HyDEEngine(BaseRecommenderEngine):
         return candidates
 
     def _generate_hypothetical_document(self, query: str) -> str | None:
-        """Generate a hypothetical role description using LLM.
-
-        Uses qwen2.5:0.5b - a fast, small, general-purpose model that
-        produces coherent Azure role descriptions.
-
-        Args:
-            query: User's original query
-
-        Returns:
-            Generated role description or None if generation fails
-        """
         prompt = HYDE_PROMPT_TEMPLATE.format(query=query)
 
         if self.ollama_client is None:

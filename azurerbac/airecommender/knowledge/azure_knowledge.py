@@ -1,8 +1,4 @@
-"""Azure-specific knowledge base for AI role recommendations.
-
-This module contains Azure terminology, synonyms, and common use case mappings
-to help translate natural language queries into role recommendations.
-"""
+"""Azure terminology and use case mappings for AI role recommendations."""
 
 from functools import lru_cache
 from typing import Final
@@ -447,9 +443,8 @@ def extract_keywords(query: str) -> list[str]:
     ]
 
     # Expand synonyms
-    expanded = []
+    expanded = list(keywords)
     for kw in keywords:
-        expanded.append(kw)
         # Check if this keyword is a synonym for something
         for canonical, synonyms in AZURE_SERVICE_SYNONYMS.items():
             if kw in synonyms or kw == canonical:

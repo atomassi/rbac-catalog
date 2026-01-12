@@ -50,16 +50,6 @@ class TFIDFEngine(BaseRecommenderEngine):
         top_k: int = 5,
         exclude_owner: bool = True,
     ) -> list[RankedRole]:
-        """Get recommendations using Enhanced TF-IDF + BM25.
-
-        Args:
-            query: Natural language query
-            top_k: Number of recommendations to return
-            exclude_owner: Whether to exclude Owner role
-
-        Returns:
-            List of RankedRole objects sorted by TF-IDF score.
-        """
         self._log_start(query, top_k)
 
         if not self.tfidf_recommender:
@@ -103,7 +93,6 @@ class TFIDFEngine(BaseRecommenderEngine):
         return results[:top_k]
 
     def _filter_low_confidence(self, results: list[RankedRole]) -> list[RankedRole]:
-        """Filter low-confidence results (Step 3)."""
         pre_filter_count = len(results)
         results = self._filter_min_confidence(results, threshold=TFIDF_CONFIG.min_confidence)
         logger.debug(
@@ -115,7 +104,6 @@ class TFIDFEngine(BaseRecommenderEngine):
         return results
 
     def _filter_relative_scores(self, results: list[RankedRole]) -> list[RankedRole]:
-        """Filter results significantly worse than best (Step 4)."""
         if not results:
             return results
 
@@ -125,7 +113,7 @@ class TFIDFEngine(BaseRecommenderEngine):
             threshold = best_score * TFIDF_CONFIG.relative_cutoff
             results = self._filter_min_confidence(results, threshold=threshold)
             logger.debug(
-                "TF-IDF Step 4: Filtered %d results worse than 70%% of best (%.2f), %d remaining",
+                "TF-IDF: Filtered %d results worse than 70%% of best (%.2f), %d remaining",
                 pre_filter_count - len(results),
                 best_score,
                 len(results),
@@ -133,13 +121,12 @@ class TFIDFEngine(BaseRecommenderEngine):
         return results
 
     def _normalize_final_scores(self, results: list[RankedRole]) -> list[RankedRole]:
-        """Normalize scores to 60-95% range for consistent UX (Step 5)."""
         pre_str = ", ".join(f"{r.role_name}({r.final_score:.2f})" for r in results[:5])
-        logger.debug("TF-IDF Step 5: Pre-normalization scores: [%s]", pre_str)
+        logger.debug("TF-IDF: Pre-normalization scores: [%s]", pre_str)
 
         results = normalize_scores(results)
 
         post_str = ", ".join(f"{r.role_name}({r.final_score:.0%})" for r in results[:5])
-        logger.debug("TF-IDF Step 5: Post-normalization scores: [%s]", post_str)
+        logger.debug("TF-IDF: Post-normalization scores: [%s]", post_str)
 
         return results

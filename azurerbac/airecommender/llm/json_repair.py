@@ -28,14 +28,7 @@ def _try_parse_json_object(raw: str) -> dict | None:
 
 
 def parse_json_with_repair(raw_output: str) -> dict | None:
-    """Parse JSON with fallback repair for common LLM malformed output.
-
-    Args:
-        raw_output: Raw string that should contain JSON
-
-    Returns:
-        Parsed dictionary or None if parsing failed
-    """
+    """Parse JSON with fallback repair for common LLM malformed output."""
     if (parsed := _try_parse_json_object(raw_output)) is not None:
         return parsed
 

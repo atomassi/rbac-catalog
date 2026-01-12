@@ -1,12 +1,4 @@
-"""Embeddings module for semantic similarity search.
-
-This module provides sentence embedding functionality using MiniLM
-for semantic search in role recommendations. Embeddings are vector
-representations that enable finding semantically similar content.
-
-Note: Embeddings are NOT LLMs - they are vector representation models
-for similarity computation, not generative text models.
-"""
+"""Embeddings for semantic similarity search."""
 
 from __future__ import annotations
 
@@ -25,233 +17,182 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Model and cache paths
-MODELS_DIR: Final[Path] = Path(__file__).parent / "models"
-MINILM_MODEL_PATH: Final[Path] = MODELS_DIR / "all-MiniLM-L6-v2"
-EMBEDDINGS_CACHE_PATH: Final[Path] = MODELS_DIR / "role_embeddings.json"
+_MODELS_DIR: Final[Path] = Path(__file__).parent / "models"
+_MODEL_PATH: Final[Path] = _MODELS_DIR / "all-MiniLM-L6-v2"
+_CACHE_PATH: Final[Path] = _MODELS_DIR / "role_embeddings.json"
+_MODEL_NAME: Final[str] = "all-MiniLM-L6-v2"
+_MODEL_NOT_LOADED = "Embedding model not loaded"
 
 
 class EmbeddingModel:
-    """Sentence embedding model for semantic similarity.
-
-    Uses MiniLM (all-MiniLM-L6-v2) for fast, accurate semantic embeddings.
-    Supports caching embeddings to disk for faster startup.
-    """
+    """Sentence embedding model for semantic similarity search."""
 
     def __init__(self) -> None:
         self._model: SentenceTransformer | None = None
         self._embeddings: dict[str, list[float]] = {}
-        self._loaded = False
-        # Optimizations for fast similarity search
-        self._embedding_matrix: np.ndarray | None = None  # (n_docs, dim) matrix
-        self._embedding_ids: list[str] = []  # doc_id for each row
+        self._matrix: np.ndarray | None = None
+        self._doc_ids: list[str] = []
 
     @property
     def is_loaded(self) -> bool:
-        return self._loaded
+        return self._model is not None
 
     @property
     def embeddings(self) -> dict[str, list[float]]:
         return self._embeddings
 
     def try_load(self) -> bool:
-        """Try to load the sentence transformer model. Returns True on success."""
-        settings = Settings.get()
+        """Load the sentence transformer model. Returns False if skipped or failed."""
+        if self._should_skip_in_tests():
+            return False
+        return self._load_model()
 
-        # Unit tests should not pay the cost of importing torch/transformers
-        # unless explicitly opted-in via environment variable.
+    def _should_skip_in_tests(self) -> bool:
+        settings = Settings.get()
         if is_running_in_pytest() and not settings.enable_embeddings_in_tests:
             logger.info(
                 "Skipping embedding model load under pytest. "
                 "Set AZURERBAC_ENABLE_EMBEDDINGS_IN_TESTS=1 to enable."
             )
-            return False
+            return True
+        return False
 
+    def _load_model(self) -> bool:
         try:
             from sentence_transformers import SentenceTransformer
 
-            # Try to load from local path first, then download
-            if MINILM_MODEL_PATH.exists():
-                self._model = SentenceTransformer(str(MINILM_MODEL_PATH))
+            if _MODEL_PATH.exists():
+                self._model = SentenceTransformer(str(_MODEL_PATH))
             else:
-                # Download and cache the model
                 logger.info("Downloading MiniLM embedding model (first time only)...")
-                self._model = SentenceTransformer("all-MiniLM-L6-v2")
-                # Save for future use
-                MODELS_DIR.mkdir(parents=True, exist_ok=True)
-                self._model.save(str(MINILM_MODEL_PATH))
+                self._model = SentenceTransformer(_MODEL_NAME)
+                _MODELS_DIR.mkdir(parents=True, exist_ok=True)
+                self._model.save(str(_MODEL_PATH))
 
-            self._loaded = True
             logger.info("Loaded sentence embedding model (MiniLM)")
             return True
         except ImportError:
             logger.warning("sentence-transformers not installed. Using TF-IDF fallback.")
-            return False
         except Exception as e:
             logger.exception("Failed to load embedding model: %s. Using TF-IDF fallback.", e)
-            return False
+        return False
+
+    def _require_model(self) -> SentenceTransformer:
+        if not self._model:
+            raise RuntimeError(_MODEL_NOT_LOADED)
+        return self._model
 
     def encode(self, texts: list[str]) -> list[list[float]]:
-        """Encode texts into embedding vectors."""
-        if not self._model:
-            raise RuntimeError("Embedding model not loaded")
-        embeddings = self._model.encode(texts, show_progress_bar=False)
+        """Encode multiple texts into embedding vectors."""
+        embeddings = self._require_model().encode(texts, show_progress_bar=False)
         return [emb.tolist() for emb in embeddings]
 
     def encode_single(self, text: str) -> list[float]:
         """Encode a single text into an embedding vector."""
-        if not self._model:
-            raise RuntimeError("Embedding model not loaded")
-        return self._model.encode(text, show_progress_bar=False).tolist()
+        return self._require_model().encode(text, show_progress_bar=False).tolist()
 
-    def build_embeddings(
-        self,
-        documents: dict[str, str],
-        cache_hash: str | None = None,
-    ) -> None:
+    @lru_cache(maxsize=512)  # noqa: B019
+    def encode_single_cached(self, text: str) -> tuple[float, ...]:
+        """Encode with LRU caching. Returns tuple for hashability."""
+        return tuple(self.encode_single(text))
+
+    def build_embeddings(self, documents: dict[str, str], cache_hash: str | None = None) -> None:
         """Build embeddings for all documents. Uses cache if hash matches."""
-        if not self._model:
-            raise RuntimeError("Embedding model not loaded")
+        model = self._require_model()
 
-        # Check cache
         if cache_hash and self._load_cache(cache_hash):
             logger.info("Loaded embeddings from cache")
-            self._build_matrix()  # Build matrix for fast search
+            self._build_matrix()
             return
 
         logger.info("Computing embeddings for %d documents...", len(documents))
 
         doc_ids = list(documents.keys())
         texts = list(documents.values())
+        embeddings = model.encode(texts, show_progress_bar=False)
 
-        # Compute embeddings in batch
-        embeddings = self._model.encode(texts, show_progress_bar=False)
-
-        # Store embeddings
         self._embeddings = {
-            doc_id: embedding.tolist()
-            for doc_id, embedding in zip(doc_ids, embeddings, strict=True)
+            doc_id: emb.tolist() for doc_id, emb in zip(doc_ids, embeddings, strict=True)
         }
-
-        # Build numpy matrix for fast vectorized search
         self._build_matrix()
 
-        # Save cache
         if cache_hash:
             self._save_cache(cache_hash)
 
         logger.info("Computed and cached %d embeddings", len(self._embeddings))
 
     def _load_cache(self, expected_hash: str) -> bool:
-        """Load embeddings from cache if valid."""
-        if not EMBEDDINGS_CACHE_PATH.exists():
+        if not _CACHE_PATH.exists():
             return False
-
         try:
-            with open(EMBEDDINGS_CACHE_PATH) as f:
-                cache = json.load(f)
-
+            cache = json.loads(_CACHE_PATH.read_text())
             if cache.get("hash") != expected_hash:
                 logger.info("Embeddings cache outdated, recomputing...")
                 return False
-
             self._embeddings = cache.get("embeddings", {})
-            return len(self._embeddings) > 0
+            return bool(self._embeddings)
         except (OSError, json.JSONDecodeError) as e:
             logger.warning("Failed to load embeddings cache: %s", e)
             return False
 
     def _save_cache(self, cache_hash: str) -> None:
-        """Save embeddings to cache."""
         try:
-            MODELS_DIR.mkdir(parents=True, exist_ok=True)
-            with open(EMBEDDINGS_CACHE_PATH, "w") as f:
-                json.dump(
-                    {
-                        "hash": cache_hash,
-                        "embeddings": self._embeddings,
-                    },
-                    f,
-                )
+            _MODELS_DIR.mkdir(parents=True, exist_ok=True)
+            _CACHE_PATH.write_text(json.dumps({"hash": cache_hash, "embeddings": self._embeddings}))
         except OSError as e:
             logger.warning("Failed to save embeddings cache: %s", e)
 
-    @lru_cache(maxsize=512)  # noqa: B019 - singleton pattern, no memory leak risk
-    def encode_single_cached(self, text: str) -> tuple[float, ...]:
-        """Encode a single text with LRU caching. Returns tuple for hashability."""
-        return tuple(self.encode_single(text))
-
     def _build_matrix(self) -> None:
-        """Build numpy matrix from embeddings for vectorized operations."""
+        """Build normalized numpy matrix for fast vectorized cosine similarity."""
         if not self._embeddings:
             return
 
-        self._embedding_ids = list(self._embeddings.keys())
-        embeddings_list = [self._embeddings[doc_id] for doc_id in self._embedding_ids]
-        self._embedding_matrix = np.array(embeddings_list, dtype=np.float32)
+        self._doc_ids = list(self._embeddings.keys())
+        matrix = np.array([self._embeddings[d] for d in self._doc_ids], dtype=np.float32)
 
-        # Normalize rows for fast cosine similarity (just dot product after normalization)
-        norms = np.linalg.norm(self._embedding_matrix, axis=1, keepdims=True)
-        norms = np.where(norms == 0, 1, norms)  # Avoid division by zero
-        self._embedding_matrix = self._embedding_matrix / norms
+        norms = np.linalg.norm(matrix, axis=1, keepdims=True)
+        norms = np.where(norms == 0, 1, norms)
+        self._matrix = matrix / norms
 
-        logger.debug("Built embedding matrix: %s", self._embedding_matrix.shape)
+        logger.debug("Built embedding matrix: %s", self._matrix.shape)
 
     def search(self, query: str, top_k: int = 10) -> list[tuple[str, float]]:
-        """Search for similar documents using cosine similarity."""
-        if not self._model:
-            raise RuntimeError("Embedding model not loaded")
-
-        # Use cached query embedding
-        query_embedding = self.encode_single_cached(query)
-        return self.search_vector(list(query_embedding), top_k)
+        """Search for similar documents by query text."""
+        self._require_model()
+        return self.search_vector(list(self.encode_single_cached(query)), top_k)
 
     def search_vector(self, query_embedding: list[float], top_k: int) -> list[tuple[str, float]]:
         """Search for similar documents using a pre-computed query vector."""
-        # Use vectorized search if matrix is built
-        if self._embedding_matrix is not None:
-            return self._search_vectorized(query_embedding, top_k)
+        if self._matrix is not None:
+            return self._search_matrix(query_embedding, top_k)
 
-        # Fallback to vectorized batch similarity from common
         from azurerbac.airecommender.engines.common import top_k_similar
 
         return top_k_similar(query_embedding, self._embeddings, top_k)
 
-    def _search_vectorized(
-        self, query_embedding: list[float], top_k: int
-    ) -> list[tuple[str, float]]:
-        """Vectorized similarity search using numpy.
-
-        5-10x faster than loop-based search for 800+ documents.
-        """
-        # Normalize query embedding
+    def _search_matrix(self, query_embedding: list[float], top_k: int) -> list[tuple[str, float]]:
+        """Vectorized similarity search. O(n) via argpartition."""
         query_vec = np.array(query_embedding, dtype=np.float32)
         query_norm = np.linalg.norm(query_vec)
         if query_norm > 0:
             query_vec = query_vec / query_norm
 
-        # Compute all similarities in one matrix multiplication
-        similarities = self._embedding_matrix @ query_vec  # type: ignore[operator]
+        similarities = self._matrix @ query_vec  # type: ignore[operator]
+        top_indices = self._top_k_indices(similarities, top_k)
+        return [(self._doc_ids[i], float(similarities[i])) for i in top_indices]
 
-        # Get top-k indices efficiently
-        n_docs = len(similarities)
-        if top_k >= n_docs:
-            top_indices = np.argsort(similarities)[::-1]
-        else:
-            # argpartition is O(n)
-            partition_idx = np.argpartition(similarities, -top_k)[-top_k:]
-            # Sort the top k
-            top_indices = partition_idx[np.argsort(similarities[partition_idx])[::-1]]
-
-        # Return (doc_id, score) tuples
-        return [(self._embedding_ids[i], float(similarities[i])) for i in top_indices]
+    @staticmethod
+    def _top_k_indices(scores: np.ndarray, k: int) -> np.ndarray:
+        """Get indices of top-k scores efficiently."""
+        n = len(scores)
+        if k >= n:
+            return np.argsort(scores)[::-1]
+        partition_idx = np.argpartition(scores, -k)[-k:]
+        return partition_idx[np.argsort(scores[partition_idx])[::-1]]
 
 
 def compute_documents_hash(documents: dict[str, str]) -> str:
     """Compute hash of document texts for cache validation."""
     from azurerbac.core.utils import content_hash
 
-    # Sort by key and hash both keys and values
-    sorted_items = sorted(documents.items())
-    doc_str = json.dumps(sorted_items)
-    return content_hash(doc_str)
+    return content_hash(json.dumps(sorted(documents.items())))

@@ -12,21 +12,23 @@ from typing import Final, override
 
 from azurerbac.airecommender.engines.base import BaseRecommenderEngine, RankedRole
 from azurerbac.airecommender.engines.common import cosine_similarity, normalize_scores
-from azurerbac.airecommender.engines.config import HYBRID_WEIGHTS
+from azurerbac.airecommender.engines.config import (
+    HYBRID_PRIMARY_WEIGHT,
+    HYBRID_SECONDARY_WEIGHT,
+)
 from azurerbac.airecommender.engines.registry import EngineRegistry
 from azurerbac.airecommender.knowledge import extract_keywords
 from azurerbac.airecommender.modes import RecommenderMode
 
 logger = logging.getLogger(__name__)
 
-# Default candidates at each stage
 _DEFAULT_TFIDF_K: Final = 100
 _DEFAULT_EMBEDDING_K: Final = 20
 
 
 @EngineRegistry.register(RecommenderMode.HYBRID)
 class HybridEngine(BaseRecommenderEngine):
-    """Multi-stage hybrid ranking engine."""
+    """Multi-stage hybrid ranking: TF-IDF → Embedding → LLM."""
 
     @property
     @override
@@ -52,18 +54,6 @@ class HybridEngine(BaseRecommenderEngine):
         tfidf_k: int | None = None,
         embedding_k: int | None = None,
     ) -> list[RankedRole]:
-        """Get recommendations using hybrid multi-stage pipeline.
-
-        Args:
-            query: Natural language query
-            top_k: Number of final recommendations
-            exclude_owner: Whether to exclude Owner role
-            tfidf_k: Number of TF-IDF candidates (stage 1)
-            embedding_k: Number of embedding candidates (stage 2)
-
-        Returns:
-            List of RankedRole objects sorted by final score
-        """
         tfidf_k = tfidf_k or _DEFAULT_TFIDF_K
         embedding_k = embedding_k or _DEFAULT_EMBEDDING_K
 
@@ -104,7 +94,6 @@ class HybridEngine(BaseRecommenderEngine):
         top_k: int,
         exclude_owner: bool,
     ) -> list[RankedRole]:
-        """Stage 1: TF-IDF candidate retrieval."""
         if not self.tfidf_recommender:
             logger.warning("Hybrid Stage 1: No TF-IDF recommender available")
             return []
@@ -143,7 +132,6 @@ class HybridEngine(BaseRecommenderEngine):
         candidates: list[RankedRole],
         top_k: int,
     ) -> list[RankedRole]:
-        """Stage 2: Embedding-based re-ranking."""
         if not self.embedding_model or not self.embedding_model.is_loaded:
             return candidates[:top_k]
 
@@ -162,8 +150,7 @@ class HybridEngine(BaseRecommenderEngine):
         # Combine scores: TF-IDF weighted higher (curated patterns are more reliable)
         for c in candidates:
             c.final_score = (
-                HYBRID_WEIGHTS.primary_weight * c.tfidf_score
-                + HYBRID_WEIGHTS.secondary_weight * c.embedding_score
+                HYBRID_PRIMARY_WEIGHT * c.tfidf_score + HYBRID_SECONDARY_WEIGHT * c.embedding_score
             )
 
         candidates.sort(key=lambda r: r.final_score, reverse=True)
@@ -175,7 +162,6 @@ class HybridEngine(BaseRecommenderEngine):
         candidates: list[RankedRole],
         top_k: int,
     ) -> list[RankedRole]:
-        """Stage 3: LLM final ranking."""
         if not self.is_llm_available:
             return candidates[:top_k]
 

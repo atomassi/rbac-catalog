@@ -1,4 +1,4 @@
-"""Role recommendation engine."""
+"""AI role recommendation engine."""
 
 from .ai_recommender import (
     AIRecommendation,

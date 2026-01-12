@@ -1,4 +1,4 @@
-"""Semantic Search recommendation engine."""
+"""Semantic search recommendation engine."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 @EngineRegistry.register(RecommenderMode.SEMANTIC)
 class SemanticEngine(BaseRecommenderEngine):
-    """Semantic Search recommendation engine."""
+    """Pure embedding similarity search."""
 
     @property
     @override
@@ -39,16 +39,6 @@ class SemanticEngine(BaseRecommenderEngine):
         top_k: int = 5,
         exclude_owner: bool = True,
     ) -> list[RankedRole]:
-        """Get recommendations using semantic search.
-
-        Args:
-            query: Natural language query
-            top_k: Number of final recommendations
-            exclude_owner: Whether to exclude Owner role
-
-        Returns:
-            List of RankedRole objects sorted by similarity score
-        """
         self._log_start(query, top_k)
 
         query_embedding = self._encode_cached(query)
@@ -66,8 +56,6 @@ class SemanticEngine(BaseRecommenderEngine):
         )
 
         logger.debug("Semantic: Retrieved %d candidates", len(candidates))
-
-        # Filter and normalize
         candidates = self._finalize_results(
             candidates, threshold=SEMANTIC_THRESHOLDS.min_confidence
         )

@@ -1,4 +1,4 @@
-"""Cross-Encoder Reranking recommendation engine.
+"""Cross-Encoder reranking engine.
 
 Uses bi-encoder for fast initial retrieval, then cross-encoder for
 accurate reranking. Cross-encoders see query+document together,
@@ -12,23 +12,24 @@ from typing import Any, Final, override
 
 from azurerbac.airecommender.engines.base import BaseRecommenderEngine, RankedRole
 from azurerbac.airecommender.engines.common import normalize_scores
-from azurerbac.airecommender.engines.config import CROSSENCODER_THRESHOLDS, CROSSENCODER_WEIGHTS
+from azurerbac.airecommender.engines.config import (
+    CROSSENCODER_PRIMARY_WEIGHT,
+    CROSSENCODER_SECONDARY_WEIGHT,
+    CROSSENCODER_THRESHOLDS,
+)
 from azurerbac.airecommender.engines.registry import EngineRegistry
 from azurerbac.airecommender.modes import RecommenderMode
 from azurerbac.core.singleton import ThreadSafeSingleton
 
 logger = logging.getLogger(__name__)
 
-# Cross-encoder model - small and fast, trained on MS MARCO
 _CROSS_ENCODER_MODEL: Final = "cross-encoder/ms-marco-MiniLM-L-6-v2"
-
-# Number of candidates to retrieve with bi-encoder before reranking
 _RETRIEVAL_K: Final = 50
 
 
 @EngineRegistry.register(RecommenderMode.CROSSENCODER)
 class CrossEncoderEngine(BaseRecommenderEngine):
-    """Cross-Encoder Reranking recommendation engine."""
+    """Bi-encoder retrieval + cross-encoder reranking."""
 
     @property
     @override
@@ -47,11 +48,8 @@ class CrossEncoderEngine(BaseRecommenderEngine):
 
     @override
     def is_available(self) -> bool:
-        """Check if cross-encoder model is available."""
-        # First check base requirements (embeddings)
         if not super().is_available():
             return False
-        # Then check if cross-encoder can be loaded
         return is_cross_encoder_available()
 
     @override
@@ -61,16 +59,6 @@ class CrossEncoderEngine(BaseRecommenderEngine):
         top_k: int = 5,
         exclude_owner: bool = True,
     ) -> list[RankedRole]:
-        """Get recommendations using cross-encoder reranking.
-
-        Args:
-            query: Natural language query
-            top_k: Number of final recommendations
-            exclude_owner: Whether to exclude Owner role
-
-        Returns:
-            List of RankedRole objects sorted by cross-encoder score
-        """
         self._log_start(query, top_k)
 
         # Retrieve candidates with bi-encoder
@@ -103,12 +91,6 @@ class CrossEncoderEngine(BaseRecommenderEngine):
         candidates: list[RankedRole],
         cross_encoder: Any,
     ) -> list[RankedRole]:
-        """Rerank candidates using cross-encoder.
-
-        Cross-encoder scores query-document pairs directly, seeing both
-        together for more accurate relevance scoring.
-        """
-        # Build query-document pairs
         pairs = []
         for candidate in candidates:
             # Use full document_text (includes curated patterns, role name, description, keywords)
@@ -141,8 +123,8 @@ class CrossEncoderEngine(BaseRecommenderEngine):
                 # Combine bi-encoder and cross-encoder scores
                 # Weight cross-encoder higher as it's more accurate
                 candidate.final_score = (
-                    CROSSENCODER_WEIGHTS.secondary_weight * candidate.embedding_score
-                    + CROSSENCODER_WEIGHTS.primary_weight * normalized
+                    CROSSENCODER_SECONDARY_WEIGHT * candidate.embedding_score
+                    + CROSSENCODER_PRIMARY_WEIGHT * normalized
                 )
 
             # Sort by final score
@@ -163,13 +145,7 @@ class CrossEncoderEngine(BaseRecommenderEngine):
             return candidates
 
 
-# =============================================================================
-# Singleton - Cross-Encoder Model
-# =============================================================================
-
-
 def _load_cross_encoder() -> Any:
-    """Factory function to load the cross-encoder model."""
     from sentence_transformers import CrossEncoder
 
     logger.debug("Loading cross-encoder model: %s", _CROSS_ENCODER_MODEL)
@@ -178,16 +154,11 @@ def _load_cross_encoder() -> Any:
     return model
 
 
-# CrossEncoder singleton
 _cross_encoder: ThreadSafeSingleton[Any] = ThreadSafeSingleton(factory=_load_cross_encoder)
 
 
 def get_cross_encoder() -> Any:
-    """Get the cross-encoder model singleton (thread-safe).
-
-    Raises:
-        Exception: If cross-encoder failed to load.
-    """
+    """Get the cross-encoder model singleton."""
     return _cross_encoder.get()
 
 

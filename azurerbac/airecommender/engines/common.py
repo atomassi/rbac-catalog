@@ -1,4 +1,4 @@
-"""Common utilities shared across recommendation engines."""
+"""Common utilities for recommendation engines."""
 
 from __future__ import annotations
 
@@ -16,12 +16,11 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Derived constant
-_SCORE_RANGE = SCORE_CEILING - SCORE_FLOOR  # 0.35
+_SCORE_RANGE = SCORE_CEILING - SCORE_FLOOR
 
 
 def cosine_similarity(vec1: list[float], vec2: list[float]) -> float:
-    """Compute cosine similarity between two vectors. Returns 0 if zero magnitude."""
+    """Cosine similarity between two vectors."""
     if len(vec1) != len(vec2):
         raise ValueError("Vectors must have the same length")
 
@@ -38,7 +37,7 @@ def top_k_similar(
     embeddings: dict[str, list[float]],
     k: int,
 ) -> list[tuple[str, float]]:
-    """Get top-k most similar embeddings using numpy. O(n) via argpartition."""
+    """Top-k most similar embeddings using numpy (O(n) via argpartition)."""
     if not embeddings:
         return []
 
@@ -81,11 +80,7 @@ def normalize_with_sigmoid(
     output_min: float,
     output_max: float,
 ) -> list[RankedRole]:
-    """Normalize scores using a sigmoid transform.
-
-    This is intentionally kept as a shared helper for engines whose raw scoring
-    range is model-specific and unbounded (e.g., ColBERT MaxSim).
-    """
+    """Normalize scores using a sigmoid transform."""
     if not candidates:
         return candidates
 
@@ -99,11 +94,7 @@ def normalize_with_sigmoid(
 
 
 def normalize_scores(candidates: list[RankedRole]) -> list[RankedRole]:
-    """Min-max normalization for role scores.
-
-    Converts raw scores to 60-95% range based on relative position.
-    WARNING: A bad match can still get 95% if it's the "best" result.
-    """
+    """Min-max normalize scores to 60-95% range."""
     if not candidates:
         return candidates
 

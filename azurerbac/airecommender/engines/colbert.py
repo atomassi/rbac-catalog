@@ -18,16 +18,9 @@ import warnings
 from pathlib import Path
 from typing import Any, Final, override
 
-# Suppress GitPython errors in environments without git (e.g., Azure App Service)
-# Must be set before any import of ragatouille/colbert
+# Suppress warnings for serverless/containerized environments
 os.environ.setdefault("GIT_PYTHON_REFRESH", "quiet")
-
-# Suppress HuggingFace tokenizers parallelism warning after fork
-# ColBERT/RAGatouille uses tokenizers internally, and FastAPI workers may fork
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
-
-# Suppress torch.cuda.amp deprecation warnings from colbert library
-# These come from colbert/utils/amp.py using deprecated GradScaler API
 warnings.filterwarnings("ignore", message=".*torch.cuda.amp.GradScaler.*", category=FutureWarning)
 warnings.filterwarnings("ignore", message=".*CUDA is not available.*", category=UserWarning)
 
@@ -41,28 +34,19 @@ from azurerbac.core.singleton import ThreadSafeSingleton
 
 logger = logging.getLogger(__name__)
 
-# Type alias
 type SearchResult = tuple[str, float]
 
-# ColBERT model - the v2 is trained for better retrieval
 COLBERT_MODEL: Final = "colbert-ir/colbertv2.0"
-
-# Pre-built index location (shipped with repo for fast startup)
 INDEX_DIR: Final = Path(__file__).parent.parent / "models" / "azure_roles"
 
 
 class ColBERTInitializationError(Exception):
-    """Raised when ColBERT fails to initialize (e.g., missing git, failed index load)."""
-
-
-# =============================================================================
-# ColBERTEngine - Main Entry Point
-# =============================================================================
+    """Raised when ColBERT fails to initialize."""
 
 
 @EngineRegistry.register(RecommenderMode.COLBERT)
 class ColBERTEngine(BaseRecommenderEngine):
-    """ColBERT recommendation engine with token-level matching."""
+    """Token-level matching using ColBERT."""
 
     @property
     @override
@@ -77,22 +61,16 @@ class ColBERTEngine(BaseRecommenderEngine):
     @property
     @override
     def requires_embeddings(self) -> bool:
-        # ColBERT uses its own embeddings, not the shared embedding model
         return False
 
     @override
     def is_available(self) -> bool:
-        """Check if ColBERT is available."""
         import importlib.util
 
         return importlib.util.find_spec("ragatouille") is not None
 
     @staticmethod
     def _normalize_scores(candidates: list[RankedRole]) -> list[RankedRole]:
-        """Normalize ColBERT MaxSim scores to 0-1 confidence range.
-
-        Uses COLBERT_SIGMOID config for sigmoid normalization parameters.
-        """
         candidates = normalize_with_sigmoid(
             candidates,
             midpoint=COLBERT_SIGMOID.midpoint,
@@ -135,16 +113,6 @@ class ColBERTEngine(BaseRecommenderEngine):
         top_k: int = 5,
         exclude_owner: bool = True,
     ) -> list[RankedRole]:
-        """Get recommendations using ColBERT token-level matching.
-
-        Args:
-            query: Natural language query
-            top_k: Number of recommendations
-            exclude_owner: Whether to exclude Owner role
-
-        Returns:
-            List of RankedRole objects sorted by ColBERT score
-        """
         self._log_start(query, top_k)
 
         # Ensure index is built
@@ -194,20 +162,8 @@ class ColBERTEngine(BaseRecommenderEngine):
         return candidates
 
 
-# =============================================================================
-# ColBERTIndex - Implementation Detail
-# =============================================================================
-
-
 class ColBERTIndex:
-    """Wrapper for ColBERT index using RAGatouille.
-
-    Loads pre-built index from disk if available (fast, ~2s).
-    Falls back to building index on-the-fly if not found (~20s).
-    The pre-built index should be generated locally and committed to the repo.
-
-    Use get_colbert_index() to get the shared singleton instance.
-    """
+    """Wrapper for ColBERT index using RAGatouille."""
 
     def __init__(self) -> None:
         self._rag: Any = None
@@ -216,30 +172,21 @@ class ColBERTIndex:
 
     @property
     def is_loaded(self) -> bool:
-        """Check if the ColBERT index is loaded."""
         return self._is_loaded
 
     def _try_load_ragatouille(self) -> bool:
-        """Try to import RAGatouille library."""
         import importlib.util
 
         if importlib.util.find_spec("ragatouille") is not None:
             return True
-        logger.warning("RAGatouille not installed. Install with: pip install ragatouille")
+        logger.warning("RAGatouille not installed")
         return False
 
     def _has_prebuilt_index(self) -> bool:
-        """Check if a pre-built index exists on disk."""
-        # Check for key ColBERT index files
         required_files = ["metadata.json", "plan.json", "0.codes.pt"]
         return all((INDEX_DIR / f).exists() for f in required_files)
 
     def _try_load_from_disk(self) -> bool:
-        """Try to load pre-built index from disk.
-
-        Returns:
-            True if index was loaded successfully
-        """
         if not self._has_prebuilt_index():
             logger.debug("ColBERT: No pre-built index found on disk")
             return False
@@ -254,22 +201,13 @@ class ColBERTIndex:
             self._is_loaded = True
             logger.info("ColBERT: Successfully loaded pre-built index")
             return True
-
         except Exception as e:
             error_msg = f"ColBERT: Failed to load index from disk: {e}"
             logger.exception(error_msg)
             raise ColBERTInitializationError(error_msg) from e
 
     def warmup(self) -> bool:
-        """Fully initialize ColBERT: load index from disk and pre-init searcher.
-
-        This avoids slow first request by:
-        1. Loading pre-built index from disk
-        2. Initializing the searcher (normally lazy-loaded on first query)
-
-        Returns:
-            True if fully initialized, False otherwise
-        """
+        """Load index and initialize searcher for fast first query."""
         # Step 1: Load index from disk if not already loaded
         if not self._is_loaded:
             if not self._try_load_ragatouille():
@@ -303,19 +241,7 @@ class ColBERTIndex:
             return False
 
     def build_index(self, documents: dict[str, str], force_rebuild: bool = False) -> bool:
-        """Build or load ColBERT index.
-
-        Tries to load pre-built index first (fast). Only rebuilds if:
-        - No pre-built index exists
-        - force_rebuild=True
-
-        Args:
-            documents: Dict of role_id -> document_text
-            force_rebuild: Force rebuild even if pre-built index exists
-
-        Returns:
-            True if index was built successfully
-        """
+        """Build or load ColBERT index. Tries pre-built first."""
         if not self._try_load_ragatouille():
             return False
 
@@ -368,43 +294,27 @@ class ColBERTIndex:
                 raise ColBERTInitializationError(error_msg) from e
 
     def search(self, query: str, top_k: int = 10) -> list[SearchResult]:
-        """Search the ColBERT index.
-
-        Args:
-            query: Search query
-            top_k: Number of results to return
-
-        Returns:
-            List of (role_id, score) tuples sorted by relevance
-        """
         if not self._is_loaded or self._rag is None:
             logger.warning("ColBERT: Index not loaded, cannot search")
             return []
 
         try:
-            # RAGatouille returns list of dicts with 'content', 'score', 'document_id'
             results = self._rag.search(query, k=top_k)
-
             scored_roles = []
             for result in results:
-                # document_id is the role_id we passed during indexing
                 role_id = result.get("document_id")
                 score = result.get("score", 0.0)
                 if role_id:
                     scored_roles.append((role_id, score))
-
             return scored_roles
-
         except Exception as e:
             logger.exception("ColBERT: Search failed: %s", e)
             return []
 
 
-# Module-level singleton
 _colbert_index: ThreadSafeSingleton[ColBERTIndex] = ThreadSafeSingleton(ColBERTIndex)
 
 
-# For external access (e.g., startup warmup)
 def get_colbert_index() -> ColBERTIndex:
-    """Get the global ColBERT index instance (thread-safe singleton)."""
+    """Get the global ColBERT index singleton."""
     return _colbert_index.get()

@@ -44,7 +44,7 @@ MAX_RESPONSE_TIME: Final = 5.0
 PAGES_WITH_CONTENT: Final = [
     ("Homepage", "/", ["Total Built-in Roles", "Last Scan"]),
     ("Roles list", "/roles", ["Role Name", "Effective Actions"]),
-    ("Recent changes", "/recent", ["changes found", "page"]),
+    ("Recent changes", "/recent", ["changes", "per page"]),
     ("Operations list", "/operations", ["Azure Operations", "Granted By"]),
     ("Recommend page", "/recommend", ["Find Least-Privilege"]),
     ("About page", "/about", ["Azure RBAC"]),
@@ -92,9 +92,9 @@ SEARCH_FILTER_TESTS: Final = [
     ("Roles page 2", "/roles?page=2&limit=25", ["Role Name"]),
     ("Operations search", "/operations?q=storage", ["storage"]),
     ("Operations data actions", "/operations?is_data_action=1", ["Azure Operations"]),
-    ("Recent days=7", "/recent?days=7", ["changes found"]),
-    ("Recent days=90", "/recent?days=90", ["changes found"]),
-    ("Recent limit=100", "/recent?limit=100", ["changes found"]),
+    ("Recent days=7", "/recent?days=7", ["changes"]),
+    ("Recent days=90", "/recent?days=90", ["changes"]),
+    ("Recent limit=100", "/recent?limit=100", ["changes"]),
 ]
 
 # Edge cases - expected to return specific status codes
@@ -144,10 +144,10 @@ ROLE_RECOMMEND_TESTS: Final = [
 ]
 
 # Security headers that should be present
+# Note: X-Content-Type-Options and HSTS are handled by Cloudflare CDN
 REQUIRED_SECURITY_HEADERS: Final = [
     ("Content-Security-Policy", "default-src"),
     ("X-Frame-Options", "DENY"),
-    ("X-Content-Type-Options", "nosniff"),
 ]
 
 

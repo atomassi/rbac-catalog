@@ -374,9 +374,22 @@ async def test_ai_recommender(
 
         try:
             data = response.json()
+
+            # Check for error response (engine unavailable, etc.)
+            if data.get("error"):
+                return TestResult(
+                    name=name,
+                    passed=False,
+                    status_code=200,
+                    message=data["error"],
+                    response_time=elapsed,
+                    details={"request": request_body},
+                )
+
             rec_count = len(data.get("recommendations", []))
-            engine_mode = data.get("engine", {}).get("mode", "unknown")
-            engine_time = data.get("engine", {}).get("processing_time_ms", 0)
+            engine_info = data.get("engine") or {}
+            engine_mode = engine_info.get("mode", "unknown")
+            engine_time = engine_info.get("processing_time_ms", 0)
             return TestResult(
                 name=name,
                 passed=True,

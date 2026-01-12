@@ -44,19 +44,9 @@ def _action_to_keywords(action: str) -> str:
 
 
 class BM25Index:
-    """BM25 ranking algorithm - better than TF-IDF for short queries.
-
-    Uses numpy-vectorized scoring for efficient search over large document sets.
-    Precomputes term-document frequency matrix and normalization factors at index time.
-    """
+    """BM25 ranking algorithm - better than TF-IDF for short queries."""
 
     def __init__(self, k1: float = 1.5, b: float = 0.75) -> None:
-        """Initialize BM25 index with tuning parameters.
-
-        Args:
-            k1: Term frequency saturation parameter (1.2-2.0 typical)
-            b: Length normalization parameter (0.75 typical)
-        """
         self.k1 = k1
         self.b = b
         self.doc_count = 0

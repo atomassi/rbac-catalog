@@ -1,9 +1,4 @@
-"""Knowledge package for Azure RBAC domain knowledge and role indexing.
-
-This package contains:
-- azure_knowledge: Azure terminology, synonyms, and curated use case mappings
-- knowledge_base: Role document storage and indexing for semantic search
-"""
+"""Azure RBAC domain knowledge and role indexing."""
 
 from azurerbac.airecommender.knowledge.azure_knowledge import (
     ABBREVIATIONS,

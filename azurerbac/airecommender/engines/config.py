@@ -1,28 +1,13 @@
-"""Engine configuration constants.
-
-Centralized configuration for all recommendation engines.
-This consolidates thresholds, defaults, and tuning parameters.
-"""
+"""Engine configuration constants."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Final
 
-# =============================================================================
-# Global Defaults
-# =============================================================================
-
 # Score normalization output range (60-95%)
 SCORE_FLOOR: Final[float] = 0.60
 SCORE_CEILING: Final[float] = 0.95
-
-
-# =============================================================================
-# Per-Engine Confidence Thresholds
-# =============================================================================
-# These are minimum raw scores below which results are filtered out.
-# Values are tuned based on each engine's scoring characteristics.
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,7 +15,6 @@ class EngineThresholds:
     """Confidence thresholds for a recommendation engine."""
 
     min_confidence: float
-    """Minimum raw score to include in results."""
 
 
 # Semantic embedding similarity (cosine similarity 0-1)
@@ -47,11 +31,6 @@ HYDE_THRESHOLDS: Final = EngineThresholds(min_confidence=0.2)
 
 # LLM-based recommendations
 LLM_THRESHOLDS: Final = EngineThresholds(min_confidence=0.4)
-
-
-# =============================================================================
-# TF-IDF Specific Configuration
-# =============================================================================
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,13 +52,6 @@ TFIDF_CONFIG: Final = TFIDFConfig(
     high_confidence=0.9,
     relative_cutoff=0.7,
 )
-
-
-# =============================================================================
-# Sigmoid Normalization Parameters
-# =============================================================================
-# Used by engines with unbounded raw scores (ColBERT, cross-encoder).
-# Sigmoid maps unbounded scores to (0, 1) range.
 
 
 @dataclass(frozen=True, slots=True)
@@ -115,33 +87,9 @@ COLBERT_SIGMOID: Final = SigmoidParams(
 )
 
 
-# =============================================================================
-# Score Combination Weights
-# =============================================================================
-# Weights for combining scores from different retrieval stages.
-# Higher weight = more influence on final score.
+# Score combination weights (primary + secondary = 1.0)
+HYBRID_PRIMARY_WEIGHT: Final[float] = 0.7  # TF-IDF (curated patterns)
+HYBRID_SECONDARY_WEIGHT: Final[float] = 0.3  # Embeddings
 
-
-@dataclass(frozen=True, slots=True)
-class ScoreWeights:
-    """Weights for combining multiple retrieval stage scores."""
-
-    primary_weight: float
-    """Weight for the primary/more accurate score."""
-
-    secondary_weight: float
-    """Weight for the secondary/faster score."""
-
-    def __post_init__(self) -> None:
-        """Validate weights sum to 1.0."""
-        total = self.primary_weight + self.secondary_weight
-        if abs(total - 1.0) > 0.001:
-            msg = f"Weights must sum to 1.0, got {total}"
-            raise ValueError(msg)
-
-
-# Hybrid engine: TF-IDF (curated patterns) weighted higher than embeddings
-HYBRID_WEIGHTS: Final = ScoreWeights(primary_weight=0.7, secondary_weight=0.3)
-
-# Cross-encoder: CE reranking weighted higher than bi-encoder similarity
-CROSSENCODER_WEIGHTS: Final = ScoreWeights(primary_weight=0.7, secondary_weight=0.3)
+CROSSENCODER_PRIMARY_WEIGHT: Final[float] = 0.7  # Cross-encoder reranking
+CROSSENCODER_SECONDARY_WEIGHT: Final[float] = 0.3  # Bi-encoder similarity

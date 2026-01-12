@@ -120,6 +120,9 @@ filterwarnings = [
 pythonVersion = "3.12"
 typeCheckingMode = "standard"
 include = ["azurerbac"]
+exclude = ["tests", "**/__pycache__"]
+venvPath = "."
+venv = ".venv"
 # Report settings
 reportMissingImports = true
 reportMissingModuleSource = false

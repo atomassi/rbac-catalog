@@ -1,8 +1,4 @@
-"""In-memory cache container.
-
-Pure in-memory container that holds the CacheData.
-No I/O, no sync logic - just swap() and accessors.
-"""
+"""In-memory cache container."""
 
 from __future__ import annotations
 
@@ -15,6 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 from azurerbac.cache.models import CacheData, CachedChangeEvent, CachedRole
 from azurerbac.core.constants import DEFAULT_SEARCH_LIMIT
+from azurerbac.matching.models import RoleCoverage, RoleNetPermissions
 from azurerbac.telemetry import track_cache_hit
 
 if TYPE_CHECKING:
@@ -24,22 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 class CacheContainer:
-    """Thread-safe in-memory cache with atomic refresh.
-
-    All data is stored in a single CacheData object that can be atomically
-    swapped. This prevents race conditions where readers see partially
-    updated data during refresh.
-
-    Usage:
-        # Read data (capture reference for consistent reads)
-        cache = container.cache
-        ops = cache.all_operations
-        coverage = cache.role_coverage.get(role_id)
-
-        # Atomic refresh (called by build.py)
-        new_cache = CacheData(...)
-        container.swap(new_cache)
-    """
+    """Thread-safe in-memory cache."""
 
     __slots__ = (
         "_cache",
@@ -57,10 +39,6 @@ class CacheContainer:
         self._loaded_version: str | None = None
         self._reload_lock = asyncio.Lock()
         self._pending_reload = False
-
-    # ─────────────────────────────────────────────────────────────────────────
-    # Public accessors for internal state
-    # ─────────────────────────────────────────────────────────────────────────
 
     @property
     def loaded_version(self) -> str | None:
@@ -80,37 +58,22 @@ class CacheContainer:
 
     @property
     def reload_lock(self) -> asyncio.Lock:
-        """Async lock for reload operations (used by build.py)."""
+        """Async lock for reload operations."""
         return self._reload_lock
-
-    # ─────────────────────────────────────────────────────────────────────────
-    # Cache access (atomic)
-    # ─────────────────────────────────────────────────────────────────────────
 
     @property
     def cache(self) -> CacheData:
-        """Current cache data. Capture reference for consistent reads."""
+        """Current cache data."""
         return self._cache
 
     def swap(self, new_cache: CacheData) -> None:
-        """Atomically swap the entire cache (thread-safe via GIL).
-
-        Also clears misc_cache since cached lookups (like roles_allowing_op)
-        depend on the computed data and must be recalculated.
-        """
+        """Atomically swap the entire cache."""
         self._cache = new_cache
         self._misc_cache.clear()
         logger.debug("Cache swapped, misc_cache cleared")
 
-    # ─────────────────────────────────────────────────────────────────────────
-    # Convenience accessors
-    # ─────────────────────────────────────────────────────────────────────────
-
     def get_role_by_id(self, role_id: str) -> CachedRole | None:
-        """Get a cached role by ID.
-
-        Returns CachedRole which contains both the RoleDefinition and DB metadata.
-        """
+        """Get cached role by ID."""
         result = self._cache.roles_by_id.get(role_id)
         track_cache_hit("role", result is not None, role_id)
         return result
@@ -128,19 +91,19 @@ class CacheContainer:
         """Get change events for a specific role."""
         return [e for e in self._cache.all_change_events if e.role_id == role_id]
 
-    def get_role_coverage(self, role_id: str) -> tuple[set[str], set[str]] | None:
+    def get_role_coverage(self, role_id: str) -> RoleCoverage | None:
         """Get cached role coverage (control_ops, data_ops) or None if not cached.
 
-        Returns a tuple of (control_operations_set, data_operations_set)
+        Returns a RoleCoverage NamedTuple with control and data operation sets
         that the role grants, after applying notActions/notDataActions exclusions.
         """
         return self._cache.role_coverage.get(role_id)
 
-    def get_role_net_permissions(self, role_id: str) -> tuple[int, int] | None:
+    def get_role_net_permissions(self, role_id: str) -> RoleNetPermissions | None:
         """Get cached role net permissions (control_count, data_count) or None if not cached.
 
-        Returns the count of actual operations the role grants after applying
-        notActions/notDataActions exclusions.
+        Returns a RoleNetPermissions NamedTuple with the count of actual operations
+        the role grants after applying notActions/notDataActions exclusions.
         """
         return self._cache.role_net_permissions.get(role_id)
 
@@ -151,10 +114,6 @@ class CacheContainer:
         Uses the pre-computed role coverage cache.
         """
         return self._cache.operation_role_count.get(operation_name.lower(), 0)
-
-    # ─────────────────────────────────────────────────────────────────────────
-    # Role pages (paginated listings - separate from main cache)
-    # ─────────────────────────────────────────────────────────────────────────
 
     def get_role_page(self, page_key: str) -> Any:
         """Get a cached role page or count value."""
@@ -168,10 +127,6 @@ class CacheContainer:
 
     def get_role_pages_count(self) -> int:
         return len(self._role_pages)
-
-    # ─────────────────────────────────────────────────────────────────────────
-    # Misc key-value cache (for dynamic caches like roles_allowing_op:*)
-    # ─────────────────────────────────────────────────────────────────────────
 
     def get(self, key: str) -> Any:
         result = self._misc_cache.get(key)
@@ -198,10 +153,6 @@ class CacheContainer:
             updates["first_scan"] = first_scan
         if updates:
             self._cache = replace(self._cache, **updates)
-
-    # ─────────────────────────────────────────────────────────────────────────
-    # Search operations
-    # ─────────────────────────────────────────────────────────────────────────
 
     def search_operations(
         self, query: str, limit: int = DEFAULT_SEARCH_LIMIT, is_wildcard: bool = False

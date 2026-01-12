@@ -1,11 +1,4 @@
-"""Msgpack serialization for cache data.
-
-Provides custom encoding/decoding for Python types not natively supported:
-- set -> list (restored as set on decode)
-- tuple -> list (restored as tuple on decode)
-- datetime -> UTC ISO format string (restored as timezone-aware)
-- dict with tuple keys -> list of [key, value] pairs (restored on decode)
-"""
+"""Msgpack serialization with custom type handling."""
 
 from __future__ import annotations
 
@@ -16,18 +9,13 @@ import msgpack
 
 from azurerbac.core.types import JsonDict
 
-__all__ = [
-    "deserialize_from_bytes",
-    "serialize_to_bytes",
-]
+__all__ = ["deserialize_from_bytes", "serialize_to_bytes"]
 
-# Marker tags for msgpack ExtType custom types
 TAG_SET: Final[int] = 1
 TAG_TUPLE: Final[int] = 2
 TAG_DATETIME: Final[int] = 3
 TAG_TUPLE_KEY_DICT: Final[int] = 4
 
-# Fields in CacheData that use tuple keys (need special handling)
 TUPLE_KEY_FIELDS: Final[frozenset[str]] = frozenset(
     {
         "pattern_match",

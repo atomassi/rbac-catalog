@@ -22,22 +22,7 @@ def recommend_roles(
     max_results: int | None = None,
     requested_ops_data_flags: dict[str, bool] | None = None,
 ) -> list[RoleMatch]:
-    """Recommend roles that grant the requested operations.
-
-    This function finds Azure built-in roles that best match the requested
-    operations, sorted by least privilege (fewest total permissions first).
-
-    Args:
-        requested_operations: List of operation names the user needs
-        roles: List of RoleDefinition objects
-        all_operations: List of all known operations
-        max_results: Maximum number of results to return
-        requested_ops_data_flags: Optional explicit is_data_action flags
-
-    Returns:
-        List of RoleMatch objects, sorted by least privilege with
-        high-privilege roles at the bottom.
-    """
+    """Recommend roles that grant the requested operations, sorted by least privilege."""
     if not requested_operations:
         return []
 
@@ -56,15 +41,15 @@ def recommend_roles(
         if not svc.is_builtin_role(role):
             continue
 
-        role_id, role_name, description, permissions = svc.extract_role_info(role)
-        cached_coverage = svc.get_cached_coverage(role_id)
+        role_info = svc.extract_role_info(role)
+        cached_coverage = svc.get_cached_coverage(role_info.role_id)
 
         # Create evaluation context
         ctx = RoleEvaluationContext(
-            role_id=role_id,
-            role_name=role_name,
-            description=description,
-            permissions=permissions,
+            role_id=role_info.role_id,
+            role_name=role_info.role_name,
+            description=role_info.description,
+            permissions=role_info.permissions,
         )
 
         # Evaluate role coverage
@@ -84,8 +69,8 @@ def recommend_roles(
 
         # Calculate statistics
         matched_count = svc.calculate_matched_ops_count(ctx, cached_coverage)
-        control_perms, data_perms = svc.calculate_permissions_count(ctx)
-        expanded, missing_count = svc.expand_missing_operations(ctx, missing_ops, classified)
+        perms = svc.calculate_permissions_count(ctx)
+        expanded = svc.expand_missing_operations(ctx, missing_ops, classified)
 
         # Calculate match percentage
         match_pct = (matched_count / total_requested * 100) if total_requested > 0 else 0.0
@@ -93,21 +78,21 @@ def recommend_roles(
         # Build result
         matches.append(
             RoleMatch(
-                role_id=role_id,
-                role_name=role_name,
-                description=description,
+                role_id=role_info.role_id,
+                role_name=role_info.role_name,
+                description=role_info.description,
                 matched_operations=sorted(ctx.matched_ops),
                 missing_operations=sorted(missing_ops),
-                total_permissions_granted=control_perms + data_perms,
-                control_plane_permissions=control_perms,
-                data_plane_permissions=data_perms,
-                is_high_privilege=role_name in HIGH_PRIVILEGE_ROLES,
+                total_permissions=perms.control_count + perms.data_count,
+                control_plane_permissions=perms.control_count,
+                data_plane_permissions=perms.data_count,
+                is_high_privilege=role_info.role_name in HIGH_PRIVILEGE_ROLES,
                 match_percentage=match_pct,
                 has_conditions=ctx.has_conditions,
                 matched_operations_count=matched_count,
                 requested_operations_count=total_requested,
-                missing_operations_expanded=sorted(expanded),
-                missing_operations_count=missing_count,
+                missing_operations_expanded=sorted(expanded.operations),
+                missing_operations_count=expanded.total,
                 has_partial_wildcard_match=bool(ctx.wildcard_partial_coverage) or bool(missing_ops),
             )
         )
@@ -116,15 +101,7 @@ def recommend_roles(
 
 
 def _sort_and_filter_results(matches: list[RoleMatch], max_results: int | None) -> list[RoleMatch]:
-    """Sort and filter role matches by least privilege.
-
-    Full matches are returned before partial matches. Within each group,
-    non-high-privilege roles come first, sorted by fewest permissions.
-
-    Args:
-        matches: List of role matches to sort
-        max_results: Maximum results to return (None = no limit)
-    """
+    """Sort and filter role matches by least privilege."""
     full_matches = [m for m in matches if m.is_full_match]
     partial_matches = [m for m in matches if not m.is_full_match]
 
@@ -133,7 +110,7 @@ def _sort_and_filter_results(matches: list[RoleMatch], max_results: int | None) 
         full_matches.sort(
             key=lambda m: (
                 m.is_high_privilege,
-                m.total_permissions_granted,
+                m.total_permissions,
             )
         )
         return full_matches[:max_results] if max_results else full_matches
@@ -143,7 +120,7 @@ def _sort_and_filter_results(matches: list[RoleMatch], max_results: int | None) 
         key=lambda m: (
             -m.match_percentage,
             m.is_high_privilege,
-            m.total_permissions_granted,
+            m.total_permissions,
         )
     )
     # Limit partial matches to 10 unless explicitly requested more

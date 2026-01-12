@@ -11,6 +11,12 @@ from typing import TYPE_CHECKING, Final
 from azurerbac.core.constants import RoleStatus
 from azurerbac.core.types import JsonDict
 from azurerbac.core.utils import format_datetime, parse_datetime
+from azurerbac.matching.models import (
+    PartialCoverageCacheKey,
+    RoleCoverage,
+    RoleNetPermissions,
+    WildcardCoverageResult,
+)
 
 if TYPE_CHECKING:
     from azurerbac.azure.models import OperationData, RoleDefinition
@@ -20,16 +26,7 @@ CACHE_VERSION: Final[str] = "v7"
 
 @dataclass(slots=True)
 class CachedRole:
-    """A cached role combining RoleDefinition with database tracking metadata.
-
-    Provides convenience properties (role_id, role_name, etc.) that delegate
-    to the underlying RoleDefinition. This allows CachedRole to be used
-    interchangeably with SQLAlchemy Role in many contexts.
-
-    This class only adds fields that come from our database, not from Azure:
-    - status: RoleStatus enum (ACTIVE or DELETED)
-    - last_seen_at: Last time we saw this role in Azure
-    """
+    """Cached role with definition and tracking metadata."""
 
     definition: RoleDefinition
     status: RoleStatus
@@ -60,7 +57,6 @@ class CachedRole:
         return self.definition.properties.updated_on
 
     def to_dict(self) -> JsonDict:
-        """Convert to dict for JSON serialization (disk persistence)."""
         return {
             "definition": self.definition.to_dict(),
             "status": self.status.value,
@@ -69,7 +65,6 @@ class CachedRole:
 
     @classmethod
     def from_dict(cls, data: JsonDict) -> CachedRole:
-        """Create from dict (disk persistence)."""
         from azurerbac.azure.models import RoleDefinition
 
         return cls(
@@ -81,11 +76,7 @@ class CachedRole:
 
 @dataclass(slots=True)
 class CachedChangeEvent:
-    """A cached change event from role history.
-
-    Typed representation of role change events for cache storage.
-    Replaces untyped dict for better type safety and IDE support.
-    """
+    """Cached change event from role history."""
 
     id: int
     role_id: str
@@ -98,7 +89,6 @@ class CachedChangeEvent:
     role_json: JsonDict | None = None
 
     def to_dict(self) -> JsonDict:
-        """Convert to dict for JSON serialization (disk persistence)."""
         return {
             "id": self.id,
             "role_id": self.role_id,
@@ -113,7 +103,6 @@ class CachedChangeEvent:
 
     @classmethod
     def from_dict(cls, data: JsonDict) -> CachedChangeEvent:
-        """Create from dict (disk persistence)."""
         return cls(
             id=data["id"],
             role_id=data["role_id"],
@@ -168,18 +157,7 @@ class CacheMetadata:
 
 @dataclass
 class CacheData:
-    """Unified cache container - all data in one atomically-swappable object.
-
-    Contains:
-    - Metadata: version, counts, hashes for invalidation
-    - Raw data: operations, roles, events (loaded from DB/disk)
-    - Indexes: fast lookup structures (built from raw data)
-    - Computed: role coverage, pattern matching (expensive analysis)
-
-    All fields are saved to disk including computed caches.
-    On reload, everything is loaded directly - no recomputation needed.
-    All fields are immutable after creation - to update, create new instance and swap.
-    """
+    """Unified cache container - all data in one atomically-swappable object."""
 
     # Metadata (for versioning and invalidation)
     metadata: CacheMetadata = field(default_factory=CacheMetadata)
@@ -197,14 +175,13 @@ class CacheData:
     ops_by_prefix: dict[str, list[OperationData]] = field(default_factory=dict)
 
     # Computed caches (expensive analysis, rebuilt on data change)
-    role_coverage: dict[str, tuple[set[str], set[str]]] = field(default_factory=dict)
-    role_net_permissions: dict[str, tuple[int, int]] = field(default_factory=dict)
+    role_coverage: dict[str, RoleCoverage] = field(default_factory=dict)
+    role_net_permissions: dict[str, RoleNetPermissions] = field(default_factory=dict)
     operation_role_count: dict[str, int] = field(default_factory=dict)
     pattern_match: dict[tuple[str, int], set[str]] = field(default_factory=dict)
-    # Key: (pattern, cache_key, sorted_actions_tuple, sorted_not_actions_tuple)
-    partial_coverage: dict[
-        tuple[str, int, tuple[str, ...], tuple[str, ...]], tuple[int, int, int, list[str]]
-    ] = field(default_factory=dict)
+    partial_coverage: dict[PartialCoverageCacheKey, WildcardCoverageResult] = field(
+        default_factory=dict
+    )
     wildcard_count: dict[tuple[str, int], int] = field(default_factory=dict)
     operations_by_prefix_computed: dict[int, dict[str, set[str]]] = field(default_factory=dict)
     cache_ops_count: list[int] = field(default_factory=lambda: [0, 0])
@@ -227,8 +204,7 @@ def compute_roles_hash(roles: list[RoleDefinition]) -> str:
         updated = role.properties.updated_on.isoformat() if role.properties.updated_on else ""
         return f"{role.role_id}:{updated}"
 
-    data = [role_key(role) for role in roles]
-    return content_hash("|".join(sorted(data)))
+    return content_hash("|".join(sorted(role_key(r) for r in roles)))
 
 
 def compute_operations_hash(operations: list[OperationData]) -> str:

@@ -20,80 +20,30 @@ class CacheBackendType(Enum):
 
 
 class CacheBackend(ABC):
-    """Abstract base class for cache storage backends.
-
-    Current implementation:
-        - FileCacheBackend: Local file with watchdog for change detection.
-          Suitable for single-VM deployments where all workers share a filesystem.
-
-    Future options (if disk I/O becomes a bottleneck or horizontal scaling needed):
-        - RedisCacheBackend: Redis with pub/sub for multi-instance invalidation.
-        - MemcachedBackend: Simple key-value with no pub/sub.
-
-    All I/O methods are async to support non-blocking operations.
-
-    Method groups:
-        Core CRUD: save(), load(), delete(), exists()
-        Versioning: get_version(), get_mtime() - for change detection
-        Notifications: subscribe(), unsubscribe(), is_subscribed - optional pub/sub
-        Lifecycle: close() - cleanup connections/resources
-    """
-
-    # -------------------------------------------------------------------------
-    # Core CRUD operations
-    # -------------------------------------------------------------------------
+    """Abstract base class for cache storage backends."""
 
     @abstractmethod
     async def save(self, data: CacheData) -> bool:
-        """Save cache data to storage.
-
-        Args:
-            data: The CacheData to persist.
-
-        Returns:
-            True if successful, False otherwise.
-        """
+        """Save cache data to storage."""
 
     @abstractmethod
     async def load(self) -> CacheData | None:
-        """Load cache data from storage.
-
-        Returns:
-            The loaded CacheData, or None if not found or error.
-        """
+        """Load cache data from storage."""
 
     @abstractmethod
     async def delete(self) -> None:
-        """Delete the cached data from storage."""
+        """Delete cached data from storage."""
 
     def exists(self) -> bool:
-        """Check if cached data exists.
-
-        Default implementation uses get_version(). Override for efficiency.
-        """
+        """Check if cached data exists."""
         return self.get_version() is not None
-
-    # -------------------------------------------------------------------------
-    # Versioning (for change detection)
-    # -------------------------------------------------------------------------
 
     @abstractmethod
     def get_version(self) -> str | None:
-        """Get a version identifier for the cached data.
-
-        Used for change detection. The version changes when data is updated.
-
-        Implementation examples:
-            - File: mtime as string
-            - Redis: OBJECT ENCODING or custom version key
-            - Memcached: CAS token
-
-        Returns:
-            Version string, or None if cache doesn't exist.
-        """
+        """Get version identifier for change detection."""
 
     def get_mtime(self) -> float | None:
-        """Get modification time as Unix timestamp, or None if unavailable."""
+        """Get modification time as Unix timestamp."""
         version = self.get_version()
         if version is None:
             return None
@@ -102,54 +52,24 @@ class CacheBackend(ABC):
         except (ValueError, TypeError):
             return None
 
-    # -------------------------------------------------------------------------
-    # Change notifications (optional - for pub/sub backends)
-    # -------------------------------------------------------------------------
-
     def subscribe(self, callback: Callable[[], None]) -> bool:
-        """Subscribe to cache change notifications.
-
-        Optional. Backends without pub/sub (e.g., Memcached) return False.
-        Callers should fall back to polling get_version() if False.
-
-        Args:
-            callback: Function to call when cache is updated.
-                     Should be lightweight (just set a flag).
-
-        Returns:
-            True if subscription started successfully, False if not supported.
-        """
+        """Subscribe to cache change notifications. Returns False if unsupported."""
         return False  # Default: not supported
 
     def unsubscribe(self) -> None:  # noqa: B027
-        """Stop receiving cache change notifications.
-
-        No-op if subscribe() returned False or wasn't called.
-        """
+        """Stop receiving change notifications."""
 
     @property
     def is_subscribed(self) -> bool:
-        """Check if currently subscribed to changes."""
-        return False  # Default: not subscribed
-
-    # -------------------------------------------------------------------------
-    # Lifecycle
-    # -------------------------------------------------------------------------
+        """Check if subscribed to changes."""
+        return False
 
     async def close(self) -> None:  # noqa: B027
-        """Close connections and release resources.
-
-        Called during application shutdown. Override for backends with
-        connections (Redis, Memcached).
-        """
+        """Close connections and release resources."""
 
 
 def create_backend() -> CacheBackend:
-    """Create a backend instance based on settings.
-
-    Called by CacheService to instantiate the backend.
-    Do not call directly - use get_cache_service().backend instead.
-    """
+    """Create a backend instance based on settings."""
     from azurerbac.settings import get_settings
 
     settings = get_settings()

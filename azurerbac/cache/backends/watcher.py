@@ -1,8 +1,4 @@
-"""File watcher for cache updates using watchdog.
-
-Provides instant notification when the cache file is updated by the worker,
-eliminating the need for polling-based detection.
-"""
+"""File watcher for cache updates using watchdog."""
 
 from __future__ import annotations
 
@@ -35,12 +31,6 @@ class _CacheFileHandler(FileSystemEventHandler):
         cache_filename: str,
         on_change: Callable[[], None],
     ) -> None:
-        """Initialize the handler.
-
-        Args:
-            cache_filename: Name of the cache file to watch (e.g., "app_cache.msgpack")
-            on_change: Callback to invoke when cache file is modified
-        """
         super().__init__()
         self._cache_filename = cache_filename
         self._on_change = on_change
@@ -89,16 +79,9 @@ class _CacheFileHandler(FileSystemEventHandler):
 
 
 class CacheFileWatcher:
-    """Watcher for cache file changes using watchdog.
-
-    Uses watchdog for efficient OS-level file monitoring.
-    Thread-safe and designed to work alongside async code.
-
-    Use the module-level `cache_watcher` singleton instance.
-    """
+    """Watcher for cache file changes using watchdog."""
 
     def __init__(self) -> None:
-        """Initialize the watcher."""
         self._observer: BaseObserver | None = None
         self._started = False
         self._lock = threading.Lock()
@@ -109,18 +92,7 @@ class CacheFileWatcher:
         cache_filename: str,
         on_change: Callable[[], None],
     ) -> bool:
-        """Start watching the cache directory.
-
-        Args:
-            cache_dir: Directory containing the cache file
-            cache_filename: Name of the cache file to watch
-            on_change: Sync callback to invoke when cache file changes.
-                       This runs in the watchdog thread, so keep it lightweight
-                       (e.g., set a flag, schedule async task).
-
-        Returns:
-            True if watcher started successfully, False otherwise
-        """
+        """Start watching the cache directory."""
         with self._lock:
             if self._started:
                 logger.debug("Watcher: already running, skipping start")

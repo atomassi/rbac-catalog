@@ -1,44 +1,30 @@
-"""Data models and value objects for role matching.
-
-This module contains dataclasses that encapsulate related data that travels together,
-eliminating data clumps and providing type-safe operations.
-"""
+"""Role matching models."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING, NamedTuple
 
 from azurerbac.core.types import JsonDict
 
 if TYPE_CHECKING:
-    from azurerbac.azure.models import OperationData, Permission
+    from azurerbac.azure.models import OperationData
 
-
-# =============================================================================
-# Enums
-# =============================================================================
+from azurerbac.azure.models import Permission
 
 
 class Plane(Enum):
-    """Operation plane identifier - eliminates string literals."""
+    """Operation plane identifier."""
 
     CONTROL = "ctrl"
     DATA = "data"
 
-
-# =============================================================================
-# Type Aliases
-# =============================================================================
+    def make_key(self, pattern: str) -> str:
+        return f"{self.value}:{pattern}"
 
 
-WildcardKey = str  # "ctrl:pattern" or "data:pattern"
-
-
-# =============================================================================
-# NamedTuples (lightweight, immutable return types)
-# =============================================================================
+WildcardKey = str
 
 
 class WildcardCoverageResult(NamedTuple):
@@ -59,9 +45,68 @@ class PartialCoverageInfo(NamedTuple):
     samples: list[str]
 
 
-# =============================================================================
-# Frozen Dataclasses (value objects, immutable)
-# =============================================================================
+class RoleCoverage(NamedTuple):
+    """Effective operations granted by a role after exclusions."""
+
+    control: set[str]
+    data: set[str]
+
+
+class RoleNetPermissions(NamedTuple):
+    """Permission counts for a role."""
+
+    control_count: int
+    data_count: int
+
+
+class PlaneActions(NamedTuple):
+    """Actions and exclusions for a single plane."""
+
+    actions: list[str]
+    not_actions: list[str]
+
+
+class ExpandedMissing(NamedTuple):
+    """Expanded missing operations result."""
+
+    operations: list[str]
+    total: int
+
+
+class RoleInfo(NamedTuple):
+    """Basic role information extracted from RoleDefinition."""
+
+    role_id: str
+    role_name: str
+    description: str
+    permissions: list[Permission]
+
+
+class PartialCoverageCacheKey(NamedTuple):
+    """Cache key for partial coverage lookups."""
+
+    pattern: str
+    cache_key: int
+    actions: tuple[str, ...]
+    not_actions: tuple[str, ...]
+
+    @classmethod
+    def build(
+        cls,
+        pattern: str,
+        cache_key: int | None,
+        actions: list[str],
+        not_actions: list[str],
+    ) -> PartialCoverageCacheKey | None:
+        """Build a cache key, returning None if caching is disabled."""
+        if cache_key is None:
+            return None
+        return cls(
+            pattern=pattern,
+            cache_key=cache_key,
+            actions=tuple(sorted(actions)),
+            not_actions=tuple(sorted(not_actions)),
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -103,14 +148,7 @@ class OperationSets:
 
     @classmethod
     def from_operations(cls, operations: list[OperationData]) -> OperationSets:
-        """Build from a list of OperationData models.
-
-        Args:
-            operations: List of OperationData objects.
-
-        Returns:
-            OperationSets with control and data plane operations separated.
-        """
+        """Build from a list of OperationData models."""
         control = frozenset(op.name for op in operations if not op.is_data_action)
         data = frozenset(op.name for op in operations if op.is_data_action)
         return cls(
@@ -172,28 +210,19 @@ class PlaneContext:
 
     def make_key(self, pattern: str) -> WildcardKey:
         """Create a wildcard key for this plane."""
-        return f"{self.prefix}:{pattern}"
-
-
-# =============================================================================
-# Mutable Dataclasses (result objects)
-# =============================================================================
+        return self.plane.make_key(pattern)
 
 
 @dataclass(slots=True)
 class RoleMatch:
-    """Represents a role that matches the requested permissions.
-
-    This is the result object returned by recommend_roles, containing
-    all information about how well a role matches the requested operations.
-    """
+    """Role matching result with coverage statistics."""
 
     role_id: str
     role_name: str
     description: str
     matched_operations: list[str] = field(default_factory=list)
     missing_operations: list[str] = field(default_factory=list)
-    total_permissions_granted: int = 0
+    total_permissions: int = 0
     control_plane_permissions: int = 0
     data_plane_permissions: int = 0
     is_high_privilege: bool = False
@@ -207,26 +236,10 @@ class RoleMatch:
 
     @property
     def is_full_match(self) -> bool:
-        """Check if all requested operations are covered."""
         return len(self.missing_operations) == 0
 
     def to_dict(self) -> JsonDict:
-        """Convert to dictionary for API response."""
-        return {
-            "role_id": self.role_id,
-            "role_name": self.role_name,
-            "matched_operations": self.matched_operations,
-            "missing_operations": self.missing_operations,
-            "missing_operations_expanded": self.missing_operations_expanded,
-            "missing_operations_count": self.missing_operations_count,
-            "has_partial_wildcard_match": self.has_partial_wildcard_match,
-            "total_permissions": self.total_permissions_granted,
-            "control_plane_permissions": self.control_plane_permissions,
-            "data_plane_permissions": self.data_plane_permissions,
-            "is_high_privilege": self.is_high_privilege,
-            "has_conditions": self.has_conditions,
-            "match_percentage": self.match_percentage,
-            "is_full_match": self.is_full_match,
-            "matched_operations_count": self.matched_operations_count,
-            "requested_operations_count": self.requested_operations_count,
-        }
+        """Convert to API response dict."""
+        result = asdict(self)
+        result["is_full_match"] = self.is_full_match
+        return result

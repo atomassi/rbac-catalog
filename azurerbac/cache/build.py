@@ -1,15 +1,10 @@
-"""Cache build and computation functions.
-
-This module contains pure computation functions for building cache data.
-Orchestration (swap, save, reload) is handled by CacheService in service.py.
-"""
+"""Cache build and computation functions."""
 
 from __future__ import annotations
 
 import logging
 import time
 from datetime import datetime
-from typing import TYPE_CHECKING
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,16 +21,14 @@ from azurerbac.cache.models import (
 from azurerbac.core.constants import RoleStatus
 from azurerbac.core.patterns import is_wildcard_pattern, matches_pattern
 from azurerbac.core.utils import truncate_microseconds
-
-if TYPE_CHECKING:
-    pass
+from azurerbac.matching.models import (
+    PartialCoverageCacheKey,
+    RoleCoverage,
+    RoleNetPermissions,
+    WildcardCoverageResult,
+)
 
 logger = logging.getLogger(__name__)
-
-
-# ============================================================================
-# Pattern matching helpers
-# ============================================================================
 
 
 def get_matching_operations(
@@ -44,7 +37,7 @@ def get_matching_operations(
     cache_key: int,
     pattern_cache: dict[tuple[str, int], set[str]],
 ) -> set[str]:
-    """Get operations matching a pattern, using cache for performance."""
+    """Get operations matching a pattern."""
     key = (pattern.lower(), cache_key)
     if key in pattern_cache:
         return pattern_cache[key]
@@ -59,7 +52,7 @@ def build_operations_prefix_index(
     cache_key: int,
     prefix_cache: dict[int, dict[str, set[str]]],
 ) -> dict[str, set[str]]:
-    """Build an index of operations by their provider prefix."""
+    """Build index of operations by provider prefix."""
     if cache_key in prefix_cache:
         return prefix_cache[cache_key]
 
@@ -72,11 +65,6 @@ def build_operations_prefix_index(
 
     prefix_cache[cache_key] = index
     return index
-
-
-# ============================================================================
-# Precompute functions
-# ============================================================================
 
 
 def _add_operations_for_patterns(
@@ -182,15 +170,15 @@ def _compute_role_coverage(
 
 
 def _build_operation_role_count(
-    role_coverage: dict[str, tuple[set[str], set[str]]],
+    role_coverage: dict[str, RoleCoverage],
 ) -> dict[str, int]:
     """Build operation -> role count index from role coverage."""
     counts: dict[str, int] = {}
-    for control_ops, data_ops in role_coverage.values():
-        for op in control_ops:
+    for cov in role_coverage.values():
+        for op in cov.control:
             op_lower = op.lower()
             counts[op_lower] = counts.get(op_lower, 0) + 1
-        for op in data_ops:
+        for op in cov.data:
             op_lower = op.lower()
             counts[op_lower] = counts.get(op_lower, 0) + 1
     return counts
@@ -243,9 +231,9 @@ def precompute_all(
     pattern_match: dict[tuple[str, int], set[str]] = {}
     wildcard_count: dict[tuple[str, int], int] = {}
     operations_by_prefix_computed: dict[int, dict[str, set[str]]] = {}
-    role_coverage: dict[str, tuple[set[str], set[str]]] = {}
-    role_net_permissions: dict[str, tuple[int, int]] = {}
-    partial_coverage: dict[tuple, tuple[int, int, int, list[str]]] = {}
+    role_coverage: dict[str, RoleCoverage] = {}
+    role_net_permissions: dict[str, RoleNetPermissions] = {}
+    partial_coverage: dict[PartialCoverageCacheKey, WildcardCoverageResult] = {}
 
     # Separate control and data plane operations
     all_control_ops = {op.name for op in all_operations if not op.is_data_action}
@@ -298,8 +286,8 @@ def precompute_all(
             control_ops_lower_to_orig,
             data_ops_lower_to_orig,
         )
-        role_coverage[role.role_id] = (net_control, net_data)
-        role_net_permissions[role.role_id] = (len(net_control), len(net_data))
+        role_coverage[role.role_id] = RoleCoverage(net_control, net_data)
+        role_net_permissions[role.role_id] = RoleNetPermissions(len(net_control), len(net_data))
 
     logger.debug("Computed coverage for %d built-in roles", builtin_count)
 
@@ -342,26 +330,8 @@ def precompute_all(
     return new_cache
 
 
-# ============================================================================
-# Build from database
-# ============================================================================
-
-
 async def build_from_db(session: AsyncSession) -> CacheData:
-    """Build cache data from database (pure function).
-
-    Queries database for all roles, operations, and events, builds indexes,
-    and returns a complete CacheData object. Does NOT modify any global state.
-
-    Args:
-        session: SQLAlchemy async session for queries
-
-    Returns:
-        Complete CacheData ready for use
-
-    Raises:
-        Exception: If database queries fail
-    """
+    """Build cache data from database."""
     from sqlalchemy import func, select
 
     from azurerbac.core import Operation, Role, RoleHistory, RoleScanStatus

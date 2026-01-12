@@ -59,7 +59,7 @@ class OperationWithCount(BaseModel):
 class RecommendRolesRequest(BaseModel):
     """Role recommendation request."""
 
-    operations: list[OperationItem] = Field(..., min_length=1)
+    operations: list[OperationItem] = Field(..., min_length=1, max_length=100)
 
     def parse_operations(self) -> tuple[list[str], dict[str, bool] | None]:
         """Parse operations into deduplicated names and data-plane flags."""

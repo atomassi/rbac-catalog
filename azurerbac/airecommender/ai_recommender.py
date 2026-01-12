@@ -6,7 +6,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from azurerbac.airecommender.engines import (
     BaseRecommenderEngine,
@@ -27,6 +27,9 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+MAX_AI_QUERY_LENGTH = 100
+MAX_TOP_K = 20
+
 
 class EngineNotAvailableError(Exception):
     """Raised when a requested engine is not available."""
@@ -42,8 +45,8 @@ class EngineNotAvailableError(Exception):
 class AIRecommendRequest(BaseModel):
     """Role recommendation request."""
 
-    query: str
-    top_k: int = 5
+    query: str = Field(..., min_length=1, max_length=MAX_AI_QUERY_LENGTH)
+    top_k: int = Field(default=5, ge=1, le=MAX_TOP_K)
     recommender_mode: str = RecommenderMode.LLM.value
 
 

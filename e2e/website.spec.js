@@ -444,15 +444,21 @@ test.describe('Role Detail Page', () => {
     expect(response?.status()).toBe(404);
   });
 
-  test('should return 404 for malformed UUID', async ({ page }) => {
+  test('should return 400 for malformed UUID', async ({ page }) => {
     const response = await page.goto('/roles/not-a-valid-uuid');
-    expect(response?.status()).toBe(404);
+    expect(response?.status()).toBe(400);
   });
 
-  test('should handle UUID without dashes', async ({ page }) => {
-    // UUIDs without dashes should work (normalized)
+  test('should return 400 for UUID with invalid format', async ({ page }) => {
+    // UUID with partial dashes is invalid
     const response = await page.goto('/roles/acdd72a73385-48ef-bd42-f606fba81ae7');
-    // May return 404 if not normalized, or redirect if it is
+    expect(response?.status()).toBe(400);
+  });
+
+  test('should handle valid UUID without dashes', async ({ page }) => {
+    // Valid UUID without dashes should work (normalized)
+    const response = await page.goto('/roles/acdd72a7338548efbd42f606fba81ae7');
+    // May return 404 if role not found, or redirect to slug
     expect([200, 301, 404]).toContain(response?.status());
   });
 });
@@ -913,14 +919,12 @@ test.describe('API Endpoints', () => {
     expect(await response.json()).toHaveProperty('recommendations');
   });
 
-  test('should reject empty AI query', async ({ request }) => {
+  test('should reject empty AI query with 400', async ({ request }) => {
     const response = await request.post('/api/ai-recommend', {
       data: { query: '', mode: 'tfidf' }
     });
-    expect(response.status()).toBe(200);
-    const data = await response.json();
-    // Should return error response for empty query
-    expect(data.error || data.recommendations).toBeDefined();
+    // Empty query is now rejected with 400 due to min_length=1 validation
+    expect(response.status()).toBe(400);
   });
 
   test('should reject too short AI query', async ({ request }) => {
@@ -935,7 +939,7 @@ test.describe('API Endpoints', () => {
 });
 
 // =============================================================================
-// ERROR HANDLING
+// ERROR HANDLING & INPUT VALIDATION
 // =============================================================================
 test.describe('Error Handling', () => {
   test('should return 404 for unknown routes', async ({ request }) => {
@@ -945,20 +949,7 @@ test.describe('Error Handling', () => {
     expect(text.includes('404')).toBe(true);
   });
 
-  test('should handle invalid query parameters gracefully', async ({ page }) => {
-    // Invalid page number
-    const response = await page.goto('/roles?page=-1');
-    expect(response?.status()).toBe(200);
-  });
-
-  test('should handle extreme limit values', async ({ page }) => {
-    // Very large limit should be clamped
-    const response = await page.goto('/roles?limit=99999');
-    expect(response?.status()).toBe(200);
-    await expect(page.locator('table')).toBeVisible();
-  });
-
-  test('should handle invalid sort field', async ({ page }) => {
+  test('should handle invalid sort field gracefully', async ({ page }) => {
     const response = await page.goto('/roles?sort=invalid_field');
     expect(response?.status()).toBe(200);
     await expect(page.locator('table')).toBeVisible();
@@ -967,6 +958,85 @@ test.describe('Error Handling', () => {
   test('should handle missing operation in detail page', async ({ page }) => {
     const response = await page.goto('/operations/Invalid.Provider/nonExistentAction');
     expect(response?.status()).toBe(404);
+  });
+});
+
+test.describe('Input Validation - Reject Invalid Parameters', () => {
+  // /roles endpoint validation
+  test('should reject /roles with negative page', async ({ page }) => {
+    const response = await page.goto('/roles?page=-1');
+    expect(response?.status()).toBe(400);
+  });
+
+  test('should reject /roles with huge page number', async ({ page }) => {
+    const response = await page.goto('/roles?page=999999999');
+    expect(response?.status()).toBe(400);
+  });
+
+  test('should reject /roles with zero limit', async ({ page }) => {
+    const response = await page.goto('/roles?limit=0');
+    expect(response?.status()).toBe(400);
+  });
+
+  test('should reject /roles with excessive limit', async ({ page }) => {
+    const response = await page.goto('/roles?limit=99999');
+    expect(response?.status()).toBe(400);
+  });
+
+  // /operations endpoint validation
+  test('should reject /operations with negative page', async ({ page }) => {
+    const response = await page.goto('/operations?page=-1');
+    expect(response?.status()).toBe(400);
+  });
+
+  test('should reject /operations with excessive limit', async ({ page }) => {
+    const response = await page.goto('/operations?limit=99999');
+    expect(response?.status()).toBe(400);
+  });
+
+  // /recent endpoint validation
+  test('should reject /recent with zero days', async ({ page }) => {
+    const response = await page.goto('/recent?days=0');
+    expect(response?.status()).toBe(400);
+  });
+
+  test('should reject /recent with excessive days', async ({ page }) => {
+    const response = await page.goto('/recent?days=1000');
+    expect(response?.status()).toBe(400);
+  });
+
+  test('should reject /recent with negative page', async ({ page }) => {
+    const response = await page.goto('/recent?page=-1');
+    expect(response?.status()).toBe(400);
+  });
+
+  // API endpoint validation
+  test('should reject /api/operations/search with too long query', async ({ request }) => {
+    const response = await request.get('/api/operations/search?q=' + 'A'.repeat(200));
+    expect(response.status()).toBe(400);
+  });
+
+  test('should reject /api/recommend-roles with too many operations', async ({ request }) => {
+    const operations = Array.from({ length: 200 }, (_, i) => ({
+      name: `op${i}`,
+      is_data_action: false,
+    }));
+    const response = await request.post('/api/recommend-roles', { data: { operations } });
+    expect(response.status()).toBe(400);
+  });
+
+  test('should reject /api/ai-recommend with too long query', async ({ request }) => {
+    const response = await request.post('/api/ai-recommend', {
+      data: { query: 'A'.repeat(600), top_k: 5, recommender_mode: 'tfidf' },
+    });
+    expect(response.status()).toBe(400);
+  });
+
+  test('should reject /api/ai-recommend with invalid top_k', async ({ request }) => {
+    const response = await request.post('/api/ai-recommend', {
+      data: { query: 'test query', top_k: 100, recommender_mode: 'tfidf' },
+    });
+    expect(response.status()).toBe(400);
   });
 });
 

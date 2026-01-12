@@ -205,22 +205,28 @@ class TestRoleDetail:
         # Redirect should use the canonical UUID with dashes
         assert f"/roles/{role_id_dashes}/test-uuid-role" in response.headers["location"]
 
+    @pytest.mark.parametrize(
+        ("role_id", "expected_status"),
+        [
+            # Valid formats - should work (role doesn't exist, so 404)
+            pytest.param("754c1a27-40dc-4708-8ad4-2bffdeee09e9", 404, id="valid_with_dashes"),
+            pytest.param("754c1a2740dc47088ad42bffdeee09e9", 404, id="valid_without_dashes"),
+            pytest.param("754C1A27-40DC-4708-8AD4-2BFFDEEE09E9", 404, id="valid_uppercase"),
+            pytest.param("754c1a27-40dc-4708-8ad4-2BFFDEEE09E9", 404, id="valid_mixed_case"),
+            # Invalid formats - should return 400
+            pytest.param("not-a-valid-uuid", 400, id="invalid_not_hex"),
+            pytest.param("12345", 400, id="invalid_too_short"),
+            pytest.param("zzzzzzzz-zzzz-zzzz-zzzz-zzzzzzzzzzzz", 400, id="invalid_non_hex_chars"),
+            pytest.param("754c1a27-40dc-4708-8ad4", 400, id="invalid_incomplete"),
+            pytest.param("754c1a27-40dc-4708-8ad4-2bffdeee09e8-extra", 400, id="invalid_too_long"),
+        ],
+    )
     @pytest.mark.asyncio
-    async def test_invalid_role_id_returns_404(self, test_client):
-        """Test that invalid UUID format returns 404."""
+    async def test_role_id_format_validation(self, test_client, role_id: str, expected_status: int):
+        """Test UUID format validation for role_id path parameter."""
         client, _ = test_client
-
-        # Invalid UUID - not hex
-        response = await client.get("/roles/not-a-valid-uuid")
-        assert response.status_code == 404
-
-        # Invalid UUID - wrong length
-        response = await client.get("/roles/12345")
-        assert response.status_code == 404
-
-        # Invalid UUID - contains non-hex characters
-        response = await client.get("/roles/zzzzzzzz-zzzz-zzzz-zzzz-zzzzzzzzzzzz")
-        assert response.status_code == 404
+        response = await client.get(f"/roles/{role_id}")
+        assert response.status_code == expected_status
 
 
 # =============================================================================

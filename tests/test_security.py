@@ -95,8 +95,8 @@ class TestSQLInjection:
     async def test_role_detail_sql_injection(self, client: AsyncClient, role_id: str):
         """Verify role detail endpoint is protected against SQL injection."""
         response = await client.get(f"/roles/{role_id}")
-        # Should return 404 (not found) or redirect, never 500
-        assert response.status_code in (307, 404)
+        # Should return 400 (invalid UUID) or 404 (not found), never 500
+        assert response.status_code in (400, 404)
 
 
 class TestXSS:
@@ -281,31 +281,78 @@ class TestAPIEndpoints:
 
 
 class TestResourceExhaustion:
-    """Test protection against resource exhaustion attacks."""
+    """Test protection against resource exhaustion attacks.
 
-    async def test_large_query_truncated(self, client: AsyncClient):
-        """Verify extremely long queries are truncated, not crash."""
-        huge_query = "A" * 10000
-        response = await client.get("/roles", params={"q": huge_query})
-        assert response.status_code == 200
+    Note: FastAPI returns 422 for validation errors, but this app has a custom
+    exception handler that converts them to 400 with a user-friendly error page.
+    """
 
-    async def test_large_json_body_handled(self, client: AsyncClient):
-        """Verify large JSON bodies are handled gracefully."""
+    @pytest.mark.parametrize(
+        ("path", "params"),
+        [
+            pytest.param("/roles", {"q": "A" * 10000}, id="roles_query_too_long"),
+            pytest.param("/roles", {"page": -1}, id="roles_negative_page"),
+            pytest.param("/roles", {"page": 999999999}, id="roles_huge_page"),
+            pytest.param("/roles", {"limit": 0}, id="roles_zero_limit"),
+            pytest.param("/roles", {"limit": -1}, id="roles_negative_limit"),
+            pytest.param("/roles", {"limit": 10000}, id="roles_excessive_limit"),
+            pytest.param("/operations", {"page": -1}, id="operations_negative_page"),
+            pytest.param("/operations", {"limit": 0}, id="operations_zero_limit"),
+            pytest.param("/operations", {"limit": 10000}, id="operations_excessive_limit"),
+            pytest.param("/recent", {"days": 0}, id="recent_zero_days"),
+            pytest.param("/recent", {"days": 1000}, id="recent_excessive_days"),
+            pytest.param("/recent", {"page": -1}, id="recent_negative_page"),
+            pytest.param("/recent", {"limit": 0}, id="recent_zero_limit"),
+            # API search endpoints - MAX_SEARCH_LIMIT enforcement
+            pytest.param(
+                "/api/operations/search",
+                {"q": "test", "limit": 101},
+                id="api_ops_search_limit_exceeded",
+            ),
+            pytest.param(
+                "/api/operations/search",
+                {"q": "test", "limit": 0},
+                id="api_ops_search_zero_limit",
+            ),
+            # Operation detail page validation
+            pytest.param("/operations/test.op", {"page": -1}, id="op_detail_negative_page"),
+            pytest.param("/operations/test.op", {"limit": 0}, id="op_detail_zero_limit"),
+            pytest.param("/operations/test.op", {"limit": 10000}, id="op_detail_excessive_limit"),
+        ],
+    )
+    async def test_invalid_query_params_rejected(
+        self, client: AsyncClient, path: str, params: dict
+    ):
+        """Verify invalid query parameters return 400."""
+        response = await client.get(path, params=params)
+        assert response.status_code == 400
+
+    async def test_large_operations_list_rejected(self, client: AsyncClient):
+        """Verify large operations lists are rejected with 400."""
         large_payload = {
-            "operations": [{"name": f"op{i}", "is_data_action": False} for i in range(1000)]
+            "operations": [{"name": f"op{i}", "is_data_action": False} for i in range(200)]
         }
         response = await client.post("/api/recommend-roles", json=large_payload)
-        assert response.status_code == 200
+        assert response.status_code == 400
 
-    async def test_negative_pagination_clamped(self, client: AsyncClient):
-        """Verify negative page numbers are clamped to 1."""
-        response = await client.get("/roles", params={"page": -1})
-        assert response.status_code == 200
-
-    async def test_huge_page_number_returns_empty(self, client: AsyncClient):
-        """Verify extremely large page numbers return empty results."""
-        response = await client.get("/roles", params={"page": 999999999})
-        assert response.status_code == 200
+    @pytest.mark.parametrize(
+        ("query", "top_k"),
+        [
+            pytest.param("A" * 200, 5, id="query_too_long"),
+            pytest.param("test query", 100, id="top_k_too_large"),
+            pytest.param("test query", 0, id="top_k_zero"),
+            pytest.param("test query", -1, id="top_k_negative"),
+        ],
+    )
+    async def test_ai_recommend_invalid_params_rejected(
+        self, client: AsyncClient, query: str, top_k: int
+    ):
+        """Verify AI recommend rejects invalid parameters with 400."""
+        response = await client.post(
+            "/api/ai-recommend",
+            json={"query": query, "top_k": top_k, "recommender_mode": "tfidf"},
+        )
+        assert response.status_code == 400
 
 
 class TestMethodNotAllowed:

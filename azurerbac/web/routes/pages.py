@@ -7,7 +7,7 @@ import uuid
 from typing import Annotated
 from urllib.parse import unquote
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from azurerbac.core.enums import SortOrder
@@ -15,8 +15,10 @@ from azurerbac.web.constants import (
     DEFAULT_DAYS,
     DEFAULT_LIMIT,
     DEFAULT_PAGE,
+    MAX_DAYS,
     MAX_PAGE_NUMBER,
     MAX_PAGE_SIZE,
+    MAX_QUERY_LENGTH,
     MAX_ROLE_EVENTS,
 )
 from azurerbac.web.dependencies import PagesDeps, get_pages_deps
@@ -36,7 +38,7 @@ from azurerbac.web.services.pages import (
     get_roles_allowing_operation,
     sort_operations,
 )
-from azurerbac.web.utils import clamp, role_json_pretty, slugify
+from azurerbac.web.utils import role_json_pretty, slugify
 
 logger = logging.getLogger(__name__)
 
@@ -47,27 +49,24 @@ router = APIRouter(tags=["pages"])
 @router.get("/roles/{role_id}/{slug}", response_class=HTMLResponse, name="role_detail_slug")
 async def role_detail(
     request: Request,
-    role_id: str,
+    role_id: uuid.UUID,
     deps: Annotated[PagesDeps, Depends(get_pages_deps)],
     slug: str | None = None,
-    q: str | None = None,
-    page: int = DEFAULT_PAGE,
-    limit: int = DEFAULT_LIMIT,
-    days: int = DEFAULT_DAYS,
+    q: Annotated[str | None, Query(max_length=MAX_QUERY_LENGTH)] = None,
+    page: Annotated[int, Query(ge=1, le=MAX_PAGE_NUMBER)] = DEFAULT_PAGE,
+    limit: Annotated[int, Query(ge=1, le=MAX_PAGE_SIZE)] = DEFAULT_LIMIT,
+    days: Annotated[int, Query(ge=1, le=MAX_DAYS)] = DEFAULT_DAYS,
 ) -> Response:
     """Role detail page."""
-    # Normalize role_id to canonical UUID format (handles both with/without dashes)
-    try:
-        role_id = str(uuid.UUID(role_id))
-    except ValueError:
-        return deps.templates.TemplateResponse(request, "404.html", status_code=404)
+    # Convert to canonical string format (with dashes)
+    role_id_str = str(role_id)
 
     # Get role from cache or database
     result = await get_role_from_cache_or_db(
         deps.SessionLocal,
         deps.Role,
         deps.RoleHistory,
-        role_id,
+        role_id_str,
         max_events=MAX_ROLE_EVENTS,
     )
 
@@ -84,7 +83,7 @@ async def role_detail(
     if slug != expected_slug:
         url = build_role_redirect_url(
             request,
-            role_id,
+            role_id_str,
             expected_slug,
             q,
             page,
@@ -125,9 +124,9 @@ async def role_detail(
 async def operations_list(
     request: Request,
     deps: Annotated[PagesDeps, Depends(get_pages_deps)],
-    q: str | None = None,
-    page: int = DEFAULT_PAGE,
-    limit: int = DEFAULT_LIMIT,
+    q: Annotated[str | None, Query(max_length=MAX_QUERY_LENGTH)] = None,
+    page: Annotated[int, Query(ge=1, le=MAX_PAGE_NUMBER)] = DEFAULT_PAGE,
+    limit: Annotated[int, Query(ge=1, le=MAX_PAGE_SIZE)] = DEFAULT_LIMIT,
     is_data_action: str | None = None,
     provider: str | None = None,
     sort: str = OperationSortField.NAME,
@@ -135,10 +134,6 @@ async def operations_list(
 ) -> Response:
     """Operations list page."""
     logger.info("Operations list: q='%s' page=%d provider=%s", q or "", page, provider or "all")
-
-    # Enforce bounds on pagination parameters
-    page_size = clamp(limit, 1, MAX_PAGE_SIZE)
-    page = clamp(page, 1, MAX_PAGE_NUMBER)
 
     # Get all operations from cache
     all_operations = deps.app_cache.get_all_operations()
@@ -164,7 +159,7 @@ async def operations_list(
     sorted_ops_with_counts = sort_operations(filtered_ops, sort, order)
 
     total_filtered = len(sorted_ops_with_counts)
-    pagination = PaginationInfo.compute(total_filtered, page, page_size)
+    pagination = PaginationInfo.compute(total_filtered, page, limit)
     page_slice = sorted_ops_with_counts[pagination.start_idx : pagination.end_idx]
 
     # Convert only the paginated slice to typed models
@@ -181,7 +176,7 @@ async def operations_list(
             "total_operations": total_operations,
             "total_filtered": total_filtered,
             "page": page,
-            "limit": page_size,
+            "limit": limit,
             "total_pages": pagination.total_pages,
             "q": q,
             "is_data_action": is_data_action_filter,
@@ -203,9 +198,9 @@ async def operation_detail(
     operation_name: str,
     request: Request,
     deps: Annotated[PagesDeps, Depends(get_pages_deps)],
-    q: str | None = None,
-    page: int = DEFAULT_PAGE,
-    limit: int = DEFAULT_LIMIT,
+    q: Annotated[str | None, Query(max_length=MAX_QUERY_LENGTH)] = None,
+    page: Annotated[int, Query(ge=1, le=MAX_PAGE_NUMBER)] = DEFAULT_PAGE,
+    limit: Annotated[int, Query(ge=1, le=MAX_PAGE_SIZE)] = DEFAULT_LIMIT,
     is_data_action: str | None = None,
     provider: str | None = None,
 ) -> Response:

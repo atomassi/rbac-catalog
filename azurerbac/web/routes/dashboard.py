@@ -7,7 +7,7 @@ import logging
 from dataclasses import asdict, dataclass, field
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from azurerbac.core.enums import SortOrder, StatusFilter
@@ -18,6 +18,7 @@ from azurerbac.web.constants import (
     MAX_DAYS,
     MAX_PAGE_NUMBER,
     MAX_PAGE_SIZE,
+    MAX_QUERY_LENGTH,
 )
 from azurerbac.web.dependencies import DashboardDeps, get_dashboard_deps
 from azurerbac.web.services.dashboard import (
@@ -29,7 +30,6 @@ from azurerbac.web.services.dashboard import (
     search_roles,
 )
 from azurerbac.web.services.models import PaginationInfo, SortField
-from azurerbac.web.utils import clamp
 
 logger = logging.getLogger(__name__)
 
@@ -68,11 +68,11 @@ class DashboardContext:
 async def recent_changes(
     request: Request,
     deps: Annotated[DashboardDeps, Depends(get_dashboard_deps)],
-    q: str | None = None,
-    days: int = DEFAULT_DAYS,
+    q: Annotated[str | None, Query(max_length=MAX_QUERY_LENGTH)] = None,
+    days: Annotated[int, Query(ge=1, le=MAX_DAYS)] = DEFAULT_DAYS,
     event_type: str = "all",
-    page: int = DEFAULT_PAGE,
-    limit: int = DEFAULT_LIMIT,
+    page: Annotated[int, Query(ge=1, le=MAX_PAGE_NUMBER)] = DEFAULT_PAGE,
+    limit: Annotated[int, Query(ge=1, le=MAX_PAGE_SIZE)] = DEFAULT_LIMIT,
     ai: int | None = None,
 ) -> Response:
     """Recent changes page."""
@@ -89,9 +89,6 @@ async def recent_changes(
         return RedirectResponse(url=f"/roles?{urlencode(params)}", status_code=302)
 
     common = await get_common_dashboard_data(deps)
-    days = clamp(days, 1, MAX_DAYS)
-    page = clamp(page, 1, MAX_PAGE_NUMBER)
-    limit = clamp(limit, 1, MAX_PAGE_SIZE)
 
     events = []
     cutoff = dt.datetime.now(dt.UTC) - dt.timedelta(days=days)
@@ -130,9 +127,9 @@ async def recent_changes(
 async def roles_list(
     request: Request,
     deps: Annotated[DashboardDeps, Depends(get_dashboard_deps)],
-    q: str | None = None,
-    page: int = DEFAULT_PAGE,
-    limit: int = DEFAULT_LIMIT,
+    q: Annotated[str | None, Query(max_length=MAX_QUERY_LENGTH)] = None,
+    page: Annotated[int, Query(ge=1, le=MAX_PAGE_NUMBER)] = DEFAULT_PAGE,
+    limit: Annotated[int, Query(ge=1, le=MAX_PAGE_SIZE)] = DEFAULT_LIMIT,
     sort: str = SortField.NAME,
     order: str = SortOrder.ASC,
     status_filter: str = StatusFilter.ACTIVE,
@@ -144,14 +141,12 @@ async def roles_list(
         "Dashboard /roles: q='%s' page=%d sort=%s status=%s", q or "", page, sort, status_filter
     )
     common = await get_common_dashboard_data(deps)
-    page_size = clamp(limit, 1, MAX_PAGE_SIZE)
-    page = clamp(page, 1, MAX_PAGE_NUMBER)
     needs_python_sort = sort in ("actions", "data_actions", "updated")
 
     async with deps.SessionLocal() as session:
         if not q:
             result = await fetch_roles_paginated(
-                session, deps, status_filter, sort, order, page, page_size, needs_python_sort
+                session, deps, status_filter, sort, order, page, limit, needs_python_sort
             )
         else:
             result = await search_roles(
@@ -162,7 +157,7 @@ async def roles_list(
                 sort,
                 order,
                 page,
-                page_size,
+                limit,
                 needs_python_sort,
                 exact_match,
             )
@@ -172,7 +167,7 @@ async def roles_list(
     ctx = DashboardContext(
         tab="roles",
         page=page,
-        limit=page_size,
+        limit=limit,
         total_pages=result.total_pages,
         q=q,
         sort=sort,

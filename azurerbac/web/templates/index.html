@@ -905,11 +905,11 @@
                                         </td>
                                         <td class="px-2 sm:px-6 py-3 whitespace-nowrap">
                                             {% if ev.event_type == 'created' %}
-                                                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-700">New</span>
+                                                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-700"><span class="hidden sm:inline">Created</span><span class="sm:hidden">New</span></span>
                                             {% elif ev.event_type == 'updated' %}
-                                                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700">Edit</span>
+                                                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700"><span class="hidden sm:inline">Updated</span><span class="sm:hidden">Edit</span></span>
                                             {% elif ev.event_type == 'deleted' %}
-                                                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700">Del</span>
+                                                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700"><span class="hidden sm:inline">Deleted</span><span class="sm:hidden">Del</span></span>
                                             {% else %}
                                                 <span class="text-xs text-slate-600">{{ ev.event_type }}</span>
                                             {% endif %}

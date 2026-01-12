@@ -215,3 +215,27 @@ async def warmup_colbert() -> None:
     loop = asyncio.get_event_loop()
     with concurrent.futures.ThreadPoolExecutor() as pool:
         await loop.run_in_executor(pool, _warmup)
+
+
+async def warmup_crossencoder() -> None:
+    """Pre-warm CrossEncoder model at startup to avoid slow first request.
+
+    Runs in a thread pool to not block the event loop.
+    """
+    import concurrent.futures
+
+    def _warmup() -> None:
+        try:
+            logger.info("CROSSENCODER WARMUP: Starting...")
+            start = time.time()
+
+            from azurerbac.airecommender.engines.crossencoder import get_cross_encoder
+
+            get_cross_encoder()  # Trigger lazy loading
+            logger.info("CROSSENCODER WARMUP: Initialized in %.2fs", time.time() - start)
+        except Exception as e:
+            logger.exception("CROSSENCODER WARMUP: Failed (non-fatal): %s", e)
+
+    loop = asyncio.get_event_loop()
+    with concurrent.futures.ThreadPoolExecutor() as pool:
+        await loop.run_in_executor(pool, _warmup)

@@ -64,6 +64,7 @@ from azurerbac.web.services.startup import (
     ensure_db,
     preload_cache,
     warmup_colbert,
+    warmup_crossencoder,
 )
 from azurerbac.web.utils import slugify
 
@@ -131,6 +132,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:  # pylint: disable=unus
     async with anyio.create_task_group() as tg:
         tg.start_soon(cache_refresh_task, SessionLocal, name="cache-refresh")
         tg.start_soon(warmup_colbert, name="colbert-warmup")
+        tg.start_soon(warmup_crossencoder, name="crossencoder-warmup")
 
         yield  # Application is running
 

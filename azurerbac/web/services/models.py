@@ -1,34 +1,24 @@
-"""Typed models for web service layer.
-
-These dataclasses replace untyped dicts returned by service functions,
-providing better type safety and IDE support.
-"""
+"""Web service layer models."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
 from azurerbac.core.enums import SortOrder
 from azurerbac.core.types import JsonDict
+from azurerbac.matching.models import RoleCoverage
 
 if TYPE_CHECKING:
     from azurerbac.azure.models import OperationData, Permission, RoleDefinition
     from azurerbac.cache import CacheContainer
     from azurerbac.cache.models import CachedChangeEvent, CachedRole
 
-# Note: CacheContainer is used in RolePermissionAnalyzer._cache property return type
-
-
-# =============================================================================
-# Operation Search/Filter Types
-# =============================================================================
-
 
 class OperationSortField(StrEnum):
-    """Valid sort fields for operation listings."""
+    """Sort fields for operation listings."""
 
     NAME = "name"
     PROVIDER = "provider"
@@ -37,27 +27,14 @@ class OperationSortField(StrEnum):
 
 
 class DataActionFilter(StrEnum):
-    """Filter for data vs control plane actions.
-
-    Maps query string values to boolean filters:
-    - "1" -> True (data plane only)
-    - "0" -> False (control plane only)
-    - None/other -> all actions
-    """
+    """Data vs control plane filter."""
 
     DATA = "1"
     CONTROL = "0"
 
     @classmethod
     def parse(cls, value: str | None) -> bool | None:
-        """Parse a query string value to a boolean filter.
-
-        Args:
-            value: Query string value ("1", "0", or None)
-
-        Returns:
-            True for data actions, False for control actions, None for all.
-        """
+        """Parse query string to boolean filter."""
         if value == cls.DATA:
             return True
         if value == cls.CONTROL:
@@ -67,23 +44,61 @@ class DataActionFilter(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class OperationSearchParams:
-    """Parameters for operation search and filtering.
-
-    Encapsulates all filter/sort parameters that often travel together.
-    """
+    """Operation search parameters."""
 
     query: str | None = None
-    is_data_action: bool | None = None  # None = all, True = data, False = control
+    is_data_action: bool | None = None
     provider: str | None = None
     sort: str | OperationSortField = OperationSortField.NAME
     order: str | SortOrder = SortOrder.ASC
 
 
-class RawPermissions:
-    """Raw permission patterns extracted from a role definition.
+class SortField(StrEnum):
+    """Sort fields for role listings."""
 
-    Provides methods to compute effective permissions and check for wildcards.
-    """
+    ACTIONS = "actions"
+    DATA_ACTIONS = "data_actions"
+    ID = "id"
+    UPDATED = "updated"
+    NAME = "name"
+
+    @classmethod
+    def from_string(cls, value: str) -> SortField:
+        """Parse string to SortField."""
+        try:
+            return cls(value)
+        except ValueError:
+            return cls.NAME
+
+    def requires_python_sort(self) -> bool:
+        """True if requires in-memory sorting."""
+        return self in {SortField.ACTIONS, SortField.DATA_ACTIONS}
+
+
+@dataclass(frozen=True, slots=True)
+class PaginationParams:
+    """Pagination parameters."""
+
+    page: int
+    page_size: int
+    sort: str | SortField = SortField.NAME
+    order: str | SortOrder = SortOrder.ASC
+
+    @property
+    def offset(self) -> int:
+        return (self.page - 1) * self.page_size
+
+    @property
+    def is_descending(self) -> bool:
+        return self.order == SortOrder.DESC
+
+    @property
+    def sort_field(self) -> SortField:
+        return SortField.from_string(str(self.sort))
+
+
+class RawPermissions:
+    """Raw permission patterns from a role."""
 
     __slots__ = ("actions", "data_actions", "not_actions", "not_data_actions")
 
@@ -130,9 +145,7 @@ class RawPermissions:
         """Check if role has any defined permissions (actions or data_actions)."""
         return bool(self.actions or self.data_actions)
 
-    def compute_effective(
-        self, control_ops: set[str], data_ops: set[str]
-    ) -> tuple[set[str], set[str]]:
+    def compute_effective(self, control_ops: set[str], data_ops: set[str]) -> RoleCoverage:
         """Compute effective permissions after applying exclusions."""
         from azurerbac.core.patterns import expand_patterns_to_operations
 
@@ -144,7 +157,7 @@ class RawPermissions:
         data_excluded = expand_patterns_to_operations(self.not_data_actions, data_ops)
         data_effective = data_granted - data_excluded
 
-        return control_effective, data_effective
+        return RoleCoverage(control_effective, data_effective)
 
     def to_effective_permissions(
         self,
@@ -153,16 +166,7 @@ class RawPermissions:
         *,
         has_conditions: bool,
     ) -> RoleEffectivePermissions:
-        """Build RoleEffectivePermissions from computed effective sets.
-
-        Args:
-            control_effective: Set of effective control plane operation names.
-            data_effective: Set of effective data plane operation names.
-            has_conditions: Whether the role has ABAC conditions.
-
-        Returns:
-            RoleEffectivePermissions with all metadata populated.
-        """
+        """Build RoleEffectivePermissions from computed sets."""
         has_resolved = bool(control_effective or data_effective)
         has_unresolved = self.has_defined_permissions and not has_resolved
 
@@ -182,20 +186,7 @@ class RawPermissions:
 
 
 class RolePermissionAnalyzer:
-    """Analyzes a role's permissions using cache-backed operation data.
-
-    Encapsulates the logic for computing effective permissions and
-    finding pattern matches. Uses the global cache singleton by default,
-    but accepts an optional cache parameter for testing.
-
-    Example:
-        analyzer = RolePermissionAnalyzer(role)
-        effective = analyzer.get_effective_permissions(all_operations)
-        match = analyzer.find_matching_pattern("Microsoft.Storage/read", is_data_action=False)
-
-        # For testing with a mock cache:
-        analyzer = RolePermissionAnalyzer(role, cache=mock_cache)
-    """
+    """Analyzes role permissions using cache-backed operation data."""
 
     __slots__ = ("_cache_override", "_raw_permissions", "_role")
 
@@ -205,19 +196,14 @@ class RolePermissionAnalyzer:
         *,
         cache: CacheContainer | None = None,
     ) -> None:
-        """Initialize the analyzer.
-
-        Args:
-            role: The RoleDefinition to analyze.
-            cache: Optional cache container. If None, uses the global singleton.
-        """
+        """Initialize the analyzer."""
         self._role = role
         self._cache_override = cache
         self._raw_permissions = RawPermissions.from_permissions(role.properties.permissions)
 
     @property
     def _cache(self) -> CacheContainer:
-        """Get the cache container (override or global singleton)."""
+        """Get cache container."""
         if self._cache_override is not None:
             return self._cache_override
         from azurerbac.cache import get_cache_service
@@ -226,37 +212,30 @@ class RolePermissionAnalyzer:
 
     @property
     def role_id(self) -> str:
-        """Get the role's unique identifier."""
+        """Get role's unique identifier."""
         return self._role.name
 
     @property
     def permissions(self) -> list[Permission]:
-        """Get the role's permission list."""
+        """Get role's permission list."""
         return self._role.properties.permissions
 
     @property
     def raw(self) -> RawPermissions:
-        """Get the extracted raw permission patterns."""
+        """Get extracted raw permission patterns."""
         return self._raw_permissions
 
     @property
     def has_conditions(self) -> bool:
-        """Check if any permissions have ABAC conditions."""
+        """Check if any permissions have conditions."""
         return any(perm.condition for perm in self.permissions)
 
-    def get_cached_coverage(self) -> tuple[set[str], set[str]] | None:
-        """Get pre-computed coverage from cache if available."""
+    def get_cached_coverage(self) -> RoleCoverage | None:
+        """Get pre-computed coverage from cache."""
         return self._cache.get_role_coverage(self.role_id)
 
-    def compute_coverage(self, all_operations: list[OperationData]) -> tuple[set[str], set[str]]:
-        """Compute coverage manually from operation list.
-
-        Args:
-            all_operations: List of all known Azure operations.
-
-        Returns:
-            Tuple of (control_effective, data_effective) operation sets.
-        """
+    def compute_coverage(self, all_operations: list[OperationData]) -> RoleCoverage:
+        """Compute coverage from operation list."""
         all_control_ops = {op.name for op in all_operations if not op.is_data_action}
         all_data_ops = {op.name for op in all_operations if op.is_data_action}
         return self.raw.compute_effective(all_control_ops, all_data_ops)
@@ -264,16 +243,7 @@ class RolePermissionAnalyzer:
     def get_effective_permissions(
         self, all_operations: list[OperationData]
     ) -> RoleEffectivePermissions:
-        """Compute the effective permissions for this role.
-
-        Uses cached coverage when available, falls back to manual computation.
-
-        Args:
-            all_operations: List of all known Azure operations.
-
-        Returns:
-            RoleEffectivePermissions with control/data plane actions and metadata.
-        """
+        """Compute effective permissions for this role."""
         # Try cache first
         if cached := self.get_cached_coverage():
             control_effective, data_effective = cached
@@ -289,15 +259,7 @@ class RolePermissionAnalyzer:
     def find_matching_pattern(
         self, operation_name: str, *, is_data_action: bool
     ) -> PatternMatchResult:
-        """Find the pattern that grants an operation and check for conditions.
-
-        Args:
-            operation_name: The operation name to match.
-            is_data_action: Whether this is a data plane action.
-
-        Returns:
-            PatternMatchResult with matched pattern and condition info.
-        """
+        """Find pattern granting an operation."""
         from azurerbac.core.patterns import matches_pattern
 
         operation_lower = operation_name.lower()
@@ -317,18 +279,9 @@ class RolePermissionAnalyzer:
         return PatternMatchResult(matched_pattern=None, has_condition=False, condition_text=None)
 
 
-# =============================================================================
-# Pagination Models
-# =============================================================================
-
-
 @dataclass(frozen=True, slots=True)
 class PaginationInfo:
-    """Computed pagination metadata.
-
-    Holds derived values (total_pages, start/end indices) to avoid
-    repeating the same calculations in multiple routes.
-    """
+    """Computed pagination metadata."""
 
     total_pages: int
     start_idx: int
@@ -336,16 +289,7 @@ class PaginationInfo:
 
     @staticmethod
     def compute(total_items: int, page: int, page_size: int) -> PaginationInfo:
-        """Compute pagination values from item count and page parameters.
-
-        Args:
-            total_items: Total number of items before pagination.
-            page: Current page number (1-based).
-            page_size: Number of items per page.
-
-        Returns:
-            PaginationInfo with total_pages, start_idx, end_idx.
-        """
+        """Compute pagination values."""
         total_pages = max(1, (total_items + page_size - 1) // page_size)
         # Clamp page to available pages
         clamped_page = min(page, total_pages)
@@ -360,10 +304,7 @@ class PaginationInfo:
 
 @dataclass(frozen=True, slots=True)
 class PaginatedResult[T]:
-    """Generic paginated result container.
-
-    Replaces tuple[list[T], int, int] returns with a typed dataclass.
-    """
+    """Generic paginated result container."""
 
     items: list[T]
     total_count: int
@@ -372,11 +313,7 @@ class PaginatedResult[T]:
 
 @dataclass(frozen=True, slots=True)
 class PatternMatchResult:
-    """Result of finding a pattern that matches an operation.
-
-    Used when checking which permission pattern grants an operation
-    and whether conditions apply.
-    """
+    """Pattern match result."""
 
     matched_pattern: str | None
     has_condition: bool
@@ -385,10 +322,7 @@ class PatternMatchResult:
 
 @dataclass(frozen=True, slots=True)
 class ScanMetadata:
-    """Scan timestamp metadata from cache or database.
-
-    Contains first and last scan timestamps for display purposes.
-    """
+    """Scan timestamp metadata."""
 
     last_scan: datetime | None
     first_scan: datetime | None
@@ -396,11 +330,7 @@ class ScanMetadata:
 
 @dataclass(slots=True)
 class RoleEffectivePermissions:
-    """Effective permissions for a role after applying notActions/notDataActions.
-
-    Contains control plane and data plane actions, counts, and metadata
-    about wildcards and conditions.
-    """
+    """Effective permissions after applying notActions."""
 
     control_plane_actions: list[str]
     data_plane_actions: list[str]
@@ -416,27 +346,12 @@ class RoleEffectivePermissions:
 
     def to_dict(self) -> JsonDict:
         """Convert to dict for template rendering."""
-        return {
-            "control_plane_actions": self.control_plane_actions,
-            "data_plane_actions": self.data_plane_actions,
-            "control_plane_count": self.control_plane_count,
-            "data_plane_count": self.data_plane_count,
-            "has_conditions": self.has_conditions,
-            "has_wildcards": self.has_wildcards,
-            "has_unresolved_permissions": self.has_unresolved_permissions,
-            "raw_actions": self.raw_actions,
-            "raw_not_actions": self.raw_not_actions,
-            "raw_data_actions": self.raw_data_actions,
-            "raw_not_data_actions": self.raw_not_data_actions,
-        }
+        return asdict(self)
 
 
 @dataclass(slots=True)
 class EnrichedChangeEvent:
-    """A role change event enriched with processed diff data.
-
-    Used for displaying role history with formatted diff output.
-    """
+    """Change event with processed diff data."""
 
     scan_timestamp: datetime | None
     azure_updated_on: datetime | None
@@ -448,24 +363,12 @@ class EnrichedChangeEvent:
 
     def to_dict(self) -> JsonDict:
         """Convert to dict for template rendering."""
-        return {
-            "scan_timestamp": self.scan_timestamp,
-            "azure_updated_on": self.azure_updated_on,
-            "event_type": self.event_type,
-            "summary": self.summary,
-            "diff": self.diff,
-            "diff_pretty": self.diff_pretty,
-            "role_json_pretty": self.role_json_pretty,
-        }
+        return asdict(self)
 
 
 @dataclass(slots=True)
 class RoleAllowingOperation:
-    """A role that allows a specific operation.
-
-    Contains role identification, the matched pattern, action counts,
-    and condition information.
-    """
+    """Role that allows a specific operation."""
 
     role_id: str
     role_name: str
@@ -486,19 +389,7 @@ class RoleAllowingOperation:
         data_count: int,
         match_result: PatternMatchResult,
     ) -> RoleAllowingOperation:
-        """Create from role data and pattern match result.
-
-        Args:
-            role_id: The role's unique identifier.
-            role_name: Display name of the role.
-            role_type: Type of the role (e.g., "BuiltInRole").
-            control_count: Number of control plane actions.
-            data_count: Number of data plane actions.
-            match_result: The pattern match result.
-
-        Returns:
-            RoleAllowingOperation instance.
-        """
+        """Create from role data and match result."""
         return cls(
             role_id=role_id,
             role_name=role_name,
@@ -512,24 +403,12 @@ class RoleAllowingOperation:
 
     def to_dict(self) -> JsonDict:
         """Convert to dict for template rendering."""
-        return {
-            "role_id": self.role_id,
-            "role_name": self.role_name,
-            "role_type": self.role_type,
-            "matched_pattern": self.matched_pattern,
-            "actions_count": self.actions_count,
-            "data_actions_count": self.data_actions_count,
-            "has_condition": self.has_condition,
-            "condition_text": self.condition_text,
-        }
+        return asdict(self)
 
 
 @dataclass(slots=True)
 class RoleWithCounts:
-    """A role enriched with action counts from cache.
-
-    Used for dashboard role listings where counts are needed.
-    """
+    """Role with action counts."""
 
     role_id: str
     role_name: str
@@ -541,23 +420,12 @@ class RoleWithCounts:
 
     def to_dict(self) -> JsonDict:
         """Convert to dict for template rendering."""
-        return {
-            "role_id": self.role_id,
-            "role_name": self.role_name,
-            "role_type": self.role_type,
-            "status": self.status,
-            "updated_on": self.updated_on,
-            "actions_count": self.actions_count,
-            "data_actions_count": self.data_actions_count,
-        }
+        return asdict(self)
 
 
 @dataclass(slots=True)
 class DashboardSummary:
-    """Summary data for dashboard pages.
-
-    Contains total counts and scan timestamps.
-    """
+    """Dashboard summary data."""
 
     total_roles: int
     total_operations: int
@@ -566,20 +434,12 @@ class DashboardSummary:
 
     def to_dict(self) -> JsonDict:
         """Convert to dict for template rendering."""
-        return {
-            "total_roles": self.total_roles,
-            "total_operations": self.total_operations,
-            "last_scan": self.last_scan,
-            "first_scan": self.first_scan,
-        }
+        return asdict(self)
 
 
 @dataclass(slots=True)
 class RoleDetailResult:
-    """Result of fetching role detail data from cache or database.
-
-    Replaces tuple return from get_role_from_cache_or_db for better type safety.
-    """
+    """Role detail data from cache or database."""
 
     cached_role: CachedRole | None
     definition: RoleDefinition | None

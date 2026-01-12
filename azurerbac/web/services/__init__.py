@@ -1,12 +1,7 @@
-"""Web services package.
-
-This package contains business logic separated from route handlers.
-"""
+"""Web services package."""
 
 from azurerbac.core.enums import EventTypeFilter, SortOrder, StatusFilter
 from azurerbac.web.services.dashboard import (
-    PaginationParams,
-    SortField,
     enrich_role_with_counts,
     ensure_scan_metadata,
     fetch_events_from_db,
@@ -25,6 +20,7 @@ from azurerbac.web.services.models import (
     OperationSortField,
     PaginatedResult,
     PaginationInfo,
+    PaginationParams,
     PatternMatchResult,
     RawPermissions,
     RoleAllowingOperation,
@@ -33,6 +29,7 @@ from azurerbac.web.services.models import (
     RolePermissionAnalyzer,
     RoleWithCounts,
     ScanMetadata,
+    SortField,
 )
 from azurerbac.web.services.pages import (
     compute_role_effective_permissions,

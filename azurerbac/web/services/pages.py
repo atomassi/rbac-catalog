@@ -1,4 +1,4 @@
-"""Pages service functions for the Azure RBAC Catalog."""
+"""Pages service functions."""
 
 from __future__ import annotations
 
@@ -30,18 +30,8 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-# =============================================================================
-# Operation Search Helpers
-# =============================================================================
-
-
 def operation_matches_search(op: OperationData, query_lower: str) -> bool:
-    """Check if an OperationData matches a text search query.
-
-    Searches across name, display_name, description, provider, and resource type.
-
-    Note: This delegates to OperationData.matches_search() for consistency.
-    """
+    """Check if operation matches search query."""
     return op.matches_search(query_lower)
 
 
@@ -49,15 +39,7 @@ def filter_operations(
     operations: list[OperationData],
     params: OperationSearchParams,
 ) -> list[OperationData]:
-    """Filter operations based on search parameters.
-
-    Args:
-        operations: List of OperationData objects to filter
-        params: Search/filter parameters
-
-    Returns:
-        Filtered list of operations (original order preserved)
-    """
+    """Filter operations based on search parameters."""
     result = operations
 
     # Apply text search
@@ -90,17 +72,7 @@ def sort_operations(
     order: str | SortOrder,
     cache: CacheContainer | None = None,
 ) -> list[tuple[OperationData, int]]:
-    """Sort operations based on sort field and order.
-
-    Args:
-        operations: List of OperationData objects to sort
-        sort: Sort field - OperationSortField enum or string
-        order: Sort order - SortOrder enum or string
-        cache: Optional cache container. If None, uses global singleton.
-
-    Returns:
-        List of (operation, role_count) tuples, sorted as requested
-    """
+    """Sort operations and return with role counts."""
     from azurerbac.cache import get_cache_service
 
     cache_resolved = cache if cache is not None else get_cache_service().container
@@ -118,39 +90,23 @@ def sort_operations(
     return ops_with_count
 
 
-# =============================================================================
-# Role Permissions
-# =============================================================================
-
-
 def compute_role_effective_permissions(
     role: RoleDefinition,
     all_operations: list[OperationData],
     cache: CacheContainer | None = None,
 ) -> RoleEffectivePermissions:
-    """Compute the effective permissions for a role.
-
-    Delegates to RolePermissionAnalyzer for the actual computation.
-
-    Args:
-        role: The RoleDefinition Pydantic model.
-        all_operations: List of all known Azure operations.
-        cache: Optional cache container. If None, uses global singleton.
-
-    Returns:
-        RoleEffectivePermissions with control/data plane actions and metadata.
-    """
+    """Compute effective permissions for a role."""
     analyzer = RolePermissionAnalyzer(role, cache=cache)
     return analyzer.get_effective_permissions(all_operations)
 
 
 def _operation_in_set(operation_lower: str, operation_set: set[str]) -> bool:
-    """Check if operation is in the effective set (case-insensitive)."""
+    """Check if operation is in set (case-insensitive)."""
     return any(op.lower() == operation_lower for op in operation_set)
 
 
 def _get_cache(cache: CacheContainer | None) -> CacheContainer:
-    """Get the cache container (provided or global singleton)."""
+    """Get cache container."""
     if cache is not None:
         return cache
     from azurerbac.cache import get_cache_service
@@ -163,20 +119,7 @@ def get_roles_allowing_operation(
     is_data_action: bool,
     cache: CacheContainer | None = None,
 ) -> list[RoleAllowingOperation]:
-    """Find all roles that allow a specific operation.
-
-    Uses the pre-computed role coverage cache from the recommender.
-    This cache contains the expanded set of actual operations each role covers,
-    after applying notActions/notDataActions exclusions.
-
-    Args:
-        operation_name: The name of the operation to search for.
-        is_data_action: Whether this is a data action (vs control plane action).
-        cache: Optional cache container. If None, uses global singleton.
-
-    Returns:
-        List of RoleAllowingOperation with role details and matched pattern.
-    """
+    """Find roles allowing a specific operation."""
     cache_resolved = _get_cache(cache)
 
     # Check cache first
@@ -217,15 +160,11 @@ def get_roles_allowing_operation(
 
     allowing_roles.sort(key=lambda x: x.role_name.lower())
 
-    # Cache result
     cache_resolved.set(cache_key, allowing_roles)
 
     return allowing_roles
 
 
-# =============================================================================
-# Role Detail Helpers
-# =============================================================================
 async def get_role_from_cache_or_db(
     session_local: async_sessionmaker,
     role_snapshot_model: type[Role],
@@ -235,21 +174,7 @@ async def get_role_from_cache_or_db(
     *,
     cache: CacheContainer | None = None,
 ) -> RoleDetailResult:
-    """Get role data from cache or fallback to database.
-
-    Uses the global cache singleton. Falls back to database on cache miss.
-
-    Args:
-        session_local: Async session factory.
-        role_snapshot_model: Role SQLAlchemy model.
-        role_history_model: RoleHistory SQLAlchemy model.
-        role_id: The role ID to fetch.
-        max_events: Maximum number of events to return.
-        cache: Optional cache container (defaults to global singleton).
-
-    Returns:
-        RoleDetailResult containing cached_role, definition, events, and first_scan.
-    """
+    """Get role data from cache or database."""
     from sqlalchemy import func, select
 
     from azurerbac.cache import get_cache_service

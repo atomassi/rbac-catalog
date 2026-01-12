@@ -1,4 +1,4 @@
-"""API route handlers for the Azure RBAC Catalog."""
+"""API route handlers."""
 
 from __future__ import annotations
 
@@ -61,13 +61,7 @@ async def api_search_operations(
     q: SearchQuery = "",
     limit: SearchLimit = DEFAULT_SEARCH_LIMIT,
 ) -> OperationSearchResponse:
-    """Search operations by name or description.
-
-    Supports wildcards:
-    - * matches any characters (e.g., Microsoft.Authorization/*/read)
-
-    Returns a list of operations matching the query.
-    """
+    """Search operations by name with optional wildcards."""
     # Early return for insufficient query length
     if len(q) < MIN_SEARCH_CHARS:
         return empty_search_response(ErrorMessages.SEARCH_TOO_SHORT)
@@ -96,10 +90,7 @@ async def api_count_wildcard_matches(
     pattern: SearchQuery,
     is_data_action: bool = False,
 ) -> CountMatchesResponse:
-    """Count how many operations match a wildcard pattern.
-
-    Used to show "(matches N operations)" when user selects a wildcard pattern.
-    """
+    """Count operations matching a wildcard pattern."""
     # Non-wildcard patterns always return zero matches
     if not pattern or not is_wildcard_pattern(pattern):
         return CountMatchesResponse(pattern=pattern, count=0, is_data_action=is_data_action)
@@ -115,11 +106,7 @@ async def api_recommend_roles(
     request: RecommendRolesRequest,
     deps: Annotated[BaseDeps, Depends(get_api_deps)],
 ) -> RecommendRolesResponse:
-    """Recommend roles based on selected operations.
-
-    Expects JSON body: {"operations": [{"name": "op1", "is_data_action": false}, ...]}
-    Returns roles that grant all requested operations, sorted by least privilege.
-    """
+    """Recommend roles based on selected operations."""
     requested_ops, data_flags = request.parse_operations()
 
     # Get data from cache (preloaded at startup)
@@ -164,20 +151,7 @@ async def ai_recommend_endpoint(
     body: AIRecommendRequest,
     deps: Annotated[BaseDeps, Depends(get_api_deps)],
 ) -> AIRecommendResponse:
-    """AI-powered role recommendations based on natural language query.
-
-    This endpoint uses semantic search to find roles matching a natural language
-    description like "I need to read storage blobs" or "manage virtual machines".
-
-    Engines (in order of speed/accuracy tradeoff):
-    - TFIDF: Fast lexical search
-    - Semantic: Pure embedding similarity
-    - ColBERT: Token-level late interaction
-    - CrossEncoder: Bi-encoder + reranking
-    - LLM: Fine-tuned Qwen model
-    - RAG/Hybrid/HyDE: Multi-stage pipelines
-    """
-    # ─── Input Validation ─────────────────────────────────────────────────────
+    """AI-powered role recommendations from natural language query."""
     query = (body.query or "").strip()[:MAX_QUERY_LENGTH]
 
     if not query:
@@ -185,7 +159,6 @@ async def ai_recommend_endpoint(
     if len(query) < MIN_AI_QUERY_CHARS:
         return ai_error_response(ErrorMessages.QUERY_TOO_SHORT)
 
-    # ─── Request Normalization ────────────────────────────────────────────────
     requested_mode = (
         body.recommender_mode
         if RecommenderMode.is_valid(body.recommender_mode)
@@ -194,8 +167,6 @@ async def ai_recommend_endpoint(
     top_k = clamp(body.top_k, 1, MAX_TOP_K)
     roles = deps.app_cache.get_all_roles()
 
-    # ─── Execute AI Recommendation ────────────────────────────────────────────
-    # Run CPU-bound AI recommendation in thread pool to avoid blocking event loop
     try:
         loop = asyncio.get_running_loop()
         recommendations, actual_mode = await loop.run_in_executor(
@@ -221,7 +192,6 @@ async def ai_recommend_endpoint(
         logger.exception("AI recommendation failed")
         return ai_error_response(ErrorMessages.GENERIC_ERROR)
 
-    # ─── Success Response ─────────────────────────────────────────────────────
     logger.info(
         "AI recommendation: query='%s' requested=%s actual=%s results=%d",
         query[:50],

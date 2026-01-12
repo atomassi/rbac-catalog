@@ -1,12 +1,4 @@
-"""Routes package for the Azure RBAC Catalog web application.
-
-This package contains all route handlers organized by functionality:
-- api: JSON API endpoints for role recommendation
-- dashboard: Dashboard rendering for /recent and /roles pages
-- health: Health check endpoint
-- pages: Page handlers for role details, operations, recommend, about
-- static: Static content routes (robots.txt, sitemap, favicons)
-"""
+"""Routes package."""
 
 from azurerbac.web.routes.api import router as api_router
 from azurerbac.web.routes.dashboard import router as dashboard_router

@@ -1,19 +1,4 @@
-"""Timing utilities for metrics and debugging.
-
-Provides context managers for timing operations with optional metric tracking.
-
-Usage:
-    from azurerbac.telemetry.timers import TimedDbQuery, TimedOperation
-
-    # Track database query duration
-    async with TimedDbQuery("fetch_roles") as timer:
-        result = await session.execute(select(Role))
-        timer.rows = len(result.scalars().all())
-
-    # Debug timing for any operation
-    with TimedOperation("computing role coverage", logger):
-        expensive_computation()
-"""
+"""Timing utilities for metrics."""
 
 from __future__ import annotations
 
@@ -27,11 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 class BaseTimer(ABC):
-    """Abstract base class for timing context managers.
-
-    Eliminates duplication between TimedDbQuery and TimedOperation.
-    Subclasses implement _on_exit to handle timing results.
-    """
+    """Base class for timing context managers."""
 
     __slots__ = ("_start_time",)
 
@@ -64,22 +45,11 @@ class BaseTimer(ABC):
 
     @abstractmethod
     def _on_exit(self, elapsed: float, exc_type: type[BaseException] | None) -> None:
-        """Handle timing result. Called on both sync and async exit."""
+        pass
 
 
 class TimedDbQuery(BaseTimer):
-    """Context manager for timing database queries and tracking metrics.
-
-    Usage:
-        async with TimedDbQuery("fetch_roles") as timer:
-            result = await session.execute(select(Role))
-            rows = result.scalars().all()
-            timer.rows = len(rows)
-
-    Or simpler (without row count):
-        with TimedDbQuery("fetch_roles"):
-            result = await session.execute(select(Role))
-    """
+    """Timer for database queries with metrics tracking."""
 
     __slots__ = ("query_name", "rows")
 
@@ -89,22 +59,13 @@ class TimedDbQuery(BaseTimer):
         self.rows: int | None = None
 
     def _on_exit(self, elapsed: float, exc_type: type[BaseException] | None) -> None:
-        # Import here to avoid circular dependency
         from azurerbac.telemetry.metrics import track_db_query
 
         track_db_query(self.query_name, elapsed, self.rows)
 
 
 class TimedOperation(BaseTimer):
-    """Context manager for timing any operation with debug logging.
-
-    Usage:
-        with TimedOperation("computing role coverage", logger):
-            # expensive computation
-            pass
-
-    Logs at DEBUG level when entering and exiting, with elapsed time.
-    """
+    """Timer for operations with debug logging."""
 
     __slots__ = ("log", "operation_name")
 

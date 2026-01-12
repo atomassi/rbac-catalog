@@ -1,4 +1,4 @@
-"""Telemetry module: Application Insights metrics and logging."""
+"""Telemetry: Application Insights metrics and logging."""
 
 from .logging import configure_logging, get_logger
 from .metrics import (

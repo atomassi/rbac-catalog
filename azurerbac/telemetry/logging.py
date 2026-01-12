@@ -1,4 +1,4 @@
-"""Application Insights and file logging configuration using OpenTelemetry."""
+"""Logging configuration for Application Insights and file output."""
 
 from __future__ import annotations
 
@@ -8,17 +8,13 @@ from typing import Final
 
 from azurerbac.settings import Settings, is_running_in_azure
 
-# Log directory for local file logging
 LOGS_DIR: Final = Path(__file__).parent.parent.parent / "logs"
 
-# Module logger for internal errors
 _logger = logging.getLogger(__name__)
-
 _configured = False
 _configured_log_file: str | None = None
 _configured_component: str | None = None
 
-# Patterns that indicate sensitive data - redact these from logs
 _SENSITIVE_PATTERNS: Final = (
     "Bearer ",
     "Authorization:",
@@ -32,20 +28,13 @@ _SENSITIVE_PATTERNS: Final = (
 
 
 class _CredentialFilter(logging.Filter):
-    """Filter to redact sensitive information from log messages."""
+    """Redact sensitive information from logs."""
 
     def filter(self, record: logging.LogRecord) -> bool:
-        """Redact sensitive patterns from log message.
-
-        Notes:
-            We inspect the rendered message (record.getMessage()) so secrets
-            provided via logging args are also caught.
-        """
         try:
             rendered = record.getMessage()
-        except Exception:  # pragma: no cover - defensive; logging should never break
+        except Exception:
             return True
-
         if isinstance(rendered, str):
             rendered_lower = rendered.lower()
             for pattern in _SENSITIVE_PATTERNS:
@@ -57,23 +46,13 @@ class _CredentialFilter(logging.Filter):
 
 
 class _EnvironmentFilter(logging.Filter):
-    """Filter to add environment (production/staging) to log records.
-
-    This adds the 'environment' attribute to each log record.
-    Azure Monitor reads arbitrary record attributes and maps them
-    to customDimensions in Application Insights.
-
-    Note: Resource attributes like deployment.environment only work
-    for traces/spans, not for Python logs. This filter is the
-    recommended approach for logs.
-    """
+    """Add environment attribute to log records."""
 
     def __init__(self, environment: str) -> None:
         super().__init__()
         self.environment = environment
 
     def filter(self, record: logging.LogRecord) -> bool:
-        """Add environment directly to log record."""
         record.environment = self.environment
         return True
 

@@ -25,11 +25,7 @@ POSTGRES_SCOPE: Final[str] = "https://ossrdbms-aad.database.windows.net/.default
 
 
 class ManagedIdentityAuthenticator:
-    """Handles async token acquisition for Azure PostgreSQL.
-
-    This class maintains a singleton ManagedIdentityCredential to avoid
-    leaking HTTP sessions. Use ManagedIdentityAuthenticator.get() for the singleton.
-    """
+    """Singleton async token provider for Azure PostgreSQL authentication."""
 
     _instance: ThreadSafeSingleton[ManagedIdentityAuthenticator] | None = None
 
@@ -85,22 +81,13 @@ class ManagedIdentityAuthenticator:
 
 
 class DBEngine:
-    """Singleton wrapper for the AsyncEngine.
-
-    Usage:
-        engine = DBEngine.get()  # Get singleton
-        await DBEngine.dispose()  # Shutdown cleanup
-    """
+    """Singleton wrapper for the AsyncEngine."""
 
     _instance: ThreadSafeSingleton[AsyncEngine] | None = None
 
     @classmethod
     def get(cls) -> AsyncEngine:
-        """Get the singleton AsyncEngine.
-
-        The engine maintains a connection pool. Creating multiple engines
-        wastes connections and adds overhead.
-        """
+        """Get the singleton AsyncEngine."""
         if cls._instance is None:
             cls._instance = ThreadSafeSingleton(factory=EngineFactory.from_settings)
         return cls._instance.get()
@@ -113,11 +100,7 @@ class DBEngine:
 
     @classmethod
     async def dispose(cls) -> None:
-        """Dispose the engine and MSI authenticator on shutdown.
-
-        Call this during application shutdown to cleanly close all
-        pooled connections.
-        """
+        """Dispose the engine and MSI authenticator on shutdown."""
         if cls._instance and cls._instance.is_initialized:
             await cls._instance.get().dispose()
             cls.reset()
@@ -125,22 +108,7 @@ class DBEngine:
 
 
 class EngineFactory:
-    """Factory for creating SQLAlchemy async engines.
-
-    Usage:
-        # From settings (recommended for production)
-        engine = EngineFactory.from_settings()
-
-        # From connection string
-        engine = EngineFactory.from_connection_string("postgresql+asyncpg://...")
-
-        # With managed identity
-        engine = EngineFactory.from_managed_identity(
-            host="mydb.postgres.database.azure.com",
-            database="mydb",
-            user="my-identity",
-        )
-    """
+    """Factory for creating SQLAlchemy async engines."""
 
     # Default pool settings
     POOL_SIZE = 10
@@ -152,14 +120,7 @@ class EngineFactory:
 
     @classmethod
     def from_settings(cls, settings: Settings | None = None) -> AsyncEngine:
-        """Create engine from application settings.
-
-        Args:
-            settings: Optional Settings instance. If None, loads from singleton.
-
-        Returns:
-            Configured AsyncEngine.
-        """
+        """Create engine from application settings."""
         if settings is None:
             from azurerbac.settings import Settings
 
@@ -184,14 +145,7 @@ class EngineFactory:
 
     @classmethod
     def from_connection_string(cls, connection_string: str) -> AsyncEngine:
-        """Create engine from a database connection string.
-
-        Args:
-            connection_string: SQLAlchemy connection URL (sqlite or postgresql).
-
-        Returns:
-            Configured AsyncEngine.
-        """
+        """Create engine from a database connection string."""
         logger.info("Creating engine from connection string")
 
         if connection_string.startswith("sqlite"):
@@ -213,19 +167,7 @@ class EngineFactory:
         user: str,
         port: int = 5432,
     ) -> AsyncEngine:
-        """Create engine using Azure Managed Identity authentication.
-
-        Each connection fetches a fresh Azure AD token as the password.
-
-        Args:
-            host: PostgreSQL server hostname.
-            database: Database name.
-            user: Managed identity name (as registered in PostgreSQL).
-            port: PostgreSQL port (default 5432).
-
-        Returns:
-            Configured AsyncEngine with MSI token injection.
-        """
+        """Create engine using Azure Managed Identity authentication."""
         logger.info(
             "Creating engine with managed identity: host=%s, port=%s, database=%s, user=%s",
             host,

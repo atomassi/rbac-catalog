@@ -228,11 +228,8 @@ jobs:
 
       - name: Wait for staging to be ready
         run: |
-          echo "⏳ Initial wait during startup (3 minutes for model warmup)..."
-          sleep 180
-          echo "✅ Initial wait complete"
-          
           echo "⏳ Waiting for staging to be ready (up to 15 minutes)..."
+          echo "   (AI models now warm up BEFORE startup, so healthz only returns 200 when ready)"
           MAX_WAIT_SECONDS=900
           POLL_INTERVAL_SECONDS=30
           WAITED_SECONDS=0

@@ -126,13 +126,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:  # pylint: disable=unus
     await ensure_db(engine)
     await preload_cache(SessionLocal)
 
-    logger.info("Application startup complete, starting background tasks...")
+    # Warmup AI models BEFORE accepting requests
+    logger.info("Warming up AI models...")
+    async with anyio.create_task_group() as warmup_tg:
+        warmup_tg.start_soon(warmup_colbert, name="colbert-warmup")
+        warmup_tg.start_soon(warmup_crossencoder, name="crossencoder-warmup")
 
-    # Use anyio task group for clean task management
+    logger.info("Application startup complete, starting background tasks...")
     async with anyio.create_task_group() as tg:
         tg.start_soon(cache_refresh_task, SessionLocal, name="cache-refresh")
-        tg.start_soon(warmup_colbert, name="colbert-warmup")
-        tg.start_soon(warmup_crossencoder, name="crossencoder-warmup")
 
         yield  # Application is running
 

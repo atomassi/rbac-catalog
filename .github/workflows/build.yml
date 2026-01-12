@@ -106,7 +106,15 @@ jobs:
       - name: Run E2E tests
         run: |
           uvicorn azurerbac.web.app:app --host 0.0.0.0 --port 8000 &
-          for i in {1..30}; do curl -s http://localhost:8000/healthz && break || sleep 1; done
+          echo "Waiting for app to start..."
+          for i in {1..600}; do
+            if curl -sf http://localhost:8000/healthz > /dev/null 2>&1; then
+              echo "App ready after ${i}s"
+              break
+            fi
+            sleep 10
+          done
+          curl -sf http://localhost:8000/healthz || { echo "App failed to start"; exit 1; }
           npm run test:e2e
         env:
           DB_CONNECTION_STRING: "sqlite+aiosqlite:///e2e_test.db"

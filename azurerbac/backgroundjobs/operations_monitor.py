@@ -1,4 +1,4 @@
-"""Monitor for Azure provider operations - stores operations to database."""
+"""Monitor for Azure provider operations."""
 
 from __future__ import annotations
 
@@ -15,7 +15,6 @@ from azurerbac.core import Operation, OperationScanStatus, utcnow
 
 logger = logging.getLogger(__name__)
 
-# Fields to sync between OperationData and Operation
 _OPERATION_FIELDS = (
     "display_name",
     "description",
@@ -73,13 +72,7 @@ def _create_operation(op_data: OperationData, now: dt.datetime) -> Operation:
 async def apply_operations_scan(
     session: AsyncSession, operations: list[OperationData]
 ) -> OperationsScanResult:
-    """Store/update operations in the database.
-
-    Uses upsert logic - updates existing operations, inserts new ones.
-    Handles duplicates by keeping the last occurrence.
-
-    Returns OperationsScanResult with created/updated/total/duplicates/providers counts.
-    """
+    """Store/update operations in the database using upsert logic."""
     now = utcnow()
     logger.info(
         "Starting operations scan at %s with %d operations from Azure", now, len(operations)

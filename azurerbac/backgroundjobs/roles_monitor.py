@@ -1,4 +1,4 @@
-"""Monitor for Azure built-in roles - detects and stores role changes."""
+"""Monitor for Azure built-in roles."""
 
 from __future__ import annotations
 
@@ -33,10 +33,7 @@ def _create_history_entry(
     role_json: dict | None,
     azure_updated_on: dt.datetime | None,
 ) -> RoleHistory:
-    """Create a new RoleHistory entry (combined version + event).
-
-    Note: scan_id is set after RoleScanStatus is created in apply_role_scan.
-    """
+    """Create a new RoleHistory entry. Note: scan_id is set after commit."""
     return RoleHistory(
         role_id=role_id,
         version_number=version_number,
@@ -53,13 +50,7 @@ async def _handle_new_role(
     session: AsyncSession,
     role: RoleDefinition,
 ) -> RoleHistory:
-    """Handle creation of a new role.
-
-    Distinguishes between truly new roles (CREATED) and pre-existing roles
-    discovered on initial scan (INITIAL_SCAN) by comparing Azure timestamps.
-
-    Returns the created history entry so scan_id can be set later.
-    """
+    """Handle creation of a new role. Returns the created history entry."""
     role_id = role.role_id
     role_name = role.role_name
     session.add(Role(role_id=role_id, role_name=role_name))
@@ -160,27 +151,40 @@ async def _handle_role_update(
     return None
 
 
-async def apply_role_scan(session: AsyncSession, roles: list[dict]) -> RoleScanResult:
-    """Compare fetched roles vs DB snapshots, store changes.
+def _handle_role_deletion(
+    snap: Role,
+    now: dt.datetime,
+) -> RoleHistory:
+    """Handle deletion of a role. Returns the created history entry."""
+    logger.info("Role deleted: %s (%s)", snap.role_name, snap.role_id)
 
-    Returns RoleScanResult with created/updated/deleted/total counts.
-    """
+    # Get old_json directly from current_version relationship
+    old_json = snap.current_version.role_json if snap.current_version else None
+    old_role = RoleDefinition.model_validate(old_json) if old_json else None
+    diff = diff_roles(old_role, None)
+
+    # Delete events have no JSON - role_json is NULL
+    next_version_num = (snap.history[0].version_number if snap.history else 0) + 1
+    history_entry = _create_history_entry(
+        role_id=snap.role_id,
+        role_name=snap.role_name,
+        version_number=next_version_num,
+        event_type=EventType.DELETED,
+        diff=diff,
+        role_json=None,  # No JSON for deleted role
+        azure_updated_on=now,  # Use scan timestamp as event date
+    )
+    snap.status = RoleStatus.DELETED
+    return history_entry
+
+
+async def apply_role_scan(session: AsyncSession, roles: list[RoleDefinition]) -> RoleScanResult:
+    """Compare fetched roles vs DB snapshots and store changes."""
     now = utcnow()
     logger.info("Starting role scan at %s with %d roles from Azure", now, len(roles))
 
-    fetched_by_id: dict[str, RoleDefinition] = {}
-    parse_errors = 0
-    for r in roles:
-        try:
-            role = RoleDefinition.model_validate(r)
-            if role.role_id:
-                fetched_by_id[role.role_id] = role
-        except Exception as e:
-            parse_errors += 1
-            logger.warning("Failed to parse role JSON: %s - %s", e, r.get("name", "unknown"))
-
-    if parse_errors > 0:
-        logger.warning("Role parsing: %d errors out of %d roles", parse_errors, len(roles))
+    # Build lookup by role_id
+    fetched_by_id = {role.role_id: role for role in roles if role.role_id}
 
     # Load all roles
     existing = (await session.execute(select(Role))).scalars().all()
@@ -212,27 +216,9 @@ async def apply_role_scan(session: AsyncSession, roles: list[dict]) -> RoleScanR
         if role_id in fetched_by_id or snap.status == RoleStatus.DELETED:
             continue
 
-        logger.info("Role deleted: %s (%s)", snap.role_name, role_id)
-
-        # Get old_json directly from current_version relationship
-        old_json = snap.current_version.role_json if snap.current_version else None
-        old_role = RoleDefinition.model_validate(old_json) if old_json else None
-        diff = diff_roles(old_role, None)
-
-        # Delete events have no JSON - role_json is NULL
-        next_version_num = (snap.history[0].version_number if snap.history else 0) + 1
-        history_entry = _create_history_entry(
-            role_id=role_id,
-            role_name=snap.role_name,
-            version_number=next_version_num,
-            event_type=EventType.DELETED,
-            diff=diff,
-            role_json=None,  # No JSON for deleted role
-            azure_updated_on=now,  # Use scan timestamp as event date
-        )
+        history_entry = _handle_role_deletion(snap, now)
         session.add(history_entry)
         history_entries.append(history_entry)
-        snap.status = RoleStatus.DELETED
         deleted_count += 1
 
     # Record scan status first to get the ID for history entries

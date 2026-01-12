@@ -21,6 +21,9 @@ _PERMISSION_FIELD_MAP = {
     "conditionversion": "condition_version",
 }
 
+# Fields that should be lists (None -> [] for Azure API null handling)
+_PERMISSION_LIST_FIELDS = frozenset({"actions", "data_actions", "not_actions", "not_data_actions"})
+
 _ROLE_PROPERTIES_FIELD_MAP = {
     "rolename": "role_name",
     "type": "type",
@@ -41,15 +44,22 @@ _ROLE_DEFINITION_FIELD_MAP = {
 }
 
 
-class Permission(BaseModel):
-    """Azure RBAC permission block with case-insensitive field parsing.
+def _normalize_dict_keys(data: Any, field_map: dict[str, str]) -> dict[str, Any]:
+    """Normalize dict keys using case-insensitive mapping."""
+    if not isinstance(data, dict):
+        return data
+    normalized: dict[str, Any] = {}
+    for key, value in data.items():
+        folded_key = key.casefold()
+        if folded_key in field_map:
+            normalized[field_map[folded_key]] = value
+        else:
+            normalized[key] = value
+    return normalized
 
-    Supports any case variation of field names:
-    - PascalCase (Azure Resource Graph): DataActions, NotActions
-    - camelCase (Azure REST API, serialization): dataActions, notActions
-    - lowercase: dataactions, notactions
-    - snake_case (Python): data_actions, not_actions
-    """
+
+class Permission(BaseModel):
+    """Azure RBAC permission block with case-insensitive field parsing."""
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -63,27 +73,15 @@ class Permission(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def _normalize_keys(cls, data: Any) -> Any:
-        """Normalize field names to lowercase for case-insensitive matching.
+        """Normalize field names and convert None to [] for list fields.
 
-        Also converts None to empty list for list fields (Azure API sometimes returns null).
+        Azure API sometimes returns null for empty permission arrays.
         """
-        if not isinstance(data, dict):
-            return data
-        # Fields that should be lists (None -> [])
-        list_fields = {"actions", "data_actions", "not_actions", "not_data_actions"}
-        normalized: dict[str, Any] = {}
-        for key, value in data.items():
-            folded_key = key.casefold()
-            if folded_key in _PERMISSION_FIELD_MAP:
-                target_key = _PERMISSION_FIELD_MAP[folded_key]
-                # Convert None to [] for list fields
-                if target_key in list_fields and value is None:
-                    normalized[target_key] = []
-                else:
-                    normalized[target_key] = value
-            else:
-                # Keep unknown keys as-is (Pydantic will ignore them with default config)
-                normalized[key] = value
+        normalized = _normalize_dict_keys(data, _PERMISSION_FIELD_MAP)
+        if isinstance(normalized, dict):
+            for field in _PERMISSION_LIST_FIELDS:
+                if normalized.get(field) is None:
+                    normalized[field] = []
         return normalized
 
     def to_dict(self) -> JsonDict:
@@ -121,14 +119,7 @@ class Permission(BaseModel):
 
 
 class RoleProperties(BaseModel):
-    """Properties of an Azure role definition with case-insensitive field parsing.
-
-    Supports any case variation of field names:
-    - PascalCase (Azure Resource Graph): RoleName, AssignableScopes
-    - camelCase (Azure REST API, serialization): roleName, assignableScopes
-    - lowercase: rolename, assignablescopes
-    - snake_case (Python): role_name, assignable_scopes
-    """
+    """Properties of an Azure role definition with case-insensitive field parsing."""
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -146,16 +137,7 @@ class RoleProperties(BaseModel):
     @classmethod
     def _normalize_keys(cls, data: Any) -> Any:
         """Normalize field names to lowercase for case-insensitive matching."""
-        if not isinstance(data, dict):
-            return data
-        normalized: dict[str, Any] = {}
-        for key, value in data.items():
-            folded_key = key.casefold()
-            if folded_key in _ROLE_PROPERTIES_FIELD_MAP:
-                normalized[_ROLE_PROPERTIES_FIELD_MAP[folded_key]] = value
-            else:
-                normalized[key] = value
-        return normalized
+        return _normalize_dict_keys(data, _ROLE_PROPERTIES_FIELD_MAP)
 
     @field_validator("created_on", "updated_on", mode="before")
     @classmethod
@@ -173,13 +155,7 @@ class RoleProperties(BaseModel):
 
 
 class RoleDefinition(BaseModel):
-    """Azure RBAC role definition with case-insensitive field parsing.
-
-    Supports any case variation of field names:
-    - PascalCase: Id, Name, Type, Properties
-    - camelCase: id, name, type, properties
-    - lowercase: id, name, type, properties
-    """
+    """Azure RBAC role definition with case-insensitive field parsing."""
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -192,33 +168,11 @@ class RoleDefinition(BaseModel):
     @classmethod
     def _normalize_keys(cls, data: Any) -> Any:
         """Normalize field names to lowercase for case-insensitive matching."""
-        if not isinstance(data, dict):
-            return data
-        normalized: dict[str, Any] = {}
-        for key, value in data.items():
-            folded_key = key.casefold()
-            if folded_key in _ROLE_DEFINITION_FIELD_MAP:
-                normalized[_ROLE_DEFINITION_FIELD_MAP[folded_key]] = value
-            else:
-                normalized[key] = value
-        return normalized
+        return _normalize_dict_keys(data, _ROLE_DEFINITION_FIELD_MAP)
 
     @classmethod
     def from_resource_graph(cls, item: dict[str, Any]) -> RoleDefinition:
-        """Transform a Resource Graph role definition to normalized format.
-
-        Resource Graph returns:
-            {
-                "id": "/providers/Microsoft.Authorization/RoleDefinitions/...",
-                "properties": { ... }
-            }
-
-        Normalizes:
-            - id casing (RoleDefinitions -> roleDefinitions)
-            - Extracts GUID as name
-            - Parses permissions with case-insensitive handling
-            - Excludes isServiceRole
-        """
+        """Transform a Resource Graph role definition to normalized format."""
         role_id = item.get("id", "")
         props = item.get("properties", {})
 
@@ -351,16 +305,7 @@ class OperationData(BaseModel):
         }
 
     def matches_search(self, query_lower: str) -> bool:
-        """Check if operation matches a text search query (case-insensitive).
-
-        Searches across name, display_name, description, provider, and resource type.
-
-        Args:
-            query_lower: Lowercase search query string
-
-        Returns:
-            True if query matches any searchable field
-        """
+        """Check if operation matches a text search query (case-insensitive)."""
         return (
             query_lower in self.name.lower()
             or query_lower in (self.display_name or "").lower()

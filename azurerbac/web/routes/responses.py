@@ -1,4 +1,4 @@
-"""API response factories and error messages."""
+"""API response factories."""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ __all__ = [
 
 
 class ErrorMessages(StrEnum):
-    """User-facing error messages for API responses."""
+    """API error messages."""
 
     SEARCH_TOO_SHORT = f"Please enter at least {MIN_SEARCH_CHARS} characters to search"
     QUERY_EMPTY = "Query cannot be empty"
@@ -30,12 +30,12 @@ class ErrorMessages(StrEnum):
 
     @staticmethod
     def engine_unavailable(engine: str) -> str:
-        """Format engine unavailable message with specific engine name."""
+        """Format engine unavailable message."""
         return f"{engine} engine is unavailable. Try a different engine."
 
 
 def empty_search_response(message: str) -> OperationSearchResponse:
-    """Create an empty search response with a user-facing message."""
+    """Create empty search response."""
     return OperationSearchResponse(
         operations=[],
         total=0,
@@ -49,6 +49,6 @@ def ai_error_response(
     mode: str | None = None,
     available: bool = False,
 ) -> AIRecommendResponse:
-    """Create an error response for AI recommendations."""
+    """Create AI error response."""
     engine = AIEngineInfo(mode=mode, available=available) if mode else None
     return AIRecommendResponse(error=error, recommendations=[], engine=engine)

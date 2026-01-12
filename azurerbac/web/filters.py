@@ -1,4 +1,4 @@
-"""Jinja2 template filters for the Azure RBAC Catalog web application."""
+"""Jinja2 template filters."""
 
 from __future__ import annotations
 
@@ -7,7 +7,6 @@ import json
 from datetime import datetime
 from typing import Any, Final
 
-# Diff line type codes
 _CODE_HINT: Final = "? "
 _CODE_REMOVED: Final = "- "
 _CODE_ADDED: Final = "+ "
@@ -15,19 +14,19 @@ _CODE_UNCHANGED: Final = "  "
 
 
 def _json_to_str(value: Any) -> str:
-    """Convert a value to a JSON string, or empty string if None."""
+    """Convert value to JSON string, or empty if None."""
     if value is None:
         return ""
     return json.dumps(value, indent=2, sort_keys=True, default=str)
 
 
 def _ensure_str(item: Any) -> str:
-    """Convert item to string, using JSON serialization for non-strings."""
+    """Convert item to string via JSON if needed."""
     return item if isinstance(item, str) else _json_to_str(item)
 
 
 def _process_ndiff(diff_lines_iter: list[str]) -> list[dict]:
-    """Process ndiff output into a list of {type, text} dicts."""
+    """Process ndiff output into {type, text} dicts."""
     result = []
     i = 0
     while i < len(diff_lines_iter):
@@ -72,14 +71,7 @@ def _process_ndiff(diff_lines_iter: list[str]) -> list[dict]:
 
 
 def diff_lines(change: dict) -> list[dict]:
-    """Compute a unified diff between 'from' and 'to' in a change object.
-
-    Handles multiple change formats:
-    - {"from": X, "to": Y} - standard diff
-    - {"to": Y} - created (show all as added)
-    - {"from": X} - deleted (show all as removed)
-    - {"added": [...], "removed": [...]} - list modifications
-    """
+    """Compute unified diff between 'from' and 'to' in a change object."""
     # Handle list-style changes (added/removed arrays)
     if "added" in change or "removed" in change:
         result: list[dict[str, str]] = []
@@ -110,10 +102,7 @@ def diff_lines(change: dict) -> list[dict]:
 
 
 def full_json_diff(before_json: dict | None, after_json: dict | None) -> list[dict]:
-    """Compute a unified diff between two full JSON objects.
-
-    Returns a list of {type: 'added'|'removed'|'unchanged', text: str} for each line.
-    """
+    """Compute unified diff between two JSON objects."""
     before_str = _json_to_str(before_json)
     after_str = _json_to_str(after_json)
 
@@ -125,11 +114,7 @@ def full_json_diff(before_json: dict | None, after_json: dict | None) -> list[di
 
 
 def _parse_datetime_value(value: Any) -> datetime | None:
-    """Parse value to datetime if possible.
-
-    Returns:
-        datetime object if parseable, None otherwise.
-    """
+    """Parse value to datetime if possible."""
     if value is None:
         return None
     if isinstance(value, datetime):
@@ -145,14 +130,14 @@ def _parse_datetime_value(value: Any) -> datetime | None:
 
 
 def format_datetime(value: Any) -> str:
-    """Format a datetime to show only up to seconds (no microseconds)."""
+    """Format datetime up to seconds."""
     if (dt_obj := _parse_datetime_value(value)) is not None:
         return dt_obj.strftime("%Y-%m-%d %H:%M:%S")
     return str(value) if value is not None else ""
 
 
 def format_date(value: Any) -> str:
-    """Format a datetime to show only the date (no time)."""
+    """Format datetime to date only."""
     if (dt_obj := _parse_datetime_value(value)) is not None:
         return dt_obj.strftime("%Y-%m-%d")
     return str(value) if value is not None else ""

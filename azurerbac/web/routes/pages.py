@@ -1,4 +1,4 @@
-"""Page route handlers for the Azure RBAC Catalog."""
+"""Page route handlers."""
 
 from __future__ import annotations
 
@@ -55,7 +55,7 @@ async def role_detail(
     limit: int = DEFAULT_LIMIT,
     days: int = DEFAULT_DAYS,
 ) -> Response:
-    """Role detail page showing role definition and change history."""
+    """Role detail page."""
     # Normalize role_id to canonical UUID format (handles both with/without dashes)
     try:
         role_id = str(uuid.UUID(role_id))
@@ -133,7 +133,7 @@ async def operations_list(
     sort: str = OperationSortField.NAME,
     order: str = SortOrder.ASC,
 ) -> Response:
-    """Operations list page - shows all Azure RBAC operations."""
+    """Operations list page."""
     logger.info("Operations list: q='%s' page=%d provider=%s", q or "", page, provider or "all")
 
     # Enforce bounds on pagination parameters
@@ -209,7 +209,7 @@ async def operation_detail(
     is_data_action: str | None = None,
     provider: str | None = None,
 ) -> Response:
-    """Operation detail page - shows operation info and roles that allow it."""
+    """Operation detail page."""
     # URL decode the operation name (handles both encoded and unencoded paths)
     decoded_name = unquote(operation_name)
 
@@ -266,7 +266,7 @@ async def recommend_page(
     request: Request,
     deps: Annotated[PagesDeps, Depends(get_pages_deps)],
 ) -> Response:
-    """Role Recommender page."""
+    """Role recommender page."""
     logger.info("Recommend page loaded")
     # Get count from cache - if 0, cache hasn't been initialized yet
     ops_count = len(deps.app_cache.get_all_operations())
@@ -286,7 +286,7 @@ async def about_page(
     request: Request,
     deps: Annotated[PagesDeps, Depends(get_pages_deps)],
 ) -> Response:
-    """About/FAQ page."""
+    """About page."""
     logger.info("About page loaded")
     # Preserve ai=1 parameter if set
     ai_mode = request.query_params.get("ai") == "1"

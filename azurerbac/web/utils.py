@@ -1,4 +1,4 @@
-"""Utility functions for the Azure RBAC Catalog web application."""
+"""Web utility functions."""
 
 from __future__ import annotations
 
@@ -10,25 +10,17 @@ _SLUG_PATTERN: Final = re.compile(r"[^a-z0-9]+")
 
 
 def slugify(text: str) -> str:
-    """Create a URL-friendly slug from text."""
+    """Create URL-friendly slug from text."""
     if not text:
         return ""
     return _SLUG_PATTERN.sub("-", text.lower()).strip("-")
 
 
 def clamp(value: int, min_val: int, max_val: int) -> int:
-    """Clamp value to bounds [min_val, max_val].
-
-    Example:
-        clamp(page, 1, MAX_PAGE_NUMBER)  # Ensures 1 <= page <= MAX_PAGE_NUMBER
-    """
+    """Clamp value to [min_val, max_val]."""
     return max(min_val, min(value, max_val))
 
 
 def role_json_pretty(role: dict[str, Any]) -> str:
-    """Pretty-print role JSON.
-
-    The dict is expected to come from RoleDefinition.to_dict() which already
-    produces the correct field ordering. Just serialize it.
-    """
+    """Pretty-print role JSON."""
     return json.dumps(role, indent=2, default=str)

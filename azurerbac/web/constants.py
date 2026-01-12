@@ -1,8 +1,7 @@
-"""Shared constants for web routes."""
+"""Web route constants."""
 
 from typing import Final
 
-# Domain configuration
 NEW_DOMAIN: Final = "rbac-catalog.dev"
 SITE_URL: Final = f"https://{NEW_DOMAIN}"
 OLD_DOMAINS: Final = frozenset(
@@ -14,36 +13,27 @@ OLD_DOMAINS: Final = frozenset(
     }
 )
 
-# Paths that should never be redirected (health checks, probes)
 HEALTH_PATHS: Final = frozenset({"/healthz", "/version"})
 
-# Pagination and date bounds
 MAX_PAGE_SIZE: Final = 1000
 MAX_PAGE_NUMBER: Final = 10000
 MAX_DAYS: Final = 365
-
-# Default values for pagination and filters
 DEFAULT_PAGE: Final = 1
 DEFAULT_LIMIT: Final = 25
 DEFAULT_DAYS: Final = 30
-
-# Query and search limits
 MAX_ROLE_EVENTS: Final = 200
 
-# API request validation thresholds
 MIN_SEARCH_CHARS: Final = 2
 MIN_AI_QUERY_CHARS: Final = 3
 MAX_QUERY_LENGTH: Final = 100
 MAX_SEARCH_LIMIT: Final = 500
 MAX_TOP_K: Final = 20
 
-# Cache durations (in seconds)
-CACHE_BROWSER_SHORT: Final = 120  # 2 minutes
-CACHE_CDN_MEDIUM: Final = 600  # 10 minutes
-CACHE_CDN_LONG: Final = 1800  # 30 minutes
-CACHE_STALE_REVALIDATE: Final = 1200  # 20 minutes
+CACHE_BROWSER_SHORT: Final = 120
+CACHE_CDN_MEDIUM: Final = 600
+CACHE_CDN_LONG: Final = 1800
+CACHE_STALE_REVALIDATE: Final = 1200
 
-# Cache-Control header values
 CACHE_HEADER_NONE: Final = "no-store"
 CACHE_HEADER_STATIC: Final = "public, max-age=31536000, immutable"
 CACHE_HEADER_MAIN_PAGE: Final = (
@@ -56,7 +46,6 @@ CACHE_HEADER_DETAIL_PAGE: Final = (
 )
 VARY_ENCODING: Final = "Accept-Encoding"
 
-# Security header values
 CSP_HEADER: Final = (
     "default-src 'self'; "
     "script-src 'self' 'unsafe-inline' 'unsafe-eval' "
@@ -74,5 +63,4 @@ PERMISSIONS_POLICY_HEADER: Final = (
     "magnetometer=(), microphone=(), payment=(), usb=(), interest-cohort=()"
 )
 
-# GZip compression threshold
 GZIP_MIN_SIZE: Final = 500

@@ -1,4 +1,4 @@
-"""Pydantic models for API request and response schemas."""
+"""API request and response models."""
 
 from __future__ import annotations
 
@@ -9,40 +9,28 @@ from pydantic import BaseModel, Field
 if TYPE_CHECKING:
     from azurerbac.azure.models import OperationData
 
-# =============================================================================
-# Health Check Models
-# =============================================================================
-
 
 class HealthResponse(BaseModel):
-    """Response model for health check endpoint."""
+    """Health check response."""
 
     ok: bool
 
 
 class VersionResponse(BaseModel):
-    """Response model for version endpoint."""
+    """Version response."""
 
     version: str
 
 
-# =============================================================================
-# Operation Models
-# =============================================================================
-
-
 class OperationItem(BaseModel):
-    """Model for an operation in the recommendation request."""
+    """Operation in recommendation request."""
 
     name: str
     is_data_action: bool = False
 
 
 class OperationWithCount(BaseModel):
-    """Operation data enriched with role count for display.
-
-    Used when listing operations with their associated role counts.
-    """
+    """Operation data with role count."""
 
     name: str
     display_name: str | None
@@ -55,15 +43,7 @@ class OperationWithCount(BaseModel):
 
     @classmethod
     def from_operation(cls, op: OperationData, role_count: int) -> OperationWithCount:
-        """Create from an OperationData and role count.
-
-        Args:
-            op: The OperationData object from cache.
-            role_count: Number of roles that grant this operation.
-
-        Returns:
-            OperationWithCount instance.
-        """
+        """Create from OperationData and role count."""
         return cls(
             name=op.name,
             display_name=op.display_name,
@@ -77,19 +57,12 @@ class OperationWithCount(BaseModel):
 
 
 class RecommendRolesRequest(BaseModel):
-    """Request model for role recommendation."""
+    """Role recommendation request."""
 
     operations: list[OperationItem] = Field(..., min_length=1)
 
     def parse_operations(self) -> tuple[list[str], dict[str, bool] | None]:
-        """Parse operations into deduplicated names and data-plane flags.
-
-        When the same operation appears with both data planes, we omit the flag
-        entirely to let auto-detection handle it.
-
-        Returns:
-            Tuple of (unique_operation_names, data_flags_dict_or_none)
-        """
+        """Parse operations into deduplicated names and data-plane flags."""
         seen_ops: list[str] = []
         data_flags: dict[str, bool] = {}
         conflicted: set[str] = set()

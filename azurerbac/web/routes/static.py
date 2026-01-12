@@ -1,4 +1,4 @@
-"""Static content routes: robots.txt, sitemap.xml, favicons, etc."""
+"""Static content routes."""
 
 from __future__ import annotations
 
@@ -16,16 +16,14 @@ from azurerbac.core.constants import RoleStatus
 from azurerbac.web.constants import SITE_URL
 from azurerbac.web.utils import slugify
 
-# IndexNow API key for instant indexing (Bing, Yandex, etc.)
 INDEXNOW_KEY: Final = "4484caab4dbc472ca61ac1141d812336"
-
 
 router = APIRouter(tags=["static"])
 
 
 @router.get("/robots.txt")
 async def robots_txt() -> Response:
-    """Serve robots.txt for search engine crawlers."""
+    """Serve robots.txt."""
     body = "\n".join(
         [
             "# Allow all bots",
@@ -45,7 +43,7 @@ async def robots_txt() -> Response:
 
 @router.get("/googleec37c4d2676ac205.html")
 async def google_site_verification() -> Response:
-    """Google Search Console site verification."""
+    """Google Search Console verification."""
     return Response(
         content="google-site-verification: googleec37c4d2676ac205.html",
         media_type="text/html",
@@ -55,7 +53,7 @@ async def google_site_verification() -> Response:
 
 @router.get(f"/{INDEXNOW_KEY}.txt")
 async def indexnow_key() -> Response:
-    """IndexNow key verification file for Bing, Yandex instant indexing."""
+    """IndexNow key verification."""
     return Response(
         content=INDEXNOW_KEY,
         media_type="text/plain",
@@ -64,62 +62,61 @@ async def indexnow_key() -> Response:
 
 
 def _get_static_images_path() -> Path:
-    """Get path to static/images directory."""
+    """Get static/images directory path."""
     return Path(__file__).parent.parent / "static" / "images"
+
+
+def _static_response(content: bytes | str, media_type: str) -> Response:
+    """Create cached static response."""
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
 
 
 @router.get("/favicon.ico")
 async def favicon_ico() -> Response:
-    """Serve favicon.ico for browser tabs and bookmarks."""
-    ico_path = _get_static_images_path() / "favicon.ico"
-    return Response(
-        content=ico_path.read_bytes(),
-        media_type="image/x-icon",
-        headers={"Cache-Control": "public, max-age=86400"},
+    """Serve favicon.ico."""
+    return _static_response(
+        (_get_static_images_path() / "favicon.ico").read_bytes(),
+        "image/x-icon",
     )
 
 
 @router.get("/favicon.svg")
 async def favicon_svg() -> Response:
-    """Serve favicon as SVG."""
-    svg_path = _get_static_images_path() / "favicon.svg"
-    return Response(
-        content=svg_path.read_text(),
-        media_type="image/svg+xml",
-        headers={"Cache-Control": "public, max-age=86400"},
+    """Serve favicon.svg."""
+    return _static_response(
+        (_get_static_images_path() / "favicon.svg").read_text(),
+        "image/svg+xml",
     )
 
 
 @router.get("/favicon-48.png")
 async def favicon_png_48() -> Response:
     """Serve 48x48 PNG favicon."""
-    png_path = _get_static_images_path() / "favicon-48.png"
-    return Response(
-        content=png_path.read_bytes(),
-        media_type="image/png",
-        headers={"Cache-Control": "public, max-age=86400"},
+    return _static_response(
+        (_get_static_images_path() / "favicon-48.png").read_bytes(),
+        "image/png",
     )
 
 
 @router.get("/favicon-192.png")
 async def favicon_png_192() -> Response:
     """Serve 192x192 PNG favicon for Android/PWA."""
-    png_path = _get_static_images_path() / "favicon-192.png"
-    return Response(
-        content=png_path.read_bytes(),
-        media_type="image/png",
-        headers={"Cache-Control": "public, max-age=86400"},
+    return _static_response(
+        (_get_static_images_path() / "favicon-192.png").read_bytes(),
+        "image/png",
     )
 
 
 @router.get("/apple-touch-icon.png")
 async def apple_touch_icon() -> Response:
     """Serve Apple touch icon (192x192)."""
-    png_path = _get_static_images_path() / "favicon-192.png"
-    return Response(
-        content=png_path.read_bytes(),
-        media_type="image/png",
-        headers={"Cache-Control": "public, max-age=86400"},
+    return _static_response(
+        (_get_static_images_path() / "favicon-192.png").read_bytes(),
+        "image/png",
     )
 
 

@@ -1,4 +1,4 @@
-"""HTTP middleware for the Azure RBAC Catalog web application."""
+"""HTTP middleware."""
 
 from __future__ import annotations
 
@@ -24,15 +24,13 @@ from azurerbac.web.constants import (
 
 logger = logging.getLogger(__name__)
 
-
-# Path sets for O(1) lookup
 _MAIN_PAGES: Final = frozenset({"/", "/recent", "/roles", "/operations", "/recommend", "/about"})
 
 
 async def add_cache_headers(
     request: Request, call_next: Callable[[Request], Awaitable[Response]]
 ) -> Response:
-    """Add cache headers for Azure Front Door and browser caching."""
+    """Add cache headers for CDN and browser caching."""
     response = await call_next(request)
     path = request.url.path
 
@@ -70,10 +68,7 @@ async def add_cache_headers(
 async def add_security_headers(
     request: Request, call_next: Callable[[Request], Awaitable[Response]]
 ) -> Response:
-    """Add security headers to prevent common attacks.
-
-    Note: HSTS and X-Content-Type-Options are handled by Cloudflare.
-    """
+    """Add security headers."""
     response = await call_next(request)
     headers = response.headers
     path = request.url.path
@@ -94,11 +89,7 @@ async def add_security_headers(
 async def redirect_old_domain(
     request: Request, call_next: Callable[[Request], Awaitable[Response]]
 ) -> Response:
-    """301 redirect from old domains to canonical custom domain.
-
-    Note: Health check endpoints (/healthz, /version) are never redirected
-    to ensure health probes work regardless of Host header.
-    """
+    """301 redirect from old domains to canonical domain."""
     # Never redirect health checks - probes may use any host
     if request.url.path in HEALTH_PATHS:
         return await call_next(request)

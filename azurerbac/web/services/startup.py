@@ -1,10 +1,12 @@
-"""Application startup and cache lifecycle services."""
+"""Application startup services."""
 
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import logging
 import time
+from collections.abc import Callable
 
 import anyio
 from sqlalchemy import select
@@ -20,14 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 async def preload_cache(session_factory: async_sessionmaker[AsyncSession]) -> None:
-    """Preload cache with commonly accessed data at startup.
-
-    Uses the CacheService to populate the unified CacheData
-    (raw + indexes + computed fields), then warms common role-list pages.
-
-    Args:
-        session_factory: Async session factory for database access
-    """
+    """Preload cache with commonly accessed data."""
     from azurerbac.telemetry import TimedDbQuery
 
     logger.info("CACHE INITIALIZATION STARTED")
@@ -84,15 +79,6 @@ async def cache_refresh_task(session_factory: async_sessionmaker[AsyncSession]) 
     3. File watcher detects change, sets pending_reload flag
     4. This task checks the flag and reloads from disk
     5. Every 1 hour: rebuilds from database to ensure consistency
-
-    Thread-safety:
-    - reload_if_needed() uses async lock and thread pool for I/O
-    - rebuild_in_memory() uses a lock to prevent concurrent rebuilds
-    - Both use atomic swap to update in-memory cache safely while serving requests
-
-    Cancellation:
-    - Properly handles CancelledError for clean shutdown
-    - Never swallows CancelledError without re-raising
 
     Args:
         session_factory: Async session factory for database access
@@ -178,31 +164,26 @@ async def cache_refresh_task(session_factory: async_sessionmaker[AsyncSession]) 
 
 
 async def ensure_db(engine: AsyncEngine) -> None:
-    """Ensure database tables exist.
-
-    Checks for one table (role_snapshots) since create_all creates all tables together.
-    If one exists, all exist. If not, create_all creates all at once.
-
-    Args:
-        engine: Async database engine
-    """
+    """Ensure database tables exist."""
     from azurerbac.core import ensure_db as ensure_db_core
 
     await ensure_db_core(engine)
 
 
-async def warmup_colbert() -> None:
-    """Pre-warm ColBERT engine at startup to avoid slow first request.
+async def _run_in_thread(func: Callable[[], None]) -> None:
+    """Run blocking function in thread pool."""
+    loop = asyncio.get_event_loop()
+    with concurrent.futures.ThreadPoolExecutor() as pool:
+        await loop.run_in_executor(pool, func)
 
-    Runs in a thread pool to not block the event loop.
-    """
-    import concurrent.futures
+
+async def warmup_colbert() -> None:
+    """Pre-warm ColBERT engine."""
 
     def _warmup() -> None:
         try:
             logger.info("COLBERT WARMUP: Starting...")
             start = time.time()
-
             from azurerbac.airecommender.engines.colbert import get_colbert_index
 
             if get_colbert_index().warmup():
@@ -212,30 +193,21 @@ async def warmup_colbert() -> None:
         except Exception as e:
             logger.exception("COLBERT WARMUP: Failed (non-fatal): %s", e)
 
-    loop = asyncio.get_event_loop()
-    with concurrent.futures.ThreadPoolExecutor() as pool:
-        await loop.run_in_executor(pool, _warmup)
+    await _run_in_thread(_warmup)
 
 
 async def warmup_crossencoder() -> None:
-    """Pre-warm CrossEncoder model at startup to avoid slow first request.
-
-    Runs in a thread pool to not block the event loop.
-    """
-    import concurrent.futures
+    """Pre-warm CrossEncoder model."""
 
     def _warmup() -> None:
         try:
             logger.info("CROSSENCODER WARMUP: Starting...")
             start = time.time()
-
             from azurerbac.airecommender.engines.crossencoder import get_cross_encoder
 
-            get_cross_encoder()  # Trigger lazy loading
+            get_cross_encoder()
             logger.info("CROSSENCODER WARMUP: Initialized in %.2fs", time.time() - start)
         except Exception as e:
             logger.exception("CROSSENCODER WARMUP: Failed (non-fatal): %s", e)
 
-    loop = asyncio.get_event_loop()
-    with concurrent.futures.ThreadPoolExecutor() as pool:
-        await loop.run_in_executor(pool, _warmup)
+    await _run_in_thread(_warmup)

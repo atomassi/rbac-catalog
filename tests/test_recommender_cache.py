@@ -458,10 +458,7 @@ class TestNotActionsExclusions:
 
         if result_no_cache and result_with_cache:
             # Total permissions should exclude the notActions
-            assert (
-                result_no_cache[0].total_permissions_granted
-                == result_with_cache[0].total_permissions_granted
-            )
+            assert result_no_cache[0].total_permissions == result_with_cache[0].total_permissions
             assert (
                 result_no_cache[0].control_plane_permissions
                 == result_with_cache[0].control_plane_permissions

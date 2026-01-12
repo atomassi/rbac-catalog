@@ -143,48 +143,42 @@ class TestTopKSimilar:
 class TestComputeDocumentsHash:
     """Tests for compute_documents_hash function."""
 
-    def test_same_documents_same_hash(self):
-        """Test that identical documents produce the same hash."""
+    @pytest.mark.parametrize(
+        ("docs1", "docs2", "should_equal"),
+        [
+            pytest.param(
+                {"role1": "Storage Blob Reader", "role2": "Virtual Machine Contributor"},
+                {"role1": "Storage Blob Reader", "role2": "Virtual Machine Contributor"},
+                True,
+                id="identical_docs",
+            ),
+            pytest.param(
+                {"role1": "First", "role2": "Second"},
+                {"role2": "Second", "role1": "First"},
+                True,
+                id="order_independent",
+            ),
+            pytest.param(
+                {"role1": "Storage Blob Reader"},
+                {"role1": "Storage Blob Writer"},
+                False,
+                id="different_content",
+            ),
+            pytest.param(
+                {"role1": "User Access Administrator manage access"},
+                {"role1": "User Access Administrator manage access Create role assignment"},
+                False,
+                id="content_changed",
+            ),
+        ],
+    )
+    def test_hash_comparison(self, docs1, docs2, should_equal):
+        """Test hash behavior for various document comparisons."""
         from azurerbac.airecommender.embeddings import compute_documents_hash
 
-        docs = {"role1": "Storage Blob Reader", "role2": "Virtual Machine Contributor"}
-        hash1 = compute_documents_hash(docs)
-        hash2 = compute_documents_hash(docs)
-        assert hash1 == hash2
-
-    def test_different_documents_different_hash(self):
-        """Test that different documents produce different hashes."""
-        from azurerbac.airecommender.embeddings import compute_documents_hash
-
-        docs1 = {"role1": "Storage Blob Reader"}
-        docs2 = {"role1": "Storage Blob Writer"}  # Different content
-        assert compute_documents_hash(docs1) != compute_documents_hash(docs2)
-
-    def test_content_change_changes_hash(self):
-        """Test that changing content (e.g., adding operation descriptions) changes the hash."""
-        from azurerbac.airecommender.embeddings import compute_documents_hash
-
-        # Simulates before/after adding operation descriptions
-        docs_before = {"role1": "User Access Administrator manage access"}
-        docs_after = {
-            "role1": (
-                "User Access Administrator manage access "
-                "Create role assignment Delete role assignment"
-            )
-        }
-
-        hash_before = compute_documents_hash(docs_before)
-        hash_after = compute_documents_hash(docs_after)
-        assert hash_before != hash_after
-
-    def test_order_independent(self):
-        """Test that document order doesn't affect the hash."""
-        from azurerbac.airecommender.embeddings import compute_documents_hash
-
-        # Different insertion order, same content
-        docs1 = {"role1": "First", "role2": "Second"}
-        docs2 = {"role2": "Second", "role1": "First"}
-        assert compute_documents_hash(docs1) == compute_documents_hash(docs2)
+        hash1 = compute_documents_hash(docs1)
+        hash2 = compute_documents_hash(docs2)
+        assert (hash1 == hash2) == should_equal
 
 
 class TestRAGEngine:
@@ -1169,10 +1163,10 @@ class TestEmbeddingModelOptimizations:
         }
         mock_embedding_model.build_embeddings(documents, cache_hash=None)
 
-        assert mock_embedding_model._embedding_matrix is not None
-        assert isinstance(mock_embedding_model._embedding_matrix, np.ndarray)
-        assert mock_embedding_model._embedding_matrix.shape == (3, 384)
-        assert len(mock_embedding_model._embedding_ids) == 3
+        assert mock_embedding_model._matrix is not None
+        assert isinstance(mock_embedding_model._matrix, np.ndarray)
+        assert mock_embedding_model._matrix.shape == (3, 384)
+        assert len(mock_embedding_model._doc_ids) == 3
 
     def test_matrix_is_normalized(self, mock_embedding_model):
         """Test that the embedding matrix rows are normalized (for fast cosine sim)."""
@@ -1182,7 +1176,7 @@ class TestEmbeddingModelOptimizations:
         mock_embedding_model.build_embeddings(documents, cache_hash=None)
 
         # Each row should have norm ≈ 1.0
-        norms = np.linalg.norm(mock_embedding_model._embedding_matrix, axis=1)
+        norms = np.linalg.norm(mock_embedding_model._matrix, axis=1)
         np.testing.assert_array_almost_equal(norms, [1.0, 1.0], decimal=5)
 
     def test_search_uses_vectorized_when_matrix_exists(self, mock_embedding_model):
@@ -1233,8 +1227,8 @@ class TestEmbeddingModelOptimizations:
         query = "read storage data"
         query_embedding = mock_embedding_model.encode_single(query)
 
-        # Vectorized result
-        vectorized_results = mock_embedding_model._search_vectorized(query_embedding, top_k=3)
+        # Vectorized result using _search_matrix
+        vectorized_results = mock_embedding_model._search_matrix(query_embedding, top_k=3)
 
         # Manual loop-based calculation
         from azurerbac.airecommender.engines.common import cosine_similarity
@@ -1258,13 +1252,12 @@ class TestEmbeddingModelEdgeCases:
 
         model = EmbeddingModel()
         model._model = MagicMock()
-        model._loaded = True
 
         # Empty documents should not crash
         model._embeddings = {}
         model._build_matrix()
 
-        assert model._embedding_matrix is None or len(model._embedding_ids) == 0
+        assert model._matrix is None or len(model._doc_ids) == 0
 
     def test_search_without_matrix_uses_fallback(self):
         """Test that search falls back to loop when matrix not built."""
@@ -1276,9 +1269,8 @@ class TestEmbeddingModelEdgeCases:
         model._model = MagicMock()
         # Return numpy array that has .tolist() method
         model._model.encode = lambda t, show_progress_bar=False: np.array([0.1] * 384)
-        model._loaded = True
         model._embeddings = {"role-1": [0.1] * 384, "role-2": [0.2] * 384}
-        model._embedding_matrix = None  # Force fallback
+        model._matrix = None  # Force fallback
 
         # Clear cache before test
         model.encode_single_cached.cache_clear()

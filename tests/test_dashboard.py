@@ -47,6 +47,7 @@ class TestEnrichRoleWithCounts:
 
     def test_enrich_role_uses_cache(self):
         """Test enriching role uses cache when available."""
+        from azurerbac.matching.models import RoleNetPermissions
         from azurerbac.web.services.dashboard import enrich_role_with_counts
 
         role = MagicMock()
@@ -57,7 +58,7 @@ class TestEnrichRoleWithCounts:
         role.updated_on = None
 
         mock_app_cache = MagicMock()
-        mock_app_cache.get_role_net_permissions.return_value = (5, 2)
+        mock_app_cache.get_role_net_permissions.return_value = RoleNetPermissions(5, 2)
 
         result = enrich_role_with_counts(role, cache=mock_app_cache)
 

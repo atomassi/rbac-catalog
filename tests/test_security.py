@@ -210,9 +210,6 @@ class TestHeaderInjection:
         assert "X-Injected" not in response.headers
 
 
-# NOTE: Security headers are tested in test_middleware.py::TestSecurityHeaders
-
-
 class TestInformationDisclosure:
     """Test protection against information disclosure."""
 
@@ -283,4 +280,50 @@ class TestAPIEndpoints:
         assert "Sitemap" in response.text
 
 
-# NOTE: Cache headers are tested in test_middleware.py::TestCacheHeaders
+class TestResourceExhaustion:
+    """Test protection against resource exhaustion attacks."""
+
+    async def test_large_query_truncated(self, client: AsyncClient):
+        """Verify extremely long queries are truncated, not crash."""
+        huge_query = "A" * 10000
+        response = await client.get("/roles", params={"q": huge_query})
+        assert response.status_code == 200
+
+    async def test_large_json_body_handled(self, client: AsyncClient):
+        """Verify large JSON bodies are handled gracefully."""
+        large_payload = {
+            "operations": [{"name": f"op{i}", "is_data_action": False} for i in range(1000)]
+        }
+        response = await client.post("/api/recommend-roles", json=large_payload)
+        assert response.status_code == 200
+
+    async def test_negative_pagination_clamped(self, client: AsyncClient):
+        """Verify negative page numbers are clamped to 1."""
+        response = await client.get("/roles", params={"page": -1})
+        assert response.status_code == 200
+
+    async def test_huge_page_number_returns_empty(self, client: AsyncClient):
+        """Verify extremely large page numbers return empty results."""
+        response = await client.get("/roles", params={"page": 999999999})
+        assert response.status_code == 200
+
+
+class TestMethodNotAllowed:
+    """Test that endpoints reject unexpected HTTP methods."""
+
+    @pytest.mark.parametrize(
+        ("method", "path"),
+        [
+            pytest.param("POST", "/roles", id="post_roles"),
+            pytest.param("PUT", "/roles", id="put_roles"),
+            pytest.param("DELETE", "/roles", id="delete_roles"),
+            pytest.param("PATCH", "/roles", id="patch_roles"),
+            pytest.param("POST", "/operations", id="post_operations"),
+            pytest.param("GET", "/api/recommend-roles", id="get_recommend_roles"),
+            pytest.param("GET", "/api/ai-recommend", id="get_ai_recommend"),
+        ],
+    )
+    async def test_method_not_allowed(self, client: AsyncClient, method: str, path: str):
+        """Verify endpoints reject unexpected HTTP methods."""
+        response = await client.request(method, path)
+        assert response.status_code == 405

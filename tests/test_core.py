@@ -603,20 +603,31 @@ class TestUtils:
             assert result is not None
             assert result.tzinfo == expected_tzinfo
 
-    def test_ensure_utc_or_min_with_none(self):
-        """Test ensure_utc_or_min returns datetime.min for None."""
+    @pytest.mark.parametrize(
+        ("input_dt", "expected"),
+        [
+            pytest.param(
+                None,
+                dt.datetime.min.replace(tzinfo=dt.UTC),
+                id="none_returns_min",
+            ),
+            pytest.param(
+                dt.datetime(2023, 1, 15, 12, 30, 0, tzinfo=dt.UTC),
+                dt.datetime(2023, 1, 15, 12, 30, 0, tzinfo=dt.UTC),
+                id="aware_datetime_preserved",
+            ),
+            pytest.param(
+                dt.datetime(2023, 1, 15, 12, 30, 0),
+                dt.datetime(2023, 1, 15, 12, 30, 0, tzinfo=dt.UTC),
+                id="naive_datetime_gets_utc",
+            ),
+        ],
+    )
+    def test_ensure_utc_or_min(self, input_dt, expected):
+        """Test ensure_utc_or_min with various inputs."""
         from azurerbac.core.utils import ensure_utc_or_min
 
-        result = ensure_utc_or_min(None)
-        assert result == dt.datetime.min.replace(tzinfo=dt.UTC)
-
-    def test_ensure_utc_or_min_with_datetime(self):
-        """Test ensure_utc_or_min preserves datetime."""
-        from azurerbac.core.utils import ensure_utc_or_min
-
-        aware = dt.datetime(2023, 1, 15, 12, 30, 0, tzinfo=dt.UTC)
-        result = ensure_utc_or_min(aware)
-        assert result == aware
+        assert ensure_utc_or_min(input_dt) == expected
 
     # format_iso_z parametrized tests
     @pytest.mark.parametrize(

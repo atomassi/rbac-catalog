@@ -3,6 +3,7 @@
 import pytest
 from sqlalchemy import select
 
+from azurerbac.azure.models import RoleDefinition
 from azurerbac.backgroundjobs.roles_monitor import apply_role_scan
 from azurerbac.core import Role, RoleHistory
 from azurerbac.core.constants import EventType, RoleStatus
@@ -14,8 +15,8 @@ def _make_role(
     updated_on: str = "2021-01-01T00:00:00Z",
     created_on: str | None = None,
     **extra_props,
-) -> dict:
-    """Helper to create a role definition dict.
+) -> RoleDefinition:
+    """Helper to create a RoleDefinition object.
 
     Args:
         role_id: Unique role identifier
@@ -46,12 +47,14 @@ def _make_role(
         "updatedOn": updated_on,
         **extra_props,
     }
-    return {
-        "id": f"/providers/Microsoft.Authorization/roleDefinitions/{role_id}",
-        "type": "Microsoft.Authorization/roleDefinitions",
-        "name": role_id,
-        "properties": props,
-    }
+    return RoleDefinition.model_validate(
+        {
+            "id": f"/providers/Microsoft.Authorization/roleDefinitions/{role_id}",
+            "type": "Microsoft.Authorization/roleDefinitions",
+            "name": role_id,
+            "properties": props,
+        }
+    )
 
 
 class TestApplyRoleScan:
@@ -283,15 +286,6 @@ class TestApplyRoleScan:
         assert stats.total == 0
 
     @pytest.mark.asyncio
-    async def test_skips_roles_without_id(self, db_session):
-        """Test that roles without id/name are skipped."""
-        roles = [{"properties": {"roleName": "No ID Role"}}]
-        stats = await apply_role_scan(db_session, roles)
-
-        assert stats.total == 0
-        assert stats.created == 0
-
-    @pytest.mark.asyncio
     async def test_diff_contains_change_details(self, db_session):
         """Test that diff_json contains meaningful change information."""
         # Create role
@@ -496,3 +490,150 @@ class TestEmptyFetchResultError:
         spec.fetch.assert_called_once()
         mock_apply.assert_called_once()  # apply should be called
         mock_on_success.assert_called_once()  # success callback should be called
+
+
+class TestJobRunnerExecuteWithTelemetry:
+    """Tests for JobRunner.execute_with_telemetry method."""
+
+    @pytest.mark.asyncio
+    async def test_returns_result_on_success(self):
+        from unittest.mock import MagicMock
+
+        from azurerbac.backgroundjobs.worker import JobRunner
+
+        runner = JobRunner(session_factory=MagicMock())
+
+        async def work():
+            return {"result": "success"}
+
+        result = await runner.execute_with_telemetry("test-op", work)
+        assert result == {"result": "success"}
+
+    @pytest.mark.asyncio
+    async def test_calls_on_success_callback(self):
+        from unittest.mock import MagicMock
+
+        from azurerbac.backgroundjobs.worker import JobRunner
+
+        runner = JobRunner(session_factory=MagicMock())
+        on_success = MagicMock()
+
+        async def work():
+            return "result"
+
+        await runner.execute_with_telemetry("test-op", work, on_success=on_success)
+        on_success.assert_called_once()
+        # First arg is elapsed time (float), second is result
+        call_args = on_success.call_args[0]
+        assert isinstance(call_args[0], float)
+        assert call_args[1] == "result"
+
+    @pytest.mark.asyncio
+    async def test_returns_none_on_exception(self):
+        from unittest.mock import MagicMock
+
+        from azurerbac.backgroundjobs.worker import JobRunner
+
+        runner = JobRunner(session_factory=MagicMock())
+
+        async def work():
+            raise RuntimeError("test error")
+
+        result = await runner.execute_with_telemetry("test-op", work)
+        assert result is None
+
+
+class TestCreateJobSpecs:
+    """Tests for _create_job_specs function."""
+
+    def test_creates_both_job_specs(self):
+        from azurerbac.backgroundjobs.worker import _create_job_specs
+        from azurerbac.settings import Settings
+
+        settings = Settings.get()
+        jobs = _create_job_specs(settings)
+
+        assert len(jobs) == 2
+        job_names = {job.name for job in jobs}
+        assert "role-scan" in job_names
+        assert "operations-scan" in job_names
+
+    def test_job_specs_have_correct_types(self):
+        from azurerbac.backgroundjobs.worker import JobSpec, _create_job_specs
+        from azurerbac.settings import Settings
+
+        settings = Settings.get()
+        jobs = _create_job_specs(settings)
+
+        for job in jobs:
+            assert isinstance(job, JobSpec)
+            assert callable(job.fetch)
+            assert callable(job.apply)
+            assert callable(job.on_success)
+            assert isinstance(job.interval_seconds, int)
+
+
+class TestSetupScheduler:
+    """Tests for _setup_scheduler function."""
+
+    def test_creates_scheduler_with_enabled_jobs(self):
+        from unittest.mock import AsyncMock, MagicMock
+
+        from azurerbac.backgroundjobs.worker import JobSpec, _setup_scheduler
+
+        jobs = [
+            JobSpec(
+                name="job1",
+                enabled=True,
+                fetch_label="Fetch 1",
+                fetch=AsyncMock(),
+                apply=AsyncMock(),
+                on_success=MagicMock(),
+                interval_seconds=60,
+            ),
+            JobSpec(
+                name="job2",
+                enabled=False,
+                fetch_label="Fetch 2",
+                fetch=AsyncMock(),
+                apply=AsyncMock(),
+                on_success=MagicMock(),
+                interval_seconds=120,
+            ),
+        ]
+
+        run_job = AsyncMock()
+        scheduler = _setup_scheduler(jobs, run_job)
+
+        # Only enabled jobs should be scheduled
+        scheduled_jobs = scheduler.get_jobs()
+        assert len(scheduled_jobs) == 1
+        assert scheduled_jobs[0].id == "job1"
+
+
+class TestRunJobDisabled:
+    """Tests for disabled job handling."""
+
+    @pytest.mark.asyncio
+    async def test_run_job_skips_disabled_job(self):
+        from unittest.mock import AsyncMock, MagicMock
+
+        from azurerbac.backgroundjobs.worker import JobRunner, JobSpec
+
+        runner = JobRunner(session_factory=MagicMock())
+
+        spec = JobSpec(
+            name="disabled-job",
+            enabled=False,
+            fetch_label="Fetch disabled",
+            fetch=AsyncMock(),
+            apply=AsyncMock(),
+            on_success=MagicMock(),
+            interval_seconds=60,
+        )
+
+        await runner.run_job(spec)
+
+        # Fetch should not be called for disabled jobs
+        spec.fetch.assert_not_called()
+        spec.apply.assert_not_called()

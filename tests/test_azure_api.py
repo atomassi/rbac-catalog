@@ -17,7 +17,7 @@ def _transform_resource_graph_role(item: dict[str, Any]) -> dict[str, Any]:
 
 class TestFlattenProviderOperationsPayload:
     def test_flattens_provider_and_resource_type_operations(self):
-        from azurerbac.azure.operations import _flatten_provider_operations_payload
+        from azurerbac.azure.operations import _flatten_provider_operations
 
         payload = {
             "value": [
@@ -54,7 +54,7 @@ class TestFlattenProviderOperationsPayload:
             ]
         }
 
-        operations = _flatten_provider_operations_payload(payload)
+        operations = _flatten_provider_operations(payload)
         assert len(operations) == 3
 
         provider_op = operations[0]
@@ -69,15 +69,15 @@ class TestFlattenProviderOperationsPayload:
         assert all(op.resource_type_display_name == "Virtual Machines" for op in rt_ops)
 
     def test_handles_empty_payload(self):
-        from azurerbac.azure.operations import _flatten_provider_operations_payload
+        from azurerbac.azure.operations import _flatten_provider_operations
 
-        assert _flatten_provider_operations_payload({"value": []}) == []
+        assert _flatten_provider_operations({"value": []}) == []
 
     def test_defaults_missing_sections(self):
-        from azurerbac.azure.operations import _flatten_provider_operations_payload
+        from azurerbac.azure.operations import _flatten_provider_operations
 
         payload = {"value": [{"displayName": "X"}]}
-        operations = _flatten_provider_operations_payload(payload)
+        operations = _flatten_provider_operations(payload)
         assert operations == []
 
 
@@ -832,3 +832,242 @@ class TestOperationDataEdgeCases:
         long_name = "Microsoft." + "A" * 500 + "/read"
         op = OperationData.model_validate({"name": long_name})
         assert op.name == long_name
+
+
+# =============================================================================
+# Azure HTTP and Auth Tests
+# =============================================================================
+
+
+class TestManagementUrl:
+    """Tests for management_url helper."""
+
+    def test_prepends_base_url(self):
+        from azurerbac.azure.http import management_url
+
+        result = management_url("/providers/Microsoft.Authorization")
+        assert result == "https://management.azure.com/providers/Microsoft.Authorization"
+
+    def test_handles_path_without_leading_slash(self):
+        from azurerbac.azure.http import management_url
+
+        result = management_url("providers/Microsoft.Authorization")
+        assert result == "https://management.azure.com/providers/Microsoft.Authorization"
+
+
+class TestAzureAuthContext:
+    """Tests for Azure authentication context managers."""
+
+    @pytest.mark.asyncio
+    async def test_default_azure_credential_context_manager(self):
+        """default_azure_credential yields and closes credential."""
+        from unittest.mock import AsyncMock, patch
+
+        mock_credential = AsyncMock()
+        mock_credential.close = AsyncMock()
+
+        with patch(
+            "azurerbac.azure.auth.DefaultAzureCredential",
+            return_value=mock_credential,
+        ):
+            from azurerbac.azure.auth import default_azure_credential
+
+            async with default_azure_credential() as cred:
+                assert cred is mock_credential
+
+            mock_credential.close.assert_called_once()
+
+
+# =============================================================================
+# Azure Fetch Functions (Mocked)
+# =============================================================================
+
+
+def _make_mock_async_client(response_or_side_effect, *, method: str = "post"):
+    """Create a mock async client with the given response or side effect."""
+    from unittest.mock import AsyncMock
+
+    mock_client = AsyncMock()
+    mock_method = getattr(mock_client, method)
+
+    if isinstance(response_or_side_effect, (Exception, list)):
+        mock_method.side_effect = response_or_side_effect
+    else:
+        mock_method.return_value = response_or_side_effect
+
+    mock_client.__aenter__.return_value = mock_client
+    mock_client.__aexit__.return_value = None
+    return mock_client
+
+
+def _make_mock_response(json_data):
+    """Create a mock response with json data."""
+    from unittest.mock import MagicMock
+
+    mock_response = MagicMock()
+    mock_response.json.return_value = json_data
+    mock_response.raise_for_status = MagicMock()
+    return mock_response
+
+
+class TestFetchBuiltinRoles:
+    """Tests for fetch_builtin_roles with mocked Azure API."""
+
+    @pytest.mark.asyncio
+    async def test_returns_role_definitions_on_success(self):
+        from unittest.mock import patch
+
+        from azurerbac.azure.models import RoleDefinition
+
+        response = _make_mock_response(
+            {
+                "data": [
+                    {
+                        "id": "/providers/Microsoft.Authorization/RoleDefinitions/abc-123",
+                        "properties": {
+                            "roleName": "Reader",
+                            "type": "BuiltInRole",
+                            "permissions": [],
+                        },
+                    }
+                ],
+            }
+        )
+        mock_client = _make_mock_async_client(response, method="post")
+
+        with patch(
+            "azurerbac.azure.roles.authenticated_management_async_client",
+            return_value=mock_client,
+        ):
+            from azurerbac.azure.roles import fetch_builtin_roles
+
+            roles = await fetch_builtin_roles()
+
+        assert len(roles) == 1
+        assert isinstance(roles[0], RoleDefinition)
+        assert roles[0].role_name == "Reader"
+
+    @pytest.mark.asyncio
+    async def test_handles_pagination_with_skip_token(self):
+        from unittest.mock import patch
+
+        first_response = _make_mock_response(
+            {
+                "data": [
+                    {
+                        "id": "/providers/Microsoft.Authorization/RoleDefinitions/abc",
+                        "properties": {
+                            "roleName": "Role1",
+                            "type": "BuiltInRole",
+                            "permissions": [],
+                        },
+                    }
+                ],
+                "$skipToken": "token123",
+            }
+        )
+        second_response = _make_mock_response(
+            {
+                "data": [
+                    {
+                        "id": "/providers/Microsoft.Authorization/RoleDefinitions/def",
+                        "properties": {
+                            "roleName": "Role2",
+                            "type": "BuiltInRole",
+                            "permissions": [],
+                        },
+                    }
+                ],
+            }
+        )
+
+        mock_client = _make_mock_async_client([first_response, second_response], method="post")
+
+        with patch(
+            "azurerbac.azure.roles.authenticated_management_async_client",
+            return_value=mock_client,
+        ):
+            from azurerbac.azure.roles import fetch_builtin_roles
+
+            roles = await fetch_builtin_roles()
+
+        assert len(roles) == 2
+        assert mock_client.post.call_count == 2
+
+
+class TestFetchProviderOperations:
+    """Tests for fetch_provider_operations with mocked Azure API."""
+
+    @pytest.mark.asyncio
+    async def test_returns_operations_on_success(self):
+        from unittest.mock import patch
+
+        response = _make_mock_response(
+            {
+                "value": [
+                    {
+                        "displayName": "Microsoft Compute",
+                        "operations": [
+                            {
+                                "name": "Microsoft.Compute/register/action",
+                                "displayName": "Register",
+                                "isDataAction": False,
+                            }
+                        ],
+                        "resourceTypes": [],
+                    }
+                ]
+            }
+        )
+        mock_client = _make_mock_async_client(response, method="get")
+
+        with patch(
+            "azurerbac.azure.operations.authenticated_management_async_client",
+            return_value=mock_client,
+        ):
+            from azurerbac.azure.operations import fetch_provider_operations
+
+            operations = await fetch_provider_operations()
+
+        assert len(operations) == 1
+        assert operations[0].name == "Microsoft.Compute/register/action"
+
+
+class TestAzureFetchErrorHandling:
+    """Consolidated error handling tests for Azure fetch functions."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "module_path,function_name,http_method,patch_target",
+        [
+            (
+                "azurerbac.azure.roles",
+                "fetch_builtin_roles",
+                "post",
+                "azurerbac.azure.roles.authenticated_management_async_client",
+            ),
+            (
+                "azurerbac.azure.operations",
+                "fetch_provider_operations",
+                "get",
+                "azurerbac.azure.operations.authenticated_management_async_client",
+            ),
+        ],
+    )
+    async def test_raises_on_api_error(self, module_path, function_name, http_method, patch_target):
+        from importlib import import_module
+        from unittest.mock import MagicMock, patch
+
+        import httpx
+
+        error = httpx.HTTPStatusError(
+            "Server Error", request=MagicMock(), response=MagicMock(status_code=500)
+        )
+        mock_client = _make_mock_async_client(error, method=http_method)
+
+        with patch(patch_target, return_value=mock_client):
+            module = import_module(module_path)
+            func = getattr(module, function_name)
+
+            with pytest.raises(httpx.HTTPStatusError):
+                await func()

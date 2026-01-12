@@ -479,7 +479,7 @@
             
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <!-- Left column: Search and Select Operations -->
-                <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-lg overflow-hidden flex flex-col">
+                <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-lg flex flex-col min-w-0">
                     <div class="p-6 border-b border-slate-200 dark:border-slate-700">
                         <h2 class="text-xl font-bold text-slate-900 dark:text-slate-100 flex items-center">
                             <svg class="w-5 h-5 mr-2 text-azure-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -533,7 +533,7 @@
                         </div>
                         
                         <!-- Search results -->
-                        <div id="search-results" class="mt-4 max-h-80 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-xl hidden">
+                        <div id="search-results" class="mt-4 max-h-80 overflow-y-auto overflow-x-hidden border border-slate-200 dark:border-slate-700 rounded-xl hidden">
                         </div>
                         
                         <p id="search-hint" class="text-sm text-slate-400 mt-3">Enter at least 2 characters. Use <code class="bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded text-slate-600 dark:text-slate-300">*</code> for wildcards (e.g., <code class="bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded text-slate-600 dark:text-slate-300">Microsoft.Storage/*/read</code>)</p>
@@ -656,6 +656,8 @@
         const selectedOperations = new Map(); // name -> operation object
         let searchTimeout = null;
         let lastRecommendationResults = null; // Store last results for restoration
+        let lastSearchResults = []; // Store last search results for re-rendering
+        let lastPatternMatchCount = 0; // Store last pattern match count
         let currentRecommenderMode = 'llm'; // 'llm' (Qwen-Curated) or 'tfidf' (Enhanced TF-IDF)
         const aiEnabled = NavState.isAiMode(); // Use sessionStorage for AI mode
         
@@ -1052,34 +1054,36 @@
         });
         
         function renderSearchResults(operations, isWildcardSearch = false) {
+            // Store for re-rendering when selection changes
+            lastSearchResults = operations;
+            lastPatternMatchCount = isWildcardSearch;
+            
             const count = operations.length;
             const headerHtml = isWildcardSearch 
                 ? `<div class="p-2 bg-azure-50 dark:bg-azure-900/30 border-b border-azure-100 dark:border-azure-800 text-xs text-azure-700 dark:text-azure-400 font-medium">✨ Showing ${count} pattern match${count !== 1 ? 'es' : ''}</div>`
                 : '';
             searchResults.innerHTML = headerHtml + operations.map(op => {
                 const isSelected = selectedOperations.has(op.name);
-                const actionLabel = op.is_data_action 
-                    ? '<span class="inline-flex items-center px-2 py-0.5 text-xs font-medium bg-purple-100 dark:bg-purple-900/50 text-purple-800 dark:text-purple-300 rounded">Data Action</span>'
-                    : '<span class="inline-flex items-center px-2 py-0.5 text-xs font-medium bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300 rounded">Action</span>';
+                const badgeColor = op.isDataAction 
+                    ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300'
+                    : 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300';
+                const badgeText = op.isDataAction ? 'Data Action' : 'Action';
                 return `
-                    <div class="search-result p-3 border-b border-slate-100 dark:border-slate-700 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50 ${isSelected ? 'bg-azure-50 dark:bg-azure-900/30' : ''}" 
+                    <div class="search-result p-3 border-b border-slate-100 dark:border-slate-700 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors ${isSelected ? 'bg-azure-50 dark:bg-azure-900/30' : ''}" 
                          data-name="${escapeHtml(op.name)}"
-                         data-display="${escapeHtml(op.display_name || '')}"
+                         data-display="${escapeHtml(op.displayName || '')}"
                          data-description="${escapeHtml(op.description || '')}"
                          data-provider="${escapeHtml(op.provider_display_name || '')}"
-                         data-is-data="${op.is_data_action}">
-                        <div class="flex items-start justify-between gap-2">
-                            <div class="flex-1 min-w-0">
-                                <div class="flex items-center gap-2 mb-1">
-                                    ${actionLabel}
-                                </div>
-                                <p class="text-sm font-mono text-slate-900 dark:text-slate-100 truncate">${escapeHtml(op.name)}</p>
-                                <p class="text-xs text-slate-500 dark:text-slate-400 truncate">${escapeHtml(op.display_name || 'No display name')}</p>
+                         data-is-data="${op.isDataAction}">
+                        <div class="flex gap-2">
+                            <div class="flex-1 overflow-hidden">
+                                <span class="inline-block px-1.5 py-0.5 text-xs font-semibold ${badgeColor} rounded mb-1">${badgeText}</span>
+                                <p class="text-sm font-mono text-slate-700 dark:text-slate-300" style="word-break: break-all; overflow-wrap: anywhere;">${escapeHtml(op.name)}</p>
                             </div>
-                            <div class="flex-shrink-0">
+                            <div class="toggle-icon flex-shrink-0 self-center">
                                 ${isSelected 
                                     ? '<span class="text-azure-500"><svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path></svg></span>'
-                                    : '<span class="text-slate-300 dark:text-slate-600"><svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg></span>'
+                                    : '<span class="text-slate-300 dark:text-slate-600 hover:text-azure-400"><svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg></span>'
                                 }
                             </div>
                         </div>
@@ -1116,7 +1120,7 @@
                 // Update just this item
                 const isSelected = selectedOperations.has(name);
                 el.classList.toggle('bg-azure-50', isSelected);
-                const iconContainer = el.querySelector('.flex-shrink-0');
+                const iconContainer = el.querySelector('.toggle-icon');
                 iconContainer.innerHTML = isSelected 
                     ? '<span class="text-azure-500"><svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path></svg></span>'
                     : '<span class="text-slate-300"><svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg></span>';
@@ -1143,7 +1147,9 @@
                     
                     // Determine badge based on type
                     let badgeHtml = '';
-                    let bgClass = 'bg-azure-50 border-azure-200';
+                    let bgClass = op.is_data_action 
+                        ? 'bg-purple-50 dark:bg-purple-900/30 border-purple-200 dark:border-purple-700'
+                        : 'bg-azure-50 dark:bg-azure-900/30 border-azure-200 dark:border-azure-700';
                     let countHtml = '';
                     
                     if (isWildcard) {
@@ -1154,10 +1160,8 @@
                         
                         if (op.is_data_action) {
                             badgeHtml = '<span class="inline-flex items-center px-2 py-0.5 text-xs font-medium bg-purple-100 dark:bg-purple-900/50 text-purple-800 dark:text-purple-300 rounded mr-2">✨ Data Plane</span>';
-                            bgClass = 'bg-purple-50 dark:bg-purple-900/30 border-purple-200 dark:border-purple-700';
                         } else {
                             badgeHtml = '<span class="inline-flex items-center px-2 py-0.5 text-xs font-medium bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300 rounded mr-2">✨ Control Plane</span>';
-                            bgClass = 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700';
                         }
                     }
                     
@@ -1166,10 +1170,10 @@
                     el.innerHTML = `
                         <div class="flex-1 min-w-0 flex items-center flex-wrap">
                             ${badgeHtml}
-                            <p class="text-sm font-mono text-slate-900 dark:text-slate-100 truncate">${escapeHtml(displayName)}</p>
+                            <p class="text-sm font-mono text-slate-900 dark:text-slate-100" style="word-break: break-all;">${escapeHtml(displayName)}</p>
                             ${countHtml}
                         </div>
-                        <button class="ml-2 text-slate-400 hover:text-red-500 transition-colors" data-key="${escapeHtml(key)}">
+                        <button class="ml-2 text-slate-400 hover:text-red-500 transition-colors flex-shrink-0" data-key="${escapeHtml(key)}">
                             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"></path>
                             </svg>
@@ -1178,6 +1182,10 @@
                     el.querySelector('button').addEventListener('click', () => {
                         selectedOperations.delete(key);
                         updateSelectedDisplay();
+                        // Re-render search results to update the selection state
+                        if (lastSearchResults.length > 0) {
+                            renderSearchResults(lastSearchResults, lastPatternMatchCount);
+                        }
                     });
                     selectedOpsContainer.appendChild(el);
                 });

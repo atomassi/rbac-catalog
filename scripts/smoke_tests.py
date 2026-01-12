@@ -189,12 +189,15 @@ async def test_page_with_content(
         missing = [c for c in expected_content if c.lower() not in text]
 
         if missing:
+            # Include a snippet of the response for debugging
+            body_preview = response.text[:300].replace("\n", " ")[:150]
             return TestResult(
                 name=name,
                 passed=False,
                 status_code=200,
                 message=f"Missing content: {missing}",
                 response_time=elapsed,
+                details={"body_preview": body_preview},
             )
 
         return TestResult(
@@ -315,14 +318,18 @@ def print_result(result: TestResult, verbose: bool = False) -> None:
     if result.passed:
         status = "\033[92m✅ PASS\033[0m"
         detail = f"({result.response_time:.2f}s)" if result.response_time else ""
+        if verbose and result.details:
+            detail += f" {result.details}"
     else:
         status = "\033[91m❌ FAIL\033[0m"
+        details_parts = []
         if result.message:
-            detail = f"({result.message})"
-        elif result.status_code:
-            detail = f"(Expected {result.expected}, got {result.status_code})"
-        else:
-            detail = ""
+            details_parts.append(result.message)
+        if result.status_code and result.status_code != result.expected:
+            details_parts.append(f"HTTP {result.status_code}")
+        if verbose and result.details:
+            details_parts.append(str(result.details))
+        detail = f"({', '.join(details_parts)})" if details_parts else ""
 
     print(f"{status} - {result.name} {detail}")
 
@@ -348,35 +355,52 @@ async def test_ai_recommender(
             )
 
         if response.status_code != 200:
+            # Try to extract error message from response body
+            error_detail = ""
+            try:
+                error_data = response.json()
+                error_detail = error_data.get("detail", error_data.get("error", ""))
+            except Exception:
+                error_detail = response.text[:200] if response.text else ""
             return TestResult(
                 name=name,
                 passed=False,
                 status_code=response.status_code,
                 expected=200,
                 response_time=elapsed,
+                message=error_detail,
+                details={"request": request_body},
             )
 
         try:
             data = response.json()
             rec_count = len(data.get("recommendations", []))
             engine_mode = data.get("engine", {}).get("mode", "unknown")
+            engine_time = data.get("engine", {}).get("processing_time_ms", 0)
             return TestResult(
                 name=name,
                 passed=True,
                 status_code=200,
                 response_time=elapsed,
-                details={"recommendations": rec_count, "engine": engine_mode},
+                details={
+                    "recommendations": rec_count,
+                    "engine": engine_mode,
+                    "engine_ms": engine_time,
+                },
             )
-        except Exception:
+        except Exception as e:
+            # Include response body preview for debugging
+            body_preview = response.text[:500] if response.text else "<empty>"
             return TestResult(
                 name=name,
                 passed=False,
                 status_code=200,
-                message="Invalid JSON response",
+                message=f"Invalid JSON: {e}",
                 response_time=elapsed,
+                details={"body_preview": body_preview},
             )
     except httpx.RequestError as e:
-        return TestResult(name=name, passed=False, message=str(e))
+        return TestResult(name=name, passed=False, message=f"Request failed: {e}")
 
 
 async def test_role_recommend(
@@ -649,12 +673,17 @@ async def run_smoke_tests(base_url: str, verbose: bool = False) -> bool:
 
     if failed > 0:
         print("\033[91m❌ Smoke tests FAILED\033[0m")
-        # Print failed tests
+        # Print failed tests with full details
         print("\nFailed tests:")
         for r in results:
             if not r.passed:
                 msg = r.message if r.message else f"HTTP {r.status_code}"
                 print(f"   - {r.name}: {msg}")
+                if r.details:
+                    for key, value in r.details.items():
+                        # Truncate long values
+                        val_str = str(value)[:200]
+                        print(f"       {key}: {val_str}")
         return False
     else:
         print("\033[92m🎉 All smoke tests PASSED\033[0m")

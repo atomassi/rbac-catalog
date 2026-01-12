@@ -265,7 +265,7 @@ class ColBERTIndex:
 
         This avoids slow first request by:
         1. Loading pre-built index from disk
-        2. Initializing the searcher (normally lazy-loaded on first query)
+        2. Running a dummy search to force RAGatouille to initialize its internal searcher
 
         Returns:
             True if fully initialized, False otherwise
@@ -284,22 +284,16 @@ class ColBERTIndex:
         if not self._is_loaded or self._rag is None:
             return False
 
-        # Step 2: Initialize searcher
+        # Step 2: Run a dummy search to force RAGatouille to initialize its searcher
+        # This is more reliable than calling internal _load_searcher() which RAGatouille
+        # may bypass when .search() is called
         try:
-            model = self._rag.model
-            model_index = model.model_index
-
-            if model_index.searcher is None:
-                logger.info("ColBERT: Initializing searcher...")
-                model_index._load_searcher(
-                    checkpoint=model.checkpoint,
-                    collection=model.collection,
-                    index_name=model.index_name,
-                    force_fast=False,
-                )
+            logger.info("ColBERT: Warming up searcher with dummy query...")
+            _ = self._rag.search("warmup query", k=1)
+            logger.info("ColBERT: Searcher warmed up successfully")
             return True
         except Exception as e:
-            logger.exception("ColBERT: Searcher init failed: %s", e)
+            logger.exception("ColBERT: Searcher warmup failed: %s", e)
             return False
 
     def build_index(self, documents: dict[str, str], force_rebuild: bool = False) -> bool:

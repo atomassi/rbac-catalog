@@ -249,7 +249,7 @@ jobs:
       - name: Smoke tests on staging
         run: |
           pip install httpx
-          python scripts/smoke_tests.py --url ${{ env.STAGING_URL }}
+          python scripts/smoke_tests.py --url ${{ env.STAGING_URL }} --verbose
 
       - name: Swap staging to production
         run: |

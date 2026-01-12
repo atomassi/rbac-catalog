@@ -124,12 +124,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:  # pylint: disable=unus
     logger.info("Starting application...")
     await ensure_db(engine)
     await preload_cache(SessionLocal)
+
     logger.info("Application startup complete, starting background tasks...")
 
     # Use anyio task group for clean task management
     async with anyio.create_task_group() as tg:
-        tg.start_soon(warmup_colbert, name="colbert-warmup")
         tg.start_soon(cache_refresh_task, SessionLocal, name="cache-refresh")
+        tg.start_soon(warmup_colbert, name="colbert-warmup")
 
         yield  # Application is running
 

@@ -7,12 +7,33 @@ eliminating data clumps and providing type-safe operations.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import TYPE_CHECKING, NamedTuple
 
 from azurerbac.core.types import JsonDict
 
 if TYPE_CHECKING:
-    from azurerbac.azure.models import OperationData
+    from azurerbac.azure.models import OperationData, Permission
+
+
+# =============================================================================
+# Enums
+# =============================================================================
+
+
+class Plane(Enum):
+    """Operation plane identifier - eliminates string literals."""
+
+    CONTROL = "ctrl"
+    DATA = "data"
+
+
+# =============================================================================
+# Type Aliases
+# =============================================================================
+
+
+WildcardKey = str  # "ctrl:pattern" or "data:pattern"
 
 
 # =============================================================================
@@ -29,6 +50,15 @@ class WildcardCoverageResult(NamedTuple):
     uncovered_samples: list[str]
 
 
+class PartialCoverageInfo(NamedTuple):
+    """Partial coverage tracking for wildcard patterns."""
+
+    covered: int
+    total: int
+    uncovered: int
+    samples: list[str]
+
+
 # =============================================================================
 # Frozen Dataclasses (value objects, immutable)
 # =============================================================================
@@ -36,11 +66,7 @@ class WildcardCoverageResult(NamedTuple):
 
 @dataclass(frozen=True, slots=True)
 class ClassifiedOperations:
-    """Classified operations separated by plane and pattern type.
-
-    This value object groups operations that are always passed together,
-    eliminating the data clump of (control, data, control_wildcards, data_wildcards).
-    """
+    """Operations separated by plane and pattern type."""
 
     control: frozenset[str] = field(default_factory=frozenset)
     data: frozenset[str] = field(default_factory=frozenset)
@@ -112,6 +138,41 @@ class WildcardCoverage:
     def missing_count(self) -> int:
         """Number of operations not covered."""
         return max(0, self.total_count - self.covered_count)
+
+
+@dataclass(slots=True)
+class RoleEvaluationContext:
+    """Context for evaluating a single role's coverage."""
+
+    role_id: str
+    role_name: str
+    description: str
+    permissions: list[Permission]
+    matched_ops: set[str] = field(default_factory=set)
+    wildcard_partial_coverage: dict[WildcardKey, PartialCoverageInfo] = field(default_factory=dict)
+    fully_covered_wildcards: set[WildcardKey] = field(default_factory=set)
+    has_conditions: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class PlaneContext:
+    """Encapsulates plane-specific data for DRY evaluation."""
+
+    plane: Plane
+    all_ops: frozenset[str]
+    cache_key: int
+    wildcards: frozenset[str]
+    wildcard_ops_map: dict[str, set[str]]
+    cached_ops: set[str] | None
+
+    @property
+    def prefix(self) -> str:
+        """Key prefix for wildcard tracking."""
+        return self.plane.value
+
+    def make_key(self, pattern: str) -> WildcardKey:
+        """Create a wildcard key for this plane."""
+        return f"{self.prefix}:{pattern}"
 
 
 # =============================================================================

@@ -15,14 +15,16 @@ Main components:
 from azurerbac.matching.models import (
     ClassifiedOperations,
     OperationSets,
+    PartialCoverageInfo,
+    Plane,
+    PlaneContext,
+    RoleEvaluationContext,
     RoleMatch,
     WildcardCoverage,
     WildcardCoverageResult,
+    WildcardKey,
 )
-from azurerbac.matching.recommendation_service import (
-    RoleEvaluationContext,
-    RoleRecommendationService,
-)
+from azurerbac.matching.recommendation_service import RoleRecommendationService
 from azurerbac.matching.role_matching import (
     check_operation_allowed,
     check_wildcard_operation_allowed,
@@ -38,11 +40,15 @@ from azurerbac.matching.role_recommender import recommend_roles
 __all__ = [
     "ClassifiedOperations",
     "OperationSets",
+    "PartialCoverageInfo",
+    "Plane",
+    "PlaneContext",
     "RoleEvaluationContext",
     "RoleMatch",
     "RoleRecommendationService",
     "WildcardCoverage",
     "WildcardCoverageResult",
+    "WildcardKey",
     "check_operation_allowed",
     "check_wildcard_operation_allowed",
     "count_net_permissions",

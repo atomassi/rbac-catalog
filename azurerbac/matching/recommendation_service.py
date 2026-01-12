@@ -3,14 +3,19 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
-from enum import Enum
-from typing import TYPE_CHECKING, NamedTuple
+from typing import TYPE_CHECKING
 
 from azurerbac.azure.models import OperationData, Permission, RoleDefinition
 from azurerbac.core.constants import DEFAULT_SEARCH_LIMIT
 from azurerbac.core.patterns import is_wildcard_pattern
-from azurerbac.matching.models import ClassifiedOperations, OperationSets
+from azurerbac.matching.models import (
+    ClassifiedOperations,
+    OperationSets,
+    PartialCoverageInfo,
+    Plane,
+    PlaneContext,
+    RoleEvaluationContext,
+)
 from azurerbac.matching.role_matching import (
     check_operation_allowed,
     check_wildcard_operation_allowed,
@@ -25,66 +30,6 @@ if TYPE_CHECKING:
     from azurerbac.cache.models import CacheData
 
 logger = logging.getLogger(__name__)
-
-
-class Plane(Enum):
-    """Operation plane identifier - eliminates string literals."""
-
-    CONTROL = "ctrl"
-    DATA = "data"
-
-
-class PartialCoverageInfo(NamedTuple):
-    """Partial coverage tracking for wildcard patterns.
-
-    Using NamedTuple instead of bare tuple improves:
-    - Readability: Named fields vs positional indices
-    - Type safety: IDE can verify field access
-    - Self-documenting: No need for comments explaining tuple positions
-    """
-
-    covered: int
-    total: int
-    uncovered: int
-    samples: list[str]
-
-
-WildcardKey = str  # "ctrl:pattern" or "data:pattern"
-
-
-@dataclass(slots=True)
-class RoleEvaluationContext:
-    """Context for evaluating a single role's coverage."""
-
-    role_id: str
-    role_name: str
-    description: str
-    permissions: list[Permission]
-    matched_ops: set[str] = field(default_factory=set)
-    wildcard_partial_coverage: dict[WildcardKey, PartialCoverageInfo] = field(default_factory=dict)
-    fully_covered_wildcards: set[WildcardKey] = field(default_factory=set)
-    has_conditions: bool = False
-
-
-@dataclass(frozen=True, slots=True)
-class PlaneContext:
-    """Encapsulates plane-specific data for DRY evaluation."""
-
-    plane: Plane
-    all_ops: frozenset[str]
-    cache_key: int
-    wildcards: frozenset[str]
-    wildcard_ops_map: dict[str, set[str]]
-    cached_ops: set[str] | None
-
-    @property
-    def prefix(self) -> str:
-        """Key prefix for wildcard tracking."""
-        return self.plane.value
-
-    def make_key(self, pattern: str) -> WildcardKey:
-        """Create a wildcard key for this plane."""
-        return f"{self.prefix}:{pattern}"
 
 
 class RoleRecommendationService:

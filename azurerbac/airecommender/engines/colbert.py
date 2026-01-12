@@ -100,7 +100,7 @@ class ColBERTEngine(BaseRecommenderEngine):
             output_min=COLBERT_SIGMOID.output_min,
             output_max=COLBERT_SIGMOID.output_max,
         )
-        logger.info(
+        logger.debug(
             "Normalized %d ColBERT scores: [%s]",
             len(candidates),
             ", ".join(f"{c.role_name}({c.final_score:.0%})" for c in candidates[:3]),
@@ -333,8 +333,9 @@ class ColBERTIndex:
             try:
                 from ragatouille import RAGPretrainedModel
 
-                logger.info("ColBERT: Building index for %d documents...", len(documents))
-                logger.info("ColBERT: This may take ~20s. Consider pre-building the index.")
+                logger.info(
+                    "ColBERT: Building index for %d documents (may take ~20s)...", len(documents)
+                )
 
                 # Initialize RAGatouille with ColBERT model
                 self._rag = RAGPretrainedModel.from_pretrained(COLBERT_MODEL)
@@ -357,7 +358,7 @@ class ColBERTIndex:
                 )
 
                 self._is_loaded = True
-                logger.info("ColBERT: Index built with %d documents", len(documents))
+                logger.debug("ColBERT: Index built with %d documents", len(documents))
                 return True
 
             except Exception as e:

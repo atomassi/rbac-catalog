@@ -898,7 +898,7 @@
                                             {{ event_date.strftime('%Y-%m-%d') if event_date else '' }}
                                         </td>
                                         <td class="px-2 sm:px-6 py-3">
-                                            <div class="text-sm font-medium text-azure-600">
+                                            <div class="text-sm font-semibold text-azure-600">
                                                 <a href="{{ role_url(ev.role_id, ev.role_name) }}" onclick="NavState.setBackContext('recent')" class="hover:text-azure-700 hover:underline">{{ ev.role_name }}</a>
                                             </div>
                                             <code class="text-xs font-mono text-slate-400 hidden sm:block">{{ ev.role_id }}</code>

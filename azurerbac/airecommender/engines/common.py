@@ -116,7 +116,7 @@ def normalize_scores(candidates: list[RankedRole]) -> list[RankedRole]:
         normalized = (c.final_score - min_score) / score_range if score_range > 0 else 1.0
         c.final_score = SCORE_FLOOR + (normalized * _SCORE_RANGE)
 
-    logger.info(
+    logger.debug(
         "Normalized %d scores (min-max): [%s]",
         len(candidates),
         ", ".join(f"{c.role_name}({c.final_score:.0%})" for c in candidates[:3]),

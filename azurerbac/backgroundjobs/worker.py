@@ -220,9 +220,7 @@ async def main() -> None:
     settings = Settings.get()
     configure_logging("worker")
 
-    logger.info("=" * 60)
-    logger.info("Azure RBAC Worker starting...")
-    logger.info("Configuration:")
+    logger.info("Azure RBAC Worker starting with configuration:")
     logger.info(
         "  Role scan enabled: %s (interval: %ds)",
         settings.role_scan_enabled,
@@ -235,7 +233,6 @@ async def main() -> None:
     )
     logger.info("  Run role scan on startup: %s", settings.run_roles_scan_on_startup)
     logger.info("  Run operations scan on startup: %s", settings.run_operations_scan_on_startup)
-    logger.info("=" * 60)
 
     engine = DBEngine.get()
     session_local = create_sessionmaker(engine)

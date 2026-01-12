@@ -126,7 +126,7 @@ class CrossEncoderEngine(BaseRecommenderEngine):
             ce_scores = cross_encoder.predict(pairs)
 
             # Log top candidates with their scores
-            logger.info(
+            logger.debug(
                 "CrossEncoder reranking: top 6 bi-encoder candidates: %s",
                 [(c.role_name, f"{c.embedding_score:.3f}") for c in candidates[:6]],
             )
@@ -153,7 +153,7 @@ class CrossEncoderEngine(BaseRecommenderEngine):
                 (c.role_name, f"ce={c.llm_score:.3f}", f"final={c.final_score:.3f}")
                 for c in candidates[:6]
             ]
-            logger.info("CrossEncoder reranking: top 6 after rerank: %s", top6)
+            logger.debug("CrossEncoder reranking: top 6 after rerank: %s", top6)
 
             return candidates
 
@@ -172,9 +172,9 @@ def _load_cross_encoder() -> Any:
     """Factory function to load the cross-encoder model."""
     from sentence_transformers import CrossEncoder
 
-    logger.info("Loading cross-encoder model: %s", _CROSS_ENCODER_MODEL)
+    logger.debug("Loading cross-encoder model: %s", _CROSS_ENCODER_MODEL)
     model = CrossEncoder(_CROSS_ENCODER_MODEL)
-    logger.info("Cross-encoder model loaded successfully")
+    logger.debug("Cross-encoder model loaded successfully")
     return model
 
 

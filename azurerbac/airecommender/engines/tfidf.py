@@ -106,7 +106,7 @@ class TFIDFEngine(BaseRecommenderEngine):
         """Filter low-confidence results (Step 3)."""
         pre_filter_count = len(results)
         results = self._filter_min_confidence(results, threshold=TFIDF_CONFIG.min_confidence)
-        logger.info(
+        logger.debug(
             "TF-IDF Step 3: Filtered %d low-confidence results (< %s), %d remaining",
             pre_filter_count - len(results),
             f"{TFIDF_CONFIG.min_confidence:.0%}",
@@ -124,7 +124,7 @@ class TFIDFEngine(BaseRecommenderEngine):
             pre_filter_count = len(results)
             threshold = best_score * TFIDF_CONFIG.relative_cutoff
             results = self._filter_min_confidence(results, threshold=threshold)
-            logger.info(
+            logger.debug(
                 "TF-IDF Step 4: Filtered %d results worse than 70%% of best (%.2f), %d remaining",
                 pre_filter_count - len(results),
                 best_score,
@@ -135,11 +135,11 @@ class TFIDFEngine(BaseRecommenderEngine):
     def _normalize_final_scores(self, results: list[RankedRole]) -> list[RankedRole]:
         """Normalize scores to 60-95% range for consistent UX (Step 5)."""
         pre_str = ", ".join(f"{r.role_name}({r.final_score:.2f})" for r in results[:5])
-        logger.info("TF-IDF Step 5: Pre-normalization scores: [%s]", pre_str)
+        logger.debug("TF-IDF Step 5: Pre-normalization scores: [%s]", pre_str)
 
         results = normalize_scores(results)
 
         post_str = ", ".join(f"{r.role_name}({r.final_score:.0%})" for r in results[:5])
-        logger.info("TF-IDF Step 5: Post-normalization scores: [%s]", post_str)
+        logger.debug("TF-IDF Step 5: Post-normalization scores: [%s]", post_str)
 
         return results

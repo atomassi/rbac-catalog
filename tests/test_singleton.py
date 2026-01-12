@@ -97,31 +97,19 @@ class TestThreadSafeSingleton:
         assert c2.count == 0  # Fresh instance
         assert c1 is not c2
 
-    def test_is_initialized_property(self):
-        """Test the is_initialized property."""
+    def test_is_initialized_lifecycle(self):
+        """Test is_initialized property through lifecycle."""
 
         class Simple:
             pass
 
         singleton = ThreadSafeSingleton(Simple)
 
-        assert not singleton.is_initialized
+        assert not singleton.is_initialized  # Before get()
         singleton.get()
-        assert singleton.is_initialized
-
-    def test_reset_clears_is_initialized(self):
-        """Test that reset() makes is_initialized return False."""
-
-        class Simple:
-            pass
-
-        singleton = ThreadSafeSingleton(Simple)
-
-        singleton.get()
-        assert singleton.is_initialized
-
+        assert singleton.is_initialized  # After get()
         singleton.reset()
-        assert not singleton.is_initialized
+        assert not singleton.is_initialized  # After reset()
 
     def test_thread_safety(self):
         """Test that singleton is thread-safe under concurrent access."""

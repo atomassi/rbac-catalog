@@ -5,41 +5,35 @@ import pytest
 from azurerbac.azure.models import RoleDefinition
 from azurerbac.core.diffing import diff_roles, diff_summary
 
-
-def _reader_role_dict() -> dict:
-    return {
-        "properties": {
-            "roleName": "Reader",
-            "type": "BuiltInRole",
-            "description": "View all resources, but does not allow you to make any changes.",
-            "assignableScopes": ["/"],
-            "permissions": [
-                {
-                    "actions": ["*/read"],
-                    "notActions": [],
-                    "dataActions": [],
-                    "notDataActions": [],
-                }
-            ],
-            "createdOn": "2015-02-02T21:55:09.8806423Z",
-            "updatedOn": "2021-11-11T20:13:47.8628684Z",
-        },
-        # Azure role definition ID format
-        "id": "/providers/Microsoft.Authorization/roleDefinitions/acdd72a7-3385-48ef-bd42-f606fba81ae7",  # noqa: E501
-        "type": "Microsoft.Authorization/roleDefinitions",
-        "name": "acdd72a7-3385-48ef-bd42-f606fba81ae7",
-    }
+READER_ROLE_DICT = {
+    "properties": {
+        "roleName": "Reader",
+        "type": "BuiltInRole",
+        "description": "View all resources, but does not allow you to make any changes.",
+        "assignableScopes": ["/"],
+        "permissions": [
+            {
+                "actions": ["*/read"],
+                "notActions": [],
+                "dataActions": [],
+                "notDataActions": [],
+            }
+        ],
+        "createdOn": "2015-02-02T21:55:09.8806423Z",
+        "updatedOn": "2021-11-11T20:13:47.8628684Z",
+    },
+    "id": "/providers/Microsoft.Authorization/roleDefinitions/acdd72a7-3385-48ef-bd42-f606fba81ae7",
+    "type": "Microsoft.Authorization/roleDefinitions",
+    "name": "acdd72a7-3385-48ef-bd42-f606fba81ae7",
+}
 
 
 def _to_model(d: dict | None) -> RoleDefinition | None:
-    """Convert dict to RoleDefinition model."""
-    if d is None:
-        return None
-    return RoleDefinition.model_validate(d)
+    return RoleDefinition.model_validate(d) if d else None
 
 
 def test_no_change_returns_changed_false():
-    role_dict = _reader_role_dict()
+    role_dict = copy.deepcopy(READER_ROLE_DICT)
     d = diff_roles(_to_model(role_dict), _to_model(copy.deepcopy(role_dict)))
     assert d["changed"] is False
     assert d["changes"] == []
@@ -55,7 +49,7 @@ def test_no_change_returns_changed_false():
 )
 def test_created_or_deleted_role_has_root_diff(old_role: str | None, new_role: str | None):
     """Created or deleted roles should have a root-level diff."""
-    role_dict = _reader_role_dict()
+    role_dict = copy.deepcopy(READER_ROLE_DICT)
     model = _to_model(role_dict)
     old = model if old_role == "_model" else None
     new = model if new_role == "_model" else None
@@ -66,7 +60,7 @@ def test_created_or_deleted_role_has_root_diff(old_role: str | None, new_role: s
 
 def test_updated_on_change_is_tracked_but_not_considered_update():
     """Metadata fields like updatedOn are tracked but don't trigger changed=True."""
-    old_dict = _reader_role_dict()
+    old_dict = copy.deepcopy(READER_ROLE_DICT)
     new_dict = copy.deepcopy(old_dict)
     new_dict["properties"]["updatedOn"] = "2025-12-14T00:00:00.0000000Z"
 
@@ -80,7 +74,7 @@ def test_updated_on_change_is_tracked_but_not_considered_update():
 
 def test_metadata_only_changes_not_considered_update():
     """All metadata fields together should not trigger changed=True."""
-    old_dict = _reader_role_dict()
+    old_dict = copy.deepcopy(READER_ROLE_DICT)
     new_dict = copy.deepcopy(old_dict)
     new_dict["properties"]["updatedOn"] = "2025-12-14T00:00:00.0000000Z"
     new_dict["properties"]["updatedBy"] = "new-user-id"
@@ -97,7 +91,7 @@ def test_metadata_only_changes_not_considered_update():
 
 def test_real_change_with_metadata_is_detected():
     """A real change alongside metadata changes should trigger changed=True."""
-    old_dict = _reader_role_dict()
+    old_dict = copy.deepcopy(READER_ROLE_DICT)
     new_dict = copy.deepcopy(old_dict)
     new_dict["properties"]["updatedOn"] = "2025-12-14T00:00:00.0000000Z"
     new_dict["properties"]["description"] = "New description"
@@ -116,7 +110,7 @@ def test_real_change_with_metadata_is_detected():
     ],
 )
 def test_assignable_scopes_are_order_insensitive(old_scopes, new_scopes):
-    old_dict = _reader_role_dict()
+    old_dict = copy.deepcopy(READER_ROLE_DICT)
     new_dict = copy.deepcopy(old_dict)
 
     old_dict["properties"]["assignableScopes"] = old_scopes
@@ -133,7 +127,7 @@ def test_assignable_scopes_are_order_insensitive(old_scopes, new_scopes):
     ],
 )
 def test_permissions_actions_order_is_ignored(old_actions, new_actions):
-    old_dict = _reader_role_dict()
+    old_dict = copy.deepcopy(READER_ROLE_DICT)
     new_dict = copy.deepcopy(old_dict)
 
     old_dict["properties"]["permissions"] = [
@@ -158,7 +152,7 @@ def test_permissions_actions_order_is_ignored(old_actions, new_actions):
 
 
 def test_permissions_change_is_detected():
-    old_dict = _reader_role_dict()
+    old_dict = copy.deepcopy(READER_ROLE_DICT)
     new_dict = copy.deepcopy(old_dict)
 
     new_dict["properties"]["permissions"][0]["actions"].append("Microsoft.Authorization/*")
@@ -169,7 +163,7 @@ def test_permissions_change_is_detected():
 
 
 def test_summary_includes_paths_and_limit():
-    old_dict = _reader_role_dict()
+    old_dict = copy.deepcopy(READER_ROLE_DICT)
     new_dict = copy.deepcopy(old_dict)
 
     new_dict["properties"]["description"] = "new desc"
@@ -189,7 +183,7 @@ def test_summary_includes_paths_and_limit():
 )
 def test_condition_change_detected(test_id):
     """Test that Condition add/change/remove is detected."""
-    old_dict = _reader_role_dict()
+    old_dict = copy.deepcopy(READER_ROLE_DICT)
 
     if test_id == "added":
         # Old has no condition, new has condition
@@ -225,7 +219,7 @@ def test_condition_change_detected(test_id):
 
 def test_diff_timestamps_use_z_suffix():
     """Verify that diff output uses 'Z' suffix format for timestamps."""
-    old_dict = _reader_role_dict()
+    old_dict = copy.deepcopy(READER_ROLE_DICT)
     new_dict = copy.deepcopy(old_dict)
     # Change updatedOn to trigger a diff
     new_dict["properties"]["updatedOn"] = "2025-12-17T09:58:12.949Z"

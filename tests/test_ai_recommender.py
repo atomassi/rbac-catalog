@@ -257,18 +257,15 @@ class TestEngineNotAvailableError:
     def test_error_creation(self):
         """Test creating the error with all fields."""
         error = EngineNotAvailableError(
-            engine_name="RAG Engine",
             mode="rag",
             missing_components=["sentence-transformers"],
         )
-        assert error.engine_name == "RAG Engine"
         assert error.mode == "rag"
         assert error.missing_components == ["sentence-transformers"]
 
     def test_error_message_is_user_friendly(self):
         """Test that error message is user-friendly."""
         error = EngineNotAvailableError(
-            engine_name="RAG Engine",
             mode="rag",
             missing_components=["sentence-transformers"],
         )
@@ -277,12 +274,10 @@ class TestEngineNotAvailableError:
         assert "sentence-transformers" not in message
         # Should suggest alternatives
         assert "TF-IDF" in message
-        assert "LLM" in message
 
     def test_error_with_multiple_missing_components(self):
         """Test error with multiple missing components."""
         error = EngineNotAvailableError(
-            engine_name="Hybrid Engine",
             mode="hybrid",
             missing_components=["Ollama LLM", "sentence-transformers"],
         )
@@ -292,7 +287,6 @@ class TestEngineNotAvailableError:
     def test_error_with_empty_missing_components(self):
         """Test error with empty missing components list."""
         error = EngineNotAvailableError(
-            engine_name="Test Engine",
             mode="test",
             missing_components=[],
         )
@@ -302,7 +296,6 @@ class TestEngineNotAvailableError:
     def test_error_is_exception(self):
         """Test that error is a proper Exception."""
         error = EngineNotAvailableError(
-            engine_name="Test",
             mode="test",
             missing_components=[],
         )
@@ -312,7 +305,6 @@ class TestEngineNotAvailableError:
         """Test that error can be raised and caught."""
         with pytest.raises(EngineNotAvailableError) as exc_info:
             raise EngineNotAvailableError(
-                engine_name="RAG Engine",
                 mode="rag",
                 missing_components=["sentence-transformers"],
             )

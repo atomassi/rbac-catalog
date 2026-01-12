@@ -57,6 +57,95 @@ def mock_app_cache():
     return mock_cache
 
 
+@pytest.fixture
+def reset_metrics_sender():
+    """Reset MetricsSender state between tests."""
+    from azurerbac.telemetry.sender import MetricsSender
+
+    original_initialized = MetricsSender._initialized
+    original_meter = MetricsSender._meter
+    original_histograms = MetricsSender._histograms.copy()
+    original_gauges = MetricsSender._gauges.copy()
+    original_counters = MetricsSender._counters.copy()
+
+    yield
+
+    MetricsSender._initialized = original_initialized
+    MetricsSender._meter = original_meter
+    MetricsSender._histograms = original_histograms
+    MetricsSender._gauges = original_gauges
+    MetricsSender._counters = original_counters
+
+
+# =============================================================================
+# MetricsSender Unit Tests
+# =============================================================================
+
+
+class TestMetricsSenderUnit:
+    """Unit tests for MetricsSender class."""
+
+    def test_send_gauge_noop_when_not_initialized(self, local_env, reset_metrics_sender):
+        """send_gauge should be a no-op when not in Azure."""
+        from azurerbac.telemetry.sender import MetricsSender
+
+        MetricsSender._initialized = False
+        MetricsSender._meter = None
+
+        # Should not raise
+        MetricsSender.send_gauge("test_gauge", 42.0, {"key": "value"})
+
+    def test_send_histogram_noop_when_not_initialized(self, local_env, reset_metrics_sender):
+        """send_histogram should be a no-op when not in Azure."""
+        from azurerbac.telemetry.sender import MetricsSender
+
+        MetricsSender._initialized = False
+        MetricsSender._meter = None
+
+        # Should not raise
+        MetricsSender.send_histogram("test_hist", 1.5, {"key": "value"})
+
+    def test_send_count_noop_when_not_initialized(self, local_env, reset_metrics_sender):
+        """send_count should be a no-op when not in Azure."""
+        from azurerbac.telemetry.sender import MetricsSender
+
+        MetricsSender._initialized = False
+        MetricsSender._meter = None
+
+        # Should not raise
+        MetricsSender.send_count("test_count", 5.0)
+
+    def test_flush_returns_false_when_not_initialized(self, local_env, reset_metrics_sender):
+        """flush should return False when not initialized."""
+        from azurerbac.telemetry.sender import MetricsSender
+
+        MetricsSender._initialized = False
+        MetricsSender._meter = None
+
+        result = MetricsSender.flush()
+        assert result is False
+
+    def test_get_histogram_creates_histogram(self, reset_metrics_sender):
+        """_get_histogram should create and cache histograms."""
+        from azurerbac.telemetry.sender import MetricsSender
+
+        mock_histogram = MagicMock()
+        mock_meter = MagicMock()
+        mock_meter.create_histogram.return_value = mock_histogram
+
+        MetricsSender._meter = mock_meter
+        MetricsSender._histograms = {}
+
+        result = MetricsSender._get_histogram("test", "description")
+        assert result is mock_histogram
+        mock_meter.create_histogram.assert_called_once()
+
+        # Second call should reuse cached
+        result2 = MetricsSender._get_histogram("test", "description")
+        assert result2 is mock_histogram
+        assert mock_meter.create_histogram.call_count == 1
+
+
 # =============================================================================
 # Local Mode Tests - Metrics Functions Are No-Op
 # =============================================================================

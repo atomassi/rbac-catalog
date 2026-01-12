@@ -1,26 +1,21 @@
-"""Shared enums used across multiple modules.
-
-Centralizes common enums (like SortOrder) to avoid circular imports
-and provide a single source of truth.
-"""
+"""Shared enums across modules."""
 
 from enum import StrEnum
 
 
 class SortOrder(StrEnum):
-    """Sort order direction - used across all sortable listings."""
+    """Sort direction."""
 
     ASC = "asc"
     DESC = "desc"
 
     @property
     def is_descending(self) -> bool:
-        """Check if this is descending order."""
         return self == SortOrder.DESC
 
 
 class StatusFilter(StrEnum):
-    """Status filter for role listings."""
+    """Role status filter."""
 
     ACTIVE = "active"
     DELETED = "deleted"
@@ -28,7 +23,7 @@ class StatusFilter(StrEnum):
 
 
 class EventTypeFilter(StrEnum):
-    """Event type filter for recent changes."""
+    """Event type filter."""
 
     CREATED = "created"
     UPDATED = "updated"

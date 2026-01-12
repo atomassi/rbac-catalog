@@ -7,8 +7,8 @@ from typing import Final
 class EventType(StrEnum):
     """Role change event types."""
 
-    CREATED = "created"  # Truly new role (azure created_on == updated_on)
-    INITIAL_SCAN = "initial_scan"  # Pre-existing role discovered on first scan
+    CREATED = "created"
+    INITIAL_SCAN = "initial_scan"
     UPDATED = "updated"
     DELETED = "deleted"
 
@@ -20,7 +20,6 @@ class RoleStatus(StrEnum):
     DELETED = "deleted"
 
 
-# High privilege roles that should be flagged with warnings.
 HIGH_PRIVILEGE_ROLES: Final[frozenset[str]] = frozenset(
     {
         "Owner",
@@ -30,12 +29,7 @@ HIGH_PRIVILEGE_ROLES: Final[frozenset[str]] = frozenset(
     }
 )
 
-# Default role type for built-in roles
 DEFAULT_ROLE_TYPE: Final[str] = "BuiltInRole"
-
-# Azure resource type for role definitions
 ROLE_DEFINITION_TYPE: Final[str] = "Microsoft.Authorization/roleDefinitions"
-
-# Default limits for search and matching operations
 DEFAULT_SEARCH_LIMIT: Final[int] = 50
 MAX_UNCOVERED_SAMPLE: Final[int] = 50

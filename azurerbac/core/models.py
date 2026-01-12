@@ -66,18 +66,8 @@ Schema Overview
 │                                                                                 │
 └─────────────────────────────────────────────────────────────────────────────────┘
 
-Relationships
--------------
-- Role 1:N RoleHistory (cascade delete)
-- RoleHistory N:1 RoleScanStatus (which scan detected this change)
-
-Event Types
------------
-- CREATED:      New role just created in Azure (createdOn == updatedOn)
-- INITIAL_SCAN: Pre-existing role discovered (createdOn != updatedOn)
-- UPDATED:      Role definition changed
-- DELETED:      Role removed from Azure
-
+Relationships: Role 1:N RoleHistory (cascade delete), RoleHistory N:1 RoleScanStatus
+Event types: CREATED, INITIAL_SCAN, UPDATED, DELETED
 """
 
 from __future__ import annotations
@@ -99,12 +89,7 @@ class Base(DeclarativeBase):
 
 
 class Role(Base):
-    """Tracks role identity and current state.
-
-    Primary role data lives in RoleHistory.role_json.
-    role_name is denormalized for efficient DB queries (ORDER BY, WHERE).
-    Access latest version via history[0] (ordered by version_number DESC).
-    """
+    """Tracks role identity and current state. Access latest version via history[0]."""
 
     __tablename__ = "roles"
 
@@ -138,11 +123,7 @@ class Role(Base):
 
     @property
     def last_known_version(self) -> RoleHistory | None:
-        """Get the most recent version that has role_json (not NULL).
-
-        For deleted roles, this returns the version before deletion.
-        For active roles, this is the same as current_version.
-        """
+        """Most recent version with role_json (not NULL). Works for deleted roles."""
         for h in self.history:
             if h.role_json is not None:
                 return h
@@ -150,11 +131,7 @@ class Role(Base):
 
     @property
     def last_known_json(self) -> dict:
-        """Get the most recent role JSON, even for deleted roles.
-
-        For deleted roles, returns the JSON from before deletion.
-        For active roles, returns the current JSON.
-        """
+        """Most recent role JSON. Works for deleted roles."""
         lkv = self.last_known_version
         return lkv.role_json if lkv and lkv.role_json else {}
 

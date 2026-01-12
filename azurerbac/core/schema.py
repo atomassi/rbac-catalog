@@ -9,24 +9,14 @@ from .models import Base
 
 
 async def ensure_db(engine: AsyncEngine, *, sentinel_table: str = "role_snapshots") -> None:
-    """Ensure database tables exist.
-
-    Uses a single sentinel table check because `metadata.create_all()` creates all
-    tables together.
-
-    This is safe to call concurrently across multiple processes; expected races
-    are handled by catching common DDL errors.
-    """
+    """Ensure database tables exist (safe for concurrent calls)."""
     try:
         async with engine.begin() as conn:
 
             def _table_exists(sync_conn: Connection) -> bool:
-                inspector = inspect(sync_conn)
-                return sentinel_table in inspector.get_table_names()
+                return sentinel_table in inspect(sync_conn).get_table_names()
 
-            table_exists = await conn.run_sync(_table_exists)
-            if not table_exists:
+            if not await conn.run_sync(_table_exists):
                 await conn.run_sync(Base.metadata.create_all)
     except (IntegrityError, ProgrammingError):
-        # Race condition: another process already created the tables.
-        return
+        pass  # Race condition: another process created tables

@@ -1,31 +1,4 @@
-"""Application Insights custom metrics using OpenTelemetry.
-
-This module provides helpers to send custom metrics to Azure Application Insights.
-Metrics are only sent in production (when WEBSITE_SITE_NAME is set).
-
-Metrics appear in the `customMetrics` table in Application Insights.
-Query example: customMetrics | where name == "startup_duration_seconds"
-
-Usage:
-    from azurerbac.telemetry import track_metric, track_cache_stats
-    from azurerbac.telemetry.timers import TimedDbQuery, TimedOperation
-
-    # Track a single metric
-    track_metric("cache_hit_rate", 0.95, {"cache_type": "roles"})
-
-    # Track cache statistics
-    track_cache_stats(app_cache)
-
-    # Time a database query
-    async with TimedDbQuery("fetch_roles") as timer:
-        result = await session.execute(select(Role))
-        timer.rows = len(result.scalars().all())
-
-OpenTelemetry provides:
-- Histograms with percentiles (p50, p95, p99) for durations
-- Gauges for current values
-- Counters for event counts
-"""
+"""Application Insights custom metrics using OpenTelemetry."""
 
 from __future__ import annotations
 
@@ -87,21 +60,7 @@ def track_metric(
     value: float,
     properties: dict[str, Any] | None = None,
 ) -> None:
-    """Track a custom metric to Application Insights.
-
-    Metrics are sent to the `customMetrics` table.
-    Query in Log Analytics: customMetrics | where name == "metric_name"
-
-    Also logs the metric locally for debugging.
-
-    Args:
-        name: Metric name (e.g., "cache_hit_rate", "roles_count")
-        value: Numeric value
-        properties: Optional dimension properties (e.g., {"cache_type": "roles"})
-
-    Note: No-op when running locally or without App Insights configured.
-          Use track_gauge, track_duration, or track_event for specific metric types.
-    """
+    """Track a custom metric to Application Insights."""
     # Always log locally (even when local, for debugging)
     props_str = f" {properties}" if properties else ""
     logger.debug("Metric: %s=%s%s", name, value, props_str)

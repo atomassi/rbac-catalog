@@ -1,4 +1,4 @@
-"""Core business logic: models, database, diffing, configuration, constants, patterns."""
+"""Core: models, database, diffing, constants, patterns."""
 
 from .constants import (
     DEFAULT_ROLE_TYPE,
@@ -8,25 +8,9 @@ from .constants import (
     RoleStatus,
 )
 from .db import DBEngine, EngineFactory, create_sessionmaker
-from .enums import (
-    EventTypeFilter,
-    SortOrder,
-    StatusFilter,
-)
-from .models import (
-    Base,
-    Operation,
-    OperationScanStatus,
-    Role,
-    RoleHistory,
-    RoleScanStatus,
-)
-from .patterns import (
-    is_wildcard_pattern,
-    matches_pattern,
-    pattern_to_regex,
-    wildcard_to_sql_like,
-)
+from .enums import EventTypeFilter, SortOrder, StatusFilter
+from .models import Base, Operation, OperationScanStatus, Role, RoleHistory, RoleScanStatus
+from .patterns import is_wildcard_pattern, matches_pattern, pattern_to_regex, wildcard_to_sql_like
 from .schema import ensure_db
 from .singleton import ThreadSafeSingleton
 from .types import JsonDict

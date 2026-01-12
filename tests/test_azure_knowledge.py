@@ -165,3 +165,41 @@ class TestGetNegativePatterns:
         """Test that negative patterns returns a sequence (tuple for caching)."""
         patterns = get_negative_patterns(query)
         assert isinstance(patterns, (list, tuple))
+
+
+# =============================================================================
+# Knowledge Base Function Tests
+# =============================================================================
+
+
+class TestExtractOperationKeywords:
+    """Tests for extracting keywords from Azure operation names."""
+
+    def test_extracts_keywords_from_operation(self):
+        """Test basic keyword extraction from Azure operation name."""
+        from azurerbac.airecommender.knowledge.knowledge_base import extract_operation_keywords
+
+        ops = ["Microsoft.Storage/storageAccounts/read"]
+        keywords = extract_operation_keywords(ops)
+        assert "storage" in keywords
+        assert "storageaccounts" in keywords  # camelCase preserved as lowercase word
+        assert "read" in keywords
+        assert "microsoft" not in keywords  # Should be filtered
+
+    def test_handles_empty_list(self):
+        """Test with empty operation list."""
+        from azurerbac.airecommender.knowledge.knowledge_base import extract_operation_keywords
+
+        keywords = extract_operation_keywords([])
+        assert keywords == []
+
+    def test_handles_set_input(self):
+        """Test that function accepts both list and set."""
+        from azurerbac.airecommender.knowledge.knowledge_base import extract_operation_keywords
+
+        ops = {"Microsoft.Compute/virtualMachines/start/action"}
+        keywords = extract_operation_keywords(ops)
+        assert "compute" in keywords
+        assert "virtualmachines" in keywords  # camelCase preserved as lowercase word
+        assert "start" in keywords
+        assert "action" in keywords

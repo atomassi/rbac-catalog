@@ -20,13 +20,8 @@ logger = logging.getLogger(__name__)
 
 _MODELS_DIR: Final[Path] = Path(__file__).parent.parent / "models"
 _KB_PATH: Final[Path] = _MODELS_DIR / "knowledge_base.json"
-_MIN_ROLE_NAME_LEN: Final[int] = 3
 _FUZZY_THRESHOLD: Final[float] = 0.7
 _MAX_DOC_KEYWORDS: Final[int] = 15
-
-_INVALID_NAME_PATTERNS: Final[frozenset[str]] = frozenset(
-    {"day time", "what is", "how to", "when", "where", "why"}
-)
 
 
 class RoleKnowledgeBase:
@@ -107,9 +102,9 @@ class RoleKnowledgeBase:
                 effective_data = _filter_wildcards(raw_data_actions)
 
             curated_patterns = role_to_patterns.get(role_name, [])
-            all_actions = raw_actions + raw_data_actions
-            limited_actions = [a for a in all_actions if "*" not in a]
-            action_keywords = extract_operation_keywords(limited_actions)
+            # Use expanded operations (wildcards resolved) for keyword extraction
+            all_effective = effective_control | effective_data
+            action_keywords = extract_operation_keywords(all_effective)
 
             doc_text = _build_document_text(
                 curated_patterns, role_name, description, action_keywords
@@ -135,12 +130,6 @@ class RoleKnowledgeBase:
     def find_role_id_by_name(self, role_name: str) -> str | None:
         """Find role_id by matching role name with fuzzy fallback."""
         name_lower = role_name.lower().strip()
-
-        if len(name_lower) < _MIN_ROLE_NAME_LEN:
-            return None
-
-        if any(p in name_lower for p in _INVALID_NAME_PATTERNS):
-            return None
 
         if name_lower in self._name_to_role_id:
             return self._name_to_role_id[name_lower]
@@ -216,7 +205,7 @@ _CAMEL_CASE_PATTERN: Final[re.Pattern[str]] = re.compile(r"[a-z]+")
 _SKIP_TOKENS: Final[frozenset[str]] = frozenset({"microsoft", "*", ""})
 
 
-def extract_operation_keywords(operations: list[str]) -> list[str]:
+def extract_operation_keywords(operations: Iterable[str]) -> list[str]:
     """Extract meaningful keywords from operation names.
 
     Example: 'Microsoft.Storage/storageAccounts/read' -> ['storage', 'accounts', 'read']

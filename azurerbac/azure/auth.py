@@ -11,7 +11,7 @@ AZURE_MGMT_SCOPE: Final = "https://management.azure.com/.default"
 
 @asynccontextmanager
 async def default_azure_credential() -> AsyncIterator[DefaultAzureCredential]:
-    """Context manager for Azure DefaultAzureCredential with proper cleanup."""
+    """Async context manager for DefaultAzureCredential."""
     credential = DefaultAzureCredential()
     try:
         yield credential
@@ -20,6 +20,5 @@ async def default_azure_credential() -> AsyncIterator[DefaultAzureCredential]:
 
 
 async def get_management_token(credential: DefaultAzureCredential) -> str:
-    """Get an access token for Azure Management API."""
-    token = await credential.get_token(AZURE_MGMT_SCOPE)
-    return token.token
+    """Get access token for Azure Management API."""
+    return (await credential.get_token(AZURE_MGMT_SCOPE)).token

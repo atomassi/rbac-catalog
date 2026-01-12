@@ -54,9 +54,6 @@ def _create_job_specs(settings: Settings) -> list[JobSpec]:
     """Create job specifications based on settings."""
     from azurerbac.telemetry import track_operations_scan, track_role_scan
 
-    async def _fetch_roles() -> list[dict]:
-        return await fetch_builtin_roles()
-
     def _on_roles_success(elapsed: float, roles: list[Any], stats: ScanResult) -> None:
         # stats is always RoleScanResult here
         assert isinstance(stats, RoleScanResult)
@@ -68,7 +65,9 @@ def _create_job_specs(settings: Settings) -> list[JobSpec]:
             roles_deleted=stats.deleted,
         )
 
-    def _on_operations_success(elapsed: float, operations: list[Any], stats: ScanResult) -> None:
+    def _on_operations_success(
+        elapsed: float, operations: list[Any], stats: ScanResult
+    ) -> None:  # pylint: disable=unused-argument
         track_operations_scan(elapsed, len(operations))
 
     return [
@@ -76,7 +75,7 @@ def _create_job_specs(settings: Settings) -> list[JobSpec]:
             name="role-scan",
             enabled=settings.role_scan_enabled,
             fetch_label="Fetching built-in role definitions...",
-            fetch=_fetch_roles,
+            fetch=fetch_builtin_roles,
             apply=apply_role_scan,
             on_success=_on_roles_success,
             interval_seconds=settings.roles_poll_interval_seconds,
@@ -196,7 +195,7 @@ class JobRunner:
 
             # Azure should always return built-in roles and operations.
             # Zero results indicates an API issue, auth problem, or misconfiguration.
-            if len(items) == 0:
+            if not items:
                 logger.error(
                     "Fetch returned 0 items for %s - possible API/auth issue",
                     spec.name,

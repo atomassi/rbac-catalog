@@ -1,4 +1,4 @@
-"""Background jobs module: workers and scan logic."""
+"""Background jobs: workers and scan logic."""
 
 from .exceptions import EmptyFetchResultError
 from .models import OperationsScanResult, RoleScanResult, ScanResult

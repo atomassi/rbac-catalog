@@ -127,24 +127,24 @@ class TestCacheConsistency:
         for r_no, r_with in zip(result_no_cache, result_with_cache, strict=True):
             assert r_no.role_id == r_with.role_id, "Role ID mismatch"
             assert r_no.role_name == r_with.role_name, "Role name mismatch"
-            assert (
-                r_no.matched_operations == r_with.matched_operations
-            ), f"Matched ops mismatch for {r_no.role_name}"
-            assert (
-                r_no.missing_operations == r_with.missing_operations
-            ), f"Missing ops mismatch for {r_no.role_name}"
-            assert (
-                r_no.matched_operations_count == r_with.matched_operations_count
-            ), f"Matched count mismatch for {r_no.role_name}"
-            assert (
-                r_no.missing_operations_count == r_with.missing_operations_count
-            ), f"Missing count mismatch for {r_no.role_name}"
-            assert (
-                abs(r_no.match_percentage - r_with.match_percentage) < 0.001
-            ), f"Match % mismatch for {r_no.role_name}"
-            assert (
-                r_no.is_full_match == r_with.is_full_match
-            ), f"Full match mismatch for {r_no.role_name}"
+            assert r_no.matched_operations == r_with.matched_operations, (
+                f"Matched ops mismatch for {r_no.role_name}"
+            )
+            assert r_no.missing_operations == r_with.missing_operations, (
+                f"Missing ops mismatch for {r_no.role_name}"
+            )
+            assert r_no.matched_operations_count == r_with.matched_operations_count, (
+                f"Matched count mismatch for {r_no.role_name}"
+            )
+            assert r_no.missing_operations_count == r_with.missing_operations_count, (
+                f"Missing count mismatch for {r_no.role_name}"
+            )
+            assert abs(r_no.match_percentage - r_with.match_percentage) < 0.001, (
+                f"Match % mismatch for {r_no.role_name}"
+            )
+            assert r_no.is_full_match == r_with.is_full_match, (
+                f"Full match mismatch for {r_no.role_name}"
+            )
 
     def test_data_plane_wildcard_consistency(self, large_operations, sample_roles):
         """Test data plane wildcards produce same results with and without cache."""
@@ -280,9 +280,9 @@ class TestMissingOperationsExpanded:
         # Reader should have missing data plane operations
         # missing_operations_expanded should contain actual operation names
         if reader.missing_operations_count > 0:
-            assert (
-                len(reader.missing_operations_expanded) > 0
-            ), "missing_operations_expanded should have samples when missing_operations_count > 0"
+            assert len(reader.missing_operations_expanded) > 0, (
+                "missing_operations_expanded should have samples when missing_operations_count > 0"
+            )
             # Check that expanded ops are real operation names, not wildcards
             for op in reader.missing_operations_expanded:
                 assert "*" not in op, f"Expanded op should not be a wildcard: {op}"
@@ -380,12 +380,12 @@ class TestPartialWildcardCoverage:
         r_no = result_no_cache[0]
         r_with = result_with_cache[0]
 
-        assert (
-            r_no.matched_operations_count == r_with.matched_operations_count
-        ), f"Matched count: {r_no.matched_operations_count} vs {r_with.matched_operations_count}"
-        assert (
-            r_no.missing_operations_count == r_with.missing_operations_count
-        ), f"Missing count: {r_no.missing_operations_count} vs {r_with.missing_operations_count}"
+        assert r_no.matched_operations_count == r_with.matched_operations_count, (
+            f"Matched count: {r_no.matched_operations_count} vs {r_with.matched_operations_count}"
+        )
+        assert r_no.missing_operations_count == r_with.missing_operations_count, (
+            f"Missing count: {r_no.missing_operations_count} vs {r_with.missing_operations_count}"
+        )
         assert r_no.has_partial_wildcard_match == r_with.has_partial_wildcard_match
 
 
@@ -836,9 +836,9 @@ class TestReaderRoleSpecificCases:
                 requested_ops_data_flags=flags,
             )
 
-            assert len(result_no_cache) == len(
-                result_with_cache
-            ), f"Length mismatch for {flags_desc}"
+            assert len(result_no_cache) == len(result_with_cache), (
+                f"Length mismatch for {flags_desc}"
+            )
 
             if result_no_cache:
                 assert (
@@ -876,9 +876,9 @@ class TestSortingConsistency:
         no_cache_order = [r.role_id for r in result_no_cache]
         with_cache_order = [r.role_id for r in result_with_cache]
 
-        assert (
-            no_cache_order == with_cache_order
-        ), f"Sort order mismatch:\n  No cache: {no_cache_order}\n  With cache: {with_cache_order}"
+        assert no_cache_order == with_cache_order, (
+            f"Sort order mismatch:\n  No cache: {no_cache_order}\n  With cache: {with_cache_order}"
+        )
 
     def test_high_privilege_roles_sorted_last(self, large_operations, sample_roles):
         """High privilege roles should be sorted to end consistently."""
@@ -908,9 +908,9 @@ class TestSortingConsistency:
             ]
 
             if high_priv_indices and non_high_priv_indices:
-                assert max(non_high_priv_indices) < min(
-                    high_priv_indices
-                ), f"{desc}: High privilege roles should be after non-high privilege"
+                assert max(non_high_priv_indices) < min(high_priv_indices), (
+                    f"{desc}: High privilege roles should be after non-high privilege"
+                )
 
         check_high_privilege_last(result_no_cache, "No cache")
         check_high_privilege_last(result_with_cache, "With cache")
@@ -1045,17 +1045,17 @@ class TestCacheStalenessDetection:
 
         # Verify the counts are correct
         # Reader should match ALL 107 read operations (100 initial + 7 new)
-        assert (
-            reader.matched_operations_count == 107
-        ), f"Reader should match all 107 read operations, got {reader.matched_operations_count}"
-        assert (
-            reader.missing_operations_count == 0
-        ), f"Reader should have 0 missing operations, got {reader.missing_operations_count}"
+        assert reader.matched_operations_count == 107, (
+            f"Reader should match all 107 read operations, got {reader.matched_operations_count}"
+        )
+        assert reader.missing_operations_count == 0, (
+            f"Reader should have 0 missing operations, got {reader.missing_operations_count}"
+        )
 
         # Verify no partial wildcard match flag
-        assert (
-            not reader.has_partial_wildcard_match
-        ), "Reader should not have partial wildcard match for */read"
+        assert not reader.has_partial_wildcard_match, (
+            "Reader should not have partial wildcard match for */read"
+        )
 
     def test_cache_rebuilt_correctly_after_invalidation(self, sample_roles):
         """

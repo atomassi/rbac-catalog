@@ -65,9 +65,7 @@ def _create_job_specs(settings: Settings) -> list[JobSpec]:
             roles_deleted=stats.deleted,
         )
 
-    def _on_operations_success(
-        elapsed: float, operations: list[Any], stats: ScanResult
-    ) -> None:  # pylint: disable=unused-argument
+    def _on_operations_success(elapsed: float, operations: list[Any], stats: ScanResult) -> None:  # pylint: disable=unused-argument
         track_operations_scan(elapsed, len(operations))
 
     return [

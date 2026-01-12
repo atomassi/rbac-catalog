@@ -710,9 +710,9 @@ class TestDataConsistency:
         # Verify role_json is preserved
         for i, event in enumerate(loaded.all_change_events):
             original = sample_change_events[i]
-            assert (
-                event.role_json is not None or original.role_json is None
-            ), f"Event {i} missing role_json"
+            assert event.role_json is not None or original.role_json is None, (
+                f"Event {i} missing role_json"
+            )
             if original.role_json:
                 assert event.role_json == original.role_json
                 assert event.role_json["properties"]["roleName"]

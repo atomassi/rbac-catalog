@@ -9,6 +9,7 @@ from azurerbac.azure.models import OperationData, Permission, RoleDefinition
 from azurerbac.core.constants import DEFAULT_SEARCH_LIMIT
 from azurerbac.core.patterns import is_wildcard_pattern
 from azurerbac.matching.models import (
+    CacheStats,
     ClassifiedOperations,
     ExpandedMissing,
     OperationSets,
@@ -68,7 +69,6 @@ class PlaneContextFactory:
         control = PlaneContext(
             plane=Plane.CONTROL,
             all_ops=self.op_sets.all_control,
-            cache_key=self.op_sets.control_cache_key,
             wildcards=classified.control_wildcards,
             wildcard_ops_map=self.control_wildcard_ops,
             cached_ops=cached_coverage.control if cached_coverage else None,
@@ -76,7 +76,6 @@ class PlaneContextFactory:
         data = PlaneContext(
             plane=Plane.DATA,
             all_ops=self.op_sets.all_data,
-            cache_key=self.op_sets.data_cache_key,
             wildcards=classified.data_wildcards,
             wildcard_ops_map=self.data_wildcard_ops,
             cached_ops=cached_coverage.data if cached_coverage else None,
@@ -154,6 +153,20 @@ class RoleRecommendationService:
             return self._cache
         return _get_default_cache()
 
+    def get_cache_stats(self) -> CacheStats:
+        """Get current cache entry counts for logging.
+
+        Returns:
+            CacheStats with current entry counts.
+        """
+        caches = self._caches
+        return CacheStats(
+            pattern_match=len(caches.pattern_match),
+            partial_coverage=len(caches.partial_coverage),
+            role_coverage=len(caches.role_coverage),
+            wildcard_count=len(caches.wildcard_count),
+        )
+
     def _get_plane_contexts(
         self,
         classified: ClassifiedOperations,
@@ -229,12 +242,8 @@ class RoleRecommendationService:
         data_wildcards: set[str],
     ) -> None:
         """Classify a wildcard to control/data planes based on matching operations."""
-        matches_control = bool(
-            get_matching_operations(op, self.op_sets.all_control, self.op_sets.control_cache_key)
-        )
-        matches_data = bool(
-            get_matching_operations(op, self.op_sets.all_data, self.op_sets.data_cache_key)
-        )
+        matches_control = bool(get_matching_operations(op, self.op_sets.all_control, Plane.CONTROL))
+        matches_data = bool(get_matching_operations(op, self.op_sets.all_data, Plane.DATA))
 
         if matches_control:
             control_wildcards.add(op)
@@ -262,7 +271,7 @@ class RoleRecommendationService:
         total_count += self._compute_plane_wildcard_matches(
             classified.control_wildcards,
             self.op_sets.all_control,
-            self.op_sets.control_cache_key,
+            Plane.CONTROL,
             self.control_wildcard_ops,
         )
 
@@ -270,7 +279,7 @@ class RoleRecommendationService:
         total_count += self._compute_plane_wildcard_matches(
             classified.data_wildcards,
             self.op_sets.all_data,
-            self.op_sets.data_cache_key,
+            Plane.DATA,
             self.data_wildcard_ops,
         )
 
@@ -280,13 +289,13 @@ class RoleRecommendationService:
         self,
         wildcards: frozenset[str],
         all_ops: frozenset[str],
-        cache_key: int,
+        plane: Plane,
         wildcard_ops_map: dict[str, set[str]],
     ) -> int:
         """Compute wildcard matches for a single plane (DRY extraction)."""
         count = 0
         for pattern in wildcards:
-            ops = get_matching_operations(pattern, all_ops, cache_key)
+            ops = get_matching_operations(pattern, all_ops, plane)
             wildcard_ops_map[pattern] = ops
             count += len(ops)
         return count
@@ -476,9 +485,7 @@ class RoleRecommendationService:
             pattern_ops = plane.wildcard_ops_map.get(pattern, set())
             return bool(plane.cached_ops & pattern_ops)
 
-        return has_any_wildcard_coverage(
-            pattern, actions, not_actions, plane.all_ops, plane.cache_key
-        )
+        return has_any_wildcard_coverage(pattern, actions, not_actions, plane.all_ops, plane.plane)
 
     def calculate_missing_ops(
         self,
@@ -552,7 +559,6 @@ class RoleRecommendationService:
             op=op,
             plane=Plane.CONTROL,
             all_ops=self.op_sets.all_control,
-            cache_key=self.op_sets.control_cache_key,
             actions=actions,
             not_actions=not_actions,
             cached_ops=cached_coverage.control if cached_coverage else None,
@@ -565,7 +571,6 @@ class RoleRecommendationService:
             op=op,
             plane=Plane.DATA,
             all_ops=self.op_sets.all_data,
-            cache_key=self.op_sets.data_cache_key,
             actions=data_actions,
             not_actions=not_data_actions,
             cached_ops=cached_coverage.data if cached_coverage else None,
@@ -579,7 +584,6 @@ class RoleRecommendationService:
         op: str,
         plane: Plane,
         all_ops: frozenset[str],
-        cache_key: int,
         actions: list[str],
         not_actions: list[str],
         cached_ops: set[str] | None,
@@ -592,15 +596,15 @@ class RoleRecommendationService:
 
         if key in ctx.wildcard_partial_coverage:
             if cached_ops is not None:
-                pattern_ops = get_matching_operations(op, all_ops, cache_key, caches=self._caches)
+                pattern_ops = get_matching_operations(op, all_ops, plane, caches=self._caches)
                 return len(cached_ops & pattern_ops)
             result = count_wildcard_partial_coverage(
-                op, actions, not_actions, all_ops, cache_key, caches=self._caches
+                op, actions, not_actions, all_ops, plane, caches=self._caches
             )
             return result.covered
 
         if key in ctx.fully_covered_wildcards:
-            return count_operations_matching_pattern(op, all_ops, cache_key)
+            return count_operations_matching_pattern(op, all_ops, plane)
 
         return 0
 
@@ -621,14 +625,14 @@ class RoleRecommendationService:
                 perm.actions,
                 perm.not_actions,
                 self.op_sets.all_control,
-                self.op_sets.control_cache_key,
+                Plane.CONTROL,
                 caches=self._caches,
             )
             data_count += count_net_permissions(
                 perm.data_actions,
                 perm.not_data_actions,
                 self.op_sets.all_data,
-                self.op_sets.data_cache_key,
+                Plane.DATA,
                 caches=self._caches,
             )
 
@@ -644,9 +648,14 @@ class RoleRecommendationService:
         current_control_count = len(self.op_sets.all_control)
         current_data_count = len(self.op_sets.all_data)
 
-        cache_is_stale = cached_control_count > 0 and (
+        # Cache is stale if either plane count differs
+        # The (cached_control_count > 0 or cached_data_count > 0) check ensures
+        # we only invalidate when there's actually cached data to invalidate
+        has_cached_data = cached_control_count > 0 or cached_data_count > 0
+        counts_differ = (
             current_control_count != cached_control_count or current_data_count != cached_data_count
         )
+        cache_is_stale = has_cached_data and counts_differ
 
         if cache_is_stale:
             logger.warning(
@@ -659,8 +668,18 @@ class RoleRecommendationService:
             )
             self._caches.role_coverage.clear()
             self._caches.role_net_permissions.clear()
+            self._caches.pattern_match.clear()
+            self._caches.wildcard_count.clear()
+            self._caches.partial_coverage.clear()
             return True
 
+        logger.debug(
+            "Cache valid: control=%d, data=%d, role_coverage=%d entries, pattern_match=%d entries",
+            current_control_count,
+            current_data_count,
+            len(self._caches.role_coverage),
+            len(self._caches.pattern_match),
+        )
         return False
 
     def has_full_cache(self) -> bool:
@@ -721,7 +740,6 @@ class RoleRecommendationService:
                 plane=Plane.CONTROL,
                 in_plane=True,
                 all_ops=self.op_sets.all_control,
-                cache_key=self.op_sets.control_cache_key,
                 actions=plane_actions.actions,
                 not_actions=plane_actions.not_actions,
             )
@@ -737,7 +755,6 @@ class RoleRecommendationService:
                 plane=Plane.DATA,
                 in_plane=True,
                 all_ops=self.op_sets.all_data,
-                cache_key=self.op_sets.data_cache_key,
                 actions=plane_actions.actions,
                 not_actions=plane_actions.not_actions,
             )
@@ -753,7 +770,6 @@ class RoleRecommendationService:
         plane: Plane,
         in_plane: bool,
         all_ops: frozenset[str],
-        cache_key: int,
         actions: list[str],
         not_actions: list[str],
     ) -> ExpandedMissing:
@@ -762,12 +778,12 @@ class RoleRecommendationService:
 
         if key in ctx.wildcard_partial_coverage:
             result = count_wildcard_partial_coverage(
-                op, actions, not_actions, all_ops, cache_key, caches=self._caches
+                op, actions, not_actions, all_ops, plane, caches=self._caches
             )
             return ExpandedMissing(list(result.uncovered_samples), result.uncovered)
 
         if in_plane and key not in ctx.fully_covered_wildcards:
-            matching = get_matching_operations(op, all_ops, cache_key, caches=self._caches)
+            matching = get_matching_operations(op, all_ops, plane, caches=self._caches)
             return ExpandedMissing(sorted(matching), len(matching))
 
         return ExpandedMissing([], 0)

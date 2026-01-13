@@ -17,6 +17,7 @@ import pytest
 from azurerbac.azure.models import OperationData
 from azurerbac.cache import get_cache_service, precompute_all
 from azurerbac.matching import recommend_roles
+from azurerbac.matching.models import CacheOpsCount
 from tests.helpers import clear_computed_caches, make_role_definition
 
 # =============================================================================
@@ -937,7 +938,7 @@ class TestCacheStalenessDetection:
 
         # Store initial cache counts
         initial_counts = get_cache_service().container.cache.cache_ops_count
-        assert initial_counts[0] > 0, f"Expected control ops > 0, got {initial_counts}"
+        assert initial_counts.control > 0, f"Expected control ops > 0, got {initial_counts}"
 
         # Add new operations
         extended_operations = [
@@ -1011,7 +1012,7 @@ class TestCacheStalenessDetection:
 
         # Verify cache was built correctly
         assert len(get_cache_service().container.cache.role_coverage) > 0
-        initial_cache_count = get_cache_service().container.cache.cache_ops_count[0]
+        initial_cache_count = get_cache_service().container.cache.cache_ops_count.control
         assert initial_cache_count == 100
 
         # Step 3: Simulate new operations being added (DB updated)
@@ -1103,10 +1104,10 @@ class TestCacheStalenessDetection:
 
         # Now rebuild cache with v2 and verify it's correct
         get_cache_service().swap_in_memory(precompute_all(sample_roles, ops_v2))
-        assert get_cache_service().container.cache.cache_ops_count == [
+        assert get_cache_service().container.cache.cache_ops_count == CacheOpsCount(
             5,
             0,
-        ]  # 5 control ops total, 0 data ops
+        )  # 5 control ops total, 0 data ops
 
         # Query again - should use fresh cache
         result_v2_cached = recommend_roles(
@@ -1125,7 +1126,7 @@ class TestCacheStalenessDetection:
 
         clear_computed_caches()
         get_cache_service().swap_in_memory(precompute_all(sample_roles, ops_v1))
-        assert get_cache_service().container.cache.cache_ops_count == [1, 0]
+        assert get_cache_service().container.cache.cache_ops_count == CacheOpsCount(1, 0)
 
         # Add data plane operations
         ops_v2 = [
@@ -1150,7 +1151,8 @@ class TestCacheStalenessDetection:
 
         # Verify cache was rebuilt correctly
         get_cache_service().swap_in_memory(precompute_all(sample_roles, ops_v2))
-        assert get_cache_service().container.cache.cache_ops_count == [1, 1]  # 1 control, 1 data
+        cache_counts = get_cache_service().container.cache.cache_ops_count
+        assert cache_counts == CacheOpsCount(1, 1)  # 1 control, 1 data
 
 
 class TestAtomicSwap:
@@ -1241,3 +1243,514 @@ class TestAtomicSwap:
         assert len(new_instance.role_coverage) == 0
         # Old instance still has the data (no in-place mutation for thread safety)
         assert len(initial_instance.role_coverage) == 1
+
+
+class TestCacheInvalidationScenarios:
+    """Comprehensive tests for cache invalidation with Plane enum keys.
+
+    These tests validate that all operation-dependent caches are properly
+    invalidated when operations change, since Plane enum keys are static
+    (unlike the old integer keys that embedded operation counts).
+
+    The caches that depend on operations are:
+    - pattern_match: PatternCacheKey(pattern, Plane) -> set[str]
+    - wildcard_count: PatternCacheKey(pattern, Plane) -> int
+    - partial_coverage: PartialCoverageCacheKey -> WildcardCoverageResult
+    - role_coverage: role_id -> RoleCoverage
+    - role_net_permissions: role_id -> RoleNetPermissions
+    """
+
+    @pytest.fixture
+    def reader_role(self):
+        """Reader role with */read permission."""
+        return make_role_definition(
+            role_name="Reader",
+            role_id="reader-role",
+            actions=["*/read"],
+        )
+
+    @pytest.fixture
+    def contributor_role(self):
+        """Contributor role with * permission."""
+        return make_role_definition(
+            role_name="Contributor",
+            role_id="contributor-role",
+            actions=["*"],
+        )
+
+    @pytest.fixture
+    def storage_data_reader(self):
+        """Storage Data Reader with data plane permission."""
+        return make_role_definition(
+            role_name="Storage Data Reader",
+            role_id="storage-data-reader",
+            data_actions=["Microsoft.Storage/storageAccounts/blobServices/*/read"],
+        )
+
+    @pytest.mark.parametrize(
+        ("initial_control_count", "added_control_count", "expected_final_count"),
+        [
+            pytest.param(10, 5, 15, id="add_5_to_10"),
+            pytest.param(100, 7, 107, id="add_7_to_100_original_bug"),
+            pytest.param(50, 0, 50, id="no_change"),
+            pytest.param(1, 9, 10, id="grow_1_to_10"),
+            pytest.param(1, 99, 100, id="grow_1_to_100"),
+        ],
+    )
+    def test_control_plane_ops_change_invalidates_pattern_cache(
+        self,
+        reader_role,
+        initial_control_count: int,
+        added_control_count: int,
+        expected_final_count: int,
+    ):
+        """Test pattern_match cache is invalidated when control ops change."""
+        # Build initial operations
+        initial_ops = [
+            OperationData(
+                name=f"Microsoft.Provider{i}/resource/read",
+                is_data_action=False,
+            )
+            for i in range(initial_control_count)
+        ]
+
+        clear_computed_caches()
+        get_cache_service().swap_in_memory(precompute_all([reader_role], initial_ops))
+
+        # Verify initial cache state
+        cache = get_cache_service().container.cache
+        assert cache.cache_ops_count.control == initial_control_count
+
+        # Add new operations
+        extended_ops = initial_ops + [
+            OperationData(
+                name=f"Microsoft.NewProvider{i}/newResource/read",
+                is_data_action=False,
+            )
+            for i in range(added_control_count)
+        ]
+
+        # Query with extended operations - should trigger invalidation if changed
+        result = recommend_roles(
+            ["*/read"],
+            [reader_role],
+            extended_ops,
+            requested_ops_data_flags={"*/read": False},
+        )
+
+        # Reader should match ALL read operations
+        reader = next(r for r in result if r.role_name == "Reader")
+        assert reader.matched_operations_count == expected_final_count, (
+            f"Expected {expected_final_count} matched ops, got {reader.matched_operations_count}"
+        )
+        assert reader.match_percentage == 100.0
+
+    @pytest.mark.parametrize(
+        ("initial_data_count", "added_data_count", "expected_final_count"),
+        [
+            pytest.param(10, 5, 15, id="add_5_to_10"),
+            pytest.param(50, 10, 60, id="add_10_to_50"),
+            pytest.param(1, 19, 20, id="grow_1_to_20"),
+        ],
+    )
+    def test_data_plane_ops_change_invalidates_pattern_cache(
+        self,
+        storage_data_reader,
+        initial_data_count: int,
+        added_data_count: int,
+        expected_final_count: int,
+    ):
+        """Test pattern_match cache is invalidated when data ops change."""
+        # Build initial data operations
+        initial_ops = [
+            OperationData(
+                name=f"Microsoft.Storage/storageAccounts/blobServices/container{i}/read",
+                is_data_action=True,
+            )
+            for i in range(initial_data_count)
+        ]
+
+        clear_computed_caches()
+        get_cache_service().swap_in_memory(precompute_all([storage_data_reader], initial_ops))
+
+        # Verify initial cache state
+        cache = get_cache_service().container.cache
+        assert cache.cache_ops_count.data == initial_data_count
+
+        # Add new data operations
+        extended_ops = initial_ops + [
+            OperationData(
+                name=f"Microsoft.Storage/storageAccounts/blobServices/newContainer{i}/read",
+                is_data_action=True,
+            )
+            for i in range(added_data_count)
+        ]
+
+        # Query with extended operations
+        result = recommend_roles(
+            ["Microsoft.Storage/storageAccounts/blobServices/*/read"],
+            [storage_data_reader],
+            extended_ops,
+            requested_ops_data_flags={
+                "Microsoft.Storage/storageAccounts/blobServices/*/read": True
+            },
+        )
+
+        # Storage Data Reader should match ALL data read operations
+        reader = next(r for r in result if r.role_name == "Storage Data Reader")
+        assert reader.matched_operations_count == expected_final_count, (
+            f"Expected {expected_final_count} matched ops, got {reader.matched_operations_count}"
+        )
+        assert reader.match_percentage == 100.0
+
+    @pytest.mark.parametrize(
+        (
+            "initial_control",
+            "initial_data",
+            "added_control",
+            "added_data",
+            "expect_invalidation",
+        ),
+        [
+            pytest.param(10, 10, 5, 0, True, id="control_only_change"),
+            pytest.param(10, 10, 0, 5, True, id="data_only_change"),
+            pytest.param(10, 10, 5, 5, True, id="both_planes_change"),
+            pytest.param(10, 10, 0, 0, False, id="no_change"),
+        ],
+    )
+    def test_cache_invalidation_triggers(
+        self,
+        reader_role,
+        initial_control: int,
+        initial_data: int,
+        added_control: int,
+        added_data: int,
+        expect_invalidation: bool,
+    ):
+        """Test that check_cache_staleness correctly detects stale cache."""
+        from azurerbac.matching.recommendation_service import RoleRecommendationService
+
+        # Build initial operations
+        initial_ops = [
+            OperationData(
+                name=f"Microsoft.Control{i}/resource/read",
+                is_data_action=False,
+            )
+            for i in range(initial_control)
+        ] + [
+            OperationData(
+                name=f"Microsoft.Data{i}/resource/read",
+                is_data_action=True,
+            )
+            for i in range(initial_data)
+        ]
+
+        clear_computed_caches()
+        get_cache_service().swap_in_memory(precompute_all([reader_role], initial_ops))
+
+        # Extend operations
+        extended_ops = (
+            initial_ops
+            + [
+                OperationData(
+                    name=f"Microsoft.NewControl{i}/resource/read",
+                    is_data_action=False,
+                )
+                for i in range(added_control)
+            ]
+            + [
+                OperationData(
+                    name=f"Microsoft.NewData{i}/resource/read",
+                    is_data_action=True,
+                )
+                for i in range(added_data)
+            ]
+        )
+
+        # Create service with extended ops
+        service = RoleRecommendationService(
+            extended_ops, caches=get_cache_service().container.cache
+        )
+
+        # Check staleness
+        was_invalidated = service.check_cache_staleness()
+
+        assert was_invalidated == expect_invalidation, (
+            f"Expected invalidation={expect_invalidation}, got {was_invalidated}"
+        )
+
+    @pytest.mark.parametrize(
+        "cache_name",
+        [
+            pytest.param("pattern_match", id="pattern_match_cache"),
+            pytest.param("wildcard_count", id="wildcard_count_cache"),
+            pytest.param("partial_coverage", id="partial_coverage_cache"),
+            pytest.param("role_coverage", id="role_coverage_cache"),
+            pytest.param("role_net_permissions", id="role_net_permissions_cache"),
+        ],
+    )
+    def test_all_dependent_caches_cleared_on_invalidation(
+        self,
+        reader_role,
+        cache_name: str,
+    ):
+        """Test that all operation-dependent caches are cleared on staleness."""
+        from azurerbac.matching.recommendation_service import RoleRecommendationService
+
+        # Build initial cache
+        initial_ops = [
+            OperationData(
+                name=f"Microsoft.Provider{i}/resource/read",
+                is_data_action=False,
+            )
+            for i in range(10)
+        ]
+
+        clear_computed_caches()
+        get_cache_service().swap_in_memory(precompute_all([reader_role], initial_ops))
+
+        # Verify the target cache has data
+        cache = get_cache_service().container.cache
+        target_cache = getattr(cache, cache_name)
+        initial_size = len(target_cache)
+
+        # For caches that may be empty initially, populate them
+        if initial_size == 0:
+            # Run a query to populate caches
+            recommend_roles(
+                ["*/read"],
+                [reader_role],
+                initial_ops,
+                requested_ops_data_flags={"*/read": False},
+            )
+            target_cache = getattr(cache, cache_name)
+            initial_size = len(target_cache)
+
+        # Now change operations
+        extended_ops = initial_ops + [
+            OperationData(
+                name=f"Microsoft.NewProvider{i}/resource/read",
+                is_data_action=False,
+            )
+            for i in range(5)
+        ]
+
+        # Create service with extended ops and trigger invalidation
+        service = RoleRecommendationService(extended_ops, caches=cache)
+        was_invalidated = service.check_cache_staleness()
+
+        assert was_invalidated, "Cache should have been invalidated"
+
+        # Verify the target cache is now empty
+        cleared_cache = getattr(cache, cache_name)
+        assert len(cleared_cache) == 0, (
+            f"Cache '{cache_name}' should be empty after invalidation, "
+            f"but has {len(cleared_cache)} entries"
+        )
+
+    def test_stale_pattern_match_returns_wrong_count_without_invalidation(
+        self,
+        reader_role,
+    ):
+        """Demonstrate the bug when pattern_match cache is NOT invalidated.
+
+        This test shows what happens if we DON'T clear pattern_match:
+        - Cache has 10 ops for */read pattern
+        - Operations grow to 15
+        - Without invalidation, cache still returns 10 ops
+        - This causes wrong match counts
+
+        This is a regression test for the Plane enum refactoring.
+        """
+        from azurerbac.matching.models import PatternCacheKey, Plane
+        from azurerbac.matching.role_matching import get_matching_operations
+
+        # Build initial cache with 10 operations
+        initial_ops = [
+            OperationData(
+                name=f"Microsoft.Provider{i}/resource/read",
+                is_data_action=False,
+            )
+            for i in range(10)
+        ]
+        initial_op_names = frozenset(op.name for op in initial_ops)
+
+        clear_computed_caches()
+        cache = get_cache_service().container.cache
+
+        # Simulate caching the pattern match
+        cached_result = get_matching_operations(
+            "*/read", initial_op_names, Plane.CONTROL, caches=cache
+        )
+        assert len(cached_result) == 10
+
+        # Verify cache entry exists
+        cache_key = PatternCacheKey("*/read", Plane.CONTROL)
+        assert cache_key in cache.pattern_match
+        assert len(cache.pattern_match[cache_key]) == 10
+
+        # Now operations grow to 15
+        extended_ops = initial_ops + [
+            OperationData(
+                name=f"Microsoft.NewProvider{i}/resource/read",
+                is_data_action=False,
+            )
+            for i in range(5)
+        ]
+        extended_op_names = frozenset(op.name for op in extended_ops)
+
+        # WITHOUT clearing cache, get_matching_operations returns stale data
+        stale_result = get_matching_operations(
+            "*/read", extended_op_names, Plane.CONTROL, caches=cache
+        )
+        # BUG: Returns 10 instead of 15 because cache hit with stale data!
+        assert len(stale_result) == 10, "Stale cache should return old count"
+
+        # Now clear the cache (simulating proper invalidation)
+        cache.pattern_match.clear()
+
+        # Fresh query returns correct count
+        fresh_result = get_matching_operations(
+            "*/read", extended_op_names, Plane.CONTROL, caches=cache
+        )
+        assert len(fresh_result) == 15, "Fresh query should return new count"
+
+    def test_partial_coverage_cache_invalidation(
+        self,
+        reader_role,
+    ):
+        """Test that partial_coverage cache is invalidated correctly."""
+        from azurerbac.matching.models import Plane
+        from azurerbac.matching.role_matching import count_wildcard_partial_coverage
+
+        # Build operations where reader covers only some
+        initial_ops = [
+            OperationData(
+                name=f"Microsoft.Provider{i}/resource/read",
+                is_data_action=False,
+            )
+            for i in range(10)
+        ] + [
+            OperationData(
+                name=f"Microsoft.Provider{i}/resource/write",
+                is_data_action=False,
+            )
+            for i in range(5)
+        ]
+        all_op_names = frozenset(op.name for op in initial_ops)
+
+        clear_computed_caches()
+        cache = get_cache_service().container.cache
+
+        # Query partial coverage for Microsoft.Provider0/* pattern
+        # Reader (with */read) should cover /read but not /write
+        pattern = "Microsoft.Provider0/*"
+        result = count_wildcard_partial_coverage(
+            pattern,
+            ["*/read"],  # actions
+            [],  # not_actions
+            all_op_names,
+            Plane.CONTROL,
+            caches=cache,
+        )
+
+        # Should cover 1 out of 2 (read but not write for Provider0)
+        assert result.covered == 1
+        assert result.total == 2
+
+        # Verify cache is populated
+        assert len(cache.partial_coverage) == 1
+
+        # Add more operations for Provider0
+        extended_ops = [
+            *initial_ops,
+            OperationData(
+                name="Microsoft.Provider0/resource/delete",
+                is_data_action=False,
+            ),
+            OperationData(
+                name="Microsoft.Provider0/resource/action",
+                is_data_action=False,
+            ),
+        ]
+        extended_op_names = frozenset(op.name for op in extended_ops)
+
+        # Without clearing, we get stale result
+        stale_result = count_wildcard_partial_coverage(
+            pattern,
+            ["*/read"],
+            [],
+            extended_op_names,
+            Plane.CONTROL,
+            caches=cache,
+        )
+        # Stale: still shows 1/2 instead of 1/4
+        assert stale_result.covered == 1
+        assert stale_result.total == 2
+
+        # Clear and recompute
+        cache.partial_coverage.clear()
+        cache.pattern_match.clear()  # Also need to clear pattern_match
+
+        fresh_result = count_wildcard_partial_coverage(
+            pattern,
+            ["*/read"],
+            [],
+            extended_op_names,
+            Plane.CONTROL,
+            caches=cache,
+        )
+        # Fresh: shows 1/4 (read out of read/write/delete/action)
+        assert fresh_result.covered == 1
+        assert fresh_result.total == 4
+
+    @pytest.mark.parametrize(
+        ("ops_decrease", "expected_behavior"),
+        [
+            pytest.param(True, "invalidate", id="ops_removed"),
+            pytest.param(False, "invalidate", id="ops_added"),
+        ],
+    )
+    def test_cache_invalidation_on_decrease(
+        self,
+        reader_role,
+        ops_decrease: bool,
+        expected_behavior: str,
+    ):
+        """Test cache invalidation works when operations decrease."""
+        if ops_decrease:
+            # Start with more, end with fewer
+            initial_count, final_count = 20, 10
+        else:
+            # Start with fewer, end with more
+            initial_count, final_count = 10, 20
+
+        initial_ops = [
+            OperationData(
+                name=f"Microsoft.Provider{i}/resource/read",
+                is_data_action=False,
+            )
+            for i in range(initial_count)
+        ]
+
+        clear_computed_caches()
+        get_cache_service().swap_in_memory(precompute_all([reader_role], initial_ops))
+
+        final_ops = [
+            OperationData(
+                name=f"Microsoft.Provider{i}/resource/read",
+                is_data_action=False,
+            )
+            for i in range(final_count)
+        ]
+
+        result = recommend_roles(
+            ["*/read"],
+            [reader_role],
+            final_ops,
+            requested_ops_data_flags={"*/read": False},
+        )
+
+        reader = next(r for r in result if r.role_name == "Reader")
+        assert reader.matched_operations_count == final_count
+        assert reader.match_percentage == 100.0

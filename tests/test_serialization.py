@@ -287,3 +287,30 @@ class TestRoundTrip:
         packed = serialize_to_bytes(data)
         unpacked = deserialize_from_bytes(packed)
         assert unpacked["unicode"] == "こんにちは世界 🌍 émojis"
+
+    def test_cache_ops_count_roundtrip(self):
+        """CacheOpsCount (NamedTuple) survives round-trip with reconstruction.
+
+        NamedTuples are serialized as tuples, which become lists after msgpack.
+        The _reconstruct_coverage_data function in file.py handles converting
+        back to CacheOpsCount.
+        """
+        from azurerbac.matching.models import CacheOpsCount
+
+        data = {"cache_ops_count": CacheOpsCount(100, 50)}
+        packed = serialize_to_bytes(data)
+        unpacked = deserialize_from_bytes(packed)
+
+        # After msgpack, it's a list (NamedTuple -> tuple -> list)
+        assert unpacked["cache_ops_count"] == [100, 50]
+        assert isinstance(unpacked["cache_ops_count"], list)
+
+        # Simulate reconstruction (what file.py does)
+        from azurerbac.cache.backends.file import FileCacheBackend
+
+        FileCacheBackend._reconstruct_coverage_data(unpacked)
+
+        # After reconstruction, it's a proper CacheOpsCount
+        assert isinstance(unpacked["cache_ops_count"], CacheOpsCount)
+        assert unpacked["cache_ops_count"].control == 100
+        assert unpacked["cache_ops_count"].data == 50

@@ -19,6 +19,8 @@ from azurerbac.cache import (
     CachedChangeEvent,
     CachedRole,
     CacheMetadata,
+    PatternCacheKey,
+    Plane,
     compute_operations_hash,
     compute_roles_hash,
     get_cache_service,
@@ -52,8 +54,8 @@ class TestGetMatchingOperations:
 
     def test_matches_wildcard_read_pattern(self, operation_names: set[str]):
         """Test matching */read pattern."""
-        cache: dict[tuple[str, int], set[str]] = {}
-        result = get_matching_operations("*/read", operation_names, 1, cache)
+        cache: dict[PatternCacheKey, set[str]] = {}
+        result = get_matching_operations("*/read", operation_names, False, cache)
 
         assert "Microsoft.Storage/storageAccounts/read" in result
         assert "Microsoft.Compute/virtualMachines/read" in result
@@ -63,8 +65,8 @@ class TestGetMatchingOperations:
 
     def test_matches_provider_wildcard(self, operation_names: set[str]):
         """Test matching Microsoft.Storage/* pattern."""
-        cache: dict[tuple[str, int], set[str]] = {}
-        result = get_matching_operations("Microsoft.Storage/*", operation_names, 1, cache)
+        cache: dict[PatternCacheKey, set[str]] = {}
+        result = get_matching_operations("Microsoft.Storage/*", operation_names, False, cache)
 
         assert "Microsoft.Storage/storageAccounts/read" in result
         assert "Microsoft.Storage/storageAccounts/write" in result
@@ -73,62 +75,64 @@ class TestGetMatchingOperations:
 
     def test_matches_star_pattern(self, operation_names: set[str]):
         """Test matching * pattern (matches all)."""
-        cache: dict[tuple[str, int], set[str]] = {}
-        result = get_matching_operations("*", operation_names, 1, cache)
+        cache: dict[PatternCacheKey, set[str]] = {}
+        result = get_matching_operations("*", operation_names, False, cache)
 
         assert result == operation_names
 
     def test_caches_results(self, operation_names: set[str]):
         """Test that results are cached and reused."""
-        cache: dict[tuple[str, int], set[str]] = {}
+        cache: dict[PatternCacheKey, set[str]] = {}
 
         # First call populates cache
-        result1 = get_matching_operations("*/read", operation_names, 1, cache)
+        result1 = get_matching_operations("*/read", operation_names, False, cache)
 
         # Verify cache is populated
-        assert ("*/read", 1) in cache
+        assert PatternCacheKey("*/read", False) in cache
 
         # Second call should return same result from cache
-        result2 = get_matching_operations("*/read", operation_names, 1, cache)
+        result2 = get_matching_operations("*/read", operation_names, False, cache)
 
         assert result1 == result2
-        assert result1 is cache[("*/read", 1)]
+        assert result1 is cache[PatternCacheKey("*/read", False)]
 
     def test_case_insensitive_pattern(self, operation_names: set[str]):
         """Test that pattern matching is case-insensitive for cache key."""
-        cache: dict[tuple[str, int], set[str]] = {}
+        cache: dict[PatternCacheKey, set[str]] = {}
 
-        result1 = get_matching_operations("*/READ", operation_names, 1, cache)
-        result2 = get_matching_operations("*/read", operation_names, 1, cache)
+        result1 = get_matching_operations("*/READ", operation_names, Plane.DATA, cache)
+        result2 = get_matching_operations("*/read", operation_names, Plane.DATA, cache)
 
         # Both should use the same cache key (lowercase)
-        assert ("*/read", 1) in cache
-        assert ("*/READ", 1) not in cache
+        assert PatternCacheKey("*/read", Plane.DATA) in cache
+        assert PatternCacheKey("*/READ", Plane.DATA) not in cache
         assert result1 == result2
 
     def test_different_cache_keys_separate_results(self, operation_names: set[str]):
         """Test that different cache keys store separate results."""
-        cache: dict[tuple[str, int], set[str]] = {}
+        cache: dict[PatternCacheKey, set[str]] = {}
 
-        result1 = get_matching_operations("*/read", operation_names, 1, cache)
-        result2 = get_matching_operations("*/read", operation_names, 2, cache)
+        result1 = get_matching_operations("*/read", operation_names, Plane.CONTROL, cache)
+        result2 = get_matching_operations("*/read", operation_names, Plane.DATA, cache)
 
-        assert ("*/read", 1) in cache
-        assert ("*/read", 2) in cache
+        assert PatternCacheKey("*/read", Plane.CONTROL) in cache
+        assert PatternCacheKey("*/read", Plane.DATA) in cache
         # Results should be equal but stored separately
         assert result1 == result2
 
     def test_empty_operations_set(self):
         """Test with empty operations set."""
-        cache: dict[tuple[str, int], set[str]] = {}
-        result = get_matching_operations("*/read", set(), 1, cache)
+        cache: dict[PatternCacheKey, set[str]] = {}
+        result = get_matching_operations("*/read", set(), Plane.DATA, cache)
 
         assert result == set()
 
     def test_no_matches(self, operation_names: set[str]):
         """Test pattern that matches nothing."""
-        cache: dict[tuple[str, int], set[str]] = {}
-        result = get_matching_operations("Microsoft.NonExistent/*", operation_names, 1, cache)
+        cache: dict[PatternCacheKey, set[str]] = {}
+        result = get_matching_operations(
+            "Microsoft.NonExistent/*", operation_names, Plane.DATA, cache
+        )
 
         assert result == set()
 

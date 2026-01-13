@@ -12,7 +12,10 @@ from azurerbac.core.constants import RoleStatus
 from azurerbac.core.types import JsonDict
 from azurerbac.core.utils import format_datetime, parse_datetime
 from azurerbac.matching.models import (
+    CacheOpsCount,
     PartialCoverageCacheKey,
+    PatternCacheKey,
+    Plane,
     RoleCoverage,
     RoleNetPermissions,
     WildcardCoverageResult,
@@ -178,13 +181,13 @@ class CacheData:
     role_coverage: dict[str, RoleCoverage] = field(default_factory=dict)
     role_net_permissions: dict[str, RoleNetPermissions] = field(default_factory=dict)
     operation_role_count: dict[str, int] = field(default_factory=dict)
-    pattern_match: dict[tuple[str, int], set[str]] = field(default_factory=dict)
+    pattern_match: dict[PatternCacheKey, set[str]] = field(default_factory=dict)
     partial_coverage: dict[PartialCoverageCacheKey, WildcardCoverageResult] = field(
         default_factory=dict
     )
-    wildcard_count: dict[tuple[str, int], int] = field(default_factory=dict)
-    operations_by_prefix_computed: dict[int, dict[str, set[str]]] = field(default_factory=dict)
-    cache_ops_count: list[int] = field(default_factory=lambda: [0, 0])
+    wildcard_count: dict[PatternCacheKey, int] = field(default_factory=dict)
+    operations_by_prefix_computed: dict[Plane, dict[str, set[str]]] = field(default_factory=dict)
+    cache_ops_count: CacheOpsCount = field(default_factory=lambda: CacheOpsCount(0, 0))
 
     @cached_property
     def ops_names_set(self) -> set[str]:

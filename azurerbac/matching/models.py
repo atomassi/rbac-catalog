@@ -59,6 +59,22 @@ class RoleNetPermissions(NamedTuple):
     data_count: int
 
 
+class CacheOpsCount(NamedTuple):
+    """Operation counts at cache build time (for staleness detection)."""
+
+    control: int
+    data: int
+
+
+class CacheStats(NamedTuple):
+    """Cache entry counts for logging/debugging."""
+
+    pattern_match: int
+    partial_coverage: int
+    role_coverage: int
+    wildcard_count: int
+
+
 class PlaneActions(NamedTuple):
     """Actions and exclusions for a single plane."""
 
@@ -82,11 +98,23 @@ class RoleInfo(NamedTuple):
     permissions: list[Permission]
 
 
+class PatternCacheKey(NamedTuple):
+    """Cache key for pattern matching results.
+
+    Attributes:
+        pattern: Lowercase action pattern (e.g., "*/read", "microsoft.compute/*").
+        plane: The operation plane (CONTROL or DATA).
+    """
+
+    pattern: str
+    plane: Plane
+
+
 class PartialCoverageCacheKey(NamedTuple):
     """Cache key for partial coverage lookups."""
 
     pattern: str
-    cache_key: int
+    plane: Plane
     actions: tuple[str, ...]
     not_actions: tuple[str, ...]
 
@@ -94,16 +122,16 @@ class PartialCoverageCacheKey(NamedTuple):
     def build(
         cls,
         pattern: str,
-        cache_key: int | None,
+        plane: Plane | None,
         actions: list[str],
         not_actions: list[str],
     ) -> PartialCoverageCacheKey | None:
         """Build a cache key, returning None if caching is disabled."""
-        if cache_key is None:
+        if plane is None:
             return None
         return cls(
             pattern=pattern,
-            cache_key=cache_key,
+            plane=plane,
             actions=tuple(sorted(actions)),
             not_actions=tuple(sorted(not_actions)),
         )
@@ -137,14 +165,12 @@ class ClassifiedOperations:
 class OperationSets:
     """Pre-computed operation sets for matching.
 
-    Encapsulates all operation sets and their cache keys,
+    Encapsulates all operation sets for both planes,
     eliminating repeated parameter passing.
     """
 
     all_control: frozenset[str]
     all_data: frozenset[str]
-    control_cache_key: int
-    data_cache_key: int
 
     @classmethod
     def from_operations(cls, operations: list[OperationData]) -> OperationSets:
@@ -154,8 +180,6 @@ class OperationSets:
         return cls(
             all_control=control,
             all_data=data,
-            control_cache_key=len(control),
-            data_cache_key=len(data) + 1_000_000,  # Offset to avoid collision
         )
 
 
@@ -198,7 +222,6 @@ class PlaneContext:
 
     plane: Plane
     all_ops: frozenset[str]
-    cache_key: int
     wildcards: frozenset[str]
     wildcard_ops_map: dict[str, set[str]]
     cached_ops: set[str] | None

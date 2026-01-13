@@ -2,16 +2,24 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Set as AbstractSet
 from itertools import islice
 from typing import TYPE_CHECKING, Final
 
 from azurerbac.core.constants import MAX_UNCOVERED_SAMPLE
 from azurerbac.core.patterns import is_wildcard_pattern, matches_pattern
-from azurerbac.matching.models import PartialCoverageCacheKey, WildcardCoverageResult
+from azurerbac.matching.models import (
+    PartialCoverageCacheKey,
+    PatternCacheKey,
+    Plane,
+    WildcardCoverageResult,
+)
 
 if TYPE_CHECKING:
     from azurerbac.cache import CacheData
+
+logger = logging.getLogger(__name__)
 
 type OperationName = str
 type Pattern = str
@@ -128,7 +136,7 @@ def check_operation_allowed(
 def get_matching_operations(
     pattern: str,
     all_operations: AbstractSet[str],
-    cache_key: int | None = None,
+    plane: Plane | None = None,
     *,
     caches: CacheData | None = None,
 ) -> set[str]:
@@ -140,14 +148,14 @@ def get_matching_operations(
     Args:
         pattern: The pattern to match operations against.
         all_operations: Set of all operation names to search.
-        cache_key: Optional key for cache lookup (typically operation count).
+        plane: Optional plane for cache lookup (CONTROL or DATA).
         caches: Optional cache container (defaults to global singleton).
     """
     cache = _get_cache(caches)
 
-    key = (pattern.lower(), cache_key) if cache_key is not None else None
-    if key is not None and key in cache.pattern_match:
-        return cache.pattern_match[key]
+    key = PatternCacheKey(pattern.lower(), plane) if plane is not None else None
+    if key is not None and (cached := cache.pattern_match.get(key)) is not None:
+        return cached
 
     # Find matching operations
     matching = {op for op in all_operations if matches_pattern(op, pattern)}
@@ -163,14 +171,12 @@ def has_any_wildcard_coverage(
     actions: list[str],
     not_actions: list[str],
     all_operations: AbstractSet[str],
-    cache_key: int | None = None,
+    plane: Plane | None = None,
     *,
     caches: CacheData | None = None,
 ) -> bool:
     """Fast check if actions provide ANY coverage for a wildcard pattern."""
-    matching_ops = get_matching_operations(
-        requested_pattern, all_operations, cache_key, caches=caches
-    )
+    matching_ops = get_matching_operations(requested_pattern, all_operations, plane, caches=caches)
     if not matching_ops:
         return False
 
@@ -259,7 +265,7 @@ def _compute_covered_operations(
     actions: list[str],
     matching_ops: set[str],
     all_operations: AbstractSet[str],
-    cache_key: int | None,
+    plane: Plane | None,
     cache: CacheData,
 ) -> set[str]:
     """Compute the set of operations covered by the given actions."""
@@ -268,9 +274,7 @@ def _compute_covered_operations(
         if action == "*":
             return matching_ops.copy()
         if is_wildcard_pattern(action):
-            action_matches = get_matching_operations(
-                action, all_operations, cache_key, caches=cache
-            )
+            action_matches = get_matching_operations(action, all_operations, plane, caches=cache)
             covered.update(action_matches)
         elif action in all_operations:
             covered.add(action)
@@ -281,7 +285,7 @@ def _remove_excluded_operations(
     covered: set[str],
     not_actions: list[str],
     all_operations: AbstractSet[str],
-    cache_key: int | None,
+    plane: Plane | None,
     cache: CacheData,
 ) -> set[str]:
     """Remove operations excluded by notActions from the covered set."""
@@ -292,9 +296,7 @@ def _remove_excluded_operations(
         if not_action == "*":
             return set()
         if is_wildcard_pattern(not_action):
-            not_matches = get_matching_operations(
-                not_action, all_operations, cache_key, caches=cache
-            )
+            not_matches = get_matching_operations(not_action, all_operations, plane, caches=cache)
             result -= not_matches
         else:
             result.discard(not_action)
@@ -306,7 +308,7 @@ def count_wildcard_partial_coverage(
     actions: list[str],
     not_actions: list[str],
     all_operations: AbstractSet[str],
-    cache_key: int | None = None,
+    plane: Plane | None = None,
     max_uncovered_sample: int = MAX_UNCOVERED_SAMPLE,
     *,
     caches: CacheData | None = None,
@@ -318,7 +320,7 @@ def count_wildcard_partial_coverage(
         actions: List of action patterns from the role.
         not_actions: List of notAction patterns from the role.
         all_operations: Set of all valid operations.
-        cache_key: Optional cache key for lookup.
+        plane: Optional plane for cache lookup (CONTROL or DATA).
         max_uncovered_sample: Maximum uncovered operations to sample.
         caches: Optional cache container.
 
@@ -327,7 +329,7 @@ def count_wildcard_partial_coverage(
     """
     cache = _get_cache(caches)
     partial_cache_key = PartialCoverageCacheKey.build(
-        requested_pattern, cache_key, actions, not_actions
+        requested_pattern, plane, actions, not_actions
     )
 
     # Check cache
@@ -337,9 +339,7 @@ def count_wildcard_partial_coverage(
             return cached
 
     # Get matching operations
-    matching_ops = get_matching_operations(
-        requested_pattern, all_operations, cache_key, caches=cache
-    )
+    matching_ops = get_matching_operations(requested_pattern, all_operations, plane, caches=cache)
     total_count = len(matching_ops)
 
     if total_count == 0:
@@ -350,10 +350,10 @@ def count_wildcard_partial_coverage(
 
     # Compute covered operations using helper functions
     covered_by_actions = _compute_covered_operations(
-        actions, matching_ops, all_operations, cache_key, cache
+        actions, matching_ops, all_operations, plane, cache
     )
     covered_by_actions = _remove_excluded_operations(
-        covered_by_actions, not_actions, all_operations, cache_key, cache
+        covered_by_actions, not_actions, all_operations, plane, cache
     )
 
     # Calculate coverage
@@ -370,28 +370,28 @@ def count_wildcard_partial_coverage(
 
 
 def count_operations_matching_pattern(
-    pattern: str, all_operations: AbstractSet[str], cache_key: int | None = None
+    pattern: str, all_operations: AbstractSet[str], plane: Plane | None = None
 ) -> int:
     """Count how many actual operations match a pattern (explicit or wildcard)."""
     if not is_wildcard_pattern(pattern):
         return 1 if pattern in all_operations else 0
-    return count_wildcard_matches(pattern, all_operations, cache_key)
+    return count_wildcard_matches(pattern, all_operations, plane)
 
 
 def count_wildcard_matches(
     pattern: str,
     all_operations: AbstractSet[str],
-    cache_key: int | None = None,
+    plane: Plane | None = None,
     *,
     caches: CacheData | None = None,
 ) -> int:
     """Count how many operations match a wildcard pattern (exact count)."""
     cache = _get_cache(caches)
-    matching = get_matching_operations(pattern, all_operations, cache_key, caches=cache)
+    matching = get_matching_operations(pattern, all_operations, plane, caches=cache)
     count = len(matching)
 
-    if cache_key is not None:
-        cache.wildcard_count[(pattern.lower(), cache_key)] = count
+    if plane is not None:
+        cache.wildcard_count[PatternCacheKey(pattern.lower(), plane)] = count
 
     return count
 
@@ -399,12 +399,12 @@ def count_wildcard_matches(
 def _count_pattern(
     pattern: str,
     all_operations: AbstractSet[str],
-    cache_key: int | None,
+    plane: Plane | None,
     cache: CacheData,
 ) -> int:
     """Count matching operations for a pattern (explicit or wildcard)."""
     if is_wildcard_pattern(pattern):
-        return count_wildcard_matches(pattern, all_operations, cache_key, caches=cache)
+        return count_wildcard_matches(pattern, all_operations, plane, caches=cache)
     return 1 if pattern in all_operations else 0
 
 
@@ -412,7 +412,7 @@ def count_net_permissions(
     actions: list[str],
     not_actions: list[str],
     all_operations: AbstractSet[str],
-    cache_key: int | None = None,
+    plane: Plane | None = None,
     *,
     caches: CacheData | None = None,
 ) -> int:
@@ -422,7 +422,7 @@ def count_net_permissions(
         actions: List of action patterns that grant access.
         not_actions: List of notAction patterns that deny access.
         all_operations: Set of all valid operations.
-        cache_key: Optional cache key for lookups.
+        plane: Optional plane for cache lookups (CONTROL or DATA).
         caches: Optional cache container.
 
     Returns:
@@ -437,7 +437,7 @@ def count_net_permissions(
     if "*" in actions:
         if not not_actions:
             return len(all_operations)
-        excluded = sum(_count_pattern(p, all_operations, cache_key, cache) for p in not_actions)
+        excluded = sum(_count_pattern(p, all_operations, plane, cache) for p in not_actions)
         return max(0, len(all_operations) - excluded)
 
     # Separate explicit and wildcard actions
@@ -445,14 +445,12 @@ def count_net_permissions(
     wildcards = [a for a in actions if is_wildcard_pattern(a)]
 
     # Count total granted
-    count = len(explicit) + sum(
-        _count_pattern(p, all_operations, cache_key, cache) for p in wildcards
-    )
+    count = len(explicit) + sum(_count_pattern(p, all_operations, plane, cache) for p in wildcards)
 
     # Subtract exclusions
     for not_pattern in not_actions:
         if is_wildcard_pattern(not_pattern):
-            count -= _count_pattern(not_pattern, all_operations, cache_key, cache)
+            count -= _count_pattern(not_pattern, all_operations, plane, cache)
         elif not_pattern in explicit or any(matches_pattern(not_pattern, wp) for wp in wildcards):
             count -= 1
 

@@ -7,6 +7,7 @@ import pytest
 
 from azurerbac.core.patterns import matches_pattern, pattern_to_regex
 from azurerbac.matching import recommend_roles
+from azurerbac.matching.models import CacheOpsCount
 from azurerbac.matching.role_matching import (
     check_operation_allowed,
     operation_matches_any_pattern,
@@ -422,13 +423,6 @@ class TestOperationSets:
             in op_sets.all_data
         )
 
-    def test_cache_keys_are_different(self, sample_operations):
-        """Control and data cache keys should be different."""
-        from azurerbac.matching.models import OperationSets
-
-        op_sets = OperationSets.from_operations(sample_operations)
-        assert op_sets.control_cache_key != op_sets.data_cache_key
-
 
 class TestRecommendationService:
     """Tests for RoleRecommendationService."""
@@ -483,7 +477,7 @@ class TestRecommendationService:
         # Get the cache and set it to stale values
         cache = get_cache_service().container.cache
         old_counts = cache.cache_ops_count
-        cache.cache_ops_count = (999, 999)  # Set to wrong values
+        cache.cache_ops_count = CacheOpsCount(999, 999)  # Set to wrong values
 
         # Now check staleness - should detect the difference
         was_stale = svc.check_cache_staleness()

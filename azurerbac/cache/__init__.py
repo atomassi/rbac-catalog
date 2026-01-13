@@ -21,12 +21,14 @@ from azurerbac.cache.models import (
     CachedChangeEvent,
     CachedRole,
     CacheMetadata,
+    PatternCacheKey,
     build_indexes,
     compute_operations_hash,
     compute_roles_hash,
 )
 from azurerbac.cache.serialization import deserialize_from_bytes, serialize_to_bytes
 from azurerbac.cache.service import CacheService, get_cache_service
+from azurerbac.matching.models import Plane
 
 __all__ = [
     "CACHE_FILENAME",
@@ -41,6 +43,8 @@ __all__ = [
     "CachedChangeEvent",
     "CachedRole",
     "FileCacheBackend",
+    "PatternCacheKey",
+    "Plane",
     "build_from_db",
     "build_indexes",
     "build_operations_prefix_index",

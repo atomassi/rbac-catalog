@@ -6,6 +6,8 @@ The heavy lifting is delegated to RoleRecommendationService.
 
 from __future__ import annotations
 
+import logging
+
 from azurerbac.azure.models import OperationData, RoleDefinition
 from azurerbac.core import HIGH_PRIVILEGE_ROLES
 from azurerbac.matching.models import RoleMatch
@@ -13,6 +15,8 @@ from azurerbac.matching.recommendation_service import (
     RoleEvaluationContext,
     RoleRecommendationService,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def recommend_roles(
@@ -31,16 +35,34 @@ def recommend_roles(
     svc.check_cache_staleness()
 
     classified = svc.classify_operations(requested_operations)
+    logger.debug(
+        "Classified %d requested ops: control=%d, data=%d, control_wildcards=%d, data_wildcards=%d",
+        len(requested_operations),
+        len(classified.control),
+        len(classified.data),
+        len(classified.control_wildcards),
+        len(classified.data_wildcards),
+    )
+
     total_requested = svc.compute_wildcard_matches(classified)
+    logger.debug(
+        "Expanded wildcards: total_requested=%d ops (control_wc_ops=%d, data_wc_ops=%d)",
+        total_requested,
+        sum(len(ops) for ops in svc.control_wildcard_ops.values()),
+        sum(len(ops) for ops in svc.data_wildcard_ops.values()),
+    )
 
     # Evaluate each role
     matches: list[RoleMatch] = []
     has_cache = svc.has_full_cache()
+    roles_evaluated = 0
+    roles_with_matches = 0
 
     for role in roles:
         if not svc.is_builtin_role(role):
             continue
 
+        roles_evaluated += 1
         role_info = svc.extract_role_info(role)
         cached_coverage = svc.get_cached_coverage(role_info.role_id)
 
@@ -63,6 +85,8 @@ def recommend_roles(
 
         if not ctx.matched_ops:
             continue
+
+        roles_with_matches += 1
 
         # Calculate missing operations
         missing_ops = svc.calculate_missing_ops(ctx, classified)
@@ -96,6 +120,28 @@ def recommend_roles(
                 has_partial_wildcard_match=bool(ctx.wildcard_partial_coverage) or bool(missing_ops),
             )
         )
+
+    # Log evaluation summary
+    full_match_count = sum(1 for m in matches if m.is_full_match)
+    partial_match_count = len(matches) - full_match_count
+    logger.debug(
+        "Evaluated %d roles: %d with any match (full=%d, partial=%d)",
+        roles_evaluated,
+        roles_with_matches,
+        full_match_count,
+        partial_match_count,
+    )
+
+    # Log cache stats summary
+    stats = svc.get_cache_stats()
+    logger.debug(
+        "Cache stats: pattern_match=%d, partial_coverage=%d, role_coverage=%d, "
+        "wildcard_count=%d entries",
+        stats.pattern_match,
+        stats.partial_coverage,
+        stats.role_coverage,
+        stats.wildcard_count,
+    )
 
     return _sort_and_filter_results(matches, max_results)
 

@@ -14,6 +14,7 @@ from azurerbac.cache.models import (
     CachedChangeEvent,
     CachedRole,
     CacheMetadata,
+    PatternCacheKey,
     build_indexes,
     compute_operations_hash,
     compute_roles_hash,
@@ -22,7 +23,9 @@ from azurerbac.core.constants import RoleStatus
 from azurerbac.core.patterns import is_wildcard_pattern, matches_pattern
 from azurerbac.core.utils import truncate_microseconds
 from azurerbac.matching.models import (
+    CacheOpsCount,
     PartialCoverageCacheKey,
+    Plane,
     RoleCoverage,
     RoleNetPermissions,
     WildcardCoverageResult,
@@ -34,11 +37,11 @@ logger = logging.getLogger(__name__)
 def get_matching_operations(
     pattern: str,
     ops: set[str],
-    cache_key: int,
-    pattern_cache: dict[tuple[str, int], set[str]],
+    plane: Plane,
+    pattern_cache: dict[PatternCacheKey, set[str]],
 ) -> set[str]:
     """Get operations matching a pattern."""
-    key = (pattern.lower(), cache_key)
+    key = PatternCacheKey(pattern.lower(), plane)
     if key in pattern_cache:
         return pattern_cache[key]
 
@@ -49,12 +52,12 @@ def get_matching_operations(
 
 def build_operations_prefix_index(
     ops: set[str],
-    cache_key: int,
-    prefix_cache: dict[int, dict[str, set[str]]],
+    plane: Plane,
+    prefix_cache: dict[Plane, dict[str, set[str]]],
 ) -> dict[str, set[str]]:
     """Build index of operations by provider prefix."""
-    if cache_key in prefix_cache:
-        return prefix_cache[cache_key]
+    if plane in prefix_cache:
+        return prefix_cache[plane]
 
     index: dict[str, set[str]] = {}
     for op in ops:
@@ -63,7 +66,7 @@ def build_operations_prefix_index(
             prefix = op[: slash_idx + 1].lower()
             index.setdefault(prefix, set()).add(op)
 
-    prefix_cache[cache_key] = index
+    prefix_cache[plane] = index
     return index
 
 
@@ -72,8 +75,8 @@ def _add_operations_for_patterns(
     patterns: list[str],
     *,
     all_ops: set[str],
-    cache_key: int,
-    pattern_match: dict[tuple[str, int], set[str]],
+    plane: Plane,
+    pattern_match: dict[PatternCacheKey, set[str]],
     ops_lower_to_orig: dict[str, str],
 ) -> None:
     """Add operations matching patterns to destination set."""
@@ -81,7 +84,7 @@ def _add_operations_for_patterns(
         if pattern == "*":
             dst.update(all_ops)
         elif is_wildcard_pattern(pattern):
-            dst.update(get_matching_operations(pattern, all_ops, cache_key, pattern_match))
+            dst.update(get_matching_operations(pattern, all_ops, plane, pattern_match))
         else:
             orig_op = ops_lower_to_orig.get(pattern.lower())
             if orig_op:
@@ -91,15 +94,13 @@ def _add_operations_for_patterns(
 def _precompute_common_patterns(
     all_control_ops: set[str],
     all_data_ops: set[str],
-    control_cache_key: int,
-    data_cache_key: int,
-    pattern_match: dict[tuple[str, int], set[str]],
+    pattern_match: dict[PatternCacheKey, set[str]],
 ) -> None:
     """Precompute common wildcard patterns."""
     common_patterns = ["*/read", "*/write", "*/delete", "*/action", "*/listkeys/action", "*"]
     for pattern in common_patterns:
-        get_matching_operations(pattern, all_control_ops, control_cache_key, pattern_match)
-        get_matching_operations(pattern, all_data_ops, data_cache_key, pattern_match)
+        get_matching_operations(pattern, all_control_ops, Plane.CONTROL, pattern_match)
+        get_matching_operations(pattern, all_data_ops, Plane.DATA, pattern_match)
 
 
 def _collect_role_patterns(roles: list[RoleDefinition]) -> set[str]:
@@ -120,12 +121,10 @@ def _compute_role_coverage(
     role: RoleDefinition,
     all_control_ops: set[str],
     all_data_ops: set[str],
-    control_cache_key: int,
-    data_cache_key: int,
-    pattern_match: dict[tuple[str, int], set[str]],
+    pattern_match: dict[PatternCacheKey, set[str]],
     control_ops_lower_to_orig: dict[str, str],
     data_ops_lower_to_orig: dict[str, str],
-) -> tuple[set[str], set[str]]:
+) -> RoleCoverage:
     """Compute effective operations (granted - excluded) for a role."""
     control_granted: set[str] = set()
     data_granted: set[str] = set()
@@ -137,7 +136,7 @@ def _compute_role_coverage(
             control_granted,
             perm.actions,
             all_ops=all_control_ops,
-            cache_key=control_cache_key,
+            plane=Plane.CONTROL,
             pattern_match=pattern_match,
             ops_lower_to_orig=control_ops_lower_to_orig,
         )
@@ -145,7 +144,7 @@ def _compute_role_coverage(
             control_excluded,
             perm.not_actions,
             all_ops=all_control_ops,
-            cache_key=control_cache_key,
+            plane=Plane.CONTROL,
             pattern_match=pattern_match,
             ops_lower_to_orig=control_ops_lower_to_orig,
         )
@@ -153,7 +152,7 @@ def _compute_role_coverage(
             data_granted,
             perm.data_actions,
             all_ops=all_data_ops,
-            cache_key=data_cache_key,
+            plane=Plane.DATA,
             pattern_match=pattern_match,
             ops_lower_to_orig=data_ops_lower_to_orig,
         )
@@ -161,12 +160,12 @@ def _compute_role_coverage(
             data_excluded,
             perm.not_data_actions,
             all_ops=all_data_ops,
-            cache_key=data_cache_key,
+            plane=Plane.DATA,
             pattern_match=pattern_match,
             ops_lower_to_orig=data_ops_lower_to_orig,
         )
 
-    return control_granted - control_excluded, data_granted - data_excluded
+    return RoleCoverage(control_granted - control_excluded, data_granted - data_excluded)
 
 
 def _build_operation_role_count(
@@ -228,9 +227,9 @@ def precompute_all(
     unique_providers = sorted(providers, key=str.casefold)
 
     # Build computed data into temporary dicts
-    pattern_match: dict[tuple[str, int], set[str]] = {}
-    wildcard_count: dict[tuple[str, int], int] = {}
-    operations_by_prefix_computed: dict[int, dict[str, set[str]]] = {}
+    pattern_match: dict[PatternCacheKey, set[str]] = {}
+    wildcard_count: dict[PatternCacheKey, int] = {}
+    operations_by_prefix_computed: dict[Plane, dict[str, set[str]]] = {}
     role_coverage: dict[str, RoleCoverage] = {}
     role_net_permissions: dict[str, RoleNetPermissions] = {}
     partial_coverage: dict[PartialCoverageCacheKey, WildcardCoverageResult] = {}
@@ -245,28 +244,24 @@ def precompute_all(
     control_ops_lower_to_orig = {op.lower(): op for op in all_control_ops}
     data_ops_lower_to_orig = {op.lower(): op for op in all_data_ops}
 
-    cache_ops_count = [len(all_control_ops), len(all_data_ops)]
-    control_cache_key = len(all_control_ops)
-    data_cache_key = len(all_data_ops) + 1000000
+    cache_ops_count = CacheOpsCount(len(all_control_ops), len(all_data_ops))
 
     # Build prefix indexes
     logger.debug("Building prefix indexes...")
-    build_operations_prefix_index(all_control_ops, control_cache_key, operations_by_prefix_computed)
-    build_operations_prefix_index(all_data_ops, data_cache_key, operations_by_prefix_computed)
+    build_operations_prefix_index(all_control_ops, Plane.CONTROL, operations_by_prefix_computed)
+    build_operations_prefix_index(all_data_ops, Plane.DATA, operations_by_prefix_computed)
 
     # 1. Precompute common patterns
     logger.debug("Precomputing common patterns...")
-    _precompute_common_patterns(
-        all_control_ops, all_data_ops, control_cache_key, data_cache_key, pattern_match
-    )
+    _precompute_common_patterns(all_control_ops, all_data_ops, pattern_match)
 
     # 2. Collect and precompute all unique action patterns from roles
     logger.debug("Collecting unique action patterns from roles...")
     all_action_patterns = _collect_role_patterns(roles)
     logger.debug("Precomputing %d unique action patterns...", len(all_action_patterns))
     for pattern in all_action_patterns:
-        get_matching_operations(pattern, all_control_ops, control_cache_key, pattern_match)
-        get_matching_operations(pattern, all_data_ops, data_cache_key, pattern_match)
+        get_matching_operations(pattern, all_control_ops, Plane.CONTROL, pattern_match)
+        get_matching_operations(pattern, all_data_ops, Plane.DATA, pattern_match)
 
     # 3. Precompute role coverage and net permissions
     logger.debug("Computing role coverage and net permissions...")
@@ -280,8 +275,6 @@ def precompute_all(
             role,
             all_control_ops,
             all_data_ops,
-            control_cache_key,
-            data_cache_key,
             pattern_match,
             control_ops_lower_to_orig,
             data_ops_lower_to_orig,

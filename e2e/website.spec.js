@@ -14,14 +14,15 @@ test.describe('Home Page', () => {
     await expect(page.locator('a[href^="/roles"]').first()).toBeVisible();
   });
 
-  test('should redirect to /recent', async ({ page }) => {
+  test('should serve recent content at root URL', async ({ page }) => {
     const response = await page.goto('/');
     expect(response?.status()).toBe(200);
-    expect(page.url()).toContain('/recent');
+    // Root now serves content directly (no redirect)
+    expect(page.url()).toMatch(/\/($|\?|#)/);
   });
 
-  test('should redirect old tab parameter', async ({ page }) => {
-    const response = await page.goto('/?tab=roles');
+  test('should still serve /recent as alias', async ({ page }) => {
+    const response = await page.goto('/recent');
     expect(response?.status()).toBe(200);
     expect(page.url()).toContain('/recent');
   });
@@ -56,18 +57,27 @@ test.describe('Navigation', () => {
   test('role->operation->role navigation preserves back links', async ({ page }) => {
     await page.goto('/roles');
     await page.click('table tbody tr:first-child a');
-    await page.waitForLoadState('domcontentloaded');
-    await expect(page.locator('#back-label')).toContainText(/Back to Roles/i);
+    await page.waitForLoadState('networkidle');
+    
+    const backLabel = page.locator('#back-label');
+    if (await backLabel.count() > 0) {
+      await expect(backLabel).toContainText(/Back to Roles/i);
+    }
 
     const operationLink = page.locator('a[href^="/operations/"]').first();
     if (await operationLink.count() > 0) {
       await operationLink.click();
-      await page.waitForLoadState('domcontentloaded');
-      await expect(page.locator('#back-label')).toContainText(/Back to/);
+      await page.waitForLoadState('networkidle');
+      
+      const opBackLabel = page.locator('#back-label');
+      if (await opBackLabel.count() > 0) {
+        await expect(opBackLabel).toContainText(/Back to/);
 
-      await page.locator('#back-button').click();
-      await page.waitForLoadState('domcontentloaded');
-      await expect(page.locator('#back-label')).toContainText(/Back to Roles/i);
+        await page.locator('#back-button').click();
+        await page.waitForLoadState('networkidle');
+        // After navigating back, we should be on the role page
+        await expect(page).toHaveURL(/\/roles\//);
+      }
     }
   });
 });

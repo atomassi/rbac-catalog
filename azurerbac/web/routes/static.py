@@ -8,7 +8,7 @@ from typing import Final
 from urllib.parse import quote
 
 from fastapi import APIRouter, Request
-from fastapi.responses import RedirectResponse, Response
+from fastapi.responses import Response
 from sqlalchemy import select
 
 from azurerbac.core import Role
@@ -139,12 +139,19 @@ async def sitemap_xml(request: Request) -> Response:
     today = dt.datetime.now(dt.UTC).date().isoformat()
 
     urls = [
-        # Recent changes page - highest priority, updated daily
+        # Home page - canonical URL, highest priority, updated daily
+        f"""  <url>
+    <loc>{SITE_URL}/</loc>
+    <lastmod>{today}</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
+  </url>""",
+        # Recent changes page (alias of home) - high priority, updated daily
         f"""  <url>
     <loc>{SITE_URL}/recent</loc>
     <lastmod>{today}</lastmod>
     <changefreq>daily</changefreq>
-    <priority>1.0</priority>
+    <priority>0.9</priority>
   </url>""",
         # Roles list page - high priority, updated daily
         f"""  <url>
@@ -221,9 +228,3 @@ async def sitemap_xml(request: Request) -> Response:
 async def head_root() -> Response:
     """Handle HEAD requests for Azure Front Door health probes."""
     return Response(status_code=200)
-
-
-@router.get("/", response_class=RedirectResponse)
-async def index_redirect() -> RedirectResponse:
-    """Redirect root to /recent page."""
-    return RedirectResponse(url="/recent", status_code=301)

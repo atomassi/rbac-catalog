@@ -69,7 +69,7 @@
     <meta name="keywords" content="Azure RBAC, Azure Built-in Roles, Azure RBAC Roles, Azure Permissions, Azure Role Based Access Control, Azure IAM, Azure Role Definitions, Azure Contributor Role, Azure Reader Role, Azure Owner Role, RBAC Permissions">
     <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
     <meta name="author" content="Azure RBAC Catalog">
-    <link rel="canonical" href="{{ site_url }}/{{ tab }}">
+    <link rel="canonical" href="{{ site_url }}/{{ '' if tab == 'recent' else tab }}">
     
     <!-- Open Graph / Facebook -->
     {% if tab == 'recent' %}
@@ -80,7 +80,7 @@
     <meta property="og:description" content="The complete reference for all {{ total_roles }} Azure built-in RBAC roles. Search permissions, view JSON definitions, and monitor role changes. Free tool for Azure security professionals.">
     {% endif %}
     <meta property="og:type" content="website">
-    <meta property="og:url" content="{{ site_url }}/{{ tab }}">
+    <meta property="og:url" content="{{ site_url }}/{{ '' if tab == 'recent' else tab }}">
     <meta property="og:site_name" content="Azure RBAC Catalog">
     <meta property="og:image" content="{{ site_url }}/static/images/og-image.png">
     <meta property="og:image:type" content="image/png">
@@ -361,7 +361,9 @@
     
     <!-- Self-hosted Tailwind CSS -->
     <link rel="stylesheet" href="/static/css/tailwind.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Load Google Fonts asynchronously to prevent render blocking -->
+    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"></noscript>
     
     <script>
     // Remove default values from form before submission to keep URLs clean
@@ -413,8 +415,8 @@
     </script>
 </head>
 <body class="h-full bg-slate-50 dark:bg-slate-900 transition-colors duration-200">
-    <script src="/static/js/nav-state.js"></script>
-    <script>NavState.initAiModeFromUrl();</script>
+    <script src="/static/js/nav-state.js" defer></script>
+    <script>document.addEventListener('DOMContentLoaded', function() { if (window.NavState) NavState.initAiModeFromUrl(); });</script>
     <div class="min-h-full">
         <!-- Header with gradient -->
         <div class="gradient-bg">
@@ -1052,6 +1054,6 @@
     </script>
     
     <!-- Dark mode handler -->
-    <script src="/static/js/darkmode.js"></script>
+    <script src="/static/js/darkmode.js" defer></script>
 </body>
 </html>

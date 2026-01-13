@@ -65,6 +65,7 @@ class DashboardContext:
 
 
 @router.get("/recent", response_class=HTMLResponse)
+@router.get("/", response_class=HTMLResponse, include_in_schema=False)
 async def recent_changes(
     request: Request,
     deps: Annotated[DashboardDeps, Depends(get_dashboard_deps)],
@@ -75,7 +76,7 @@ async def recent_changes(
     limit: Annotated[int, Query(ge=1, le=MAX_PAGE_SIZE)] = DEFAULT_LIMIT,
     ai: int | None = None,
 ) -> Response:
-    """Recent changes page."""
+    """Recent changes page. Also serves as the home page (/) to avoid redirect latency."""
     logger.info(
         "Dashboard /recent: days=%d event_type=%s page=%d limit=%d", days, event_type, page, limit
     )

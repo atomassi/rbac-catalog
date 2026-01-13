@@ -156,7 +156,9 @@
     
     <!-- Self-hosted Tailwind CSS -->
     <link rel="stylesheet" href="/static/css/tailwind.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Load Google Fonts asynchronously to prevent render blocking -->
+    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"></noscript>
 </head>
 <body class="h-full bg-slate-50 dark:bg-slate-900 transition-colors duration-200">
     <!-- Navigation state handler - must load before content -->
@@ -1853,6 +1855,6 @@
     </script>
     
     <!-- Dark mode handler -->
-    <script src="/static/js/darkmode.js"></script>
+    <script src="/static/js/darkmode.js" defer></script>
 </body>
 </html>

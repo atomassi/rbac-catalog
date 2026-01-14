@@ -167,7 +167,7 @@ jobs:
     needs: build-and-push
     environment:
       name: staging
-      url: ${{ env.STAGING_URL }}
+      url: https://azurerbac-builtinroles-staging.azurewebsites.net
     
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8  # v6.0.1
@@ -255,12 +255,12 @@ jobs:
           pip install httpx
           python scripts/smoke_tests.py --url ${{ env.STAGING_URL }} --verbose
 
-      # Cleanup always runs, even if smoke tests fail
+      # Only stop staging on failure - on success, deploy-production handles it
       - name: Stop staging slot
-        if: always()
+        if: failure()
         run: |
           az webapp stop --name ${{ env.APP_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} --slot staging
-          echo "🛑 Stopped staging slot"
+          echo "🛑 Stopped staging slot (smoke tests failed)"
 
       - name: Remove runner IP from staging
         if: always()
@@ -302,11 +302,7 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Start staging slot for swap
-        run: |
-          az webapp start --name ${{ env.APP_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} --slot staging
-          echo "🚀 Started staging slot for swap"
-
+      # Staging slot is already running from deploy-staging (only stopped on failure)
       - name: Swap staging to production
         run: |
           az webapp deployment slot swap \

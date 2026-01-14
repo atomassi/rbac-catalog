@@ -995,6 +995,158 @@ class TestFetchBuiltinRoles:
         assert mock_client.post.call_count == 2
 
 
+class TestFetchBuiltinRolesRbacApi:
+    """Tests for fetch_builtin_roles_rbac_api with mocked Azure API."""
+
+    @pytest.fixture
+    def mock_role_response(self):
+        """Standard role response for RBAC API format."""
+        return {
+            "id": "/providers/Microsoft.Authorization/roleDefinitions/abc-123",
+            "name": "abc-123",
+            "type": "Microsoft.Authorization/roleDefinitions",
+            "properties": {
+                "roleName": "Reader",
+                "type": "BuiltInRole",
+                "description": "Can view resources",
+                "permissions": [{"actions": ["*/read"], "notActions": []}],
+            },
+        }
+
+    @pytest.mark.asyncio
+    async def test_returns_role_definitions_on_success(self, mock_role_response):
+        from unittest.mock import patch
+
+        from azurerbac.azure.models import RoleDefinition
+
+        response = _make_mock_response({"value": [mock_role_response]})
+        mock_client = _make_mock_async_client(response, method="get")
+
+        with patch(
+            "azurerbac.azure.roles.authenticated_management_async_client",
+            return_value=mock_client,
+        ):
+            from azurerbac.azure.roles import fetch_builtin_roles_rbac_api
+
+            roles = await fetch_builtin_roles_rbac_api()
+
+        assert len(roles) == 1
+        assert isinstance(roles[0], RoleDefinition)
+        assert roles[0].role_name == "Reader"
+        assert roles[0].role_id == "abc-123"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "page_count",
+        [2, 3, 5],
+        ids=["2_pages", "3_pages", "5_pages"],
+    )
+    async def test_handles_pagination_with_next_link(self, page_count):
+        from unittest.mock import patch
+
+        import httpx
+
+        responses: list[httpx.Response] = []
+        for i in range(page_count):
+            data: dict[str, object] = {
+                "value": [
+                    {
+                        "id": f"/providers/Microsoft.Authorization/roleDefinitions/role-{i}",
+                        "name": f"role-{i}",
+                        "type": "Microsoft.Authorization/roleDefinitions",
+                        "properties": {
+                            "roleName": f"Role{i}",
+                            "type": "BuiltInRole",
+                            "permissions": [],
+                        },
+                    }
+                ],
+            }
+            if i < page_count - 1:
+                data["nextLink"] = f"https://management.azure.com/next?page={i + 2}"
+            responses.append(_make_mock_response(data))
+
+        mock_client = _make_mock_async_client(responses, method="get")
+
+        with patch(
+            "azurerbac.azure.roles.authenticated_management_async_client",
+            return_value=mock_client,
+        ):
+            from azurerbac.azure.roles import fetch_builtin_roles_rbac_api
+
+            roles = await fetch_builtin_roles_rbac_api()
+
+        assert len(roles) == page_count
+        assert mock_client.get.call_count == page_count
+
+    @pytest.mark.asyncio
+    async def test_uses_next_link_url_directly(self):
+        """Verify that nextLink URL is used directly without modification."""
+        from unittest.mock import patch
+
+        next_link_url = "https://management.azure.com/providers/Microsoft.Authorization/roleDefinitions?$skiptoken=abc123"
+
+        first_response = _make_mock_response(
+            {
+                "value": [
+                    {
+                        "id": "/test/1",
+                        "name": "1",
+                        "properties": {"roleName": "R1", "type": "BuiltInRole", "permissions": []},
+                    }
+                ],
+                "nextLink": next_link_url,
+            }
+        )
+        second_response = _make_mock_response({"value": []})
+
+        mock_client = _make_mock_async_client([first_response, second_response], method="get")
+
+        with patch(
+            "azurerbac.azure.roles.authenticated_management_async_client",
+            return_value=mock_client,
+        ):
+            from azurerbac.azure.roles import fetch_builtin_roles_rbac_api
+
+            await fetch_builtin_roles_rbac_api()
+
+        # Second call should use the nextLink URL directly
+        assert mock_client.get.call_count == 2
+        second_call_args = mock_client.get.call_args_list[1]
+        assert second_call_args[0][0] == next_link_url
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "error_type",
+        [
+            pytest.param("http_status", id="http_status_error"),
+            pytest.param("connection", id="connection_error"),
+        ],
+    )
+    async def test_raises_on_error(self, error_type):
+        from unittest.mock import MagicMock, patch
+
+        import httpx
+
+        if error_type == "http_status":
+            error = httpx.HTTPStatusError("Error", request=MagicMock(), response=MagicMock())
+        else:
+            error = httpx.ConnectError("Connection failed")
+
+        mock_client = _make_mock_async_client(error, method="get")
+
+        with (
+            patch(
+                "azurerbac.azure.roles.authenticated_management_async_client",
+                return_value=mock_client,
+            ),
+            pytest.raises((httpx.HTTPStatusError, httpx.ConnectError)),
+        ):
+            from azurerbac.azure.roles import fetch_builtin_roles_rbac_api
+
+            await fetch_builtin_roles_rbac_api()
+
+
 class TestFetchProviderOperations:
     """Tests for fetch_provider_operations with mocked Azure API."""
 

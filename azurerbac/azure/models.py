@@ -207,6 +207,41 @@ class RoleDefinition(BaseModel):
             ),
         )
 
+    @classmethod
+    def from_rbac_api(cls, item: dict[str, Any]) -> RoleDefinition:
+        """Transform an RBAC API role definition response to normalized format.
+
+        The RBAC API returns roles in the standard ARM format:
+        {
+            "id": "/providers/Microsoft.Authorization/roleDefinitions/{guid}",
+            "name": "{guid}",
+            "type": "Microsoft.Authorization/roleDefinitions",
+            "properties": { ... }
+        }
+        """
+        props = item.get("properties", {})
+
+        return cls(
+            id=item.get("id", ""),
+            name=item.get("name", ""),
+            type=item.get("type", ROLE_DEFINITION_TYPE),
+            properties=RoleProperties.model_validate(
+                {
+                    "roleName": props.get("roleName", ""),
+                    "type": props.get("type", ""),
+                    "description": props.get("description", ""),
+                    "assignableScopes": props.get("assignableScopes", []),
+                    "permissions": [
+                        Permission.model_validate(p) for p in props.get("permissions", [])
+                    ],
+                    "createdOn": props.get("createdOn", ""),
+                    "updatedOn": props.get("updatedOn", ""),
+                    "createdBy": props.get("createdBy"),
+                    "updatedBy": props.get("updatedBy"),
+                }
+            ),
+        )
+
     def to_dict(self) -> JsonDict:
         """Export to dict with canonical field names and order matching Azure API."""
         props = self.properties

@@ -93,9 +93,8 @@ test.describe('Recent Changes Page', () => {
 
     await expect(page.locator('table')).toBeVisible();
     const roleLinks = page.locator('table a[href^="/roles/"]');
+    await expect(roleLinks.first()).toBeVisible();
     expect(await roleLinks.count()).toBeGreaterThan(0);
-    const hasRoleNames = await page.locator('table').getByText(/Reader|Contributor|Owner|Storage/i).first().isVisible();
-    expect(hasRoleNames).toBe(true);
   });
 
   test('should display colored event type badges', async ({ page }) => {

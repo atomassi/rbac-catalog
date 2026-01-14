@@ -41,6 +41,7 @@ class EnvVars:
     APPLICATIONINSIGHTS_CONNECTION_STRING: Final = "APPLICATIONINSIGHTS_CONNECTION_STRING"
     IS_PRODUCTION: Final = "IS_PRODUCTION"
     PYTEST_CURRENT_TEST: Final = "PYTEST_CURRENT_TEST"
+    USE_RBAC_API: Final = "USE_RBAC_API"
 
 
 _BOOL_TRUE_VALUES: Final = frozenset({"1", "true", "yes", "y", "on"})
@@ -91,6 +92,7 @@ class Settings(BaseModel):
     enable_embeddings_in_tests: bool = False
     app_insights_connection_string: str = ""
     is_production: bool = False
+    use_rbac_api: bool = False
 
     @property
     def environment_name(self) -> str:
@@ -135,6 +137,7 @@ def _load_settings() -> Settings:
         enable_embeddings_in_tests=_get_bool(EnvVars.AZURERBAC_ENABLE_EMBEDDINGS_IN_TESTS, False),
         app_insights_connection_string=app_insights,
         is_production=_get_bool(EnvVars.IS_PRODUCTION, False),
+        use_rbac_api=_get_bool(EnvVars.USE_RBAC_API, False),
     )
 
 

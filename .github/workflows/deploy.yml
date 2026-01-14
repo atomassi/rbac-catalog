@@ -159,12 +159,15 @@ jobs:
         run: az logout
 
   # ═══════════════════════════════════════════════════════════════════════════
-  # Job 2: Deploy to staging, smoke tests, swap to production
+  # Job 2: Deploy to staging and run smoke tests
   # ═══════════════════════════════════════════════════════════════════════════
-  validate-and-deploy:
-    name: Validate and Deploy
+  deploy-staging:
+    name: Deploy to Staging
     runs-on: ubuntu-latest
     needs: build-and-push
+    environment:
+      name: staging
+      url: https://azurerbac-builtinroles-staging.azurewebsites.net
     
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8  # v6.0.1
@@ -252,6 +255,54 @@ jobs:
           pip install httpx
           python scripts/smoke_tests.py --url ${{ env.STAGING_URL }} --verbose
 
+      # Only stop staging on failure - on success, deploy-production handles it
+      - name: Stop staging slot
+        if: failure()
+        run: |
+          az webapp stop --name ${{ env.APP_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} --slot staging
+          echo "🛑 Stopped staging slot (smoke tests failed)"
+
+      - name: Remove runner IP from staging
+        if: always()
+        run: |
+          az webapp config access-restriction remove \
+            --name ${{ env.APP_NAME }} \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --slot staging \
+            --rule-name "GitHubRunner-v4" \
+            --output none || true
+          az webapp config access-restriction remove \
+            --name ${{ env.APP_NAME }} \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --slot staging \
+            --rule-name "GitHubRunner-v6" \
+            --output none || true
+          echo "🧹 Removed runner IPs from staging allowlist"
+
+      - name: Azure Logout
+        if: always()
+        run: az logout
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Job 3: Swap to production
+  # ═══════════════════════════════════════════════════════════════════════════
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [build-and-push, deploy-staging]
+    environment:
+      name: production
+      url: https://rbac-catalog.dev
+    
+    steps:
+      - name: Azure Login
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5  # v2.3.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # Staging slot is already running from deploy-staging (only stopped on failure)
       - name: Swap staging to production
         run: |
           az webapp deployment slot swap \
@@ -260,6 +311,11 @@ jobs:
             --slot staging \
             --target-slot production
           echo "🔄 Swapped staging to production"
+
+      - name: Stop staging slot
+        run: |
+          az webapp stop --name ${{ env.APP_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} --slot staging
+          echo "🛑 Stopped staging slot"
 
       - name: Notify IndexNow
         continue-on-error: true
@@ -287,30 +343,6 @@ jobs:
             echo "⚠️ IndexNow returned HTTP $RESPONSE"
             exit 1
           fi
-
-      # Cleanup always runs, even if smoke tests fail
-      - name: Stop staging slot
-        if: always()
-        run: |
-          az webapp stop --name ${{ env.APP_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} --slot staging
-          echo "🛑 Stopped staging slot"
-
-      - name: Remove runner IP from staging
-        if: always()
-        run: |
-          az webapp config access-restriction remove \
-            --name ${{ env.APP_NAME }} \
-            --resource-group ${{ env.RESOURCE_GROUP }} \
-            --slot staging \
-            --rule-name "GitHubRunner-v4" \
-            --output none || true
-          az webapp config access-restriction remove \
-            --name ${{ env.APP_NAME }} \
-            --resource-group ${{ env.RESOURCE_GROUP }} \
-            --slot staging \
-            --rule-name "GitHubRunner-v6" \
-            --output none || true
-          echo "🧹 Removed runner IPs from staging allowlist"
 
       - name: Azure Logout
         if: always()

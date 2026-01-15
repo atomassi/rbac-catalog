@@ -202,7 +202,7 @@ app.include_router(static_routes.router)
 # API routes (/api/*)
 app.include_router(api_routes.router)
 
-# Feed routes (/feeds/*, /export/*)
+# Feed routes (/feeds/*)
 app.include_router(feeds_routes.router)
 
 # Register rate limiter state and exception handler

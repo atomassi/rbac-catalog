@@ -43,7 +43,7 @@
     })();
     </script>
     <meta name="google-site-verification" content="googleec37c4d2676ac205" />
-    <title>Azure Operations List - All RBAC Operations | Azure RBAC</title>
+    <title>{{ total_operations }} Azure Operations - Complete RBAC Permissions List (2026)</title>
     <meta name="description" content="Complete list of all {{ total_operations }} Azure RBAC operations. Search operations by name, provider, or description. Find which built-in roles allow each operation.">
     <meta name="keywords" content="Azure Operations, Azure RBAC Operations, Azure Permissions, Azure Actions, Azure DataActions, Azure Control Plane, Azure Data Plane, Microsoft Azure Security">
     <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
@@ -123,6 +123,48 @@
             "@type": "SpeakableSpecification",
             "cssSelector": ["h1", ".hero-description"]
         }
+    }
+    </script>
+    
+    <!-- FAQPage Schema for Rich Snippets -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+            {
+                "@type": "Question",
+                "name": "What are Azure RBAC operations?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "Azure RBAC operations are specific actions that can be performed on Azure resources. There are currently {{ total_operations }} operations across all Azure services. Each operation follows the format Microsoft.{Provider}/{resourceType}/{action}, like Microsoft.Storage/storageAccounts/read."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "What is the difference between control plane and data plane operations?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "Control plane operations (actions) manage Azure resources through Azure Resource Manager - creating, deleting, and configuring resources. Data plane operations (dataActions) access the data within resources - reading blobs, querying databases, or sending messages. Both are defined separately in Azure RBAC roles."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "How do I find which Azure roles allow a specific operation?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "To find which roles include a specific operation: use Azure PowerShell (Get-AzRoleDefinition | Where-Object {$_.Actions -contains 'Microsoft.Storage/*/read'}), Azure CLI, or the Azure Portal's role definitions blade. You can also use online role catalogs that let you search operations and see which built-in roles grant them."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "What does a wildcard (*) mean in Azure RBAC operations?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "A wildcard (*) in Azure RBAC matches any characters in an operation name. For example, Microsoft.Storage/storageAccounts/* grants all operations on storage accounts, while */read grants read access to all resource types. Wildcards should be used carefully to maintain least privilege."
+                }
+            }
+        ]
     }
     </script>
     

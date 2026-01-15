@@ -141,6 +141,48 @@
     }
     </script>
     
+    <!-- FAQPage Schema for Rich Snippets -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+            {
+                "@type": "Question",
+                "name": "What is the principle of least privilege in Azure?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "The principle of least privilege means granting users and applications only the minimum permissions they need to perform their tasks. In Azure RBAC, this means selecting built-in roles with the fewest excess permissions rather than using broad roles like Contributor or Owner."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "How do I find which Azure role has specific permissions?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "To find which Azure role contains specific permissions: 1) Use Azure PowerShell with Get-AzRoleDefinition to list all roles and filter by action, 2) Use Azure CLI with az role definition list, or 3) Use a role recommender tool that lets you search by operation name like Microsoft.Storage/storageAccounts/read."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "What is the difference between actions and dataActions in Azure RBAC?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "Actions are control plane operations that manage Azure resources (create, delete, configure), while dataActions are data plane operations that access data within resources (read blobs, query databases). For example, Microsoft.Storage/storageAccounts/write is an action, while Microsoft.Storage/storageAccounts/blobServices/containers/blobs/read is a dataAction."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "How do I implement least privilege access in Azure?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "To implement least privilege in Azure: 1) Identify the specific operations your users or applications need, 2) Use a role recommender tool to find built-in roles that include only those permissions, 3) Choose the role with the fewest excess permissions, and 4) Assign roles at the narrowest scope possible (resource > resource group > subscription)."
+                }
+            }
+        ]
+    }
+    </script>
+    
     <!-- Favicon - Google requires simple /favicon.ico link -->
     <link rel="icon" href="/favicon.ico" sizes="any">
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">

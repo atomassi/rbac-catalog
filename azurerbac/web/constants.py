@@ -2,6 +2,7 @@
 
 from typing import Final
 
+GITHUB_ISSUES_URL: Final = "https://github.com/atomassi/azurerbac-builtinroles/issues"
 OLD_DOMAINS: Final = frozenset(
     {
         "azurerbac-builtinroles.azurewebsites.net",

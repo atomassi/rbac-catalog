@@ -390,7 +390,7 @@ class TestFeedEndpointsIntegration:
     @pytest.mark.asyncio
     async def test_feed_respects_days_param(self, test_client_with_events):
         """Feed should filter by days parameter."""
-        # Default 90 days should include our 1-day-old event
+        # Default 30 days should include our 1-day-old event
         response = await test_client_with_events.get("/feeds/changelog.atom")
         root = ET.fromstring(response.content)
         ns = {"atom": "http://www.w3.org/2005/Atom"}

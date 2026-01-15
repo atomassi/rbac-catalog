@@ -1,7 +1,10 @@
 name: Deploy
 
 on:
-  workflow_dispatch:  # Manual trigger only
+  workflow_dispatch:  # Manual trigger only - restricted to main branch
+
+# Only allow running on main branch
+run-name: Deploy from ${{ github.ref_name }}
 
 # Required permissions for OIDC authentication
 permissions:
@@ -18,11 +21,25 @@ env:
 
 jobs:
   # ═══════════════════════════════════════════════════════════════════════════
+  # Job 0: Validate branch - fail fast if not main
+  # ═══════════════════════════════════════════════════════════════════════════
+  validate-branch:
+    name: Validate Branch
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check branch
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::Deploy workflow can only be run from main branch, not ${{ github.ref_name }}"
+          exit 1
+
+  # ═══════════════════════════════════════════════════════════════════════════
   # Job 1: Create release tag and push image to ACR
   # ═══════════════════════════════════════════════════════════════════════════
   build-and-push:
     name: Build and Push Image
     runs-on: ubuntu-latest
+    needs: validate-branch
     outputs:
       version: ${{ steps.version.outputs.version }}
       new_tag: ${{ steps.version.outputs.new_tag }}

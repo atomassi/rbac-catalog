@@ -709,9 +709,9 @@
                                     <col class="hide-mobile" style="width: 25%;">
                                 </colgroup>
                                 <thead>
-                                    <tr class="bg-slate-50 dark:bg-slate-800 border-b border-slate-100 dark:border-slate-700">
-                                        <th scope="col" class="px-4 sm:px-6 py-4 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                                            <a href="{{ sort_url('name', 'desc' if sort == 'name' and order == 'asc' else 'asc') }}" class="group inline-flex items-center hover:text-slate-700 dark:hover:text-slate-300">
+                                    <tr class="bg-slate-50 border-b border-slate-100">
+                                        <th scope="col" class="px-4 sm:px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                                            <a href="{{ sort_url('name', 'desc' if sort == 'name' and order == 'asc' else 'asc') }}" class="group inline-flex items-center hover:text-slate-700">
                                                 Role Name
                                                 <span class="ml-1 flex-none">
                                                     {% if sort == 'name' %}
@@ -726,8 +726,8 @@
                                                 </span>
                                             </a>
                                         </th>
-                                        <th scope="col" class="hide-mobile px-6 py-4 text-center text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                                            <a href="{{ sort_url('actions', 'desc' if sort == 'actions' and order == 'asc' else 'asc') }}" class="group inline-flex items-center justify-center hover:text-slate-700 dark:hover:text-slate-300" title="Actions minus notActions exclusions">
+                                        <th scope="col" class="hide-mobile px-6 py-4 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                                            <a href="{{ sort_url('actions', 'desc' if sort == 'actions' and order == 'asc' else 'asc') }}" class="group inline-flex items-center justify-center hover:text-slate-700" title="Actions minus notActions exclusions">
                                                 Effective Actions
                                                 <span class="ml-1 flex-none">
                                                     {% if sort == 'actions' %}
@@ -742,8 +742,8 @@
                                                 </span>
                                             </a>
                                         </th>
-                                        <th scope="col" class="hide-mobile px-6 py-4 text-center text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                                            <a href="{{ sort_url('data_actions', 'desc' if sort == 'data_actions' and order == 'asc' else 'asc') }}" class="group inline-flex items-center justify-center hover:text-slate-700 dark:hover:text-slate-300" title="Data actions minus notDataActions exclusions">
+                                        <th scope="col" class="hide-mobile px-6 py-4 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                                            <a href="{{ sort_url('data_actions', 'desc' if sort == 'data_actions' and order == 'asc' else 'asc') }}" class="group inline-flex items-center justify-center hover:text-slate-700" title="Data actions minus notDataActions exclusions">
                                                 Effective Data Actions
                                                 <span class="ml-1 flex-none">
                                                     {% if sort == 'data_actions' %}
@@ -758,8 +758,8 @@
                                                 </span>
                                             </a>
                                         </th>
-                                        <th scope="col" class="hide-mobile px-6 py-4 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                                            <a href="{{ sort_url('updated', 'desc' if sort == 'updated' and order == 'asc' else 'asc') }}" class="group inline-flex items-center hover:text-slate-700 dark:hover:text-slate-300">
+                                        <th scope="col" class="hide-mobile px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                                            <a href="{{ sort_url('updated', 'desc' if sort == 'updated' and order == 'asc' else 'asc') }}" class="group inline-flex items-center hover:text-slate-700">
                                                 Last Updated
                                                 <span class="ml-1 flex-none">
                                                     {% if sort == 'updated' %}
@@ -776,7 +776,7 @@
                                         </th>
                                     </tr>
                                 </thead>
-                                <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
+                                <tbody class="divide-y divide-slate-100">
                                     {% for role in roles %}
                                     <tr class="hover:bg-slate-50/50 transition-colors {% if role.status == 'deleted' %}opacity-60{% endif %}">
                                         <td class="px-4 sm:px-6 py-4">
@@ -841,45 +841,45 @@
                     {% endif %}
                 {% else %}
                     <!-- Recent Changes Filter -->
-                    <div class="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-100 dark:border-slate-700">
+                    <div class="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-100">
                         <div class="flex flex-wrap items-center gap-2 sm:gap-4 sm:justify-between">
                             <!-- Event Type Filter -->
                             <div class="flex items-center gap-2">
                                 <span class="text-xs font-medium text-slate-400 uppercase tracking-wider hidden sm:inline">Filter</span>
-                                <div class="inline-flex rounded-lg bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 p-1 shadow-sm">
-                                    <a href="{{ build_recent_url(new_page=1, new_event_type='all') }}" class="px-2 sm:px-3 py-1.5 text-xs font-medium rounded-md transition-all {{ 'bg-azure-500 text-white shadow-sm' if event_type == 'all' else 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700' }}">All</a>
-                                    <a href="{{ build_recent_url(new_page=1, new_event_type='created') }}" class="px-2 sm:px-3 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-emerald-500 text-white shadow-sm' if event_type == 'created' else 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700' }}"><span class="hidden sm:inline">Created</span><span class="sm:hidden">New</span></a>
-                                    <a href="{{ build_recent_url(new_page=1, new_event_type='updated') }}" class="px-2 sm:px-3 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-blue-500 text-white shadow-sm' if event_type == 'updated' else 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700' }}"><span class="hidden sm:inline">Updated</span><span class="sm:hidden">Edit</span></a>
-                                    <a href="{{ build_recent_url(new_page=1, new_event_type='deleted') }}" class="px-2 sm:px-3 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-red-500 text-white shadow-sm' if event_type == 'deleted' else 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700' }}"><span class="hidden sm:inline">Deleted</span><span class="sm:hidden">Del</span></a>
+                                <div class="inline-flex rounded-lg bg-white border border-slate-200 p-1 shadow-sm">
+                                    <a href="{{ build_recent_url(new_page=1, new_event_type='all') }}" class="px-2 sm:px-3 py-1.5 text-xs font-medium rounded-md transition-all {{ 'bg-azure-500 text-white shadow-sm' if event_type == 'all' else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}">All</a>
+                                    <a href="{{ build_recent_url(new_page=1, new_event_type='created') }}" class="px-2 sm:px-3 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-emerald-500 text-white shadow-sm' if event_type == 'created' else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}"><span class="hidden sm:inline">Created</span><span class="sm:hidden">New</span></a>
+                                    <a href="{{ build_recent_url(new_page=1, new_event_type='updated') }}" class="px-2 sm:px-3 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-blue-500 text-white shadow-sm' if event_type == 'updated' else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}"><span class="hidden sm:inline">Updated</span><span class="sm:hidden">Edit</span></a>
+                                    <a href="{{ build_recent_url(new_page=1, new_event_type='deleted') }}" class="px-2 sm:px-3 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-red-500 text-white shadow-sm' if event_type == 'deleted' else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}"><span class="hidden sm:inline">Deleted</span><span class="sm:hidden">Del</span></a>
                                 </div>
                             </div>
                             
                             <!-- Time Range Filter -->
                             <div class="flex items-center gap-2">
                                 <span class="text-xs font-medium text-slate-400 uppercase tracking-wider hidden sm:inline">From</span>
-                                <div class="inline-flex rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 p-1 shadow-sm">
-                                    <a href="{{ build_recent_url(new_page=1, new_days=7) }}" class="px-1.5 sm:px-3 py-1.5 text-xs font-medium rounded-md transition-all {{ 'bg-slate-700 text-white shadow-sm' if days == 7 else 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700' }}"><span class="hidden sm:inline">7 days</span><span class="sm:hidden">7d</span></a>
-                                    <a href="{{ build_recent_url(new_page=1, new_days=15) }}" class="px-1.5 sm:px-3 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-slate-700 text-white shadow-sm' if days == 15 else 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700' }}"><span class="hidden sm:inline">15 days</span><span class="sm:hidden">15d</span></a>
-                                    <a href="{{ build_recent_url(new_page=1, new_days=30) }}" class="px-1.5 sm:px-3 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-slate-700 text-white shadow-sm' if days == 30 else 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700' }}"><span class="hidden sm:inline">30 days</span><span class="sm:hidden">30d</span></a>
-                                    <a href="{{ build_recent_url(new_page=1, new_days=90) }}" class="px-1.5 sm:px-3 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-slate-700 text-white shadow-sm' if days == 90 else 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700' }}"><span class="hidden sm:inline">90 days</span><span class="sm:hidden">90d</span></a>
-                                    <a href="{{ build_recent_url(new_page=1, new_days=365) }}" class="px-1.5 sm:px-3 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-slate-700 text-white shadow-sm' if days == 365 else 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700' }}"><span class="hidden sm:inline">1 year</span><span class="sm:hidden">1y</span></a>
+                                <div class="inline-flex rounded-lg bg-white border border-slate-200 p-1 shadow-sm">
+                                    <a href="{{ build_recent_url(new_page=1, new_days=7) }}" class="px-1.5 sm:px-3 py-1.5 text-xs font-medium rounded-md transition-all {{ 'bg-slate-700 text-white shadow-sm' if days == 7 else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}"><span class="hidden sm:inline">7 days</span><span class="sm:hidden">7d</span></a>
+                                    <a href="{{ build_recent_url(new_page=1, new_days=15) }}" class="px-1.5 sm:px-3 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-slate-700 text-white shadow-sm' if days == 15 else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}"><span class="hidden sm:inline">15 days</span><span class="sm:hidden">15d</span></a>
+                                    <a href="{{ build_recent_url(new_page=1, new_days=30) }}" class="px-1.5 sm:px-3 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-slate-700 text-white shadow-sm' if days == 30 else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}"><span class="hidden sm:inline">30 days</span><span class="sm:hidden">30d</span></a>
+                                    <a href="{{ build_recent_url(new_page=1, new_days=90) }}" class="px-1.5 sm:px-3 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-slate-700 text-white shadow-sm' if days == 90 else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}"><span class="hidden sm:inline">90 days</span><span class="sm:hidden">90d</span></a>
+                                    <a href="{{ build_recent_url(new_page=1, new_days=365) }}" class="px-1.5 sm:px-3 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-slate-700 text-white shadow-sm' if days == 365 else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}"><span class="hidden sm:inline">1 year</span><span class="sm:hidden">1y</span></a>
                                 </div>
                             </div>
                             
                             <!-- Per Page Filter -->
                             <div class="flex items-center gap-2">
                                 <span class="text-xs font-medium text-slate-400 uppercase tracking-wider hidden sm:inline">Show</span>
-                                <div class="inline-flex rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 p-1 shadow-sm">
-                                    <a href="{{ build_recent_url(new_page=1, new_limit=25) }}" class="px-2 py-1.5 text-xs font-medium rounded-md transition-all {{ 'bg-slate-700 text-white shadow-sm' if limit == 25 else 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700' }}">25</a>
-                                    <a href="{{ build_recent_url(new_page=1, new_limit=100) }}" class="px-2 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-slate-700 text-white shadow-sm' if limit == 100 else 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700' }}">100</a>
-                                    <a href="{{ build_recent_url(new_page=1, new_limit=500) }}" class="px-2 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-slate-700 text-white shadow-sm' if limit == 500 else 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700' }}">500</a>
+                                <div class="inline-flex rounded-lg bg-white border border-slate-200 p-1 shadow-sm">
+                                    <a href="{{ build_recent_url(new_page=1, new_limit=25) }}" class="px-2 py-1.5 text-xs font-medium rounded-md transition-all {{ 'bg-slate-700 text-white shadow-sm' if limit == 25 else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}">25</a>
+                                    <a href="{{ build_recent_url(new_page=1, new_limit=100) }}" class="px-2 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-slate-700 text-white shadow-sm' if limit == 100 else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}">100</a>
+                                    <a href="{{ build_recent_url(new_page=1, new_limit=500) }}" class="px-2 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-slate-700 text-white shadow-sm' if limit == 500 else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}">500</a>
                                 </div>
                                 <span class="text-xs text-slate-400 hidden sm:inline">per page</span>
                             </div>
                             
                             <!-- Results count -->
                             <div class="sm:ml-auto pl-0 sm:pl-4 flex items-center gap-3">
-                                <span class="inline-flex items-center px-2 sm:px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600">
+                                <span class="inline-flex items-center px-2 sm:px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">
                                     {{ total_events }} changes
                                 </span>
                                 {% if total_pages > 1 %}
@@ -894,16 +894,16 @@
                         <div class="overflow-x-auto">
                             <table class="min-w-full">
                                 <thead>
-                                    <tr class="bg-slate-50 dark:bg-slate-800 border-b border-slate-100 dark:border-slate-700">
-                                        <th scope="col" class="px-2 sm:px-6 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">Date</th>
-                                        <th scope="col" class="px-2 sm:px-6 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Role</th>
-                                        <th scope="col" class="px-2 sm:px-6 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">Event</th>
+                                    <tr class="bg-slate-50 border-b border-slate-100">
+                                        <th scope="col" class="px-2 sm:px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider whitespace-nowrap">Date</th>
+                                        <th scope="col" class="px-2 sm:px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Role</th>
+                                        <th scope="col" class="px-2 sm:px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider whitespace-nowrap">Event</th>
                                     </tr>
                                 </thead>
-                                <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
+                                <tbody class="divide-y divide-slate-100">
                                     {% for ev in events %}
-                                    <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors">
-                                        <td class="px-2 sm:px-6 py-3 whitespace-nowrap text-xs sm:text-sm font-mono tabular-nums text-slate-500 dark:text-slate-400">
+                                    <tr class="hover:bg-slate-50/50 transition-colors">
+                                        <td class="px-2 sm:px-6 py-3 whitespace-nowrap text-xs sm:text-sm font-mono tabular-nums text-slate-500">
                                             {% set event_date = ev.azure_updated_on or ev.scan_timestamp %}
                                             {{ event_date.strftime('%Y-%m-%d') if event_date else '' }}
                                         </td>
@@ -911,17 +911,17 @@
                                             <div class="text-sm font-semibold text-azure-600">
                                                 <a href="{{ role_url(ev.role_id, ev.role_name) }}" onclick="NavState.setBackContext('recent')" class="hover:text-azure-700 hover:underline">{{ ev.role_name }}</a>
                                             </div>
-                                            <code class="text-xs font-mono text-slate-400 dark:text-slate-500 hidden sm:block">{{ ev.role_id }}</code>
+                                            <code class="text-xs font-mono text-slate-400 hidden sm:block">{{ ev.role_id }}</code>
                                         </td>
                                         <td class="px-2 sm:px-6 py-3 whitespace-nowrap">
                                             {% if ev.event_type == 'created' %}
-                                                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-400"><span class="hidden sm:inline">Created</span><span class="sm:hidden">New</span></span>
+                                                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-700"><span class="hidden sm:inline">Created</span><span class="sm:hidden">New</span></span>
                                             {% elif ev.event_type == 'updated' %}
-                                                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-400"><span class="hidden sm:inline">Updated</span><span class="sm:hidden">Edit</span></span>
+                                                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700"><span class="hidden sm:inline">Updated</span><span class="sm:hidden">Edit</span></span>
                                             {% elif ev.event_type == 'deleted' %}
-                                                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-400"><span class="hidden sm:inline">Deleted</span><span class="sm:hidden">Del</span></span>
+                                                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700"><span class="hidden sm:inline">Deleted</span><span class="sm:hidden">Del</span></span>
                                             {% else %}
-                                                <span class="text-xs text-slate-600 dark:text-slate-400">{{ ev.event_type }}</span>
+                                                <span class="text-xs text-slate-600">{{ ev.event_type }}</span>
                                             {% endif %}
                                         </td>
                                     </tr>
@@ -931,22 +931,22 @@
                         </div>
                         <!-- Recent Changes Pagination -->
                         {% if total_pages > 1 %}
-                        <div class="px-4 sm:px-6 py-4 border-t border-slate-100 dark:border-slate-700 bg-slate-50/30 dark:bg-slate-800/30">
+                        <div class="px-4 sm:px-6 py-4 border-t border-slate-100 bg-slate-50/30">
                             <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
-                                <div class="text-sm text-slate-500 dark:text-slate-400">
-                                    Showing <span class="font-semibold text-slate-700 dark:text-slate-300">{{ (page - 1) * limit + 1 }}</span> to <span class="font-semibold text-slate-700 dark:text-slate-300">{{ [page * limit, total_events] | min }}</span> of <span class="font-semibold text-slate-700 dark:text-slate-300">{{ total_events }}</span> changes
+                                <div class="text-sm text-slate-500">
+                                    Showing <span class="font-semibold text-slate-700">{{ (page - 1) * limit + 1 }}</span> to <span class="font-semibold text-slate-700">{{ [page * limit, total_events] | min }}</span> of <span class="font-semibold text-slate-700">{{ total_events }}</span> changes
                                 </div>
                                 <nav class="flex items-center space-x-1" aria-label="Pagination">
                                     <!-- Previous -->
                                     {% if page > 1 %}
-                                    <a href="{{ build_recent_url(new_page=page - 1) }}" class="inline-flex items-center px-3 py-2 text-sm font-medium text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 hover:text-slate-700 dark:hover:text-slate-300 transition-colors">
+                                    <a href="{{ build_recent_url(new_page=page - 1) }}" class="inline-flex items-center px-3 py-2 text-sm font-medium text-slate-500 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:text-slate-700 transition-colors">
                                         <svg class="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
                                         </svg>
                                         Prev
                                     </a>
                                     {% else %}
-                                    <span class="inline-flex items-center px-3 py-2 text-sm font-medium text-slate-300 dark:text-slate-600 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-lg cursor-not-allowed">
+                                    <span class="inline-flex items-center px-3 py-2 text-sm font-medium text-slate-300 bg-slate-50 border border-slate-100 rounded-lg cursor-not-allowed">
                                         <svg class="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
                                         </svg>
@@ -960,39 +960,39 @@
                                     {% set show_end_ellipsis = page < total_pages - window - 1 %}
                                     
                                     {% if page > window + 1 %}
-                                    <a href="{{ build_recent_url(new_page=1) }}" class="hidden sm:inline-flex items-center px-3 py-2 text-sm font-medium text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">1</a>
+                                    <a href="{{ build_recent_url(new_page=1) }}" class="hidden sm:inline-flex items-center px-3 py-2 text-sm font-medium text-slate-500 bg-white border border-slate-200 rounded-lg hover:bg-slate-50">1</a>
                                     {% endif %}
                                     
                                     {% if show_start_ellipsis %}
-                                    <span class="hidden sm:inline-flex items-center px-2 py-2 text-sm text-slate-400 dark:text-slate-500">...</span>
+                                    <span class="hidden sm:inline-flex items-center px-2 py-2 text-sm text-slate-400">...</span>
                                     {% endif %}
                                     
                                     {% for p in range([1, page - window] | max, [total_pages, page + window] | min + 1) %}
                                     {% if p == page %}
                                     <span class="inline-flex items-center px-3 py-2 text-sm font-semibold text-white bg-azure-500 border border-azure-500 rounded-lg">{{ p }}</span>
                                     {% else %}
-                                    <a href="{{ build_recent_url(new_page=p) }}" class="hidden sm:inline-flex items-center px-3 py-2 text-sm font-medium text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">{{ p }}</a>
+                                    <a href="{{ build_recent_url(new_page=p) }}" class="hidden sm:inline-flex items-center px-3 py-2 text-sm font-medium text-slate-500 bg-white border border-slate-200 rounded-lg hover:bg-slate-50">{{ p }}</a>
                                     {% endif %}
                                     {% endfor %}
                                     
                                     {% if show_end_ellipsis %}
-                                    <span class="hidden sm:inline-flex items-center px-2 py-2 text-sm text-slate-400 dark:text-slate-500">...</span>
+                                    <span class="hidden sm:inline-flex items-center px-2 py-2 text-sm text-slate-400">...</span>
                                     {% endif %}
                                     
                                     {% if page < total_pages - window %}
-                                    <a href="{{ build_recent_url(new_page=total_pages) }}" class="hidden sm:inline-flex items-center px-3 py-2 text-sm font-medium text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">{{ total_pages }}</a>
+                                    <a href="{{ build_recent_url(new_page=total_pages) }}" class="hidden sm:inline-flex items-center px-3 py-2 text-sm font-medium text-slate-500 bg-white border border-slate-200 rounded-lg hover:bg-slate-50">{{ total_pages }}</a>
                                     {% endif %}
                                     
                                     <!-- Next -->
                                     {% if page < total_pages %}
-                                    <a href="{{ build_recent_url(new_page=page + 1) }}" class="inline-flex items-center px-3 py-2 text-sm font-medium text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 hover:text-slate-700 dark:hover:text-slate-300 transition-colors">
+                                    <a href="{{ build_recent_url(new_page=page + 1) }}" class="inline-flex items-center px-3 py-2 text-sm font-medium text-slate-500 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:text-slate-700 transition-colors">
                                         Next
                                         <svg class="w-4 h-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
                                         </svg>
                                     </a>
                                     {% else %}
-                                    <span class="inline-flex items-center px-3 py-2 text-sm font-medium text-slate-300 dark:text-slate-600 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-lg cursor-not-allowed">
+                                    <span class="inline-flex items-center px-3 py-2 text-sm font-medium text-slate-300 bg-slate-50 border border-slate-100 rounded-lg cursor-not-allowed">
                                         Next
                                         <svg class="w-4 h-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />

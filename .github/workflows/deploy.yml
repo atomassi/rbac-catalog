@@ -1,11 +1,7 @@
 name: Deploy
 
 on:
-  workflow_dispatch:  # Manual trigger
-  workflow_run:
-    workflows: ["Build"]
-    types: [completed]
-    branches: [release]
+  workflow_dispatch:  # Manual trigger only
 
 # Required permissions for OIDC authentication
 permissions:
@@ -27,7 +23,6 @@ jobs:
   build-and-push:
     name: Build and Push Image
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     outputs:
       version: ${{ steps.version.outputs.version }}
       new_tag: ${{ steps.version.outputs.new_tag }}

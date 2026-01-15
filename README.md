@@ -166,7 +166,7 @@ Deployments use a **staging-first approach** with automatic promotion:
 
 ```mermaid
 flowchart LR
-    A[Push to release] --> B[Build Docker image]
+    A[Manual trigger on main] --> B[Build Docker image]
     B --> C[Push to ACR]
     C --> D[Deploy to staging slot]
     D --> E[Run smoke tests]

@@ -164,6 +164,12 @@ REQUIRED_SECURITY_HEADERS: Final = [
     ("X-Frame-Options", "DENY"),
 ]
 
+# RSS/Atom feed endpoints - (name, path, expected_content_type, xml_root_element)
+FEED_ENDPOINTS: Final = [
+    ("Feed: Atom changelog", "/feeds/changelog.atom", "application/atom+xml", "feed"),
+    ("Feed: RSS changelog", "/feeds/changelog.rss", "application/rss+xml", "rss"),
+]
+
 
 @dataclass(slots=True)
 class TestResult:
@@ -322,6 +328,70 @@ async def test_edge_case(
             expected=expected_codes[0],
             response_time=elapsed,
             message="" if passed else f"Expected one of {expected_codes}",
+        )
+    except httpx.RequestError as e:
+        return TestResult(name=name, passed=False, message=str(e))
+
+
+async def test_feed_endpoint(
+    client: httpx.AsyncClient,
+    name: str,
+    path: str,
+    expected_content_type: str,
+    expected_root_element: str,
+) -> TestResult:
+    """Test an RSS/Atom feed endpoint returns valid XML with correct content type."""
+    start = time.monotonic()
+    try:
+        response = await client.get(path)
+        elapsed = time.monotonic() - start
+
+        if response.status_code != 200:
+            return TestResult(
+                name=name,
+                passed=False,
+                status_code=response.status_code,
+                expected=200,
+                response_time=elapsed,
+            )
+
+        # Check content type
+        content_type = response.headers.get("content-type", "")
+        if expected_content_type not in content_type:
+            return TestResult(
+                name=name,
+                passed=False,
+                status_code=200,
+                response_time=elapsed,
+                message=f"Wrong content-type: {content_type}",
+                details={"expected": expected_content_type, "actual": content_type},
+            )
+
+        # Check for valid XML with expected root element
+        content = response.text
+        has_xml_decl = content.strip().startswith("<?xml")
+        has_root_element = f"<{expected_root_element}" in content
+
+        if not has_xml_decl or not has_root_element:
+            return TestResult(
+                name=name,
+                passed=False,
+                status_code=200,
+                response_time=elapsed,
+                message="Invalid XML structure",
+                details={"has_xml_decl": has_xml_decl, "has_root": has_root_element},
+            )
+
+        # Check cache headers
+        cache_control = response.headers.get("cache-control", "")
+        has_cache = "max-age" in cache_control
+
+        return TestResult(
+            name=name,
+            passed=True,
+            status_code=200,
+            response_time=elapsed,
+            details={"has_cache_header": has_cache, "content_length": len(content)},
         )
     except httpx.RequestError as e:
         return TestResult(name=name, passed=False, message=str(e))
@@ -602,6 +672,18 @@ async def _run_api_tests(client: httpx.AsyncClient, verbose: bool) -> list[TestR
     return results
 
 
+async def _run_feed_tests(client: httpx.AsyncClient, verbose: bool) -> list[TestResult]:
+    """Run RSS/Atom feed endpoint tests."""
+    print("\n📡 Testing RSS/Atom Feeds...")
+    print("-" * 40)
+    results: list[TestResult] = []
+    for name, path, content_type, root_element in FEED_ENDPOINTS:
+        result = await test_feed_endpoint(client, name, path, content_type, root_element)
+        print_result(result, verbose)
+        results.append(result)
+    return results
+
+
 async def _run_ai_tests(client: httpx.AsyncClient, verbose: bool) -> list[TestResult]:
     """Run AI recommender tests for all modes."""
     print("\n🤖 Testing AI Recommender Modes...")
@@ -754,6 +836,7 @@ async def run_smoke_tests(base_url: str, verbose: bool = False) -> bool:
 
         results.extend(await _run_static_tests(client, verbose))
         results.extend(await _run_api_tests(client, verbose))
+        results.extend(await _run_feed_tests(client, verbose))
         results.extend(await _run_ai_tests(client, verbose))
         results.extend(await _run_edge_and_security_tests(client, verbose))
         results.extend(await _run_infra_tests(client, verbose))

@@ -1312,3 +1312,74 @@ test.describe('Performance', () => {
     expect(responseTime).toBeLessThan(2000);
   });
 });
+
+// =============================================================================
+// RSS/ATOM FEEDS
+// =============================================================================
+test.describe('RSS/Atom Feeds', () => {
+  test('Atom feed returns valid XML', async ({ request }) => {
+    const response = await request.get('/feeds/changelog.atom');
+    expect(response.status()).toBe(200);
+    expect(response.headers()['content-type']).toContain('application/atom+xml');
+    
+    const body = await response.text();
+    expect(body).toContain('<feed');
+    expect(body).toContain('xmlns="http://www.w3.org/2005/Atom"');
+    expect(body).toContain('<title>Azure RBAC Role Changes</title>');
+  });
+
+  test('RSS feed returns valid XML', async ({ request }) => {
+    const response = await request.get('/feeds/changelog.rss');
+    expect(response.status()).toBe(200);
+    expect(response.headers()['content-type']).toContain('application/rss+xml');
+    
+    const body = await response.text();
+    expect(body).toContain('<rss version="2.0"');
+    expect(body).toContain('<channel>');
+    expect(body).toContain('<title>Azure RBAC Role Changes</title>');
+  });
+
+  test('Atom feed respects days parameter', async ({ request }) => {
+    const response = await request.get('/feeds/changelog.atom?days=7');
+    expect(response.status()).toBe(200);
+  });
+
+  test('RSS feed respects limit parameter', async ({ request }) => {
+    const response = await request.get('/feeds/changelog.rss?limit=10');
+    expect(response.status()).toBe(200);
+  });
+
+  test('Feed has cache-control header', async ({ request }) => {
+    const response = await request.get('/feeds/changelog.atom');
+    expect(response.headers()['cache-control']).toContain('max-age');
+  });
+
+  test('Feeds reject invalid parameters', async ({ request }) => {
+    // days=0 is invalid (min 1)
+    const response1 = await request.get('/feeds/changelog.atom?days=0');
+    expect(response1.status()).toBe(422);
+
+    // days=500 is invalid (max 365)
+    const response2 = await request.get('/feeds/changelog.rss?days=500');
+    expect(response2.status()).toBe(422);
+  });
+
+  test('Subscribe button visible on Recent Changes page', async ({ page }) => {
+    await page.goto('/recent');
+    const subscribeLink = page.locator('a[href="/feeds/changelog.atom"]');
+    await expect(subscribeLink).toBeVisible();
+    await expect(subscribeLink).toContainText('Subscribe');
+  });
+
+  test('Feed autodiscovery links in page head', async ({ page }) => {
+    await page.goto('/recent');
+    
+    // Check for Atom autodiscovery link
+    const atomLink = page.locator('link[rel="alternate"][type="application/atom+xml"]');
+    await expect(atomLink).toHaveAttribute('href', /\/feeds\/changelog\.atom/);
+    
+    // Check for RSS autodiscovery link
+    const rssLink = page.locator('link[rel="alternate"][type="application/rss+xml"]');
+    await expect(rssLink).toHaveAttribute('href', /\/feeds\/changelog\.rss/);
+  });
+});

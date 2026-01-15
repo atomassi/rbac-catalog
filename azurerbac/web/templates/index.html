@@ -71,6 +71,10 @@
     <meta name="author" content="Azure RBAC Catalog">
     <link rel="canonical" href="{{ site_url }}/{{ '' if tab == 'recent' else tab }}">
     
+    <!-- RSS/Atom Feed Autodiscovery -->
+    <link rel="alternate" type="application/atom+xml" title="Azure RBAC Role Changes (Atom)" href="{{ site_url }}/feeds/changelog.atom">
+    <link rel="alternate" type="application/rss+xml" title="Azure RBAC Role Changes (RSS)" href="{{ site_url }}/feeds/changelog.rss">
+    
     <!-- Open Graph / Facebook -->
     {% if tab == 'recent' %}
     <meta property="og:title" content="Azure RBAC Recent Changes - Monitor New, Updated, and Deleted Roles">
@@ -504,6 +508,10 @@
                 <p class="hero-description text-azure-200 text-lg">
                     {% if tab == 'recent' %}
                     Track additions, updates, and deletions to Azure built-in role definitions from the last <span class="font-semibold text-white">{{ days }} days</span>
+                    <a href="/feeds/changelog.atom" class="inline-flex items-center gap-1 ml-3 text-azure-200 hover:text-orange-400 transition-colors" title="Subscribe to changelog via RSS/Atom">
+                        <svg class="w-4 h-4" viewBox="0 0 24 24" aria-hidden="true"><rect width="24" height="24" rx="4" fill="#f97316"/><circle cx="7" cy="17" r="2.5" fill="white"/><path d="M5 12.5c3.5 0 6.5 3 6.5 6.5h3c0-5.25-4.25-9.5-9.5-9.5v3z" fill="white"/><path d="M5 7c6.5 0 12 5.5 12 12h3c0-8.25-6.75-15-15-15v3z" fill="white"/></svg>
+                        Subscribe
+                    </a>
                     {% else %}
                     Complete list of all {{ total_roles }} Azure built-in roles with permissions, actions, and JSON definitions
                     {% endif %}
@@ -1020,6 +1028,10 @@
                         <a href="/recommend" class="ai-nav-link text-slate-600 hover:text-azure-600 transition-colors">Role Recommender</a>
                         <a href="/about" class="ai-nav-link text-slate-600 hover:text-azure-600 transition-colors">About</a>
                         <a href="/sitemap.xml" class="text-slate-600 hover:text-azure-600 transition-colors">Sitemap</a>
+                        <span class="hidden sm:inline text-slate-300">|</span>
+                        <a href="/feeds/changelog.atom" class="text-slate-600 hover:text-orange-500 transition-colors" title="Subscribe via RSS/Atom">
+                            <svg class="w-5 h-5" viewBox="0 0 24 24" aria-hidden="true"><rect width="24" height="24" rx="4" fill="#f97316"/><circle cx="7" cy="17" r="2.5" fill="white"/><path d="M5 12.5c3.5 0 6.5 3 6.5 6.5h3c0-5.25-4.25-9.5-9.5-9.5v3z" fill="white"/><path d="M5 7c6.5 0 12 5.5 12 12h3c0-8.25-6.75-15-15-15v3z" fill="white"/></svg>
+                        </a>
                     </nav>
                     <div class="text-center px-4">
                         <p class="text-sm text-slate-600">Azure RBAC Built-in Role Definitions Catalog — Track changes to <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles" target="_blank" rel="noopener noreferrer" class="text-azure-600 underline font-medium hover:text-azure-700">Azure built-in roles</a></p>

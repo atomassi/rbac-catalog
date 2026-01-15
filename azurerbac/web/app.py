@@ -56,6 +56,7 @@ from azurerbac.web.middleware import (
 )
 from azurerbac.web.routes import api as api_routes
 from azurerbac.web.routes import dashboard as dashboard_routes
+from azurerbac.web.routes import feeds as feeds_routes
 from azurerbac.web.routes import health as health_routes
 from azurerbac.web.routes import pages as pages_routes
 from azurerbac.web.routes import static as static_routes
@@ -200,6 +201,9 @@ app.include_router(static_routes.router)
 
 # API routes (/api/*)
 app.include_router(api_routes.router)
+
+# Feed routes (/feeds/*)
+app.include_router(feeds_routes.router)
 
 # Register rate limiter state and exception handler
 from azurerbac.web.limiter import limiter

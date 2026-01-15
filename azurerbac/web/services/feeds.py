@@ -22,6 +22,10 @@ def _build_rich_content(event: CachedChangeEvent, site_url: str) -> str:
     role_escaped = html.escape(event.role_name)
     parts.append(f"<p><strong>{role_escaped}</strong> was <strong>{event_label}</strong></p>")
 
+    # Role ID
+    role_id_escaped = html.escape(event.role_id)
+    parts.append(f"<p><strong>Role ID:</strong> <code>{role_id_escaped}</code></p>")
+
     # Summary of changed fields
     if event.summary:
         escaped_summary = html.escape(event.summary)
@@ -99,7 +103,8 @@ def build_atom_feed(
         # Category for event type
         SubElement(entry, "category", term=event.event_type, label=event_label)
 
-    return tostring(feed, encoding="unicode").encode("utf-8")
+    xml_decl = b'<?xml version="1.0" encoding="utf-8"?>\n'
+    return xml_decl + tostring(feed, encoding="unicode").encode("utf-8")
 
 
 def build_rss_feed(
@@ -152,7 +157,8 @@ def build_rss_feed(
         category = SubElement(item, "category")
         category.text = event_label
 
-    return tostring(rss, encoding="unicode").encode("utf-8")
+    xml_decl = b'<?xml version="1.0" encoding="utf-8"?>\n'
+    return xml_decl + tostring(rss, encoding="unicode").encode("utf-8")
 
 
 def get_recent_events(

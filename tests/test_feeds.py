@@ -556,6 +556,25 @@ class TestBuildRichContent:
         assert 'href="https://example.com/roles/my-role-id"' in result
         assert "View full role details" in result
 
+    @pytest.mark.parametrize(
+        "event_type",
+        [EventType.CREATED, EventType.DELETED],
+        ids=["created", "deleted"],
+    )
+    def test_rich_content_no_changed_fields_for_create_delete(self, event_type):
+        """Should not show 'Changed fields' for created or deleted events."""
+        event = CachedChangeEvent(
+            id=1,
+            role_id="test-role",
+            role_name="Test Role",
+            event_type=event_type,
+            scan_timestamp=dt.datetime.now(dt.UTC),
+            azure_updated_on=None,
+            summary="some summary that should be ignored",
+        )
+        result = _build_rich_content(event, "https://example.com")
+        assert "Changed fields:" not in result
+
 
 class TestFeedBuilderParametrized:
     """Parametrized tests for feed building."""

@@ -26,8 +26,8 @@ def _build_rich_content(event: CachedChangeEvent, site_url: str) -> str:
     role_id_escaped = html.escape(event.role_id)
     parts.append(f"<p><strong>Role ID:</strong> <code>{role_id_escaped}</code></p>")
 
-    # Summary of changed fields
-    if event.summary:
+    # Summary of changed fields (only for updates, not creates/deletes)
+    if event.summary and event.event_type == "updated":
         escaped_summary = html.escape(event.summary)
         parts.append(f"<p><strong>Changed fields:</strong> {escaped_summary}</p>")
 

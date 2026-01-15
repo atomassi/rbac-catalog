@@ -3,8 +3,28 @@ name: Build
 on:
   push:
     branches: [main, release]
+    paths:
+      - 'azurerbac/**'
+      - 'tests/**'
+      - 'e2e/**'
+      - 'requirements.txt'
+      - 'pyproject.toml'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tailwind.config.js'
+      - 'playwright.config.ts'
   pull_request:
     branches: [main, release]
+    paths:
+      - 'azurerbac/**'
+      - 'tests/**'
+      - 'e2e/**'
+      - 'requirements.txt'
+      - 'pyproject.toml'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tailwind.config.js'
+      - 'playwright.config.ts'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}

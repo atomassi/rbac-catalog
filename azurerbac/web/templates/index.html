@@ -931,75 +931,27 @@
                         </div>
                         <!-- Recent Changes Pagination -->
                         {% if total_pages > 1 %}
-                        <div class="px-4 sm:px-6 py-4 border-t border-slate-100 bg-slate-50/30">
-                            <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
-                                <div class="text-sm text-slate-500">
-                                    Showing <span class="font-semibold text-slate-700">{{ (page - 1) * limit + 1 }}</span> to <span class="font-semibold text-slate-700">{{ [page * limit, total_events] | min }}</span> of <span class="font-semibold text-slate-700">{{ total_events }}</span> changes
-                                </div>
-                                <nav class="flex items-center space-x-1" aria-label="Pagination">
-                                    <!-- Previous -->
-                                    {% if page > 1 %}
-                                    <a href="{{ build_recent_url(new_page=page - 1) }}" class="inline-flex items-center px-3 py-2 text-sm font-medium text-slate-500 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:text-slate-700 transition-colors">
+                        <div class="px-6 py-4 flex items-center justify-between border-t border-slate-100">
+                            <div class="text-sm text-slate-500">
+                                Page <span class="font-semibold text-slate-700">{{ page }}</span> of <span class="font-semibold text-slate-700">{{ total_pages }}</span>
+                            </div>
+                            <div class="flex space-x-2">
+                                {% if page > 1 %}
+                                    <a href="{{ build_recent_url(new_page=page - 1) }}" class="inline-flex items-center px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-all">
                                         <svg class="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
                                         </svg>
-                                        Prev
+                                        Previous
                                     </a>
-                                    {% else %}
-                                    <span class="inline-flex items-center px-3 py-2 text-sm font-medium text-slate-300 bg-slate-50 border border-slate-100 rounded-lg cursor-not-allowed">
-                                        <svg class="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-                                        </svg>
-                                        Prev
-                                    </span>
-                                    {% endif %}
-                                    
-                                    <!-- Page numbers -->
-                                    {% set window = 2 %}
-                                    {% set show_start_ellipsis = page > window + 2 %}
-                                    {% set show_end_ellipsis = page < total_pages - window - 1 %}
-                                    
-                                    {% if page > window + 1 %}
-                                    <a href="{{ build_recent_url(new_page=1) }}" class="hidden sm:inline-flex items-center px-3 py-2 text-sm font-medium text-slate-500 bg-white border border-slate-200 rounded-lg hover:bg-slate-50">1</a>
-                                    {% endif %}
-                                    
-                                    {% if show_start_ellipsis %}
-                                    <span class="hidden sm:inline-flex items-center px-2 py-2 text-sm text-slate-400">...</span>
-                                    {% endif %}
-                                    
-                                    {% for p in range([1, page - window] | max, [total_pages, page + window] | min + 1) %}
-                                    {% if p == page %}
-                                    <span class="inline-flex items-center px-3 py-2 text-sm font-semibold text-white bg-azure-500 border border-azure-500 rounded-lg">{{ p }}</span>
-                                    {% else %}
-                                    <a href="{{ build_recent_url(new_page=p) }}" class="hidden sm:inline-flex items-center px-3 py-2 text-sm font-medium text-slate-500 bg-white border border-slate-200 rounded-lg hover:bg-slate-50">{{ p }}</a>
-                                    {% endif %}
-                                    {% endfor %}
-                                    
-                                    {% if show_end_ellipsis %}
-                                    <span class="hidden sm:inline-flex items-center px-2 py-2 text-sm text-slate-400">...</span>
-                                    {% endif %}
-                                    
-                                    {% if page < total_pages - window %}
-                                    <a href="{{ build_recent_url(new_page=total_pages) }}" class="hidden sm:inline-flex items-center px-3 py-2 text-sm font-medium text-slate-500 bg-white border border-slate-200 rounded-lg hover:bg-slate-50">{{ total_pages }}</a>
-                                    {% endif %}
-                                    
-                                    <!-- Next -->
-                                    {% if page < total_pages %}
-                                    <a href="{{ build_recent_url(new_page=page + 1) }}" class="inline-flex items-center px-3 py-2 text-sm font-medium text-slate-500 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:text-slate-700 transition-colors">
+                                {% endif %}
+                                {% if page < total_pages %}
+                                    <a href="{{ build_recent_url(new_page=page + 1) }}" class="inline-flex items-center px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-all">
                                         Next
                                         <svg class="w-4 h-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
                                         </svg>
                                     </a>
-                                    {% else %}
-                                    <span class="inline-flex items-center px-3 py-2 text-sm font-medium text-slate-300 bg-slate-50 border border-slate-100 rounded-lg cursor-not-allowed">
-                                        Next
-                                        <svg class="w-4 h-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                                        </svg>
-                                    </span>
-                                    {% endif %}
-                                </nav>
+                                {% endif %}
                             </div>
                         </div>
                         {% endif %}

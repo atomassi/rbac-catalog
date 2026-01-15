@@ -257,7 +257,7 @@
                 "name": "How many Azure built-in roles are there?",
                 "acceptedAnswer": {
                     "@type": "Answer",
-                    "text": "There are currently {{ total_roles }} Azure built-in roles. This number grows as Microsoft adds new Azure services and features. This site monitors and tracks all changes to these roles."
+                    "text": "There are currently {{ total_roles }} Azure built-in roles. This number grows regularly as Microsoft adds new Azure services and features. You can list all roles using Azure CLI (az role definition list) or PowerShell (Get-AzRoleDefinition)."
                 }
             },
             {
@@ -273,7 +273,7 @@
                 "name": "How do I find the right Azure role for my needs?",
                 "acceptedAnswer": {
                     "@type": "Answer",
-                    "text": "Use our Role Recommender tool to find the least-privilege Azure built-in role. Enter the operations you need (like Microsoft.Storage/storageAccounts/read) and get recommendations for the most appropriate role with minimal excess permissions."
+                    "text": "Start with the principle of least privilege: identify the specific operations needed, then find the built-in role with the smallest permission set that covers them. Check the Azure documentation for service-specific roles (like Storage Blob Data Reader) before using broad roles like Contributor."
                 }
             },
             {
@@ -281,7 +281,7 @@
                 "name": "Where can I find the role definition ID for an Azure built-in role?",
                 "acceptedAnswer": {
                     "@type": "Answer",
-                    "text": "Each Azure built-in role has a unique GUID as its role definition ID. You can find these IDs on this site by clicking on any role to view its details. For example, the Contributor role ID is b24988ac-6180-42a0-ab88-20f7382dd24c."
+                    "text": "Role definition IDs are GUIDs that uniquely identify each role. Find them using: Azure Portal (IAM > Roles > click role > JSON), Azure CLI (az role definition list --query \"[].{name:roleName, id:name}\"), or PowerShell (Get-AzRoleDefinition). Example: Contributor is b24988ac-6180-42a0-ab88-20f7382dd24c."
                 }
             },
             {
@@ -297,7 +297,7 @@
                 "name": "How often are Azure built-in roles updated by Microsoft?",
                 "acceptedAnswer": {
                     "@type": "Answer",
-                    "text": "Microsoft updates Azure built-in roles regularly as new Azure services and features are released. This site monitors for changes daily and shows the complete change history for each role, including what permissions were added or removed."
+                    "text": "Microsoft updates Azure built-in roles regularly as new services launch and existing services add features. Major updates often coincide with new Azure service releases. You can track changes via the Azure updates feed or by periodically querying role definitions with Azure CLI or PowerShell."
                 }
             },
             {

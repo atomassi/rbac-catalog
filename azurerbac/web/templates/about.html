@@ -40,6 +40,87 @@
     <meta name="twitter:image" content="{{ site_url }}/static/images/og-image.png">
     <meta name="twitter:image:alt" content="Azure RBAC Catalog - About">
     
+    <!-- SoftwareApplication Schema -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "Azure RBAC Catalog",
+        "applicationCategory": "SecurityApplication",
+        "operatingSystem": "Web",
+        "description": "Free tool to browse, search, and monitor Azure built-in RBAC roles and permissions. Find least-privilege roles and track Microsoft's role changes.",
+        "url": "{{ site_url }}/",
+        "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "USD"
+        },
+        "featureList": [
+            "Browse {{ total_roles }}+ Azure built-in roles",
+            "Search {{ total_operations }}+ resource provider operations",
+            "Track role changes and updates",
+            "AI-powered role recommendations",
+            "Least-privilege role finder"
+        ]
+    }
+    </script>
+    
+    <!-- FAQPage Schema -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+            {
+                "@type": "Question",
+                "name": "What is Azure RBAC and how does it work?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "Azure RBAC (Role-Based Access Control) is Microsoft's authorization system for managing access to Azure resources. It works by assigning roles to users, groups, or service principals at a specific scope (management group, subscription, resource group, or resource). Each role contains a set of permissions that define what actions can be performed."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "What is the difference between Azure roles and Microsoft Entra roles?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "Azure roles (RBAC) control access to Azure resources like VMs, storage accounts, and databases. Microsoft Entra roles (formerly Azure AD roles) control access to Entra ID resources like users, groups, and applications. They are separate systems - an Entra Global Administrator doesn't automatically have access to Azure resources, and vice versa."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "Should I use built-in roles or custom roles in Azure?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "Use built-in roles whenever possible - they're maintained by Microsoft, well-tested, and cover most scenarios. Create custom roles only when no built-in role meets your needs and you need to grant a specific subset of permissions. Custom roles add management overhead and should be reviewed regularly."
+                }
+            }
+        ]
+    }
+    </script>
+    
+    <!-- Breadcrumb Schema -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+            {
+                "@type": "ListItem",
+                "position": 1,
+                "name": "Home",
+                "item": "{{ site_url }}/"
+            },
+            {
+                "@type": "ListItem",
+                "position": 2,
+                "name": "About",
+                "item": "{{ site_url }}/about"
+            }
+        ]
+    }
+    </script>
+    
     <!-- Favicon - Google requires simple /favicon.ico link -->
     <link rel="icon" href="/favicon.ico" sizes="any">
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">

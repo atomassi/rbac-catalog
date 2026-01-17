@@ -51,7 +51,12 @@ class FileCacheBackend(CacheBackend):
     @staticmethod
     def _reconstruct_coverage_data(data_dict: dict) -> None:
         """Reconstruct coverage-related NamedTuples from raw data in place."""
-        from azurerbac.matching.models import CacheOpsCount, RoleCoverage, RoleNetPermissions
+        from azurerbac.matching.models import (
+            CacheOpsCount,
+            CoverageResult,
+            RoleCoverage,
+            RoleNetPermissions,
+        )
 
         if role_coverage := data_dict.get("role_coverage"):
             data_dict["role_coverage"] = {
@@ -66,7 +71,9 @@ class FileCacheBackend(CacheBackend):
                 k: RoleNetPermissions(v[0], v[1]) for k, v in role_net_perms.items()
             }
         if partial_cov := data_dict.get("partial_coverage"):
-            data_dict["partial_coverage"] = {k: tuple(v) for k, v in partial_cov.items()}
+            data_dict["partial_coverage"] = {
+                k: CoverageResult(v[0], v[1], v[2], v[3]) for k, v in partial_cov.items()
+            }
         # Reconstruct CacheOpsCount from tuple/list
         ops_count = data_dict.get("cache_ops_count")
         if isinstance(ops_count, (tuple, list)) and len(ops_count) == 2:

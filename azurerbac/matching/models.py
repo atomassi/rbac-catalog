@@ -27,22 +27,13 @@ class Plane(Enum):
 WildcardKey = str
 
 
-class WildcardCoverageResult(NamedTuple):
-    """Result of wildcard pattern coverage calculation."""
+class CoverageResult(NamedTuple):
+    """Coverage statistics for wildcard patterns."""
 
     covered: int
     total: int
     uncovered: int
     uncovered_samples: list[str]
-
-
-class PartialCoverageInfo(NamedTuple):
-    """Partial coverage tracking for wildcard patterns."""
-
-    covered: int
-    total: int
-    uncovered: int
-    samples: list[str]
 
 
 class RoleCoverage(NamedTuple):
@@ -90,7 +81,7 @@ class ExpandedMissing(NamedTuple):
 
 
 class RoleInfo(NamedTuple):
-    """Basic role information extracted from RoleDefinition."""
+    """Basic role information."""
 
     role_id: str
     role_name: str
@@ -99,12 +90,7 @@ class RoleInfo(NamedTuple):
 
 
 class PatternCacheKey(NamedTuple):
-    """Cache key for pattern matching results.
-
-    Attributes:
-        pattern: Lowercase action pattern (e.g., "*/read", "microsoft.compute/*").
-        plane: The operation plane (CONTROL or DATA).
-    """
+    """Cache key for pattern matching."""
 
     pattern: str
     plane: Plane
@@ -126,7 +112,6 @@ class PartialCoverageCacheKey(NamedTuple):
         actions: list[str],
         not_actions: list[str],
     ) -> PartialCoverageCacheKey | None:
-        """Build a cache key, returning None if caching is disabled."""
         if plane is None:
             return None
         return cls(
@@ -148,11 +133,9 @@ class ClassifiedOperations:
 
     @property
     def all_requested(self) -> frozenset[str]:
-        """All requested operations as a single set."""
         return self.control | self.data | self.control_wildcards | self.data_wildcards
 
     def __len__(self) -> int:
-        """Total count of all classified operations."""
         return (
             len(self.control)
             + len(self.data)
@@ -163,62 +146,50 @@ class ClassifiedOperations:
 
 @dataclass(frozen=True, slots=True)
 class OperationSets:
-    """Pre-computed operation sets for matching.
-
-    Encapsulates all operation sets for both planes,
-    eliminating repeated parameter passing.
-    """
+    """Pre-computed operation sets for matching."""
 
     all_control: frozenset[str]
     all_data: frozenset[str]
 
     @classmethod
     def from_operations(cls, operations: list[OperationData]) -> OperationSets:
-        """Build from a list of OperationData models."""
         control = frozenset(op.name for op in operations if not op.is_data_action)
         data = frozenset(op.name for op in operations if op.is_data_action)
-        return cls(
-            all_control=control,
-            all_data=data,
-        )
+        return cls(all_control=control, all_data=data)
 
 
 @dataclass(frozen=True, slots=True)
 class WildcardCoverage:
-    """Coverage information for a wildcard pattern.
-
-    Tracks how much of a wildcard pattern is covered by a role.
-    """
+    """Coverage information for a wildcard pattern."""
 
     pattern: str
-    plane: str  # "control" or "data"
+    plane: str
     covered_count: int
     total_count: int
     uncovered_samples: tuple[str, ...] = field(default_factory=tuple)
 
     @property
     def missing_count(self) -> int:
-        """Number of operations not covered."""
         return max(0, self.total_count - self.covered_count)
 
 
 @dataclass(slots=True)
 class RoleEvaluationContext:
-    """Context for evaluating a single role's coverage."""
+    """Context for evaluating a role's coverage."""
 
     role_id: str
     role_name: str
     description: str
     permissions: list[Permission]
     matched_ops: set[str] = field(default_factory=set)
-    wildcard_partial_coverage: dict[WildcardKey, PartialCoverageInfo] = field(default_factory=dict)
+    wildcard_partial_coverage: dict[WildcardKey, CoverageResult] = field(default_factory=dict)
     fully_covered_wildcards: set[WildcardKey] = field(default_factory=set)
     has_conditions: bool = False
 
 
 @dataclass(frozen=True, slots=True)
 class PlaneContext:
-    """Encapsulates plane-specific data for DRY evaluation."""
+    """Plane-specific data for evaluation."""
 
     plane: Plane
     all_ops: frozenset[str]
@@ -228,17 +199,15 @@ class PlaneContext:
 
     @property
     def prefix(self) -> str:
-        """Key prefix for wildcard tracking."""
         return self.plane.value
 
     def make_key(self, pattern: str) -> WildcardKey:
-        """Create a wildcard key for this plane."""
         return self.plane.make_key(pattern)
 
 
 @dataclass(slots=True)
 class RoleMatch:
-    """Role matching result with coverage statistics."""
+    """Role matching result."""
 
     role_id: str
     role_name: str
@@ -262,7 +231,6 @@ class RoleMatch:
         return len(self.missing_operations) == 0
 
     def to_dict(self) -> JsonDict:
-        """Convert to API response dict."""
         result = asdict(self)
         result["is_full_match"] = self.is_full_match
         return result

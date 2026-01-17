@@ -267,7 +267,6 @@
                         <dt class="text-sm font-medium text-slate-500">Role ID</dt>
                         <dd class="mt-1 sm:mt-0 sm:col-span-2">
                             <code class="text-sm font-mono text-slate-700 bg-slate-100 px-3 py-1.5 rounded-lg">{{ role.role_id }}</code>
-                            <span class="sr-only">{{ role.role_id | replace('-', '') }}</span>
                         </dd>
                     </div>
                     <div class="px-6 py-4 sm:grid sm:grid-cols-3 sm:gap-4">
@@ -337,7 +336,7 @@
                     <div class="divide-y divide-slate-100">
                         {% for ev in events %}
                         <!-- Desktop row -->
-                        <div class="hidden sm:flex px-6 py-4 hover:bg-slate-50/50 transition-colors" style="gap: 80px;">
+                        <div class="hidden sm:flex px-6 py-4 hover:bg-slate-50/50 transition-colors overflow-hidden" style="gap: 80px;">
                             <div class="flex-shrink-0 text-sm font-mono tabular-nums text-slate-500" style="width: 180px;">
                                 {# Deleted events always show scan_timestamp (no Azure timestamp for deletions) #}
                                 {# Initial Scan events show scan_timestamp #}
@@ -379,7 +378,7 @@
                                         </span>
                                     {% endif %}
                             </div>
-                            <div class="flex-1 text-sm text-slate-900">
+                            <div class="flex-1 min-w-0 text-sm text-slate-900">
                                     {% set display_summary = ev.summary | replace("<root>", "") | trim %}
                                     {% if display_summary %}
                                     <div class="mb-3 font-medium">{{ display_summary }}</div>
@@ -397,15 +396,15 @@
                                                 <div class="bg-slate-50 border border-slate-200 rounded-xl overflow-hidden">
                                                     <div class="px-4 overflow-x-auto font-mono text-xs leading-6 bg-white max-h-96 overflow-y-auto">
 {%- for line in (ev.role_json_pretty or role_json_pretty).split('\n') %}
-<div class="bg-emerald-50 text-emerald-800 -mx-4 px-4 whitespace-pre border-l-4 border-emerald-400">+ {{ line }}</div>
+<div class="bg-emerald-50 text-emerald-800 -mx-4 px-4 whitespace-pre-wrap break-words border-l-4 border-emerald-400">+ {{ line }}</div>
 {%- endfor %}
                                                     </div>
                                                 </div>
                                             {% elif ev.event_type == 'initial_scan' %}
                                                 {# Initial Scan: show plain JSON without highlighting #}
                                                 <div class="bg-slate-50 border border-slate-200 rounded-xl overflow-hidden">
-                                                    <div class="px-4 overflow-x-auto font-mono text-xs leading-6 bg-white max-h-96 overflow-y-auto">
-<pre class="text-slate-700 whitespace-pre m-0 py-0">{{ (ev.role_json_pretty or role_json_pretty) | trim }}</pre>
+                                                    <div class="overflow-x-auto font-mono text-xs leading-6 bg-white max-h-96 overflow-y-auto">
+<pre class="text-slate-700 whitespace-pre-wrap break-words m-0 py-0 px-4">{{ (ev.role_json_pretty or role_json_pretty) | trim }}</pre>
                                                     </div>
                                                 </div>
                                             {% elif ev.diff and ev.diff.before_json is defined and ev.diff.after_json is defined %}
@@ -435,11 +434,11 @@
                                                             <div class="px-4 overflow-x-auto font-mono text-xs leading-6 bg-white">
 {%- for line in change | diff_lines %}
 {% if line.type == 'removed' -%}
-<div class="bg-red-50 text-red-800 -mx-4 px-4 whitespace-pre-wrap border-l-4 border-red-400">- {{ line.text }}</div>
+<div class="bg-red-50 text-red-800 -mx-4 px-4 whitespace-pre-wrap break-words border-l-4 border-red-400">- {{ line.text }}</div>
 {% elif line.type == 'added' -%}
-<div class="bg-emerald-50 text-emerald-800 -mx-4 px-4 whitespace-pre-wrap border-l-4 border-emerald-400">+ {{ line.text }}</div>
+<div class="bg-emerald-50 text-emerald-800 -mx-4 px-4 whitespace-pre-wrap break-words border-l-4 border-emerald-400">+ {{ line.text }}</div>
 {% else -%}
-<div class="text-slate-400 whitespace-pre-wrap">  {{ line.text }}</div>
+<div class="text-slate-400 whitespace-pre-wrap break-words">  {{ line.text }}</div>
 {% endif -%}
 {%- endfor %}
                                                             </div>
@@ -512,14 +511,14 @@
                                         <div class="bg-slate-50 border border-slate-200 rounded-lg overflow-hidden">
                                             <div class="px-3 overflow-x-auto font-mono text-xs leading-5 bg-white max-h-64 overflow-y-auto">
 {%- for line in role_json_pretty.split('\n') %}
-<div class="bg-emerald-50 text-emerald-800 -mx-3 px-3 whitespace-pre border-l-2 border-emerald-400">+ {{ line }}</div>
+<div class="bg-emerald-50 text-emerald-800 -mx-3 px-3 whitespace-pre-wrap break-words border-l-2 border-emerald-400">+ {{ line }}</div>
 {%- endfor %}
                                             </div>
                                         </div>
                                     {% elif ev.event_type == 'initial_scan' %}
                                         <div class="bg-slate-50 border border-slate-200 rounded-lg overflow-hidden">
-                                            <div class="px-3 overflow-x-auto font-mono text-xs leading-5 bg-white max-h-64 overflow-y-auto">
-<pre class="text-slate-700 whitespace-pre m-0 py-0">{{ role_json_pretty | trim }}</pre>
+                                            <div class="overflow-x-auto font-mono text-xs leading-5 bg-white max-h-64 overflow-y-auto">
+<pre class="text-slate-700 whitespace-pre-wrap break-words m-0 py-0 px-3">{{ role_json_pretty | trim }}</pre>
                                             </div>
                                         </div>
                                     {% elif ev.diff and ev.diff.before_json is defined and ev.diff.after_json is defined %}
@@ -527,11 +526,11 @@
                                             <div class="px-3 overflow-x-auto font-mono text-xs leading-5 bg-white max-h-64 overflow-y-auto">
 {%- for line in ev.diff.before_json | full_json_diff(ev.diff.after_json) %}
 {% if line.type == 'removed' -%}
-<div class="bg-red-50 text-red-800 -mx-3 px-3 whitespace-pre border-l-2 border-red-400">- {{ line.text }}</div>
+<div class="bg-red-50 text-red-800 -mx-3 px-3 whitespace-pre-wrap break-words border-l-2 border-red-400">- {{ line.text }}</div>
 {% elif line.type == 'added' -%}
-<div class="bg-emerald-50 text-emerald-800 -mx-3 px-3 whitespace-pre border-l-2 border-emerald-400">+ {{ line.text }}</div>
+<div class="bg-emerald-50 text-emerald-800 -mx-3 px-3 whitespace-pre-wrap break-words border-l-2 border-emerald-400">+ {{ line.text }}</div>
 {% else -%}
-<div class="text-slate-500 whitespace-pre">  {{ line.text }}</div>
+<div class="text-slate-500 whitespace-pre-wrap break-words">  {{ line.text }}</div>
 {% endif -%}
 {%- endfor %}
                                             </div>
@@ -549,11 +548,11 @@
                                                     <div class="px-3 overflow-x-auto font-mono text-xs leading-5 bg-white">
 {%- for line in change | diff_lines %}
 {% if line.type == 'removed' -%}
-<div class="bg-red-50 text-red-800 -mx-3 px-3 whitespace-pre-wrap border-l-2 border-red-400">- {{ line.text }}</div>
+<div class="bg-red-50 text-red-800 -mx-3 px-3 whitespace-pre-wrap break-words border-l-2 border-red-400">- {{ line.text }}</div>
 {% elif line.type == 'added' -%}
-<div class="bg-emerald-50 text-emerald-800 -mx-3 px-3 whitespace-pre-wrap border-l-2 border-emerald-400">+ {{ line.text }}</div>
+<div class="bg-emerald-50 text-emerald-800 -mx-3 px-3 whitespace-pre-wrap break-words border-l-2 border-emerald-400">+ {{ line.text }}</div>
 {% else -%}
-<div class="text-slate-400 whitespace-pre-wrap">  {{ line.text }}</div>
+<div class="text-slate-400 whitespace-pre-wrap break-words">  {{ line.text }}</div>
 {% endif -%}
 {%- endfor %}
                                                     </div>
@@ -598,7 +597,7 @@
                     </div>
                 {% else %}
                     <div class="bg-gradient-to-br from-slate-900 to-slate-800 m-4 rounded-xl overflow-hidden">
-                        <pre class="px-6 py-2 overflow-auto text-xs font-mono text-slate-100 leading-5 max-h-96">{{ role_json_pretty | trim }}</pre>
+                        <pre class="px-4 py-2 overflow-auto text-xs font-mono text-slate-100 leading-5 max-h-96">{{ role_json_pretty | trim }}</pre>
                     </div>
                 {% endif %}
             </div>

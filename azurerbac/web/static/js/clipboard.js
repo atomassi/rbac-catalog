@@ -1,7 +1,13 @@
 // @ts-check
 /**
  * Clipboard utilities with toast notifications
- * @typedef {{copy: (text: string, successMessage?: string) => Promise<boolean>, download: (content: string, filename: string, mimeType?: string) => void, exportCSV: (data: unknown[], filename: string) => void, toast: (message: string, type?: 'success' | 'error' | 'info') => void}} ClipboardUtils
+ * @typedef {{
+ *   copy: (text: string, successMessage?: string) => Promise<boolean>,
+ *   copyWithFeedback: (button: HTMLElement, text: string, successMessage?: string, feedbackDuration?: number) => Promise<boolean>,
+ *   download: (content: string, filename: string, mimeType?: string) => void,
+ *   exportCSV: (data: unknown[], filename: string) => void,
+ *   toast: (message: string, type?: 'success' | 'error' | 'info') => void
+ * }} ClipboardUtils
  */
 (function() {
     'use strict';
@@ -153,10 +159,47 @@
         downloadFile(csv, filename, 'text/csv');
     }
 
+    /**
+     * Copy text and show visual feedback on the button (icon/text toggle)
+     * Expects button to have .copy-icon, .check-icon, .copy-text, .copied-text children
+     * @param {HTMLElement} button - The button element to update
+     * @param {string} text - The text to copy
+     * @param {string} [successMessage='Copied to clipboard'] - Toast message on success
+     * @param {number} [feedbackDuration=1500] - How long to show the feedback state (ms)
+     * @returns {Promise<boolean>}
+     */
+    async function copyWithFeedback(button, text, successMessage = 'Copied to clipboard', feedbackDuration = 1500) {
+        const success = await copyToClipboard(text, successMessage);
+        
+        if (success && button) {
+            // Toggle to "copied" state
+            const copyIcon = /** @type {HTMLElement | null} */ (button.querySelector('.copy-icon'));
+            const checkIcon = /** @type {HTMLElement | null} */ (button.querySelector('.check-icon'));
+            const copyText = /** @type {HTMLElement | null} */ (button.querySelector('.copy-text'));
+            const copiedText = /** @type {HTMLElement | null} */ (button.querySelector('.copied-text'));
+            
+            if (copyIcon) copyIcon.style.display = 'none';
+            if (checkIcon) checkIcon.style.display = '';
+            if (copyText) copyText.style.display = 'none';
+            if (copiedText) copiedText.style.display = '';
+            
+            // Revert after duration
+            setTimeout(() => {
+                if (copyIcon) copyIcon.style.display = '';
+                if (checkIcon) checkIcon.style.display = 'none';
+                if (copyText) copyText.style.display = '';
+                if (copiedText) copiedText.style.display = 'none';
+            }, feedbackDuration);
+        }
+        
+        return success;
+    }
+
     // Expose globally (using custom property to avoid Clipboard API conflict)
     /** @type {ClipboardUtils} */
     const clipboardUtils = {
         copy: copyToClipboard,
+        copyWithFeedback: copyWithFeedback,
         download: downloadFile,
         exportCSV: exportAsCSV,
         toast: showToast

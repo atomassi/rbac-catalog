@@ -10,10 +10,10 @@ from typing import TYPE_CHECKING, Final
 from azurerbac.core.constants import MAX_UNCOVERED_SAMPLE
 from azurerbac.core.patterns import is_wildcard_pattern, matches_pattern
 from azurerbac.matching.models import (
+    CoverageResult,
     PartialCoverageCacheKey,
     PatternCacheKey,
     Plane,
-    WildcardCoverageResult,
 )
 
 if TYPE_CHECKING:
@@ -312,43 +312,27 @@ def count_wildcard_partial_coverage(
     max_uncovered_sample: int = MAX_UNCOVERED_SAMPLE,
     *,
     caches: CacheData | None = None,
-) -> WildcardCoverageResult:
-    """Count how many operations matching a wildcard pattern are granted by the actions.
-
-    Args:
-        requested_pattern: The wildcard pattern to check coverage for.
-        actions: List of action patterns from the role.
-        not_actions: List of notAction patterns from the role.
-        all_operations: Set of all valid operations.
-        plane: Optional plane for cache lookup (CONTROL or DATA).
-        max_uncovered_sample: Maximum uncovered operations to sample.
-        caches: Optional cache container.
-
-    Returns:
-        WildcardCoverageResult with coverage statistics.
-    """
+) -> CoverageResult:
+    """Count operations matching a wildcard pattern granted by the actions."""
     cache = _get_cache(caches)
     partial_cache_key = PartialCoverageCacheKey.build(
         requested_pattern, plane, actions, not_actions
     )
 
-    # Check cache
     if partial_cache_key is not None:
         cached = cache.partial_coverage.get(partial_cache_key)
         if cached is not None:
             return cached
 
-    # Get matching operations
     matching_ops = get_matching_operations(requested_pattern, all_operations, plane, caches=cache)
     total_count = len(matching_ops)
 
     if total_count == 0:
-        result = WildcardCoverageResult(0, 0, 0, [])
+        result = CoverageResult(0, 0, 0, [])
         if partial_cache_key is not None:
             cache.partial_coverage[partial_cache_key] = result
         return result
 
-    # Compute covered operations using helper functions
     covered_by_actions = _compute_covered_operations(
         actions, matching_ops, all_operations, plane, cache
     )
@@ -356,14 +340,13 @@ def count_wildcard_partial_coverage(
         covered_by_actions, not_actions, all_operations, plane, cache
     )
 
-    # Calculate coverage
     covered_ops = matching_ops & covered_by_actions
     covered_count = len(covered_ops)
     uncovered_ops = matching_ops - covered_ops
     uncovered_count = len(uncovered_ops)
-    uncovered_samples = sorted(uncovered_ops)[:max_uncovered_sample]
+    samples = sorted(uncovered_ops)[:max_uncovered_sample]
 
-    result = WildcardCoverageResult(covered_count, total_count, uncovered_count, uncovered_samples)
+    result = CoverageResult(covered_count, total_count, uncovered_count, samples)
     if partial_cache_key is not None:
         cache.partial_coverage[partial_cache_key] = result
     return result

@@ -11,9 +11,9 @@ from azurerbac.core.patterns import is_wildcard_pattern
 from azurerbac.matching.models import (
     CacheStats,
     ClassifiedOperations,
+    CoverageResult,
     ExpandedMissing,
     OperationSets,
-    PartialCoverageInfo,
     Plane,
     PlaneActions,
     PlaneContext,
@@ -325,11 +325,11 @@ class RoleRecommendationService:
             if len(covered_ops) == len(pattern_ops):
                 ctx.fully_covered_wildcards.add(key)
             else:
-                ctx.wildcard_partial_coverage[key] = PartialCoverageInfo(
+                ctx.wildcard_partial_coverage[key] = CoverageResult(
                     covered=len(covered_ops),
                     total=len(pattern_ops),
                     uncovered=len(pattern_ops) - len(covered_ops),
-                    samples=[],
+                    uncovered_samples=[],
                 )
 
     def evaluate_role_fast_path(
@@ -463,8 +463,8 @@ class RoleRecommendationService:
 
         # Check for partial coverage
         if self._has_partial_coverage(plane, pattern, actions, not_actions):
-            ctx.wildcard_partial_coverage[key] = PartialCoverageInfo(
-                covered=1, total=0, uncovered=0, samples=[]
+            ctx.wildcard_partial_coverage[key] = CoverageResult(
+                covered=1, total=0, uncovered=0, uncovered_samples=[]
             )
             ctx.matched_ops.add(pattern)
             if has_condition:

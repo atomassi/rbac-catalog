@@ -13,12 +13,12 @@ from azurerbac.core.types import JsonDict
 from azurerbac.core.utils import format_datetime, parse_datetime
 from azurerbac.matching.models import (
     CacheOpsCount,
+    CoverageResult,
     PartialCoverageCacheKey,
     PatternCacheKey,
     Plane,
     RoleCoverage,
     RoleNetPermissions,
-    WildcardCoverageResult,
 )
 
 if TYPE_CHECKING:
@@ -182,9 +182,7 @@ class CacheData:
     role_net_permissions: dict[str, RoleNetPermissions] = field(default_factory=dict)
     operation_role_count: dict[str, int] = field(default_factory=dict)
     pattern_match: dict[PatternCacheKey, set[str]] = field(default_factory=dict)
-    partial_coverage: dict[PartialCoverageCacheKey, WildcardCoverageResult] = field(
-        default_factory=dict
-    )
+    partial_coverage: dict[PartialCoverageCacheKey, CoverageResult] = field(default_factory=dict)
     wildcard_count: dict[PatternCacheKey, int] = field(default_factory=dict)
     operations_by_prefix_computed: dict[Plane, dict[str, set[str]]] = field(default_factory=dict)
     cache_ops_count: CacheOpsCount = field(default_factory=lambda: CacheOpsCount(0, 0))

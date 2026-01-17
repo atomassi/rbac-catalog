@@ -2,14 +2,13 @@
 
 from azurerbac.matching.models import (
     ClassifiedOperations,
+    CoverageResult,
     OperationSets,
-    PartialCoverageInfo,
     Plane,
     PlaneContext,
     RoleEvaluationContext,
     RoleMatch,
     WildcardCoverage,
-    WildcardCoverageResult,
     WildcardKey,
 )
 from azurerbac.matching.recommendation_service import RoleRecommendationService
@@ -27,15 +26,14 @@ from azurerbac.matching.role_recommender import recommend_roles
 
 __all__ = [
     "ClassifiedOperations",
+    "CoverageResult",
     "OperationSets",
-    "PartialCoverageInfo",
     "Plane",
     "PlaneContext",
     "RoleEvaluationContext",
     "RoleMatch",
     "RoleRecommendationService",
     "WildcardCoverage",
-    "WildcardCoverageResult",
     "WildcardKey",
     "check_operation_allowed",
     "check_wildcard_operation_allowed",

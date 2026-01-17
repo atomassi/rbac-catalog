@@ -24,11 +24,11 @@ from azurerbac.core.patterns import is_wildcard_pattern, matches_pattern
 from azurerbac.core.utils import truncate_microseconds
 from azurerbac.matching.models import (
     CacheOpsCount,
+    CoverageResult,
     PartialCoverageCacheKey,
     Plane,
     RoleCoverage,
     RoleNetPermissions,
-    WildcardCoverageResult,
 )
 
 logger = logging.getLogger(__name__)
@@ -232,7 +232,7 @@ def precompute_all(
     operations_by_prefix_computed: dict[Plane, dict[str, set[str]]] = {}
     role_coverage: dict[str, RoleCoverage] = {}
     role_net_permissions: dict[str, RoleNetPermissions] = {}
-    partial_coverage: dict[PartialCoverageCacheKey, WildcardCoverageResult] = {}
+    partial_coverage: dict[PartialCoverageCacheKey, CoverageResult] = {}
 
     # Separate control and data plane operations
     all_control_ops = {op.name for op in all_operations if not op.is_data_action}

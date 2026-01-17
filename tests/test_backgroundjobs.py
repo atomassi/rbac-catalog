@@ -207,6 +207,71 @@ class TestApplyRoleScan:
         assert role_history[1].version_number == 2
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("stored_updated_on", "incoming_updated_on", "should_warn"),
+        [
+            pytest.param(
+                "2022-01-01T00:00:00Z",
+                "2021-01-01T00:00:00Z",
+                True,
+                id="stale_update_older_timestamp",
+            ),
+            pytest.param(
+                "2022-01-01T00:00:00Z",
+                "2022-01-01T00:00:00Z",
+                False,
+                id="equal_timestamp_no_warn",
+            ),
+        ],
+    )
+    async def test_rejects_stale_or_equal_updated_on(
+        self,
+        db_session,
+        caplog,
+        stored_updated_on: str,
+        incoming_updated_on: str,
+        should_warn: bool,
+    ):
+        """Test that updates with stale or equal updated_on are rejected.
+
+        - Stale updates (incoming < stored) are rejected with a warning
+        - Equal timestamps (incoming == stored) are rejected silently
+        """
+        import logging
+
+        # First scan - create role with initial timestamp
+        roles_v1 = [_make_role("role-1", "Reader", updated_on=stored_updated_on)]
+        await apply_role_scan(db_session, roles_v1)
+
+        # Second scan - attempt update with stale/equal timestamp
+        roles_v2 = [
+            _make_role(
+                "role-1",
+                "Reader Updated",  # Changed name to ensure diff would be detected
+                updated_on=incoming_updated_on,
+                description="Updated description",
+            )
+        ]
+
+        with caplog.at_level(logging.INFO, logger="azurerbac.backgroundjobs.roles_monitor"):
+            stats = await apply_role_scan(db_session, roles_v2)
+
+        # Should be rejected (no update)
+        assert stats.updated == 0
+
+        # Check warning log
+        if should_warn:
+            assert any("Rejecting stale update" in record.message for record in caplog.records)
+            assert any("role-1" in record.message for record in caplog.records)
+        else:
+            assert not any("Rejecting stale update" in record.message for record in caplog.records)
+
+        # Only one history entry (the creation)
+        history = (await db_session.execute(select(RoleHistory))).scalars().all()
+        assert len(history) == 1
+        assert history[0].event_type == EventType.CREATED
+
+    @pytest.mark.asyncio
     async def test_no_update_if_unchanged(self, db_session):
         """Test that identical roles don't create update events."""
         roles = [_make_role("role-1", "Reader", updated_on="2021-01-01T00:00:00Z")]

@@ -35,9 +35,9 @@ def _to_model(d: dict | None) -> RoleDefinition | None:
 def test_no_change_returns_changed_false():
     role_dict = copy.deepcopy(READER_ROLE_DICT)
     d = diff_roles(_to_model(role_dict), _to_model(copy.deepcopy(role_dict)))
-    assert d["changed"] is False
-    assert d["changes"] == []
-    assert diff_summary(d) == "No changes"
+    assert d.changed is False
+    assert d.changes == []
+    assert diff_summary(d) == ""
 
 
 @pytest.mark.parametrize(
@@ -54,8 +54,8 @@ def test_created_or_deleted_role_has_root_diff(old_role: str | None, new_role: s
     old = model if old_role == "_model" else None
     new = model if new_role == "_model" else None
     d = diff_roles(old, new)
-    assert d["changed"] is True
-    assert d["changes"][0]["path"] == "<root>"
+    assert d.changed is True
+    assert d.changes[0].path == "<root>"
 
 
 def test_updated_on_change_is_tracked_but_not_considered_update():
@@ -66,9 +66,9 @@ def test_updated_on_change_is_tracked_but_not_considered_update():
 
     d = diff_roles(_to_model(old_dict), _to_model(new_dict))
     # changed should be False (metadata-only change)
-    assert d["changed"] is False
+    assert d.changed is False
     # But the change should still be tracked in changes
-    paths = {c["path"] for c in d["changes"]}
+    paths = {c.path for c in d.changes}
     assert "properties.updatedOn" in paths
 
 
@@ -82,9 +82,9 @@ def test_metadata_only_changes_not_considered_update():
     new_dict["properties"]["createdBy"] = "another-user-id"
 
     d = diff_roles(_to_model(old_dict), _to_model(new_dict))
-    assert d["changed"] is False
+    assert d.changed is False
     # All metadata changes should be tracked
-    paths = {c["path"] for c in d["changes"]}
+    paths = {c.path for c in d.changes}
     assert "properties.updatedOn" in paths
     assert "properties.updatedBy" in paths
 
@@ -97,8 +97,8 @@ def test_real_change_with_metadata_is_detected():
     new_dict["properties"]["description"] = "New description"
 
     d = diff_roles(_to_model(old_dict), _to_model(new_dict))
-    assert d["changed"] is True
-    paths = {c["path"] for c in d["changes"]}
+    assert d.changed is True
+    paths = {c.path for c in d.changes}
     assert "properties.updatedOn" in paths
     assert "properties.description" in paths
 
@@ -117,7 +117,7 @@ def test_assignable_scopes_are_order_insensitive(old_scopes, new_scopes):
     new_dict["properties"]["assignableScopes"] = new_scopes
 
     d = diff_roles(_to_model(old_dict), _to_model(new_dict))
-    assert d["changed"] is False
+    assert d.changed is False
 
 
 @pytest.mark.parametrize(
@@ -148,7 +148,7 @@ def test_permissions_actions_order_is_ignored(old_actions, new_actions):
     ]
 
     d = diff_roles(_to_model(old_dict), _to_model(new_dict))
-    assert d["changed"] is False
+    assert d.changed is False
 
 
 def test_permissions_change_is_detected():
@@ -158,8 +158,8 @@ def test_permissions_change_is_detected():
     new_dict["properties"]["permissions"][0]["actions"].append("Microsoft.Authorization/*")
 
     d = diff_roles(_to_model(old_dict), _to_model(new_dict))
-    assert d["changed"] is True
-    assert any(c["path"] == "properties.permissions" for c in d["changes"])
+    assert d.changed is True
+    assert any(c.path == "properties.permissions" for c in d.changes)
 
 
 def test_summary_includes_paths_and_limit():
@@ -213,8 +213,8 @@ def test_condition_change_detected(test_id):
         del new_dict["properties"]["permissions"][0]["conditionVersion"]
 
     d = diff_roles(_to_model(old_dict), _to_model(new_dict))
-    assert d["changed"] is True
-    assert any(c["path"] == "properties.permissions" for c in d["changes"])
+    assert d.changed is True
+    assert any(c.path == "properties.permissions" for c in d.changes)
 
 
 def test_diff_timestamps_use_z_suffix():
@@ -227,12 +227,14 @@ def test_diff_timestamps_use_z_suffix():
     d = diff_roles(_to_model(old_dict), _to_model(new_dict))
 
     # Find the updatedOn change
-    updated_change = next(c for c in d["changes"] if c["path"] == "properties.updatedOn")
+    updated_change = next(c for c in d.changes if c.path == "properties.updatedOn")
 
     # Both from and to should use Z suffix (not +00:00)
-    assert updated_change["from"].endswith("Z"), (
-        f"Expected 'Z' suffix, got: {updated_change['from']}"
+    assert updated_change.from_value.endswith("Z"), (
+        f"Expected 'Z' suffix, got: {updated_change.from_value}"
     )
-    assert updated_change["to"].endswith("Z"), f"Expected 'Z' suffix, got: {updated_change['to']}"
-    assert "+00:00" not in updated_change["from"]
-    assert "+00:00" not in updated_change["to"]
+    assert updated_change.to_value.endswith("Z"), (
+        f"Expected 'Z' suffix, got: {updated_change.to_value}"
+    )
+    assert "+00:00" not in updated_change.from_value
+    assert "+00:00" not in updated_change.to_value

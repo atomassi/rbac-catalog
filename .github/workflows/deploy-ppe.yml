@@ -49,8 +49,8 @@ jobs:
       - name: Validate duration
         run: |
           DURATION="${{ inputs.duration }}"
-          if [ "$DURATION" -gt 120 ]; then
-            echo "::error::Duration cannot exceed 120 minutes (2 hours)"
+          if [ "$DURATION" -gt 90 ]; then
+            echo "::error::Duration cannot exceed 90 minutes (1.5 hours)"
             exit 1
           fi
           echo "✅ Duration validated: ${DURATION} minutes"
@@ -102,14 +102,33 @@ jobs:
 
       - name: Set auto-shutdown timestamp
         run: |
-          SHUTDOWN_AT=$(date -u -d "+${{ inputs.duration }} minutes" +%s 2>/dev/null || date -u -v+${{ inputs.duration }}M +%s)
+          DURATION="${{ inputs.duration }}"
+          if SHUTDOWN_AT=$(date -u -d "+${DURATION} minutes" +%s 2>/dev/null); then
+            :
+          elif SHUTDOWN_AT=$(date -u -v+"${DURATION}"M +%s 2>/dev/null); then
+            :
+          else
+            echo "::error::Failed to calculate shutdown timestamp for duration ${DURATION} minutes"
+            exit 1
+          fi
+
           az webapp config appsettings set \
             --name ${{ env.APP_NAME }} \
             --resource-group ${{ env.RESOURCE_GROUP }} \
             --slot ${{ env.PPE_SLOT }} \
             --settings PPE_SHUTDOWN_AT=$SHUTDOWN_AT \
             --output none
-          echo "⏰ Auto-shutdown scheduled at: $(date -u -d @$SHUTDOWN_AT '+%Y-%m-%d %H:%M:%S UTC' 2>/dev/null || date -u -r $SHUTDOWN_AT '+%Y-%m-%d %H:%M:%S UTC')"
+
+          if SHUTDOWN_AT_HUMAN=$(date -u -d "@${SHUTDOWN_AT}" '+%Y-%m-%d %H:%M:%S UTC' 2>/dev/null); then
+            :
+          elif SHUTDOWN_AT_HUMAN=$(date -u -r "${SHUTDOWN_AT}" '+%Y-%m-%d %H:%M:%S UTC' 2>/dev/null); then
+            :
+          else
+            echo "::error::Failed to format shutdown timestamp (${SHUTDOWN_AT})"
+            exit 1
+          fi
+
+          echo "⏰ Auto-shutdown scheduled at: ${SHUTDOWN_AT_HUMAN}"
 
       - name: Wait for PPE to be ready
         run: |
@@ -133,11 +152,20 @@ jobs:
 
       - name: PPE deployment summary
         run: |
+          DURATION="${{ inputs.duration }}"
+          if SHUTDOWN_TIME=$(date -u -d "+${DURATION} minutes" '+%Y-%m-%d %H:%M:%S UTC' 2>/dev/null); then
+            :
+          elif SHUTDOWN_TIME=$(date -u -v+"${DURATION}"M '+%Y-%m-%d %H:%M:%S UTC' 2>/dev/null); then
+            :
+          else
+            SHUTDOWN_TIME="in ${DURATION} minutes"
+          fi
+          
           echo "✅ PPE deployment complete!"
           echo "   Branch: ${{ inputs.branch }}"
           echo "   Version: ${{ steps.version.outputs.version }}"
-          echo "   Duration: ${{ inputs.duration }} minutes"
-          echo "   Auto-shutdown at: $(date -d '+${{ inputs.duration }} minutes' '+%Y-%m-%d %H:%M:%S UTC' 2>/dev/null || date -v+${{ inputs.duration }}M '+%Y-%m-%d %H:%M:%S UTC')"
+          echo "   Duration: ${DURATION} minutes"
+          echo "   Auto-shutdown at: ${SHUTDOWN_TIME}"
           echo "🌐 ${{ env.PPE_URL }}"
 
       - name: Azure Logout

@@ -71,7 +71,13 @@ jobs:
           NOW=$(date -u +%s)
           
           if [ "$NOW" -ge "$SHUTDOWN_AT" ]; then
-            SCHEDULED_TIME=$(date -u -d @$SHUTDOWN_AT '+%Y-%m-%d %H:%M:%S UTC' 2>/dev/null || date -u -r $SHUTDOWN_AT '+%Y-%m-%d %H:%M:%S UTC')
+            if date --version >/dev/null 2>&1; then
+              # GNU date: use -d with @timestamp syntax
+              SCHEDULED_TIME=$(date -u -d "@$SHUTDOWN_AT" '+%Y-%m-%d %H:%M:%S UTC')
+            else
+              # BSD date (no --version): use -r with epoch seconds
+              SCHEDULED_TIME=$(date -u -r "$SHUTDOWN_AT" '+%Y-%m-%d %H:%M:%S UTC' 2>/dev/null || echo "timestamp $SHUTDOWN_AT (UTC)")
+            fi
             echo "⏰ Shutdown time reached (scheduled: $SCHEDULED_TIME)"
             
             # Stop the slot
@@ -89,7 +95,13 @@ jobs:
           else
             REMAINING=$((SHUTDOWN_AT - NOW))
             REMAINING_MINUTES=$((REMAINING / 60))
-            SCHEDULED_TIME=$(date -u -d @$SHUTDOWN_AT '+%Y-%m-%d %H:%M:%S UTC' 2>/dev/null || date -u -r $SHUTDOWN_AT '+%Y-%m-%d %H:%M:%S UTC')
+            if date --version >/dev/null 2>&1; then
+              # GNU date: use -d with @timestamp syntax
+              SCHEDULED_TIME=$(date -u -d "@$SHUTDOWN_AT" '+%Y-%m-%d %H:%M:%S UTC')
+            else
+              # BSD date (no --version): use -r with epoch seconds
+              SCHEDULED_TIME=$(date -u -r "$SHUTDOWN_AT" '+%Y-%m-%d %H:%M:%S UTC' 2>/dev/null || echo "timestamp $SHUTDOWN_AT (UTC)")
+            fi
             echo "✅ PPE is running"
             echo "   Shutdown at: $SCHEDULED_TIME"
             echo "   Remaining: ${REMAINING_MINUTES} minutes"

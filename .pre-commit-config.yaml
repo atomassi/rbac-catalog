@@ -17,3 +17,19 @@ repos:
         types: [python]
         pass_filenames: false
         args: [azurerbac/]
+
+      - id: unit-tests
+        name: unit tests
+        entry: ./scripts/run_tests_precommit.sh unit
+        language: script
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+
+      - id: e2e-tests
+        name: e2e tests
+        entry: ./scripts/run_tests_precommit.sh e2e
+        language: script
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]

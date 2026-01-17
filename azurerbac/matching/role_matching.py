@@ -313,7 +313,32 @@ def count_wildcard_partial_coverage(
     *,
     caches: CacheData | None = None,
 ) -> CoverageResult:
-    """Count operations matching a wildcard pattern granted by the actions."""
+    """Count operations matching a wildcard pattern granted by the actions.
+
+    Args:
+        requested_pattern: Wildcard operation pattern to evaluate coverage for,
+            for example ``"Microsoft.Storage/*"`` or ``"*/read"``.
+        actions: Action patterns granted by the role (the role's ``actions``).
+        not_actions: Exclusion patterns that remove operations from the granted
+            set (the role's ``notActions``).
+        all_operations: Full set of known operation names used to expand
+            wildcard patterns.
+        plane: Optional plane filter that restricts matching to a specific
+            plane (for example, control or data). If ``None``, all planes are
+            considered.
+        max_uncovered_sample: Maximum number of uncovered operations to include
+            in the sample list for the result. This does not affect counts,
+            only how many example operation names are returned.
+        caches: Optional cache data override. When provided, it is used for
+            operation and partial coverage caching instead of the global cache
+            service.
+
+    Returns:
+        CoverageResult: Coverage statistics for the requested pattern,
+        including the number of covered operations, total matching operations,
+        number of uncovered operations, and a sample list of uncovered
+        operation names (up to ``max_uncovered_sample``).
+    """
     cache = _get_cache(caches)
     partial_cache_key = PartialCoverageCacheKey.build(
         requested_pattern, plane, actions, not_actions
@@ -344,9 +369,9 @@ def count_wildcard_partial_coverage(
     covered_count = len(covered_ops)
     uncovered_ops = matching_ops - covered_ops
     uncovered_count = len(uncovered_ops)
-    samples = sorted(uncovered_ops)[:max_uncovered_sample]
+    uncovered_samples = sorted(uncovered_ops)[:max_uncovered_sample]
 
-    result = CoverageResult(covered_count, total_count, uncovered_count, samples)
+    result = CoverageResult(covered_count, total_count, uncovered_count, uncovered_samples)
     if partial_cache_key is not None:
         cache.partial_coverage[partial_cache_key] = result
     return result

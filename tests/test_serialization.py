@@ -314,3 +314,45 @@ class TestRoundTrip:
         assert isinstance(unpacked["cache_ops_count"], CacheOpsCount)
         assert unpacked["cache_ops_count"].control == 100
         assert unpacked["cache_ops_count"].data == 50
+
+    def test_partial_coverage_roundtrip(self):
+        """partial_coverage CoverageResult reconstruction works correctly.
+
+        CoverageResult is a NamedTuple that gets serialized as a tuple/list.
+        The _reconstruct_coverage_data function must convert it back to CoverageResult
+        so callers can use attribute access (e.g. .covered, .uncovered_samples).
+
+        This test directly tests the reconstruction logic without full serialization,
+        since we're focused on ensuring CoverageResult (not plain tuple) is returned.
+        """
+        from azurerbac.cache.backends.file import FileCacheBackend
+        from azurerbac.matching.models import CoverageResult
+
+        # Simulate what msgpack returns after deserializing: lists instead of tuples
+        # This is what the cache would look like after loading from disk
+        data_dict = {
+            "partial_coverage": {
+                "key1": [5, 10, 5, ["op1", "op2", "op3"]],  # list, not CoverageResult
+                "key2": [0, 0, 0, []],  # edge case: empty
+            }
+        }
+
+        # Before reconstruction, values are plain lists
+        assert isinstance(data_dict["partial_coverage"]["key1"], list)
+        assert isinstance(data_dict["partial_coverage"]["key2"], list)
+
+        # Reconstruction should convert to CoverageResult
+        FileCacheBackend._reconstruct_coverage_data(data_dict)
+
+        # After reconstruction, values should be CoverageResult with attribute access
+        result1 = data_dict["partial_coverage"]["key1"]
+        assert isinstance(result1, CoverageResult), "Should be CoverageResult, not tuple/list"
+        assert result1.covered == 5
+        assert result1.total == 10
+        assert result1.uncovered == 5
+        assert result1.uncovered_samples == ["op1", "op2", "op3"]
+
+        result2 = data_dict["partial_coverage"]["key2"]
+        assert isinstance(result2, CoverageResult)
+        assert result2.covered == 0
+        assert result2.uncovered_samples == []

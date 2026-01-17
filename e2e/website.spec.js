@@ -470,6 +470,125 @@ test.describe('Role Detail Page', () => {
     // May return 404 if role not found, or redirect to slug
     expect([200, 301, 404]).toContain(response?.status());
   });
+
+  test('should have copy button for Role ID', async ({ page }) => {
+    await page.goto('/roles/acdd72a7-3385-48ef-bd42-f606fba81ae7');
+    await page.waitForLoadState('domcontentloaded');
+    
+    // Find the copy button near the Role ID
+    const copyButton = page.locator('button[title="Copy Role ID"]');
+    await expect(copyButton).toBeVisible();
+  });
+
+  test('should have Copy and Download buttons for Latest Role JSON', async ({ page }) => {
+    await page.goto('/roles/acdd72a7-3385-48ef-bd42-f606fba81ae7');
+    await page.waitForLoadState('domcontentloaded');
+    
+    // Find the JSON section buttons
+    const copyJsonButton = page.locator('button[title="Copy JSON"]');
+    const downloadJsonButton = page.locator('button[title="Download JSON"]');
+    
+    await expect(copyJsonButton).toBeVisible();
+    await expect(downloadJsonButton).toBeVisible();
+  });
+
+  test('should copy Role ID to clipboard', async ({ page, context }) => {
+    // Grant clipboard permissions
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    
+    await page.goto('/roles/acdd72a7-3385-48ef-bd42-f606fba81ae7');
+    await page.waitForLoadState('domcontentloaded');
+    
+    const copyButton = page.locator('button[title="Copy Role ID"]');
+    await copyButton.click();
+    
+    // Verify clipboard content
+    const clipboardText = await page.evaluate(() => navigator.clipboard.readText());
+    expect(clipboardText).toBe('acdd72a7-3385-48ef-bd42-f606fba81ae7');
+  });
+
+  test('should show toast notification when copying Role ID', async ({ page, context }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    
+    await page.goto('/roles/acdd72a7-3385-48ef-bd42-f606fba81ae7');
+    await page.waitForLoadState('domcontentloaded');
+    
+    const copyButton = page.locator('button[title="Copy Role ID"]');
+    await copyButton.click();
+    
+    // Toast should appear
+    const toast = page.locator('#toast-container');
+    await expect(toast).toBeVisible();
+    await expect(toast).toContainText('Role ID copied');
+  });
+
+  test('should copy JSON to clipboard', async ({ page, context }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    
+    await page.goto('/roles/acdd72a7-3385-48ef-bd42-f606fba81ae7');
+    await page.waitForLoadState('domcontentloaded');
+    
+    const copyJsonButton = page.locator('button[title="Copy JSON"]');
+    await copyJsonButton.click();
+    
+    // Verify clipboard contains JSON
+    const clipboardText = await page.evaluate(() => navigator.clipboard.readText());
+    expect(clipboardText).toContain('"roleName":');
+    expect(clipboardText).toContain('"permissions":');
+  });
+
+  test('should show visual feedback when copying JSON', async ({ page, context }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    
+    await page.goto('/roles/acdd72a7-3385-48ef-bd42-f606fba81ae7');
+    await page.waitForLoadState('domcontentloaded');
+    
+    const copyJsonButton = page.locator('button[title="Copy JSON"]');
+    await copyJsonButton.click();
+    
+    // Check for "Copied!" text feedback
+    const copiedText = copyJsonButton.locator('.copied-text');
+    await expect(copiedText).toBeVisible();
+    
+    // Wait for it to revert back
+    await page.waitForTimeout(2000);
+    await expect(copiedText).not.toBeVisible();
+  });
+
+  test('should download JSON file', async ({ page }) => {
+    await page.goto('/roles/acdd72a7-3385-48ef-bd42-f606fba81ae7');
+    await page.waitForLoadState('domcontentloaded');
+    
+    // Wait for download
+    const downloadPromise = page.waitForEvent('download');
+    const downloadButton = page.locator('button[title="Download JSON"]');
+    await downloadButton.click();
+    
+    const download = await downloadPromise;
+    expect(download.suggestedFilename()).toMatch(/reader\.json$/i);
+  });
+
+  test('should not show Copy/Download buttons for deleted role', async ({ page }) => {
+    // This test requires a deleted role in the database
+    // Skip if no deleted roles exist
+    await page.goto('/recent');
+    const deletedBadge = page.locator('text=Deleted').first();
+    
+    if (await deletedBadge.count() > 0) {
+      // Click on a deleted role
+      const deletedRow = page.locator('tr:has-text("Deleted")').first();
+      const roleLink = deletedRow.locator('a[href^="/roles/"]').first();
+      await roleLink.click();
+      await page.waitForLoadState('domcontentloaded');
+      
+      // Copy/Download buttons should not be visible
+      const copyJsonButton = page.locator('button[title="Copy JSON"]');
+      const downloadJsonButton = page.locator('button[title="Download JSON"]');
+      
+      await expect(copyJsonButton).not.toBeVisible();
+      await expect(downloadJsonButton).not.toBeVisible();
+    }
+  });
 });
 
 // =============================================================================

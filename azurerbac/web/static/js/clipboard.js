@@ -4,9 +4,7 @@
  * @typedef {{
  *   copy: (text: string, successMessage?: string) => Promise<boolean>,
  *   copyWithFeedback: (button: HTMLElement, text: string, successMessage?: string, feedbackDuration?: number) => Promise<boolean>,
- *   download: (content: string, filename: string, mimeType?: string) => void,
- *   exportCSV: (data: unknown[], filename: string) => void,
- *   toast: (message: string, type?: 'success' | 'error' | 'info') => void
+ *   download: (content: string, filename: string, mimeType?: string) => void
  * }} ClipboardUtils
  */
 (function() {
@@ -81,35 +79,41 @@
             showToast('Nothing to copy', 'error');
             return false;
         }
-        try {
-            await navigator.clipboard.writeText(text);
-            showToast(successMessage, 'success');
-            return true;
-        } catch {
-            // Fallback for older browsers or when clipboard API fails
-            const textarea = document.createElement('textarea');
-            textarea.value = text;
-            textarea.style.position = 'fixed';
-            textarea.style.opacity = '0';
-            textarea.style.left = '-9999px';
-            document.body.appendChild(textarea);
-            textarea.focus();
-            textarea.select();
+        
+        // Try modern clipboard API first (if available and permitted)
+        if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
             try {
-                const success = document.execCommand('copy');
-                if (success) {
-                    showToast(successMessage, 'success');
-                    return true;
-                } else {
-                    showToast('Failed to copy', 'error');
-                    return false;
-                }
+                await navigator.clipboard.writeText(text);
+                showToast(successMessage, 'success');
+                return true;
             } catch {
+                // Fall through to legacy fallback
+            }
+        }
+        
+        // Fallback for older browsers or when clipboard API fails/unavailable
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        textarea.style.left = '-9999px';
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        try {
+            const success = document.execCommand('copy');
+            if (success) {
+                showToast(successMessage, 'success');
+                return true;
+            } else {
                 showToast('Failed to copy', 'error');
                 return false;
-            } finally {
-                document.body.removeChild(textarea);
             }
+        } catch {
+            showToast('Failed to copy', 'error');
+            return false;
+        } finally {
+            document.body.removeChild(textarea);
         }
     }
 
@@ -132,36 +136,8 @@
     }
 
     /**
-     * @param {unknown[]} data
-     * @param {string} filename
-     */
-    function exportAsCSV(data, filename) {
-        // data should be an array of objects or array of arrays
-        if (!data || data.length === 0) {
-            showToast('No data to export', 'error');
-            return;
-        }
-
-        let csv;
-        if (Array.isArray(data[0])) {
-            // Array of arrays
-            csv = /** @type {unknown[][]} */ (data).map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
-        } else if (typeof data[0] === 'string') {
-            // Simple array of strings
-            csv = /** @type {string[]} */ (data).map(item => `"${item.replace(/"/g, '""')}"`).join('\n');
-        } else {
-            // Array of objects
-            const headers = Object.keys(/** @type {object} */ (data[0]));
-            const rows = /** @type {Record<string, unknown>[]} */ (data).map(obj => headers.map(h => `"${String(obj[h] || '').replace(/"/g, '""')}"`).join(','));
-            csv = [headers.join(','), ...rows].join('\n');
-        }
-
-        downloadFile(csv, filename, 'text/csv');
-    }
-
-    /**
      * Copy text and show visual feedback on the button (icon/text toggle)
-     * Expects button to have .copy-icon, .check-icon, .copy-text, .copied-text children
+     * Expects button to contain .copy-icon, .check-icon, .copy-text, .copied-text elements within it
      * @param {HTMLElement} button - The button element to update
      * @param {string} text - The text to copy
      * @param {string} [successMessage='Copied to clipboard'] - Toast message on success
@@ -172,7 +148,7 @@
         const success = await copyToClipboard(text, successMessage);
         
         if (success && button) {
-            // Toggle to "copied" state
+            // Toggle to "copied" state using inline styles (overrides CSS classes)
             const copyIcon = /** @type {HTMLElement | null} */ (button.querySelector('.copy-icon'));
             const checkIcon = /** @type {HTMLElement | null} */ (button.querySelector('.check-icon'));
             const copyText = /** @type {HTMLElement | null} */ (button.querySelector('.copy-text'));
@@ -200,9 +176,7 @@
     const clipboardUtils = {
         copy: copyToClipboard,
         copyWithFeedback: copyWithFeedback,
-        download: downloadFile,
-        exportCSV: exportAsCSV,
-        toast: showToast
+        download: downloadFile
     };
     // @ts-ignore - intentionally extending window with custom Clipboard property
     window.Clipboard = clipboardUtils;

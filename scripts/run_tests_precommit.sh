@@ -100,7 +100,7 @@ run_e2e() {
     wait_for_server || exit 1
     
     log_info "Running Playwright tests..."
-    npx playwright test
+    BASE_URL="http://127.0.0.1:$PORT" npx playwright test
     
     local duration=$((SECONDS - start_time))
     log_success "E2E tests passed (${duration}s)"

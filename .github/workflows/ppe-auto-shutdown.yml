@@ -2,9 +2,9 @@
 # ===========================
 # Automatically stops the PPE deployment slot when its scheduled duration expires.
 # 
-# This approach uses a lightweight hourly cron job (~1 min each) instead of a
+# This approach uses a lightweight cron job (~1 min each, every 15 min) instead of a
 # long-running workflow that sleeps for the full duration. This avoids wasting
-# GitHub Actions minutes on idle polling—a 2-hour PPE deployment now costs ~2-3 min
+# GitHub Actions minutes on idle polling—a 2-hour PPE deployment now costs ~8 min
 # of Actions time instead of 120 min.
 #
 # The deploy-ppe.yml workflow sets PPE_SHUTDOWN_AT (Unix timestamp) as an app setting.
@@ -14,8 +14,8 @@ name: PPE Auto-Shutdown
 
 on:
   schedule:
-    # Run every hour (at minute 0)
-    - cron: '0 * * * *'
+    # Run every 15 minutes for timely shutdown (max 14 min delay after expiry)
+    - cron: '*/15 * * * *'
   workflow_dispatch:  # Allow manual trigger
 
 run-name: PPE Auto-Shutdown Check
@@ -46,7 +46,10 @@ jobs:
       - name: Check and stop PPE if expired
         run: |
           # Check if PPE slot is running
-          STATE=$(az webapp show --name ${{ env.APP_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} --slot ${{ env.PPE_SLOT }} --query "state" -o tsv 2>/dev/null || echo "NotFound")
+          if ! STATE=$(az webapp show --name ${{ env.APP_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} --slot ${{ env.PPE_SLOT }} --query "state" -o tsv 2>&1); then
+            echo "ℹ️ PPE slot not found or inaccessible: $STATE"
+            exit 0
+          fi
           
           if [ "$STATE" != "Running" ]; then
             echo "ℹ️ PPE slot is not running (state: $STATE), nothing to do"
@@ -54,11 +57,15 @@ jobs:
           fi
           
           # Get shutdown timestamp from app settings
-          SHUTDOWN_AT=$(az webapp config appsettings list \
+          if ! SETTINGS_OUTPUT=$(az webapp config appsettings list \
             --name ${{ env.APP_NAME }} \
             --resource-group ${{ env.RESOURCE_GROUP }} \
-            --slot ${{ env.PPE_SLOT }} \
-            --query "[?name=='PPE_SHUTDOWN_AT'].value | [0]" -o tsv 2>/dev/null || echo "")
+            --slot ${{ env.PPE_SLOT }} 2>&1); then
+            echo "::error::Failed to retrieve app settings: $SETTINGS_OUTPUT"
+            exit 1
+          fi
+          
+          SHUTDOWN_AT=$(echo "$SETTINGS_OUTPUT" | jq -r '.[] | select(.name=="PPE_SHUTDOWN_AT") | .value // empty')
           
           if [ -z "$SHUTDOWN_AT" ]; then
             echo "⚠️ PPE is running but no PPE_SHUTDOWN_AT setting found"
@@ -68,40 +75,36 @@ jobs:
             exit 0
           fi
           
+          # Validate SHUTDOWN_AT is numeric
+          if ! [[ "$SHUTDOWN_AT" =~ ^[0-9]+$ ]]; then
+            echo "::error::PPE_SHUTDOWN_AT is not a valid timestamp: $SHUTDOWN_AT"
+            exit 1
+          fi
+          
           NOW=$(date -u +%s)
           
           if [ "$NOW" -ge "$SHUTDOWN_AT" ]; then
-            if date --version >/dev/null 2>&1; then
-              # GNU date: use -d with @timestamp syntax
-              SCHEDULED_TIME=$(date -u -d "@$SHUTDOWN_AT" '+%Y-%m-%d %H:%M:%S UTC')
-            else
-              # BSD date (no --version): use -r with epoch seconds
-              SCHEDULED_TIME=$(date -u -r "$SHUTDOWN_AT" '+%Y-%m-%d %H:%M:%S UTC' 2>/dev/null || echo "timestamp $SHUTDOWN_AT (UTC)")
-            fi
+            SCHEDULED_TIME=$(date -u -d "@$SHUTDOWN_AT" '+%Y-%m-%d %H:%M:%S UTC')
             echo "⏰ Shutdown time reached (scheduled: $SCHEDULED_TIME)"
             
             # Stop the slot
             az webapp stop --name ${{ env.APP_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} --slot ${{ env.PPE_SLOT }}
             
-            # Clear the shutdown setting
-            az webapp config appsettings delete \
+            # Clear the shutdown setting (log errors but don't fail)
+            if ! DELETE_OUTPUT=$(az webapp config appsettings delete \
               --name ${{ env.APP_NAME }} \
               --resource-group ${{ env.RESOURCE_GROUP }} \
               --slot ${{ env.PPE_SLOT }} \
               --setting-names PPE_SHUTDOWN_AT \
-              --output none || true
+              --output none 2>&1); then
+              echo "⚠️ Warning: Failed to delete PPE_SHUTDOWN_AT setting: $DELETE_OUTPUT"
+            fi
             
             echo "🛑 Stopped PPE slot"
           else
             REMAINING=$((SHUTDOWN_AT - NOW))
             REMAINING_MINUTES=$((REMAINING / 60))
-            if date --version >/dev/null 2>&1; then
-              # GNU date: use -d with @timestamp syntax
-              SCHEDULED_TIME=$(date -u -d "@$SHUTDOWN_AT" '+%Y-%m-%d %H:%M:%S UTC')
-            else
-              # BSD date (no --version): use -r with epoch seconds
-              SCHEDULED_TIME=$(date -u -r "$SHUTDOWN_AT" '+%Y-%m-%d %H:%M:%S UTC' 2>/dev/null || echo "timestamp $SHUTDOWN_AT (UTC)")
-            fi
+            SCHEDULED_TIME=$(date -u -d "@$SHUTDOWN_AT" '+%Y-%m-%d %H:%M:%S UTC')
             echo "✅ PPE is running"
             echo "   Shutdown at: $SCHEDULED_TIME"
             echo "   Remaining: ${REMAINING_MINUTES} minutes"

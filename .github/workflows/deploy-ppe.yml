@@ -36,6 +36,9 @@ jobs:
   # ═══════════════════════════════════════════════════════════════════════════
   # Job 1: Build and deploy to PPE
   # ═══════════════════════════════════════════════════════════════════════════
+  # Note: PPE is intentionally publicly accessible (no IP restrictions) unlike
+  # staging in deploy.yml. This allows team members to test from any location.
+  # If PPE needs to be restricted, add IP rules similar to deploy.yml lines 216-242.
   deploy-ppe:
     name: Deploy to PPE
     runs-on: ubuntu-latest
@@ -48,7 +51,12 @@ jobs:
     steps:
       - name: Validate duration
         run: |
+          # Defensive check - choice options limit this, but API calls could bypass UI
           DURATION="${{ inputs.duration }}"
+          if ! [[ "$DURATION" =~ ^[0-9]+$ ]]; then
+            echo "::error::Duration must be a number"
+            exit 1
+          fi
           if [ "$DURATION" -gt 90 ]; then
             echo "::error::Duration cannot exceed 90 minutes (1.5 hours)"
             exit 1
@@ -103,15 +111,8 @@ jobs:
       - name: Set auto-shutdown timestamp
         run: |
           DURATION="${{ inputs.duration }}"
-          if SHUTDOWN_AT=$(date -u -d "+${DURATION} minutes" +%s 2>/dev/null); then
-            :
-          elif SHUTDOWN_AT=$(date -u -v+"${DURATION}"M +%s 2>/dev/null); then
-            :
-          else
-            echo "::error::Failed to calculate shutdown timestamp for duration ${DURATION} minutes"
-            exit 1
-          fi
-
+          SHUTDOWN_AT=$(date -u -d "+${DURATION} minutes" +%s)
+          
           az webapp config appsettings set \
             --name ${{ env.APP_NAME }} \
             --resource-group ${{ env.RESOURCE_GROUP }} \
@@ -119,15 +120,7 @@ jobs:
             --settings PPE_SHUTDOWN_AT=$SHUTDOWN_AT \
             --output none
 
-          if SHUTDOWN_AT_HUMAN=$(date -u -d "@${SHUTDOWN_AT}" '+%Y-%m-%d %H:%M:%S UTC' 2>/dev/null); then
-            :
-          elif SHUTDOWN_AT_HUMAN=$(date -u -r "${SHUTDOWN_AT}" '+%Y-%m-%d %H:%M:%S UTC' 2>/dev/null); then
-            :
-          else
-            echo "::error::Failed to format shutdown timestamp (${SHUTDOWN_AT})"
-            exit 1
-          fi
-
+          SHUTDOWN_AT_HUMAN=$(date -u -d "@${SHUTDOWN_AT}" '+%Y-%m-%d %H:%M:%S UTC')
           echo "⏰ Auto-shutdown scheduled at: ${SHUTDOWN_AT_HUMAN}"
 
       - name: Wait for PPE to be ready
@@ -137,14 +130,15 @@ jobs:
           POLL_INTERVAL_SECONDS=30
           WAITED_SECONDS=0
           
-          while [ $WAITED_SECONDS -lt $MAX_WAIT_SECONDS ]; do
-            if curl -sf "${{ env.PPE_URL }}/healthz" > /dev/null 2>&1; then
-              echo "✅ PPE is ready after ${WAITED_SECONDS}s"
+          while [ $WAITED_SECONDS -le $MAX_WAIT_SECONDS ]; do
+            HTTP_CODE=$(curl -sf -o /dev/null -w "%{http_code}" "${{ env.PPE_URL }}/healthz" 2>/dev/null || echo "000")
+            if [ "$HTTP_CODE" = "200" ]; then
+              echo "✅ PPE is ready after ${WAITED_SECONDS}s (HTTP $HTTP_CODE)"
               exit 0
             fi
+            echo "⏳ Waiting... ${WAITED_SECONDS}s / ${MAX_WAIT_SECONDS}s (HTTP $HTTP_CODE)"
             sleep $POLL_INTERVAL_SECONDS
             WAITED_SECONDS=$((WAITED_SECONDS + POLL_INTERVAL_SECONDS))
-            echo "⏳ Waiting... ${WAITED_SECONDS}s / ${MAX_WAIT_SECONDS}s"
           done
           
           echo "❌ PPE not ready after ${MAX_WAIT_SECONDS}s"
@@ -153,13 +147,7 @@ jobs:
       - name: PPE deployment summary
         run: |
           DURATION="${{ inputs.duration }}"
-          if SHUTDOWN_TIME=$(date -u -d "+${DURATION} minutes" '+%Y-%m-%d %H:%M:%S UTC' 2>/dev/null); then
-            :
-          elif SHUTDOWN_TIME=$(date -u -v+"${DURATION}"M '+%Y-%m-%d %H:%M:%S UTC' 2>/dev/null); then
-            :
-          else
-            SHUTDOWN_TIME="in ${DURATION} minutes"
-          fi
+          SHUTDOWN_TIME=$(date -u -d "+${DURATION} minutes" '+%Y-%m-%d %H:%M:%S UTC')
           
           echo "✅ PPE deployment complete!"
           echo "   Branch: ${{ inputs.branch }}"

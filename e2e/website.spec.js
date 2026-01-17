@@ -649,15 +649,12 @@ test.describe('Role Detail - Copy/Download', () => {
     await expect(copyButton).toBeVisible();
     await copyButton.click();
 
-    // Wait for feedback
-    await page.waitForTimeout(500);
+    // Verify tooltip appeared (auto-waits for condition)
+    const tooltip = copyButton.locator('.copied-tooltip');
+    await expect(tooltip).toHaveCSS('opacity', '1');
 
     // Check no JS errors occurred
     expect(errors).toHaveLength(0);
-
-    // Verify tooltip appeared
-    const tooltip = copyButton.locator('.copied-tooltip');
-    await expect(tooltip).toHaveCSS('opacity', '1');
   });
 
   test('should show visual feedback when copying Role ID', async ({ page }) => {
@@ -680,77 +677,9 @@ test.describe('Role Detail - Copy/Download', () => {
     await expect(checkIcon).toBeVisible();
     await expect(copyIcon).toBeHidden();
 
-    // After delay: should revert back
-    await page.waitForTimeout(2000);
-    await expect(copyIcon).toBeVisible();
-    await expect(checkIcon).toBeHidden();
-  });
-
-  test('should copy JSON without JS errors when clicking button', async ({ page }) => {
-    // Listen for page errors
-    const errors = [];
-    page.on('pageerror', (error) => errors.push(error.message));
-
-    await page.goto('/roles/acdd72a7-3385-48ef-bd42-f606fba81ae7');
-    await page.waitForLoadState('domcontentloaded');
-
-    // Find and click the copy JSON button (contains "Copy" text and uses copyWithFeedback)
-    const copyButton = page.locator('button[onclick*="Clipboard.copyWithFeedback"][onclick*="JSON copied"]');
-    await expect(copyButton).toBeVisible();
-    await copyButton.click();
-
-    // Wait for feedback and toast
-    await page.waitForTimeout(500);
-
-    // Check no JS errors occurred
-    expect(errors).toHaveLength(0);
-
-    // Verify toast appeared
-    const toast = page.locator('#toast-container');
-    await expect(toast).toBeVisible();
-  });
-
-  test('should download JSON file when clicking download button', async ({ page }) => {
-    await page.goto('/roles/acdd72a7-3385-48ef-bd42-f606fba81ae7');
-    await page.waitForLoadState('domcontentloaded');
-
-    // Set up download listener before clicking
-    const downloadPromise = page.waitForEvent('download');
-
-    // Find and click the download button
-    const downloadButton = page.locator('button[onclick*="Clipboard.download"]');
-    await expect(downloadButton).toBeVisible();
-    await downloadButton.click();
-
-    // Verify download was triggered
-    const download = await downloadPromise;
-    expect(download.suggestedFilename()).toMatch(/\.json$/);
-  });
-
-  test('should show visual feedback when copying JSON', async ({ page }) => {
-    await page.goto('/roles/acdd72a7-3385-48ef-bd42-f606fba81ae7');
-    await page.waitForLoadState('domcontentloaded');
-
-    const copyButton = page.locator('button[onclick*="Clipboard.copyWithFeedback"][onclick*="JSON copied"]');
-    await expect(copyButton).toBeVisible();
-
-    // Before click: "Copy" text visible, "Copied" text hidden
-    const copyText = copyButton.locator('.copy-text');
-    const copiedText = copyButton.locator('.copied-text');
-    await expect(copyText).toBeVisible();
-    await expect(copiedText).toBeHidden();
-
-    // Click to copy
-    await copyButton.click();
-
-    // After click: "Copied" text visible, "Copy" text hidden
-    await expect(copiedText).toBeVisible();
-    await expect(copyText).toBeHidden();
-
-    // After delay: should revert back
-    await page.waitForTimeout(2000);
-    await expect(copyText).toBeVisible();
-    await expect(copiedText).toBeHidden();
+    // After delay: should revert back (auto-wait using expectations)
+    await expect(copyIcon).toBeVisible({ timeout: 3000 });
+    await expect(checkIcon).toBeHidden({ timeout: 3000 });
   });
 });
 

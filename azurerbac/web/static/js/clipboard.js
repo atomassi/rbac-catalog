@@ -181,6 +181,11 @@
      * @returns {Promise<boolean>}
      */
     async function copyWithTooltip(button, text, feedbackDuration = 1500) {
+        // Validate input to avoid unnecessary clipboard operations
+        if (typeof text !== 'string' || text.trim().length === 0) {
+            return false;
+        }
+        
         let success = false;
         
         // Try modern clipboard API first
@@ -198,8 +203,10 @@
             const textarea = document.createElement('textarea');
             textarea.value = text;
             textarea.style.position = 'fixed';
+            textarea.style.left = '-9999px';
             textarea.style.opacity = '0';
             document.body.appendChild(textarea);
+            textarea.focus();
             textarea.select();
             try {
                 success = document.execCommand('copy');

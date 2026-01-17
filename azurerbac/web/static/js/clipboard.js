@@ -4,6 +4,7 @@
  * @typedef {{
  *   copy: (text: string, successMessage?: string) => Promise<boolean>,
  *   copyWithFeedback: (button: HTMLElement, text: string, successMessage?: string, feedbackDuration?: number) => Promise<boolean>,
+ *   copyWithTooltip: (button: HTMLElement, text: string, feedbackDuration?: number) => Promise<boolean>,
  *   download: (content: string, filename: string, mimeType?: string) => void
  * }} ClipboardUtils
  */
@@ -171,11 +172,77 @@
         return success;
     }
 
+    /**
+     * Copy with tooltip feedback (no toast)
+     * Expects button to contain .copy-icon, .check-icon, .copied-tooltip elements
+     * @param {HTMLElement} button - The button element to update
+     * @param {string} text - The text to copy
+     * @param {number} [feedbackDuration=1500] - How long to show the feedback state (ms)
+     * @returns {Promise<boolean>}
+     */
+    async function copyWithTooltip(button, text, feedbackDuration = 1500) {
+        let success = false;
+        
+        // Try modern clipboard API first
+        if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+            try {
+                await navigator.clipboard.writeText(text);
+                success = true;
+            } catch {
+                // Fall through to legacy fallback
+            }
+        }
+        
+        // Fallback for older browsers
+        if (!success) {
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            textarea.style.position = 'fixed';
+            textarea.style.opacity = '0';
+            document.body.appendChild(textarea);
+            textarea.select();
+            try {
+                success = document.execCommand('copy');
+            } catch {
+                success = false;
+            } finally {
+                document.body.removeChild(textarea);
+            }
+        }
+        
+        if (success && button) {
+            // Toggle icons and show tooltip
+            const copyIcon = /** @type {HTMLElement | null} */ (button.querySelector('.copy-icon'));
+            const checkIcon = /** @type {HTMLElement | null} */ (button.querySelector('.check-icon'));
+            const tooltip = /** @type {HTMLElement | null} */ (button.querySelector('.copied-tooltip'));
+            
+            if (copyIcon) copyIcon.style.display = 'none';
+            if (checkIcon) checkIcon.style.display = '';
+            if (tooltip) {
+                tooltip.style.visibility = 'visible';
+                tooltip.style.opacity = '1';
+            }
+            
+            // Revert after duration
+            setTimeout(() => {
+                if (copyIcon) copyIcon.style.display = '';
+                if (checkIcon) checkIcon.style.display = 'none';
+                if (tooltip) {
+                    tooltip.style.opacity = '0';
+                    tooltip.style.visibility = 'hidden';
+                }
+            }, feedbackDuration);
+        }
+        
+        return success;
+    }
+
     // Expose globally (using custom property to avoid Clipboard API conflict)
     /** @type {ClipboardUtils} */
     const clipboardUtils = {
         copy: copyToClipboard,
         copyWithFeedback: copyWithFeedback,
+        copyWithTooltip: copyWithTooltip,
         download: downloadFile
     };
     // @ts-ignore - intentionally extending window with custom Clipboard property

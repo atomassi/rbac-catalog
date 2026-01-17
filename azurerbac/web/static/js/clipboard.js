@@ -81,11 +81,29 @@
             return false;
         }
         
+        const success = await _copyToClipboardSilent(text);
+        if (success) {
+            showToast(successMessage, 'success');
+        } else {
+            showToast('Failed to copy', 'error');
+        }
+        return success;
+    }
+
+    /**
+     * Core clipboard copy logic without UI feedback (private helper)
+     * @param {string} text - The text to copy
+     * @returns {Promise<boolean>}
+     */
+    async function _copyToClipboardSilent(text) {
+        if (typeof text !== 'string' || text.trim().length === 0) {
+            return false;
+        }
+        
         // Try modern clipboard API first (if available and permitted)
         if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
             try {
                 await navigator.clipboard.writeText(text);
-                showToast(successMessage, 'success');
                 return true;
             } catch {
                 // Fall through to legacy fallback
@@ -96,22 +114,14 @@
         const textarea = document.createElement('textarea');
         textarea.value = text;
         textarea.style.position = 'fixed';
-        textarea.style.opacity = '0';
         textarea.style.left = '-9999px';
+        textarea.style.opacity = '0';
         document.body.appendChild(textarea);
         textarea.focus();
         textarea.select();
         try {
-            const success = document.execCommand('copy');
-            if (success) {
-                showToast(successMessage, 'success');
-                return true;
-            } else {
-                showToast('Failed to copy', 'error');
-                return false;
-            }
+            return document.execCommand('copy');
         } catch {
-            showToast('Failed to copy', 'error');
             return false;
         } finally {
             document.body.removeChild(textarea);
@@ -181,41 +191,7 @@
      * @returns {Promise<boolean>}
      */
     async function copyWithTooltip(button, text, feedbackDuration = 1500) {
-        // Validate input to avoid unnecessary clipboard operations
-        if (typeof text !== 'string' || text.trim().length === 0) {
-            return false;
-        }
-        
-        let success = false;
-        
-        // Try modern clipboard API first
-        if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
-            try {
-                await navigator.clipboard.writeText(text);
-                success = true;
-            } catch {
-                // Fall through to legacy fallback
-            }
-        }
-        
-        // Fallback for older browsers
-        if (!success) {
-            const textarea = document.createElement('textarea');
-            textarea.value = text;
-            textarea.style.position = 'fixed';
-            textarea.style.left = '-9999px';
-            textarea.style.opacity = '0';
-            document.body.appendChild(textarea);
-            textarea.focus();
-            textarea.select();
-            try {
-                success = document.execCommand('copy');
-            } catch {
-                success = false;
-            } finally {
-                document.body.removeChild(textarea);
-            }
-        }
+        const success = await _copyToClipboardSilent(text);
         
         if (success && button) {
             // Toggle icons and show tooltip

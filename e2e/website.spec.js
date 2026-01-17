@@ -643,6 +643,9 @@ test.describe('Role Detail - Copy/Download', () => {
 
     await page.goto('/roles/acdd72a7-3385-48ef-bd42-f606fba81ae7');
     await page.waitForLoadState('domcontentloaded');
+    
+    // Wait for Clipboard utility to be loaded
+    await page.waitForFunction(() => typeof window.Clipboard !== 'undefined');
 
     // Find and click the Role ID copy button
     const copyButton = page.locator('button[onclick*="Clipboard.copyWithTooltip"]');
@@ -653,6 +656,10 @@ test.describe('Role Detail - Copy/Download', () => {
     const tooltip = copyButton.locator('.copied-tooltip');
     await expect(tooltip).toHaveCSS('opacity', '1');
 
+    // Verify the correct content was copied to clipboard
+    const clipboardContent = await page.evaluate(() => navigator.clipboard.readText());
+    expect(clipboardContent).toBe('acdd72a7-3385-48ef-bd42-f606fba81ae7');
+
     // Check no JS errors occurred
     expect(errors).toHaveLength(0);
   });
@@ -660,6 +667,9 @@ test.describe('Role Detail - Copy/Download', () => {
   test('should show visual feedback when copying Role ID', async ({ page }) => {
     await page.goto('/roles/acdd72a7-3385-48ef-bd42-f606fba81ae7');
     await page.waitForLoadState('domcontentloaded');
+    
+    // Wait for Clipboard utility to be loaded
+    await page.waitForFunction(() => typeof window.Clipboard !== 'undefined');
 
     const copyButton = page.locator('button[onclick*="Clipboard.copyWithTooltip"]');
     await expect(copyButton).toBeVisible();

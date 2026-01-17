@@ -267,8 +267,6 @@
                         <dt class="text-sm font-medium text-slate-500">Role ID</dt>
                         <dd class="mt-1 sm:mt-0 sm:col-span-2">
                             <code class="text-sm font-mono text-slate-700 bg-slate-100 px-3 py-1.5 rounded-lg">{{ role.role_id }}</code>
-                            <!-- SEO: unhyphenated GUID variant for search engines (hidden via aria-hidden, not sr-only due to mobile Safari bug) -->
-                            <span aria-hidden="true" class="hidden">{{ role.role_id | replace('-', '') }}</span>
                         </dd>
                     </div>
                     <div class="px-6 py-4 sm:grid sm:grid-cols-3 sm:gap-4">

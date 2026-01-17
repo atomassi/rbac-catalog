@@ -189,6 +189,7 @@
 <body class="h-full bg-slate-50 dark:bg-slate-900 transition-colors duration-200">
     <!-- Navigation state handler - must load before content -->
     <script src="/static/js/nav-state.js"></script>
+    <script src="/static/js/clipboard.js"></script>
     <script>NavState.initAiModeFromUrl();</script>
     <div class="min-h-full">
         <!-- Header -->
@@ -574,16 +575,44 @@
             <!-- Latest JSON -->
             <div class="bg-white rounded-2xl shadow-lg overflow-hidden mb-8">
                 <div class="px-6 py-5 border-b border-slate-100">
-                    <div class="flex items-center">
-                        <div class="flex-shrink-0 bg-gradient-to-br from-slate-700 to-slate-800 rounded-xl p-3">
-                            <svg class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-                            </svg>
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0 bg-gradient-to-br from-slate-700 to-slate-800 rounded-xl p-3">
+                                <svg class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                                </svg>
+                            </div>
+                            <div class="ml-4">
+                                <h3 class="text-lg font-semibold text-slate-900">Latest Role JSON</h3>
+                                <p class="text-sm text-slate-500">Raw definition from Azure</p>
+                            </div>
                         </div>
-                        <div class="ml-4">
-                            <h3 class="text-lg font-semibold text-slate-900">Latest Role JSON</h3>
-                            <p class="text-sm text-slate-500">Raw definition from Azure</p>
+                        {% if role.status != 'deleted' %}
+                        <div class="flex items-center gap-2">
+                            <button onclick="Clipboard.copyWithFeedback(this, document.getElementById('role-json')?.textContent || '', 'JSON copied')" 
+                                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-slate-600 hover:text-azure-600 hover:bg-slate-100 rounded-lg transition-colors"
+                                    title="Copy JSON"
+                                    aria-label="Copy JSON">
+                                <svg class="w-4 h-4 copy-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                </svg>
+                                <svg class="w-4 h-4 check-icon text-emerald-600" style="display:none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                </svg>
+                                <span class="copy-text hidden sm:inline">Copy</span>
+                                <span class="copied-text text-emerald-600 hidden sm:inline" style="display:none">Copied!</span>
+                            </button>
+                            <button onclick="Clipboard.download(document.getElementById('role-json')?.textContent || '', '{{ role.role_name | slugify }}.json')" 
+                                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-slate-600 hover:text-azure-600 hover:bg-slate-100 rounded-lg transition-colors"
+                                    title="Download JSON"
+                                    aria-label="Download JSON">
+                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                </svg>
+                                <span class="hidden sm:inline">Download</span>
+                            </button>
                         </div>
+                        {% endif %}
                     </div>
                 </div>
                 {% if role.status == 'deleted' %}
@@ -597,7 +626,7 @@
                     </div>
                 {% else %}
                     <div class="bg-gradient-to-br from-slate-900 to-slate-800 m-4 rounded-xl overflow-hidden">
-                        <pre class="px-4 py-2 overflow-auto text-xs font-mono text-slate-100 leading-5 max-h-96">{{ role_json_pretty | trim }}</pre>
+                        <pre id="role-json" class="px-4 py-2 overflow-auto text-xs font-mono text-slate-100 leading-5 max-h-96">{{ role_json_pretty | trim }}</pre>
                     </div>
                 {% endif %}
             </div>

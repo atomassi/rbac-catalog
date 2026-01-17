@@ -628,6 +628,72 @@ test.describe('Role Detail Page', () => {
 });
 
 // =============================================================================
+// ROLE DETAIL - COPY/DOWNLOAD FUNCTIONALITY
+// =============================================================================
+test.describe('Role Detail - Copy/Download', () => {
+  test.beforeEach(async ({ context }) => {
+    // Grant clipboard permissions for copy tests
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  });
+
+  test('should copy Role ID without JS errors when clicking button', async ({ page }) => {
+    // Listen for page errors
+    const errors = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+
+    await page.goto('/roles/acdd72a7-3385-48ef-bd42-f606fba81ae7');
+    await page.waitForLoadState('domcontentloaded');
+    
+    // Wait for Clipboard utility to be loaded
+    await page.waitForFunction(() => typeof window.Clipboard !== 'undefined');
+
+    // Find and click the Role ID copy button
+    const copyButton = page.locator('button[onclick*="Clipboard.copyWithTooltip"]');
+    await expect(copyButton).toBeVisible();
+    await copyButton.click();
+
+    // Verify tooltip appeared (auto-waits for condition)
+    const tooltip = copyButton.locator('.copied-tooltip');
+    await expect(tooltip).toHaveCSS('opacity', '1');
+
+    // Verify the correct content was copied to clipboard
+    const clipboardContent = await page.evaluate(() => navigator.clipboard.readText());
+    expect(clipboardContent).toBe('acdd72a7-3385-48ef-bd42-f606fba81ae7');
+
+    // Check no JS errors occurred
+    expect(errors).toHaveLength(0);
+  });
+
+  test('should show visual feedback when copying Role ID', async ({ page }) => {
+    await page.goto('/roles/acdd72a7-3385-48ef-bd42-f606fba81ae7');
+    await page.waitForLoadState('domcontentloaded');
+    
+    // Wait for Clipboard utility to be loaded
+    await page.waitForFunction(() => typeof window.Clipboard !== 'undefined');
+
+    const copyButton = page.locator('button[onclick*="Clipboard.copyWithTooltip"]');
+    await expect(copyButton).toBeVisible();
+
+    // Before click: copy icon visible, check icon hidden
+    const copyIcon = copyButton.locator('.copy-icon');
+    const checkIcon = copyButton.locator('.check-icon');
+    await expect(copyIcon).toBeVisible();
+    await expect(checkIcon).toBeHidden();
+
+    // Click to copy
+    await copyButton.click();
+
+    // After click: check icon visible, copy icon hidden
+    await expect(checkIcon).toBeVisible();
+    await expect(copyIcon).toBeHidden();
+
+    // After delay: should revert back (auto-wait using expectations)
+    await expect(copyIcon).toBeVisible({ timeout: 3000 });
+    await expect(checkIcon).toBeHidden({ timeout: 3000 });
+  });
+});
+
+// =============================================================================
 // OPERATIONS PAGE
 // =============================================================================
 test.describe('Operations Page', () => {

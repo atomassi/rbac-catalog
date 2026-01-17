@@ -202,11 +202,11 @@ pre::-webkit-scrollbar-thumb:hover {
 }
 
 .dark .bg-red-50 {
-  background-color: rgba(254, 202, 202, 0.18) !important; /* red-200 for cleaner look */
+  background-color: rgba(254, 202, 202, 0.18) !important; /* red-200 (softer pink for diff views/badges) */
 }
 
 .dark .bg-red-100 {
-  background-color: rgba(254, 202, 202, 0.25) !important;
+  background-color: rgba(254, 202, 202, 0.25) !important; /* red-200 */
 }
 
 .dark .bg-amber-50,
@@ -427,20 +427,14 @@ pre::-webkit-scrollbar-thumb:hover {
 
 /* Deleted role banner - custom dark mode styling (placed after generic overrides for specificity) */
 .dark .deleted-banner-outer {
-  background-color: rgba(239, 68, 68, 0.15) !important;
-  border-color: rgba(248, 113, 113, 0.4) !important;
+  background-color: rgba(239, 68, 68, 0.15) !important; /* red-500 */
+  border-color: rgba(248, 113, 113, 0.4) !important; /* red-400 */
 }
 
-.dark .deleted-banner-title {
-  color: #f87171 !important;
-}
-
-.dark .deleted-banner-text {
-  color: #f87171 !important;
-}
-
+.dark .deleted-banner-title,
+.dark .deleted-banner-text,
 .dark .deleted-banner-icon {
-  color: #f87171 !important;
+  color: #f87171 !important; /* red-400 */
 }
 
 /* ==========================================

@@ -550,9 +550,8 @@ test.describe('Role Detail Page', () => {
     const copiedText = copyJsonButton.locator('.copied-text');
     await expect(copiedText).toBeVisible();
     
-    // Wait for it to revert back
-    await page.waitForTimeout(2000);
-    await expect(copiedText).not.toBeVisible();
+    // Wait for it to revert back (feedback duration is 1500ms)
+    await expect(copiedText).not.toBeVisible({ timeout: 3000 });
   });
 
   test('should download JSON file', async ({ page }) => {
@@ -573,8 +572,9 @@ test.describe('Role Detail Page', () => {
     // Skip if no deleted roles exist
     await page.goto('/recent');
     const deletedBadge = page.locator('text=Deleted').first();
+    const deletedCount = await deletedBadge.count();
     
-    if (await deletedBadge.count() > 0) {
+    if (deletedCount > 0) {
       // Click on a deleted role
       const deletedRow = page.locator('tr:has-text("Deleted")').first();
       const roleLink = deletedRow.locator('a[href^="/roles/"]').first();

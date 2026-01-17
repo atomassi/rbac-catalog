@@ -105,7 +105,7 @@
                     return false;
                 }
             } catch {
-                showToast('Failed to copy', 'error')
+                showToast('Failed to copy', 'error');
                 return false;
             } finally {
                 document.body.removeChild(textarea);

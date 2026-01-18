@@ -36,9 +36,9 @@ jobs:
   # ═══════════════════════════════════════════════════════════════════════════
   # Job 1: Build and deploy to PPE
   # ═══════════════════════════════════════════════════════════════════════════
-  # Note: PPE is intentionally publicly accessible (no IP restrictions) unlike
-  # staging in deploy.yml. This allows team members to test from any location.
-  # If PPE needs to be restricted, add IP rules similar to deploy.yml lines 216-242.
+  # Note: PPE slot inherits IP restrictions from production (Cloudflare + LocalDev IPs).
+  # Auto-shutdown is handled by Azure Automation Runbook (scripts/ppe-auto-shutdown.ps1)
+  # running hourly via schedule "Hourly-PPE-Shutdown-Check".
   deploy-ppe:
     name: Deploy to PPE
     runs-on: ubuntu-latest
@@ -57,8 +57,12 @@ jobs:
             echo "::error::Duration must be a number"
             exit 1
           fi
+          if [ "$DURATION" -lt 10 ]; then
+            echo "::error::Duration must be at least 10 minutes"
+            exit 1
+          fi
           if [ "$DURATION" -gt 90 ]; then
-            echo "::error::Duration cannot exceed 90 minutes (1.5 hours)"
+            echo "::error::Duration cannot exceed 90 minutes"
             exit 1
           fi
           echo "✅ Duration validated: ${DURATION} minutes"
@@ -72,6 +76,7 @@ jobs:
         id: version
         run: |
           SHORT_SHA=$(git rev-parse --short HEAD)
+          # Sanitize branch name for Docker tag (replace invalid chars with hyphen)
           BRANCH_SAFE=$(echo "${{ inputs.branch }}" | sed 's/[^a-zA-Z0-9]/-/g' | cut -c1-20)
           VERSION="ppe-${BRANCH_SAFE}-${SHORT_SHA}"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
@@ -89,12 +94,13 @@ jobs:
 
       - name: Build and push Docker image
         run: |
-          docker build \
-            --build-arg VERSION="${{ steps.version.outputs.version }}" \
-            -t ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }} \
-            .
-          docker push ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
-          echo "🐳 Built and pushed: ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}"
+          set -euo pipefail
+          IMAGE_REF="${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}"
+          echo "🐳 Building: ${IMAGE_REF}"
+          docker build --build-arg VERSION="${{ steps.version.outputs.version }}" -t "${IMAGE_REF}" .
+          echo "📤 Pushing: ${IMAGE_REF}"
+          docker push "${IMAGE_REF}"
+          echo "✅ Built and pushed: ${IMAGE_REF}"
 
       - name: Deploy to PPE Slot
         uses: azure/webapps-deploy@657f0700ea5214d56a0400d8ac5e8023c963d25d  # v3.0.6
@@ -109,9 +115,11 @@ jobs:
           echo "🚀 Started PPE slot with image: ${{ steps.version.outputs.version }}"
 
       - name: Set auto-shutdown timestamp
+        id: shutdown
         run: |
           DURATION="${{ inputs.duration }}"
           SHUTDOWN_AT=$(date -u -d "+${DURATION} minutes" +%s)
+          SHUTDOWN_AT_HUMAN=$(date -u -d "@${SHUTDOWN_AT}" '+%Y-%m-%d %H:%M:%S UTC')
           
           az webapp config appsettings set \
             --name ${{ env.APP_NAME }} \
@@ -120,7 +128,7 @@ jobs:
             --settings PPE_SHUTDOWN_AT=$SHUTDOWN_AT \
             --output none
 
-          SHUTDOWN_AT_HUMAN=$(date -u -d "@${SHUTDOWN_AT}" '+%Y-%m-%d %H:%M:%S UTC')
+          echo "shutdown_time=${SHUTDOWN_AT_HUMAN}" >> $GITHUB_OUTPUT
           echo "⏰ Auto-shutdown scheduled at: ${SHUTDOWN_AT_HUMAN}"
 
       - name: Wait for PPE to be ready
@@ -131,12 +139,12 @@ jobs:
           WAITED_SECONDS=0
           
           while [ $WAITED_SECONDS -le $MAX_WAIT_SECONDS ]; do
-            HTTP_CODE=$(curl -sf -o /dev/null -w "%{http_code}" "${{ env.PPE_URL }}/healthz" 2>/dev/null || echo "000")
+            HTTP_CODE=$(curl -f -o /dev/null -w "%{http_code}" "${{ env.PPE_URL }}/healthz" 2>/dev/null || echo "CONN_ERR")
             if [ "$HTTP_CODE" = "200" ]; then
-              echo "✅ PPE is ready after ${WAITED_SECONDS}s (HTTP $HTTP_CODE)"
+              echo "✅ PPE is ready after ${WAITED_SECONDS}s"
               exit 0
             fi
-            echo "⏳ Waiting... ${WAITED_SECONDS}s / ${MAX_WAIT_SECONDS}s (HTTP $HTTP_CODE)"
+            echo "⏳ Waiting... ${WAITED_SECONDS}s/${MAX_WAIT_SECONDS}s (status: $HTTP_CODE)"
             sleep $POLL_INTERVAL_SECONDS
             WAITED_SECONDS=$((WAITED_SECONDS + POLL_INTERVAL_SECONDS))
           done
@@ -146,14 +154,11 @@ jobs:
 
       - name: PPE deployment summary
         run: |
-          DURATION="${{ inputs.duration }}"
-          SHUTDOWN_TIME=$(date -u -d "+${DURATION} minutes" '+%Y-%m-%d %H:%M:%S UTC')
-          
           echo "✅ PPE deployment complete!"
           echo "   Branch: ${{ inputs.branch }}"
           echo "   Version: ${{ steps.version.outputs.version }}"
-          echo "   Duration: ${DURATION} minutes"
-          echo "   Auto-shutdown at: ${SHUTDOWN_TIME}"
+          echo "   Duration: ${{ inputs.duration }} minutes"
+          echo "   Auto-shutdown at: ${{ steps.shutdown.outputs.shutdown_time }}"
           echo "🌐 ${{ env.PPE_URL }}"
 
       - name: Azure Logout

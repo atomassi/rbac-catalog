@@ -69,6 +69,7 @@ $ErrorActionPreference = "Stop"
 #region Helper Functions
 
 function Convert-UnixToDateTime([long]$Timestamp) {
+    # Returns DateTime in UTC
     [DateTimeOffset]::FromUnixTimeSeconds($Timestamp).UtcDateTime
 }
 
@@ -106,7 +107,7 @@ catch {
 }
 
 if ($slot.State -ne "Running") {
-    Write-Output "PPE slot is $($slot.State), nothing to do"
+    Write-Output "PPE slot is $($slot.State)"
     return
 }
 
@@ -123,9 +124,12 @@ if (-not $shutdownAt) {
     return
 }
 
-# Validate timestamp format
+# Validate timestamp format - stop slot if invalid to prevent costs
 if ($shutdownAt -notmatch '^\d+$') {
-    throw "Invalid PPE_SHUTDOWN_AT value: $shutdownAt"
+    Write-Output "Invalid PPE_SHUTDOWN_AT value '$shutdownAt' - stopping to prevent costs"
+    Stop-AzWebAppSlot -ResourceGroupName $ResourceGroupName -Name $AppName -Slot $SlotName
+    Write-Output "Stopped PPE slot due to invalid timestamp"
+    return
 }
 
 $shutdownAtInt = [long]$shutdownAt

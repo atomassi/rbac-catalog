@@ -25,6 +25,11 @@ class RoleScanResult(ScanResult):
 
     deleted: int = 0
 
+    @property
+    def has_changes(self) -> bool:
+        """True if any changes were detected."""
+        return bool(self.created or self.updated or self.deleted)
+
 
 @dataclass(slots=True)
 class OperationsScanResult(ScanResult):

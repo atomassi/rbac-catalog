@@ -1,15 +1,19 @@
 """Background jobs: workers and scan logic."""
 
 from .exceptions import EmptyFetchResultError
+from .jobs import Job, JobResult, create_jobs
 from .models import OperationsScanResult, RoleScanResult, ScanResult
 from .operations_monitor import apply_operations_scan
 from .roles_monitor import apply_role_scan
 
 __all__ = [
     "EmptyFetchResultError",
+    "Job",
+    "JobResult",
     "OperationsScanResult",
     "RoleScanResult",
     "ScanResult",
     "apply_operations_scan",
     "apply_role_scan",
+    "create_jobs",
 ]

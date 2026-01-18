@@ -160,8 +160,8 @@ class TestMetricsLocalMode:
             ("track_metric", ("test_metric", 42.0, {"dim": "value"})),
             ("track_startup", (5.0, 100, 5000)),
             ("track_cache_refresh", (3.0, "startup", 100, 5000)),
-            ("track_role_scan", (10.0, 100, 5, 3, 2)),
-            ("track_operations_scan", (30.0, 5000)),
+            ("track_role_scan", (100, 5, 3, 2)),
+            ("track_operations_scan", (5000,)),
         ],
     )
     def test_metrics_noop_when_local(self, local_env, func_name, args):
@@ -249,15 +249,65 @@ class TestMetricsErrorHandling:
         # Should not raise - error is caught
         metrics_module.track_cache_stats(mock_cache)
 
-    def test_track_role_scan_with_zero_values(self, local_env):
-        """track_role_scan should handle zero values."""
-        metrics_module = local_env
-        metrics_module.track_role_scan(0.0, 0, 0, 0, 0)
-
     def test_track_metric_with_negative_value(self, local_env):
         """track_metric should accept negative values."""
         metrics_module = local_env
         metrics_module.track_metric("test", -42.0)
+
+
+# =============================================================================
+# Scan Tracking Functions (No Duration Parameter)
+# =============================================================================
+
+
+class TestTrackRoleScan:
+    """Test track_role_scan function accepts correct parameters without duration."""
+
+    @pytest.mark.parametrize(
+        "roles_fetched,roles_added,roles_updated,roles_deleted",
+        [
+            pytest.param(0, 0, 0, 0, id="all_zeros"),
+            pytest.param(100, 5, 3, 2, id="typical_scan"),
+            pytest.param(500, 0, 0, 0, id="no_changes"),
+            pytest.param(1, 1, 0, 0, id="single_add"),
+            pytest.param(10, 0, 5, 0, id="only_updates"),
+            pytest.param(10, 0, 0, 3, id="only_deletions"),
+            pytest.param(1000, 50, 100, 25, id="large_scan"),
+        ],
+    )
+    def test_track_role_scan_accepts_all_parameter_combinations(
+        self,
+        local_env,
+        roles_fetched: int,
+        roles_added: int,
+        roles_updated: int,
+        roles_deleted: int,
+    ):
+        """track_role_scan should accept various parameter combinations without duration."""
+        metrics_module = local_env
+        # Should not raise - no-op when local
+        metrics_module.track_role_scan(roles_fetched, roles_added, roles_updated, roles_deleted)
+
+
+class TestTrackOperationsScan:
+    """Test track_operations_scan function accepts correct parameters without duration."""
+
+    @pytest.mark.parametrize(
+        "operations_count",
+        [
+            pytest.param(0, id="zero_operations"),
+            pytest.param(1, id="single_operation"),
+            pytest.param(5000, id="typical_count"),
+            pytest.param(20000, id="large_count"),
+        ],
+    )
+    def test_track_operations_scan_accepts_all_parameter_values(
+        self, local_env, operations_count: int
+    ):
+        """track_operations_scan should accept various counts without duration."""
+        metrics_module = local_env
+        # Should not raise - no-op when local
+        metrics_module.track_operations_scan(operations_count)
 
 
 # =============================================================================

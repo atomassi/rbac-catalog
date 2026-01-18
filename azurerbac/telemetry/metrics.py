@@ -207,7 +207,6 @@ def track_cache_refresh(
 
 
 def track_role_scan(
-    duration_seconds: float,
     roles_fetched: int,
     roles_added: int,
     roles_updated: int,
@@ -215,8 +214,9 @@ def track_role_scan(
 ) -> None:
     """Track role scan metrics.
 
+    Duration is tracked separately by the worker via track_worker_result.
+
     Args:
-        duration_seconds: Time taken to complete the scan
         roles_fetched: Total roles fetched from Azure
         roles_added: New roles added
         roles_updated: Existing roles updated
@@ -227,7 +227,6 @@ def track_role_scan(
         return
 
     try:
-        track_duration("role_scan_duration_seconds", duration_seconds)
         track_gauge("role_scan_fetched", roles_fetched)
         track_gauge("role_scan_added", roles_added)
         track_gauge("role_scan_updated", roles_updated)
@@ -236,19 +235,19 @@ def track_role_scan(
         track_gauge("role_scan_total_changes", total_changes)
         track_event("role_scan_event")
         logger.info(
-            f"Tracked role scan: {duration_seconds:.2f}s, "
-            f"fetched={roles_fetched}, added={roles_added}, "
+            f"Tracked role scan: fetched={roles_fetched}, added={roles_added}, "
             f"updated={roles_updated}, deleted={roles_deleted}"
         )
     except Exception as e:
         logger.exception("Failed to track role scan metric: %s", e)
 
 
-def track_operations_scan(duration_seconds: float, operations_count: int) -> None:
+def track_operations_scan(operations_count: int) -> None:
     """Track operations scan metrics.
 
+    Duration is tracked separately by the worker via track_worker_result.
+
     Args:
-        duration_seconds: Time taken to complete the scan
         operations_count: Total operations fetched
     """
     if not _metrics_enabled():
@@ -256,12 +255,9 @@ def track_operations_scan(duration_seconds: float, operations_count: int) -> Non
         return
 
     try:
-        track_duration("operations_scan_duration_seconds", duration_seconds)
         track_gauge("operations_scan_count", operations_count)
         track_event("operations_scan_event")
-        logger.info(
-            f"Tracked operations scan: {duration_seconds:.2f}s, {operations_count} operations"
-        )
+        logger.info(f"Tracked operations scan: {operations_count} operations")
     except Exception as e:
         logger.exception("Failed to track operations scan metric: %s", e)
 

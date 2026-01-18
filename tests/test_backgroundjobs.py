@@ -427,40 +427,180 @@ class TestRoleScanResult:
 # =============================================================================
 
 
+def _make_operation(
+    name: str,
+    display_name: str = "Display Name",
+    description: str = "Description",
+    provider_display_name: str = "Microsoft Test",
+    resource_type: str = "resources",
+    is_data_action: bool = False,
+    **extra,
+):
+    """Helper to create an OperationData object."""
+    from azurerbac.azure.models import OperationData
+
+    return OperationData(
+        name=name,
+        display_name=display_name,
+        description=description,
+        provider_display_name=provider_display_name,
+        resource_type=resource_type,
+        resource_type_display_name=extra.get("resource_type_display_name", "Resources"),
+        is_data_action=is_data_action,
+        origin=extra.get("origin"),
+    )
+
+
 class TestApplyOperationsScan:
     """Tests for the apply_operations_scan function."""
 
     @pytest.mark.asyncio
-    async def test_apply_operations_scan_new_operations(self, db_session):
+    async def test_creates_new_operations(self, db_session):
         """Test adding new operations."""
-        from azurerbac.azure.models import OperationData
         from azurerbac.backgroundjobs.operations_monitor import apply_operations_scan
 
         operations = [
-            OperationData(
-                name="Microsoft.Test/resources/read",
-                display_name="Read Test Resources",
-                description="Read test resources",
-                provider_display_name="Microsoft Test",
-                resource_type="resources",
-                resource_type_display_name="Resources",
-                is_data_action=False,
-            ),
+            _make_operation("Microsoft.Test/resources/read", "Read Test Resources"),
+            _make_operation("Microsoft.Test/resources/write", "Write Test Resources"),
         ]
 
         stats = await apply_operations_scan(db_session, operations)
-        await db_session.commit()
 
-        assert stats.created == 1
+        assert stats.created == 2
+        assert stats.updated == 0
+        assert stats.total == 2
 
     @pytest.mark.asyncio
-    async def test_apply_operations_scan_empty_list(self, db_session):
+    async def test_handles_empty_list(self, db_session):
         """Test scanning with empty operations list."""
         from azurerbac.backgroundjobs.operations_monitor import apply_operations_scan
 
         stats = await apply_operations_scan(db_session, [])
         assert stats.created == 0
         assert stats.updated == 0
+        assert stats.total == 0
+
+    @pytest.mark.asyncio
+    async def test_updates_existing_operation(self, db_session):
+        """Test that changed operations are updated."""
+        from azurerbac.backgroundjobs.operations_monitor import apply_operations_scan
+
+        # First scan
+        operations_v1 = [_make_operation("Microsoft.Test/read", "Read")]
+        await apply_operations_scan(db_session, operations_v1)
+
+        # Second scan with updated display_name
+        operations_v2 = [_make_operation("Microsoft.Test/read", "Read V2")]
+        stats = await apply_operations_scan(db_session, operations_v2)
+
+        assert stats.created == 0
+        assert stats.updated == 1
+
+    @pytest.mark.asyncio
+    async def test_deduplicates_operations(self, db_session):
+        """Test that duplicate operations are deduplicated (keeps last)."""
+        from azurerbac.backgroundjobs.operations_monitor import apply_operations_scan
+
+        operations = [
+            _make_operation("Microsoft.Test/read", "First"),
+            _make_operation("Microsoft.Test/read", "Second"),  # Duplicate - should keep this
+            _make_operation("Microsoft.Test/read", "Third"),  # Duplicate - should keep this
+        ]
+
+        stats = await apply_operations_scan(db_session, operations)
+
+        assert stats.created == 1
+        assert stats.duplicates_skipped == 2
+        assert stats.total == 1
+
+    @pytest.mark.asyncio
+    async def test_counts_unique_providers(self, db_session):
+        """Test that providers are counted correctly."""
+        from azurerbac.backgroundjobs.operations_monitor import apply_operations_scan
+
+        operations = [
+            _make_operation("Microsoft.Compute/read", provider_display_name="Compute"),
+            _make_operation("Microsoft.Compute/write", provider_display_name="Compute"),
+            _make_operation("Microsoft.Storage/read", provider_display_name="Storage"),
+        ]
+
+        stats = await apply_operations_scan(db_session, operations)
+
+        assert stats.providers == 2  # Compute and Storage
+
+    @pytest.mark.asyncio
+    async def test_cache_invalidated_on_new_operations(self, db_session, monkeypatch):
+        """Test cache is invalidated when new operations are added."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        from azurerbac.backgroundjobs.operations_monitor import apply_operations_scan
+
+        mock_instance = MagicMock()
+        mock_instance.invalidate_and_rebuild = AsyncMock()
+        monkeypatch.setattr(
+            "azurerbac.backgroundjobs.operations_monitor.get_cache_service",
+            lambda: mock_instance,
+        )
+
+        # No new operations - cache should NOT be invalidated
+        await apply_operations_scan(db_session, [])
+        mock_instance.invalidate_and_rebuild.assert_not_called()
+
+        # With new operations - cache should be invalidated
+        operations = [_make_operation("Microsoft.Test/read")]
+        await apply_operations_scan(db_session, operations)
+        mock_instance.invalidate_and_rebuild.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_no_cache_invalidation_on_updates_only(self, db_session, monkeypatch):
+        """Test cache is NOT invalidated when only updates occur (no new ops)."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        from azurerbac.backgroundjobs.operations_monitor import apply_operations_scan
+
+        # First scan - add operation
+        operations_v1 = [_make_operation("Microsoft.Test/read", "Original")]
+        await apply_operations_scan(db_session, operations_v1)
+
+        # Setup mock after first scan
+        mock_instance = MagicMock()
+        mock_instance.invalidate_and_rebuild = AsyncMock()
+        monkeypatch.setattr(
+            "azurerbac.backgroundjobs.operations_monitor.get_cache_service",
+            lambda: mock_instance,
+        )
+
+        # Second scan - only update, no new ops
+        operations_v2 = [_make_operation("Microsoft.Test/read", "Updated")]
+        stats = await apply_operations_scan(db_session, operations_v2)
+
+        assert stats.updated == 1
+        assert stats.created == 0
+        mock_instance.invalidate_and_rebuild.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_skips_operations_without_name(self, db_session):
+        """Test that operations without a name are skipped."""
+        from azurerbac.azure.models import OperationData
+        from azurerbac.backgroundjobs.operations_monitor import apply_operations_scan
+
+        operations = [
+            OperationData(
+                name="",  # Empty name - should be skipped
+                display_name="No Name Op",
+                description="desc",
+                provider_display_name="Test",
+                resource_type="resources",
+                resource_type_display_name="Resources",
+                is_data_action=False,
+            ),
+            _make_operation("Microsoft.Test/read"),  # Valid
+        ]
+
+        stats = await apply_operations_scan(db_session, operations)
+
+        assert stats.created == 1
+        assert stats.total == 1
 
 
 # =============================================================================

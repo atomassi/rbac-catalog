@@ -380,6 +380,48 @@ class TestApplyRoleScan:
         assert len(history.summary) > 0
 
 
+class TestRoleScanResult:
+    """Tests for RoleScanResult dataclass."""
+
+    @pytest.mark.parametrize(
+        ("created", "updated", "deleted", "expected"),
+        [
+            pytest.param(0, 0, 0, False, id="no_changes"),
+            pytest.param(1, 0, 0, True, id="only_created"),
+            pytest.param(0, 1, 0, True, id="only_updated"),
+            pytest.param(0, 0, 1, True, id="only_deleted"),
+            pytest.param(1, 1, 1, True, id="all_changes"),
+        ],
+    )
+    def test_has_changes(self, created: int, updated: int, deleted: int, expected: bool):
+        """Test has_changes property returns True when any change count is non-zero."""
+        from azurerbac.backgroundjobs.models import RoleScanResult
+
+        result = RoleScanResult(created=created, updated=updated, deleted=deleted, total=10)
+        assert result.has_changes is expected
+
+    @pytest.mark.asyncio
+    async def test_cache_invalidated_only_when_changes(self, db_session, monkeypatch):
+        """Test cache is only invalidated when has_changes is True."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        mock_instance = MagicMock()
+        mock_instance.invalidate_and_rebuild = AsyncMock()
+        monkeypatch.setattr(
+            "azurerbac.backgroundjobs.roles_monitor.get_cache_service",
+            lambda: mock_instance,
+        )
+
+        # No changes - cache should NOT be invalidated
+        await apply_role_scan(db_session, [])
+        mock_instance.invalidate_and_rebuild.assert_not_called()
+
+        # With changes - cache should be invalidated
+        roles = [_make_role("role-1", "Reader")]
+        await apply_role_scan(db_session, roles)
+        mock_instance.invalidate_and_rebuild.assert_called_once()
+
+
 # =============================================================================
 # Operations Monitor Tests
 # =============================================================================

@@ -122,7 +122,7 @@ class OperationsScanJob(Job):
 
         logger.info("Operations scan complete: %s", result)
 
-        track_operations_scan(result.total)
+        track_operations_scan(len(operations))
 
 
 def create_jobs() -> list[Job]:

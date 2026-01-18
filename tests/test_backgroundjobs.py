@@ -623,8 +623,6 @@ class TestWorkerImports:
 
     def test_worker_main_is_async(self):
         """Verify main() is an async function."""
-        import asyncio
-
         from azurerbac.backgroundjobs.worker import main
 
         assert asyncio.iscoroutinefunction(main)

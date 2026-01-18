@@ -1,5 +1,8 @@
 """Tests for the monitor module - role scan application logic."""
 
+import asyncio
+from datetime import timedelta
+
 import pytest
 from sqlalchemy import select
 
@@ -626,37 +629,28 @@ class TestWorkerImports:
 
         assert asyncio.iscoroutinefunction(main)
 
-    def test_cleanup_uses_engine_dispose(self):
-        """Verify _cleanup() signature doesn't require engine parameter."""
+    def test_worker_class_exists(self):
+        """Verify Worker class exists and has required methods."""
+        from azurerbac.backgroundjobs.worker import Worker
+
+        worker = Worker()
+        assert hasattr(worker, "run_job")
+        assert hasattr(worker, "start")
+        assert hasattr(worker, "_setup_scheduler")
+        assert hasattr(worker, "_cleanup")
+
+    def test_job_abstract_class_has_required_methods(self):
+        """Verify Job abstract class has required abstract methods."""
         import inspect
 
-        from azurerbac.backgroundjobs.worker import _cleanup
+        from azurerbac.backgroundjobs.jobs import Job
 
-        sig = inspect.signature(_cleanup)
-        params = list(sig.parameters.keys())
-        # Should only have scheduler parameter, not engine
-        assert params == ["scheduler"]
-
-    def test_job_runner_has_required_methods(self):
-        """Verify JobRunner has execute_with_telemetry and run_job methods."""
-        from azurerbac.backgroundjobs.worker import JobRunner
-
-        assert hasattr(JobRunner, "execute_with_telemetry")
-        assert hasattr(JobRunner, "run_job")
-
-    def test_job_spec_is_dataclass(self):
-        """Verify JobSpec is a frozen dataclass."""
-        from dataclasses import fields
-
-        from azurerbac.backgroundjobs.worker import JobSpec
-
-        # Should have expected fields
-        field_names = {f.name for f in fields(JobSpec)}
-        assert "name" in field_names
-        assert "enabled" in field_names
-        assert "fetch" in field_names
-        assert "apply" in field_names
-        assert "interval_seconds" in field_names
+        # Check abstract methods/properties exist
+        assert hasattr(Job, "name")
+        assert hasattr(Job, "enabled")
+        assert hasattr(Job, "run")
+        assert hasattr(Job, "interval")
+        assert inspect.isabstract(Job)
 
 
 class TestEmptyFetchResultError:
@@ -664,7 +658,7 @@ class TestEmptyFetchResultError:
 
     def test_empty_fetch_result_error_message(self):
         """Test EmptyFetchResultError has correct message."""
-        from azurerbac.backgroundjobs.worker import EmptyFetchResultError
+        from azurerbac.backgroundjobs.exceptions import EmptyFetchResultError
 
         error = EmptyFetchResultError("role-scan")
         assert "role-scan" in str(error)
@@ -673,184 +667,133 @@ class TestEmptyFetchResultError:
 
     @pytest.mark.asyncio
     async def test_run_job_fails_on_empty_fetch(self, db_session):
-        """Test that run_job raises EmptyFetchResultError when fetch returns empty list."""
-        from unittest.mock import AsyncMock, MagicMock
+        """Test that run job handles EmptyFetchResultError when fetch returns empty list."""
+        from azurerbac.backgroundjobs.exceptions import EmptyFetchResultError
+        from azurerbac.backgroundjobs.jobs import Job
+        from azurerbac.backgroundjobs.worker import Worker
 
-        from azurerbac.backgroundjobs.worker import JobRunner, JobSpec
+        class EmptyFetchJob(Job):
+            @property
+            def name(self) -> str:
+                return "test-empty-job"
 
-        # Create a mock session factory
-        mock_session_factory = MagicMock()
+            @property
+            def enabled(self) -> bool:
+                return True
 
-        runner = JobRunner(session_factory=mock_session_factory)
+            @property
+            def interval(self) -> timedelta:
+                return timedelta(seconds=60)
 
-        # Create a job spec that returns empty list
-        spec = JobSpec(
-            name="test-empty-job",
-            enabled=True,
-            fetch_label="Fetching test items...",
-            fetch=AsyncMock(return_value=[]),  # Returns empty list
-            apply=AsyncMock(return_value={"created": 0}),
-            on_success=MagicMock(),
-            interval_seconds=60,
-        )
+            async def run(self):
+                raise EmptyFetchResultError(self.name)
 
-        # run_job should catch the error internally (via execute_with_telemetry)
-        # but it should log the failure. Let's verify the fetch was called
-        # and apply was NOT called (because of the empty result check)
-        await runner.run_job(spec)
+        job = EmptyFetchJob()
+        worker = Worker()
 
-        spec.fetch.assert_called_once()
-        spec.apply.assert_not_called()  # Should not reach apply due to empty check
-        spec.on_success.assert_not_called()  # Should not call success callback
+        # Should not raise - errors are logged and tracked
+        await worker.run_job(job)
 
     @pytest.mark.asyncio
     async def test_run_job_succeeds_with_results(self, db_session):
-        """Test that run_job succeeds when fetch returns results."""
-        from unittest.mock import AsyncMock, MagicMock
+        """Test that run job succeeds when job runs without error."""
+        from azurerbac.backgroundjobs.jobs import Job
+        from azurerbac.backgroundjobs.worker import Worker
 
-        from azurerbac.backgroundjobs.worker import JobRunner, JobSpec
+        run_called = False
 
-        # Create mock session factory that returns an async context manager
-        mock_session = AsyncMock()
-        mock_session_factory = MagicMock()
-        mock_session_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session_factory.return_value.__aexit__ = AsyncMock(return_value=None)
+        class SuccessfulJob(Job):
+            @property
+            def name(self) -> str:
+                return "test-success-job"
 
-        runner = JobRunner(session_factory=mock_session_factory)
+            @property
+            def enabled(self) -> bool:
+                return True
 
-        # Create a job spec that returns non-empty list
-        mock_apply = AsyncMock(return_value={"created": 1, "updated": 0})
-        mock_on_success = MagicMock()
+            @property
+            def interval(self) -> timedelta:
+                return timedelta(seconds=60)
 
-        spec = JobSpec(
-            name="test-success-job",
-            enabled=True,
-            fetch_label="Fetching test items...",
-            fetch=AsyncMock(return_value=[{"id": "1", "name": "test"}]),  # Non-empty
-            apply=mock_apply,
-            on_success=mock_on_success,
-            interval_seconds=60,
-        )
+            async def run(self):
+                nonlocal run_called
+                run_called = True
 
-        await runner.run_job(spec)
+        job = SuccessfulJob()
+        worker = Worker()
 
-        spec.fetch.assert_called_once()
-        mock_apply.assert_called_once()  # apply should be called
-        mock_on_success.assert_called_once()  # success callback should be called
+        await worker.run_job(job)
+
+        assert run_called
 
 
-class TestJobRunnerExecuteWithTelemetry:
-    """Tests for JobRunner.execute_with_telemetry method."""
+class TestCreateJobs:
+    """Tests for create_jobs function."""
 
-    @pytest.mark.asyncio
-    async def test_returns_result_on_success(self):
-        from unittest.mock import MagicMock
+    def test_creates_both_jobs(self):
+        from azurerbac.backgroundjobs.jobs import create_jobs
 
-        from azurerbac.backgroundjobs.worker import JobRunner
-
-        runner = JobRunner(session_factory=MagicMock())
-
-        async def work():
-            return {"result": "success"}
-
-        result = await runner.execute_with_telemetry("test-op", work)
-        assert result == {"result": "success"}
-
-    @pytest.mark.asyncio
-    async def test_calls_on_success_callback(self):
-        from unittest.mock import MagicMock
-
-        from azurerbac.backgroundjobs.worker import JobRunner
-
-        runner = JobRunner(session_factory=MagicMock())
-        on_success = MagicMock()
-
-        async def work():
-            return "result"
-
-        await runner.execute_with_telemetry("test-op", work, on_success=on_success)
-        on_success.assert_called_once()
-        # First arg is elapsed time (float), second is result
-        call_args = on_success.call_args[0]
-        assert isinstance(call_args[0], float)
-        assert call_args[1] == "result"
-
-    @pytest.mark.asyncio
-    async def test_returns_none_on_exception(self):
-        from unittest.mock import MagicMock
-
-        from azurerbac.backgroundjobs.worker import JobRunner
-
-        runner = JobRunner(session_factory=MagicMock())
-
-        async def work():
-            raise RuntimeError("test error")
-
-        result = await runner.execute_with_telemetry("test-op", work)
-        assert result is None
-
-
-class TestCreateJobSpecs:
-    """Tests for _create_job_specs function."""
-
-    def test_creates_both_job_specs(self):
-        from azurerbac.backgroundjobs.worker import _create_job_specs
-        from azurerbac.settings import Settings
-
-        settings = Settings.get()
-        jobs = _create_job_specs(settings)
+        jobs = create_jobs()
 
         assert len(jobs) == 2
         job_names = {job.name for job in jobs}
         assert "role-scan" in job_names
         assert "operations-scan" in job_names
 
-    def test_job_specs_have_correct_types(self):
-        from azurerbac.backgroundjobs.worker import JobSpec, _create_job_specs
-        from azurerbac.settings import Settings
+    def test_jobs_are_job_instances(self):
+        from azurerbac.backgroundjobs.jobs import Job, create_jobs
 
-        settings = Settings.get()
-        jobs = _create_job_specs(settings)
+        jobs = create_jobs()
 
         for job in jobs:
-            assert isinstance(job, JobSpec)
-            assert callable(job.fetch)
-            assert callable(job.apply)
-            assert callable(job.on_success)
-            assert isinstance(job.interval_seconds, int)
+            assert isinstance(job, Job)
+            assert callable(job.run)
+            assert isinstance(job.interval, timedelta)
 
 
-class TestSetupScheduler:
-    """Tests for _setup_scheduler function."""
+class TestWorkerSetupScheduler:
+    """Tests for Worker._setup_scheduler method."""
 
     def test_creates_scheduler_with_enabled_jobs(self):
-        from unittest.mock import AsyncMock, MagicMock
+        from azurerbac.backgroundjobs.jobs import Job
+        from azurerbac.backgroundjobs.worker import Worker
 
-        from azurerbac.backgroundjobs.worker import JobSpec, _setup_scheduler
+        class EnabledJob(Job):
+            @property
+            def name(self) -> str:
+                return "job1"
 
-        jobs = [
-            JobSpec(
-                name="job1",
-                enabled=True,
-                fetch_label="Fetch 1",
-                fetch=AsyncMock(),
-                apply=AsyncMock(),
-                on_success=MagicMock(),
-                interval_seconds=60,
-            ),
-            JobSpec(
-                name="job2",
-                enabled=False,
-                fetch_label="Fetch 2",
-                fetch=AsyncMock(),
-                apply=AsyncMock(),
-                on_success=MagicMock(),
-                interval_seconds=120,
-            ),
-        ]
+            @property
+            def enabled(self) -> bool:
+                return True
 
-        run_job = AsyncMock()
-        scheduler = _setup_scheduler(jobs, run_job)
+            @property
+            def interval(self) -> timedelta:
+                return timedelta(seconds=60)
+
+            async def run(self):
+                pass
+
+        class DisabledJob(Job):
+            @property
+            def name(self) -> str:
+                return "job2"
+
+            @property
+            def enabled(self) -> bool:
+                return False
+
+            @property
+            def interval(self) -> timedelta:
+                return timedelta(seconds=120)
+
+            async def run(self):
+                pass
+
+        worker = Worker()
+        worker._jobs = [EnabledJob(), DisabledJob()]
+
+        scheduler = worker._setup_scheduler()
 
         # Only enabled jobs should be scheduled
         scheduled_jobs = scheduler.get_jobs()
@@ -858,29 +801,185 @@ class TestSetupScheduler:
         assert scheduled_jobs[0].id == "job1"
 
 
-class TestRunJobDisabled:
-    """Tests for disabled job handling."""
+class TestWorkerRunJob:
+    """Tests for Worker.run_job method."""
 
     @pytest.mark.asyncio
-    async def test_run_job_skips_disabled_job(self):
+    @pytest.mark.parametrize(
+        "job_enabled,should_raise,expect_run_called",
+        [
+            pytest.param(False, False, False, id="disabled_job_skipped"),
+            pytest.param(True, False, True, id="enabled_job_executed"),
+            pytest.param(True, True, True, id="failing_job_caught"),
+        ],
+    )
+    async def test_run_job_behavior(
+        self, job_enabled: bool, should_raise: bool, expect_run_called: bool
+    ):
+        """run_job should handle enabled/disabled jobs and catch exceptions."""
+        from azurerbac.backgroundjobs.jobs import Job
+        from azurerbac.backgroundjobs.worker import Worker
+
+        run_called = False
+
+        class TestJob(Job):
+            @property
+            def name(self) -> str:
+                return "test-job"
+
+            @property
+            def enabled(self) -> bool:
+                return job_enabled
+
+            @property
+            def interval(self) -> timedelta:
+                return timedelta(seconds=60)
+
+            async def run(self):
+                nonlocal run_called
+                run_called = True
+                if should_raise:
+                    raise RuntimeError("Test error")
+
+        job = TestJob()
+        worker = Worker()
+
+        # Should never propagate exceptions
+        await worker.run_job(job)
+
+        assert run_called == expect_run_called
+
+
+class TestWorkerInit:
+    """Tests for Worker initialization."""
+
+    @pytest.mark.parametrize(
+        "use_custom_settings",
+        [
+            pytest.param(False, id="default_settings"),
+            pytest.param(True, id="custom_settings"),
+        ],
+    )
+    def test_init_settings(self, use_custom_settings: bool):
+        """Worker should use provided settings or default to Settings.get()."""
+        from unittest.mock import MagicMock
+
+        from azurerbac.backgroundjobs.worker import Worker
+
+        if use_custom_settings:
+            custom_settings = MagicMock()
+            worker = Worker(settings=custom_settings)
+            assert worker._settings is custom_settings
+        else:
+            worker = Worker()
+            assert worker._settings is not None
+
+        # Common assertions for both cases
+        assert worker._jobs == []
+        assert worker._jobs_by_name == {}
+        assert worker._scheduler is None
+        assert worker._shutdown_event is None
+
+
+class TestWorkerCleanup:
+    """Tests for Worker._cleanup method."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "has_scheduler",
+        [
+            pytest.param(True, id="with_scheduler"),
+            pytest.param(False, id="without_scheduler"),
+        ],
+    )
+    async def test_cleanup_handles_scheduler(self, has_scheduler: bool):
+        """_cleanup should handle scheduler presence/absence gracefully."""
+        from unittest.mock import MagicMock, patch
+
+        from azurerbac.backgroundjobs.worker import Worker
+
+        worker = Worker()
+        mock_scheduler = MagicMock() if has_scheduler else None
+        worker._scheduler = mock_scheduler
+
+        with patch("azurerbac.backgroundjobs.worker.DBEngine") as mock_engine:
+            mock_engine.dispose = MagicMock(return_value=asyncio.Future())
+            mock_engine.dispose.return_value.set_result(None)
+            await worker._cleanup()
+
+        if has_scheduler:
+            mock_scheduler.shutdown.assert_called_once_with(wait=True)
+
+
+class TestWorkerRunStartupJobs:
+    """Tests for Worker._run_startup_jobs method."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "run_roles,run_operations,expected_jobs_run",
+        [
+            pytest.param(False, False, [], id="neither_enabled"),
+            pytest.param(True, False, ["role-scan"], id="only_roles"),
+            pytest.param(False, True, ["operations-scan"], id="only_operations"),
+            pytest.param(True, True, ["role-scan", "operations-scan"], id="both_enabled"),
+        ],
+    )
+    async def test_run_startup_jobs_based_on_settings(
+        self, run_roles: bool, run_operations: bool, expected_jobs_run: list[str]
+    ):
+        """_run_startup_jobs should respect settings flags."""
         from unittest.mock import AsyncMock, MagicMock
 
-        from azurerbac.backgroundjobs.worker import JobRunner, JobSpec
+        from azurerbac.backgroundjobs.worker import Worker
 
-        runner = JobRunner(session_factory=MagicMock())
+        mock_settings = MagicMock()
+        mock_settings.run_roles_scan_on_startup = run_roles
+        mock_settings.run_operations_scan_on_startup = run_operations
 
-        spec = JobSpec(
-            name="disabled-job",
-            enabled=False,
-            fetch_label="Fetch disabled",
-            fetch=AsyncMock(),
-            apply=AsyncMock(),
-            on_success=MagicMock(),
-            interval_seconds=60,
-        )
+        worker = Worker(settings=mock_settings)
+        worker.run_job = AsyncMock()
 
-        await runner.run_job(spec)
+        # Setup mock jobs
+        role_job = MagicMock()
+        role_job.name = "role-scan"
+        ops_job = MagicMock()
+        ops_job.name = "operations-scan"
+        worker._jobs_by_name = {"role-scan": role_job, "operations-scan": ops_job}
 
-        # Fetch should not be called for disabled jobs
-        spec.fetch.assert_not_called()
-        spec.apply.assert_not_called()
+        await worker._run_startup_jobs()
+
+        # Verify correct jobs were run
+        actual_jobs_run = [call.args[0].name for call in worker.run_job.call_args_list]
+        assert actual_jobs_run == expected_jobs_run
+
+
+class TestWorkerSetupShutdownHandler:
+    """Tests for Worker._setup_shutdown_handler method."""
+
+    @pytest.mark.parametrize(
+        "has_event,expect_signals_registered",
+        [
+            pytest.param(False, False, id="no_event_returns_early"),
+            pytest.param(True, True, id="with_event_registers_signals"),
+        ],
+    )
+    def test_setup_shutdown_handler(self, has_event: bool, expect_signals_registered: bool):
+        """_setup_shutdown_handler should register signals only when event exists."""
+        import signal
+        from unittest.mock import patch
+
+        from azurerbac.backgroundjobs.worker import Worker
+
+        worker = Worker()
+        worker._shutdown_event = asyncio.Event() if has_event else None
+
+        with patch("azurerbac.backgroundjobs.worker.signal.signal") as mock_signal:
+            worker._setup_shutdown_handler()
+
+            if expect_signals_registered:
+                assert mock_signal.call_count == 2
+                registered_signals = {call.args[0] for call in mock_signal.call_args_list}
+                assert signal.SIGINT in registered_signals
+                assert signal.SIGTERM in registered_signals
+            else:
+                mock_signal.assert_not_called()

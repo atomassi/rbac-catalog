@@ -135,7 +135,9 @@
     
     <!-- Self-hosted Tailwind CSS -->
     <link rel="stylesheet" href="/static/css/tailwind.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Load Google Fonts asynchronously to prevent render blocking -->
+    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"></noscript>
     
     <!-- Alpine.js Component for Effective Permissions (must be defined before Alpine.js loads) -->
     <script>

@@ -12,16 +12,12 @@ _SLUG_PATTERN: Final = re.compile(r"[^a-z0-9]+")
 
 def slugify(text: str) -> str:
     """Create URL-friendly slug from text."""
-    if not text:
-        return ""
-    return _SLUG_PATTERN.sub("-", text.lower()).strip("-")
+    return _SLUG_PATTERN.sub("-", text.lower()).strip("-") if text else ""
 
 
 def urlencode_path(text: str) -> str:
     """URL-encode a path segment, encoding / as %2F."""
-    if not text:
-        return ""
-    return quote(text, safe="")
+    return quote(text, safe="") if text else ""
 
 
 def clamp(value: int, min_val: int, max_val: int) -> int:

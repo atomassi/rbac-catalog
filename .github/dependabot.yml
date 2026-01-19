@@ -18,6 +18,10 @@ updates:
       - "python"
     commit-message:
       prefix: "chore(deps)"
+    # Ignore pre-release versions (alpha, beta, rc)
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-prerelease"]
     groups:
       # Critical framework dependencies - review carefully
       python-frameworks:

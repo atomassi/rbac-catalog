@@ -30,6 +30,9 @@ async def robots_txt() -> Response:
             "User-agent: *",
             "Allow: /",
             "",
+            "# Block API endpoints from crawling",
+            "Disallow: /api/",
+            "",
             f"Sitemap: {SITE_URL}/sitemap.xml",
             "",
         ]
@@ -140,18 +143,12 @@ async def sitemap_xml(request: Request) -> Response:
 
     urls = [
         # Home page - canonical URL, highest priority, updated daily
+        # Note: /recent is an alias that redirects canonical to /, so not in sitemap
         f"""  <url>
     <loc>{SITE_URL}/</loc>
     <lastmod>{today}</lastmod>
     <changefreq>daily</changefreq>
     <priority>1.0</priority>
-  </url>""",
-        # Recent changes page (alias of home) - high priority, updated daily
-        f"""  <url>
-    <loc>{SITE_URL}/recent</loc>
-    <lastmod>{today}</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.9</priority>
   </url>""",
         # Roles list page - high priority, updated daily
         f"""  <url>
@@ -200,9 +197,9 @@ async def sitemap_xml(request: Request) -> Response:
     for op in all_operations:
         op_name = op.name
         if op_name:
-            # URL encode the operation name for the sitemap
-            # Keep "/" unencoded since it's part of the URL path structure
-            encoded_name = quote(op_name, safe="/")
+            # URL encode the operation name for the sitemap (encode / as %2F)
+            # This matches the canonical tag and how Googlebot crawls links
+            encoded_name = quote(op_name, safe="")
             urls.append(
                 f"""  <url>
     <loc>{SITE_URL}/operations/{encoded_name}</loc>

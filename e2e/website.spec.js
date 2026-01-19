@@ -1476,15 +1476,6 @@ test.describe('SEO', () => {
     expect(await metaDesc.count()).toBeGreaterThan(0);
   });
 
-  test('should have canonical URL on role detail page', async ({ page }) => {
-    await page.goto('/roles/acdd72a7-3385-48ef-bd42-f606fba81ae7/reader');
-    const canonical = page.locator('link[rel="canonical"]');
-    if (await canonical.count() > 0) {
-      const href = await canonical.getAttribute('href');
-      expect(href).toContain('/roles/');
-    }
-  });
-
   test('should have Open Graph tags', async ({ page }) => {
     await page.goto('/recent');
     const ogTitle = page.locator('meta[property="og:title"]');
@@ -1492,6 +1483,94 @@ test.describe('SEO', () => {
     // At least one OG tag should exist
     const hasOgTags = await ogTitle.count() > 0 || await ogDesc.count() > 0;
     expect(hasOgTags).toBe(true);
+  });
+});
+
+// =============================================================================
+// CANONICAL URLS & SITEMAP
+// =============================================================================
+test.describe('Canonical URLs & Sitemap', () => {
+  const SITE_URL = 'https://rbac-catalog.dev';
+
+  test('homepage canonical should be /', async ({ page }) => {
+    await page.goto('/');
+    const canonical = await page.locator('link[rel="canonical"]').getAttribute('href');
+    expect(canonical).toBe(`${SITE_URL}/`);
+    const ogUrl = await page.locator('meta[property="og:url"]').getAttribute('content');
+    expect(ogUrl).toBe(`${SITE_URL}/`);
+  });
+
+  test('/recent alias should have canonical pointing to /', async ({ page }) => {
+    await page.goto('/recent');
+    const canonical = await page.locator('link[rel="canonical"]').getAttribute('href');
+    expect(canonical).toBe(`${SITE_URL}/`);
+    const ogUrl = await page.locator('meta[property="og:url"]').getAttribute('content');
+    expect(ogUrl).toBe(`${SITE_URL}/`);
+  });
+
+  test('/roles page should have self-referencing canonical', async ({ page }) => {
+    await page.goto('/roles');
+    const canonical = await page.locator('link[rel="canonical"]').getAttribute('href');
+    expect(canonical).toBe(`${SITE_URL}/roles`);
+  });
+
+  test('/operations page should have self-referencing canonical', async ({ page }) => {
+    await page.goto('/operations');
+    const canonical = await page.locator('link[rel="canonical"]').getAttribute('href');
+    expect(canonical).toBe(`${SITE_URL}/operations`);
+  });
+
+  test('/recommend page should have self-referencing canonical', async ({ page }) => {
+    await page.goto('/recommend');
+    const canonical = await page.locator('link[rel="canonical"]').getAttribute('href');
+    expect(canonical).toBe(`${SITE_URL}/recommend`);
+  });
+
+  test('/about page should have self-referencing canonical', async ({ page }) => {
+    await page.goto('/about');
+    const canonical = await page.locator('link[rel="canonical"]').getAttribute('href');
+    expect(canonical).toBe(`${SITE_URL}/about`);
+  });
+
+  test('role detail page canonical should match sitemap URL', async ({ page }) => {
+    await page.goto('/roles/acdd72a7-3385-48ef-bd42-f606fba81ae7/reader');
+    const canonical = await page.locator('link[rel="canonical"]').getAttribute('href');
+    expect(canonical).toBe(`${SITE_URL}/roles/acdd72a7-3385-48ef-bd42-f606fba81ae7/reader`);
+  });
+
+  test('operation detail page canonical should use %2F encoding', async ({ page }) => {
+    // Operation names contain slashes that must be encoded as %2F
+    await page.goto('/operations/Microsoft.Compute%2FvirtualMachines%2Fread');
+    const canonical = await page.locator('link[rel="canonical"]').getAttribute('href');
+    expect(canonical).toContain('%2F');
+    expect(canonical).toBe(`${SITE_URL}/operations/Microsoft.Compute%2FvirtualMachines%2Fread`);
+  });
+
+  test('sitemap should not contain /recent (alias)', async ({ request }) => {
+    const response = await request.get('/sitemap.xml');
+    const body = await response.text();
+    // /recent is an alias for / and should not be in sitemap
+    expect(body).not.toContain(`${SITE_URL}/recent</loc>`);
+    // But / should be in sitemap
+    expect(body).toContain(`${SITE_URL}/</loc>`);
+  });
+
+  test('sitemap should contain main pages', async ({ request }) => {
+    const response = await request.get('/sitemap.xml');
+    const body = await response.text();
+    expect(body).toContain(`${SITE_URL}/</loc>`);
+    expect(body).toContain(`${SITE_URL}/roles</loc>`);
+    expect(body).toContain(`${SITE_URL}/operations</loc>`);
+    expect(body).toContain(`${SITE_URL}/recommend</loc>`);
+    expect(body).toContain(`${SITE_URL}/about</loc>`);
+  });
+
+  test('sitemap operation URLs should use %2F encoding', async ({ request }) => {
+    const response = await request.get('/sitemap.xml');
+    const body = await response.text();
+    // Operation URLs in sitemap should have encoded slashes
+    const operationUrlMatch = body.match(/<loc>https:\/\/rbac-catalog\.dev\/operations\/[^<]+%2F[^<]+<\/loc>/);
+    expect(operationUrlMatch).not.toBeNull();
   });
 });
 

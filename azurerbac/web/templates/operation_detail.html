@@ -20,13 +20,13 @@
     <meta name="keywords" content="{{ operation.name }}, Azure Operation, Azure RBAC, Azure Permissions, {{ operation.provider_display_name or '' }}, {{ 'Data Plane' if operation.is_data_action else 'Control Plane' }}">
     <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
     <meta name="author" content="Azure RBAC Catalog">
-    <link rel="canonical" href="{{ site_url }}/operations/{{ operation.name }}">
+    <link rel="canonical" href="{{ site_url }}/operations/{{ operation.name | urlencode_path }}">
     
     <!-- Open Graph / Facebook -->
     <meta property="og:title" content="{{ operation.name }} - Azure Operation">
     <meta property="og:description" content="{{ operation.description or 'Azure RBAC operation' }}. View which Azure built-in roles allow this operation.">
     <meta property="og:type" content="article">
-    <meta property="og:url" content="{{ site_url }}/operations/{{ operation.name }}">
+    <meta property="og:url" content="{{ site_url }}/operations/{{ operation.name | urlencode_path }}">
     <meta property="og:site_name" content="Azure RBAC Catalog">
     <meta property="og:image" content="{{ site_url }}/static/images/og-image.png">
     <meta property="og:image:type" content="image/png">

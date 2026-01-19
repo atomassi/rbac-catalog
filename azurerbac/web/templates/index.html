@@ -69,7 +69,9 @@
     <meta name="keywords" content="Azure RBAC, Azure Built-in Roles, Azure RBAC Roles, Azure Permissions, Azure Role Based Access Control, Azure IAM, Azure Role Definitions, Azure Contributor Role, Azure Reader Role, Azure Owner Role, RBAC Permissions">
     <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
     <meta name="author" content="Azure RBAC Catalog">
-    <link rel="canonical" href="{{ site_url }}/{{ '' if tab == 'recent' else tab }}">
+    {# /recent is an alias for / - both should have canonical pointing to / #}
+    {% set canonical_path = '/' if request.url.path == '/recent' else request.url.path %}
+    <link rel="canonical" href="{{ site_url }}{{ canonical_path }}">
     
     <!-- RSS/Atom Feed Autodiscovery -->
     <link rel="alternate" type="application/atom+xml" title="Azure RBAC Role Changes (Atom)" href="{{ site_url }}/feeds/changelog.atom">
@@ -84,7 +86,7 @@
     <meta property="og:description" content="The complete reference for all {{ total_roles }} Azure built-in RBAC roles. Search permissions, view JSON definitions, and monitor role changes. Free tool for Azure security professionals.">
     {% endif %}
     <meta property="og:type" content="website">
-    <meta property="og:url" content="{{ site_url }}/{{ '' if tab == 'recent' else tab }}">
+    <meta property="og:url" content="{{ site_url }}{{ canonical_path }}">
     <meta property="og:site_name" content="Azure RBAC Catalog">
     <meta property="og:image" content="{{ site_url }}/static/images/og-image.png">
     <meta property="og:image:type" content="image/png">

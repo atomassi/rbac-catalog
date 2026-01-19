@@ -67,7 +67,7 @@ from azurerbac.web.services.startup import (
     warmup_colbert,
     warmup_crossencoder,
 )
-from azurerbac.web.utils import slugify
+from azurerbac.web.utils import slugify, urlencode_path
 
 # Load .env for local development only (Azure App Service sets WEBSITE_SITE_NAME)
 if not is_running_in_azure() and not is_running_in_pytest():
@@ -98,6 +98,7 @@ templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
 # Add filters to templates
 templates.env.filters["slugify"] = slugify
+templates.env.filters["urlencode_path"] = urlencode_path
 templates.env.filters["diff_lines"] = diff_lines
 templates.env.filters["full_json_diff"] = full_json_diff
 templates.env.filters["format_datetime"] = format_datetime

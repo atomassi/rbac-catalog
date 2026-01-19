@@ -8,6 +8,7 @@ from azurerbac.web.filters import (
     format_datetime,
     full_json_diff,
 )
+from azurerbac.web.utils import clamp, role_json_pretty, slugify, urlencode_path
 
 
 class TestDiffLines:
@@ -285,3 +286,94 @@ class TestSlugifyEdgeCases:
         result = slugify("Role (Preview)")
         assert "(" not in result
         assert ")" not in result
+
+
+class TestSlugify:
+    """Tests for the slugify utility function."""
+
+    @pytest.mark.parametrize(
+        ("text", "expected"),
+        [
+            pytest.param("Hello World", "hello-world", id="spaces_to_hyphens"),
+            pytest.param("Role (Preview)", "role-preview", id="removes_parentheses"),
+            pytest.param("TEST-NAME", "test-name", id="lowercase"),
+            pytest.param("multiple   spaces", "multiple-spaces", id="collapses_spaces"),
+            pytest.param("special!@#chars", "special-chars", id="removes_special_chars"),
+            pytest.param("--leading-trailing--", "leading-trailing", id="strips_hyphens"),
+            pytest.param("", "", id="empty_string"),
+            pytest.param("already-slugified", "already-slugified", id="already_slug"),
+            pytest.param("CamelCaseText", "camelcasetext", id="camelcase"),
+            pytest.param("Numbers123Here", "numbers123here", id="preserves_numbers"),
+        ],
+    )
+    def test_slugify(self, text: str, expected: str) -> None:
+        """Test slugify converts text to URL-friendly slugs."""
+        assert slugify(text) == expected
+
+
+class TestUrlEncodePath:
+    """Tests for the urlencode_path utility function."""
+
+    @pytest.mark.parametrize(
+        ("text", "expected"),
+        [
+            pytest.param("simple", "simple", id="simple_text"),
+            pytest.param("with/slash", "with%2Fslash", id="encodes_slash"),
+            pytest.param("a/b/c", "a%2Fb%2Fc", id="multiple_slashes"),
+            pytest.param("", "", id="empty_string"),
+            pytest.param("hello world", "hello%20world", id="encodes_spaces"),
+            pytest.param("special&chars=here", "special%26chars%3Dhere", id="encodes_special"),
+            pytest.param(
+                "Microsoft.Storage/storageAccounts/read",
+                "Microsoft.Storage%2FstorageAccounts%2Fread",
+                id="azure_operation",
+            ),
+        ],
+    )
+    def test_urlencode_path(self, text: str, expected: str) -> None:
+        """Test urlencode_path encodes path segments correctly."""
+        assert urlencode_path(text) == expected
+
+
+class TestClamp:
+    """Tests for the clamp utility function."""
+
+    @pytest.mark.parametrize(
+        ("value", "min_val", "max_val", "expected"),
+        [
+            pytest.param(5, 0, 10, 5, id="within_range"),
+            pytest.param(-5, 0, 10, 0, id="below_min"),
+            pytest.param(15, 0, 10, 10, id="above_max"),
+            pytest.param(0, 0, 10, 0, id="at_min"),
+            pytest.param(10, 0, 10, 10, id="at_max"),
+            pytest.param(1, 1, 1, 1, id="min_equals_max"),
+            pytest.param(-100, -50, -10, -50, id="negative_range_below"),
+            pytest.param(-30, -50, -10, -30, id="negative_range_within"),
+        ],
+    )
+    def test_clamp(self, value: int, min_val: int, max_val: int, expected: int) -> None:
+        """Test clamp constrains values to range."""
+        assert clamp(value, min_val, max_val) == expected
+
+
+class TestRoleJsonPretty:
+    """Tests for the role_json_pretty utility function."""
+
+    def test_formats_dict_with_indent(self) -> None:
+        """Test that role JSON is formatted with 2-space indent."""
+        role = {"name": "Reader", "permissions": ["read"]}
+        result = role_json_pretty(role)
+        assert '"name": "Reader"' in result
+        assert "\n" in result  # Has newlines
+        assert "  " in result  # Has indentation
+
+    def test_handles_nested_objects(self) -> None:
+        """Test formatting of nested role structures."""
+        role = {"properties": {"roleName": "Test", "permissions": [{"actions": ["*"]}]}}
+        result = role_json_pretty(role)
+        assert "roleName" in result
+        assert "actions" in result
+
+    def test_empty_dict(self) -> None:
+        """Test formatting of empty dict."""
+        assert role_json_pretty({}) == "{}"

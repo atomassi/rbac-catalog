@@ -407,19 +407,19 @@ class TestOperationSets:
     """Tests for OperationSets value object."""
 
     def test_from_operations_creates_correct_sets(self, sample_operations):
-        """from_operations should separate control and data plane operations."""
+        """from_operations should separate control and data plane operations (lowered)."""
         from azurerbac.matching.models import OperationSets
 
         op_sets = OperationSets.from_operations(sample_operations)
 
-        # Control plane operations
-        assert "Microsoft.Storage/storageAccounts/read" in op_sets.all_control
-        assert "Microsoft.Compute/virtualMachines/read" in op_sets.all_control
+        # Control plane operations (stored lowered)
+        assert "microsoft.storage/storageaccounts/read" in op_sets.all_control
+        assert "microsoft.compute/virtualmachines/read" in op_sets.all_control
 
-        # Data plane operations
-        assert "Microsoft.KeyVault/vaults/secrets/read" in op_sets.all_data
+        # Data plane operations (stored lowered)
+        assert "microsoft.keyvault/vaults/secrets/read" in op_sets.all_data
         assert (
-            "Microsoft.Storage/storageAccounts/blobServices/containers/blobs/read"
+            "microsoft.storage/storageaccounts/blobservices/containers/blobs/read"
             in op_sets.all_data
         )
 
@@ -439,8 +439,9 @@ class TestRecommendationService:
             ]
         )
 
-        assert "Microsoft.Storage/storageAccounts/read" in classified.control
-        assert "Microsoft.KeyVault/vaults/secrets/read" in classified.data
+        # Operations are stored lowered for case-insensitive matching
+        assert "microsoft.storage/storageaccounts/read" in classified.control
+        assert "microsoft.keyvault/vaults/secrets/read" in classified.data
 
     def test_classify_operations_handles_wildcards(self, sample_operations):
         """classify_operations should detect wildcards matching both planes."""

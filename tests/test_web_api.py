@@ -339,7 +339,7 @@ class TestUniqueProvidersCaching:
             provider = op.provider_display_name
             if provider:
                 providers.add(provider)
-        expected = sorted(providers, key=str.casefold)
+        expected = sorted(providers, key=str.lower)
 
         cache.set_metadata(unique_providers=expected)
 

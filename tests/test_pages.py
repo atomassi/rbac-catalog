@@ -38,10 +38,19 @@ class TestComputeRoleEffectivePermissionsServices:
 
         # Create mock app_cache with pre-computed coverage
         mock_app_cache = MagicMock()
+        # Cache stores lowered operation names
         mock_app_cache.get_role_coverage.return_value = (
-            {"Microsoft.Storage/storageAccounts/read"},
+            {"microsoft.storage/storageaccounts/read"},
             set(),
         )
+        # Mock restore_operation_casing to return original casing
+        ops_map = {
+            "microsoft.storage/storageaccounts/read": "Microsoft.Storage/storageAccounts/read",
+            "microsoft.storage/storageaccounts/write": "Microsoft.Storage/storageAccounts/write",
+        }
+        mock_app_cache.restore_operation_casing.side_effect = lambda ops: [
+            ops_map.get(op, op) for op in ops
+        ]
 
         result = compute_role_effective_permissions(role, all_operations, mock_app_cache)
 
@@ -66,15 +75,23 @@ class TestComputeRoleEffectivePermissionsServices:
             {"name": "Microsoft.Storage/storageAccounts/delete", "is_data_action": False},
         ]
 
-        # Create mock with delete excluded
+        # Create mock with delete excluded (cache stores lowered)
         mock_app_cache = MagicMock()
         mock_app_cache.get_role_coverage.return_value = (
             {
-                "Microsoft.Storage/storageAccounts/read",
-                "Microsoft.Storage/storageAccounts/write",
+                "microsoft.storage/storageaccounts/read",
+                "microsoft.storage/storageaccounts/write",
             },
             set(),
         )
+        ops_map = {
+            "microsoft.storage/storageaccounts/read": "Microsoft.Storage/storageAccounts/read",
+            "microsoft.storage/storageaccounts/write": "Microsoft.Storage/storageAccounts/write",
+            "microsoft.storage/storageaccounts/delete": "Microsoft.Storage/storageAccounts/delete",
+        }
+        mock_app_cache.restore_operation_casing.side_effect = lambda ops: [
+            ops_map.get(op, op) for op in ops
+        ]
 
         result = compute_role_effective_permissions(role, all_operations, mock_app_cache)
 
@@ -101,8 +118,15 @@ class TestComputeRoleEffectivePermissionsServices:
         mock_app_cache = MagicMock()
         mock_app_cache.get_role_coverage.return_value = (
             set(),
-            {"Microsoft.Storage/storageAccounts/blobServices/containers/blobs/read"},
+            {"microsoft.storage/storageaccounts/blobservices/containers/blobs/read"},
         )
+        blob_op = "microsoft.storage/storageaccounts/blobservices/containers/blobs/read"
+        ops_map = {
+            blob_op: "Microsoft.Storage/storageAccounts/blobServices/containers/blobs/read",
+        }
+        mock_app_cache.restore_operation_casing.side_effect = lambda ops: [
+            ops_map.get(op, op) for op in ops
+        ]
 
         result = compute_role_effective_permissions(role, all_operations, mock_app_cache)
 
@@ -139,7 +163,7 @@ class TestComputeRoleEffectivePermissionsServices:
             pytest.param(
                 ["Microsoft.Storage/*/read"],
                 None,
-                ({"Microsoft.Storage/storageAccounts/read"}, set()),
+                ({"microsoft.storage/storageaccounts/read"}, set()),
                 "has_unresolved_permissions",
                 False,
                 id="resolved_permissions",
@@ -163,6 +187,12 @@ class TestComputeRoleEffectivePermissionsServices:
 
         mock_app_cache = MagicMock()
         mock_app_cache.get_role_coverage.return_value = cache_coverage
+        ops_map = {
+            "microsoft.storage/storageaccounts/read": "Microsoft.Storage/storageAccounts/read",
+        }
+        mock_app_cache.restore_operation_casing.side_effect = lambda ops: [
+            ops_map.get(op, op) for op in ops
+        ]
 
         result = compute_role_effective_permissions(role, [], mock_app_cache)
 
@@ -186,6 +216,13 @@ class TestComputeRoleEffectivePermissionsServices:
         mock_app_cache = MagicMock()
         # Cache miss
         mock_app_cache.get_role_coverage.return_value = None
+        ops_map = {
+            "microsoft.storage/storageaccounts/read": "Microsoft.Storage/storageAccounts/read",
+            "microsoft.storage/storageaccounts/write": "Microsoft.Storage/storageAccounts/write",
+        }
+        mock_app_cache.restore_operation_casing.side_effect = lambda ops: [
+            ops_map.get(op, op) for op in ops
+        ]
 
         result = compute_role_effective_permissions(role, all_operations, mock_app_cache)
 
@@ -243,8 +280,9 @@ class TestGetRolesAllowingOperationServices:
             )
         ]
         mock_app_cache.get_all_roles.return_value = roles
+        # Cache stores lowered operation names for O(1) lookup
         mock_app_cache.get_role_coverage.return_value = (
-            {"Microsoft.Storage/storageAccounts/read"},
+            {"microsoft.storage/storageaccounts/read"},
             set(),
         )
 

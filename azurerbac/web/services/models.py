@@ -161,12 +161,12 @@ class RawPermissions:
 
     def to_effective_permissions(
         self,
-        control_effective: set[str],
-        data_effective: set[str],
+        control_effective: list[str],
+        data_effective: list[str],
         *,
         has_conditions: bool,
     ) -> RoleEffectivePermissions:
-        """Build RoleEffectivePermissions from computed sets."""
+        """Build RoleEffectivePermissions from computed lists."""
         has_resolved = bool(control_effective or data_effective)
         has_unresolved = self.has_defined_permissions and not has_resolved
 
@@ -244,15 +244,14 @@ class RolePermissionAnalyzer:
         self, all_operations: list[OperationData]
     ) -> RoleEffectivePermissions:
         """Compute effective permissions for this role."""
-        # Try cache first
         if cached := self.get_cached_coverage():
             control_effective, data_effective = cached
         else:
             control_effective, data_effective = self.compute_coverage(all_operations)
 
         return self.raw.to_effective_permissions(
-            control_effective,
-            data_effective,
+            self._cache.restore_operation_casing(control_effective),
+            self._cache.restore_operation_casing(data_effective),
             has_conditions=self.has_conditions,
         )
 

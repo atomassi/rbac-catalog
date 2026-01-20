@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 from pydantic import BaseModel, Field
 
-if TYPE_CHECKING:
-    from azurerbac.azure.models import OperationData
+from azurerbac.azure.models import OperationData
 
 
 class HealthResponse(BaseModel):
@@ -89,7 +86,7 @@ class RecommendRolesRequest(BaseModel):
 class OperationSearchResponse(BaseModel):
     """Response model for operation search."""
 
-    operations: list
+    operations: list[OperationData]
     total: int
     is_wildcard_search: bool
     message: str | None = None

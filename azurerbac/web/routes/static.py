@@ -21,7 +21,11 @@ INDEXNOW_KEY: Final = "4484caab4dbc472ca61ac1141d812336"
 router = APIRouter(tags=["static"])
 
 
-@router.get("/robots.txt")
+@router.get(
+    "/robots.txt",
+    response_class=Response,
+    responses={200: {"content": {"text/plain": {}}}},
+)
 async def robots_txt() -> Response:
     """Serve robots.txt."""
     body = "\n".join(
@@ -78,7 +82,11 @@ def _static_response(content: bytes | str, media_type: str) -> Response:
     )
 
 
-@router.get("/favicon.ico")
+@router.get(
+    "/favicon.ico",
+    response_class=Response,
+    responses={200: {"content": {"image/x-icon": {}}}},
+)
 async def favicon_ico() -> Response:
     """Serve favicon.ico."""
     return _static_response(
@@ -87,7 +95,11 @@ async def favicon_ico() -> Response:
     )
 
 
-@router.get("/favicon.svg")
+@router.get(
+    "/favicon.svg",
+    response_class=Response,
+    responses={200: {"content": {"image/svg+xml": {}}}},
+)
 async def favicon_svg() -> Response:
     """Serve favicon.svg."""
     return _static_response(
@@ -123,7 +135,11 @@ async def apple_touch_icon() -> Response:
     )
 
 
-@router.get("/sitemap.xml")
+@router.get(
+    "/sitemap.xml",
+    response_class=Response,
+    responses={200: {"content": {"application/xml": {}}}},
+)
 async def sitemap_xml(request: Request) -> Response:
     """Generate dynamic sitemap with all role and operation pages."""
     # Get app_cache and SessionLocal from app.state (shared with main app)

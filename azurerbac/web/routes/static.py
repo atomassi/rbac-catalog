@@ -48,7 +48,7 @@ async def robots_txt() -> Response:
     )
 
 
-@router.get("/googleec37c4d2676ac205.html", include_in_schema=False)
+@router.get("/googleec37c4d2676ac205.html")
 async def google_site_verification() -> Response:
     """Google Search Console verification."""
     return Response(
@@ -58,7 +58,7 @@ async def google_site_verification() -> Response:
     )
 
 
-@router.get(f"/{INDEXNOW_KEY}.txt", include_in_schema=False)
+@router.get(f"/{INDEXNOW_KEY}.txt")
 async def indexnow_key() -> Response:
     """IndexNow key verification."""
     return Response(
@@ -108,7 +108,7 @@ async def favicon_svg() -> Response:
     )
 
 
-@router.get("/favicon-48.png", include_in_schema=False)
+@router.get("/favicon-48.png")
 async def favicon_png_48() -> Response:
     """Serve 48x48 PNG favicon."""
     return _static_response(
@@ -117,7 +117,7 @@ async def favicon_png_48() -> Response:
     )
 
 
-@router.get("/favicon-192.png", include_in_schema=False)
+@router.get("/favicon-192.png")
 async def favicon_png_192() -> Response:
     """Serve 192x192 PNG favicon for Android/PWA."""
     return _static_response(
@@ -126,7 +126,7 @@ async def favicon_png_192() -> Response:
     )
 
 
-@router.get("/apple-touch-icon.png", include_in_schema=False)
+@router.get("/apple-touch-icon.png")
 async def apple_touch_icon() -> Response:
     """Serve Apple touch icon (192x192)."""
     return _static_response(
@@ -237,7 +237,7 @@ async def sitemap_xml(request: Request) -> Response:
     )
 
 
-@router.head("/", include_in_schema=False)
+@router.head("/")
 async def head_root() -> Response:
     """Handle HEAD requests for Azure Front Door health probes."""
     return Response(status_code=200)

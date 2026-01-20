@@ -65,7 +65,7 @@ class DashboardContext:
 
 
 @router.get("/recent", response_class=HTMLResponse)
-@router.get("/", response_class=HTMLResponse, include_in_schema=False)
+@router.get("/", response_class=HTMLResponse)
 async def recent_changes(
     request: Request,
     deps: Annotated[DashboardDeps, Depends(get_dashboard_deps)],

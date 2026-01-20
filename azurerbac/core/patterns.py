@@ -32,7 +32,11 @@ def wildcard_to_sql_like(pattern: str) -> str:
 
 
 def expand_patterns_to_operations(patterns: list[str], all_ops: set[str]) -> set[str]:
-    """Expand patterns (with wildcards) to matching operations."""
+    """Expand patterns (with wildcards) to matching operations.
+
+    Pattern matching is case-insensitive. Expects all_ops to contain
+    lowercased operation names for O(1) lookup.
+    """
     result: set[str] = set()
     for pattern in patterns:
         if pattern == "*":
@@ -40,6 +44,9 @@ def expand_patterns_to_operations(patterns: list[str], all_ops: set[str]) -> set
         if "*" in pattern:
             regex = pattern_to_regex(pattern)
             result.update(op for op in all_ops if regex.match(op))
-        elif pattern in all_ops:
-            result.add(pattern)
+        else:
+            # Case-insensitive exact match
+            pattern_lower = pattern.lower()
+            if pattern_lower in all_ops:
+                result.add(pattern_lower)
     return result

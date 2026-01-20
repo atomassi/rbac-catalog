@@ -32,7 +32,6 @@ def recommend_roles(
 
     # Initialize service and prepare classification
     svc = RoleRecommendationService(all_operations, requested_ops_data_flags)
-    svc.check_cache_staleness()
 
     classified = svc.classify_operations(requested_operations)
     logger.debug(
@@ -99,14 +98,18 @@ def recommend_roles(
         # Calculate match percentage
         match_pct = (matched_count / total_requested * 100) if total_requested > 0 else 0.0
 
+        # Restore original casing for display
+        matched_ops_display = svc.restore_original_casing(ctx.matched_ops)
+        missing_ops_display = svc.restore_original_casing(missing_ops)
+
         # Build result
         matches.append(
             RoleMatch(
                 role_id=role_info.role_id,
                 role_name=role_info.role_name,
                 description=role_info.description,
-                matched_operations=sorted(ctx.matched_ops),
-                missing_operations=sorted(missing_ops),
+                matched_operations=sorted(matched_ops_display),
+                missing_operations=sorted(missing_ops_display),
                 total_permissions=perms.control_count + perms.data_count,
                 control_plane_permissions=perms.control_count,
                 data_plane_permissions=perms.data_count,

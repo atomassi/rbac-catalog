@@ -7,7 +7,6 @@ import pytest
 
 from azurerbac.core.patterns import matches_pattern, pattern_to_regex
 from azurerbac.matching import recommend_roles
-from azurerbac.matching.models import CacheOpsCount
 from azurerbac.matching.role_matching import (
     check_operation_allowed,
     operation_matches_any_pattern,
@@ -407,19 +406,19 @@ class TestOperationSets:
     """Tests for OperationSets value object."""
 
     def test_from_operations_creates_correct_sets(self, sample_operations):
-        """from_operations should separate control and data plane operations."""
+        """from_operations should separate control and data plane operations (lowered)."""
         from azurerbac.matching.models import OperationSets
 
         op_sets = OperationSets.from_operations(sample_operations)
 
-        # Control plane operations
-        assert "Microsoft.Storage/storageAccounts/read" in op_sets.all_control
-        assert "Microsoft.Compute/virtualMachines/read" in op_sets.all_control
+        # Control plane operations (stored lowered)
+        assert "microsoft.storage/storageaccounts/read" in op_sets.all_control
+        assert "microsoft.compute/virtualmachines/read" in op_sets.all_control
 
-        # Data plane operations
-        assert "Microsoft.KeyVault/vaults/secrets/read" in op_sets.all_data
+        # Data plane operations (stored lowered)
+        assert "microsoft.keyvault/vaults/secrets/read" in op_sets.all_data
         assert (
-            "Microsoft.Storage/storageAccounts/blobServices/containers/blobs/read"
+            "microsoft.storage/storageaccounts/blobservices/containers/blobs/read"
             in op_sets.all_data
         )
 
@@ -439,8 +438,9 @@ class TestRecommendationService:
             ]
         )
 
-        assert "Microsoft.Storage/storageAccounts/read" in classified.control
-        assert "Microsoft.KeyVault/vaults/secrets/read" in classified.data
+        # Operations are stored lowered for case-insensitive matching
+        assert "microsoft.storage/storageaccounts/read" in classified.control
+        assert "microsoft.keyvault/vaults/secrets/read" in classified.data
 
     def test_classify_operations_handles_wildcards(self, sample_operations):
         """classify_operations should detect wildcards matching both planes."""
@@ -466,23 +466,226 @@ class TestRecommendationService:
         assert "Microsoft.Compute/*" in svc.control_wildcard_ops
         assert len(svc.control_wildcard_ops["Microsoft.Compute/*"]) >= 3
 
-    def test_check_cache_staleness_detects_changes(self, sample_operations):
-        """check_cache_staleness should detect when operation counts change."""
-        from azurerbac.cache import get_cache_service
+
+# =============================================================================
+# Max Results Parameter Tests
+# =============================================================================
+
+
+class TestMaxResultsParameter:
+    """Tests that max_results parameter works correctly."""
+
+    @pytest.mark.parametrize(
+        ("num_roles", "max_results", "expected_count"),
+        [
+            pytest.param(25, None, 25, id="no_limit_returns_all"),
+            pytest.param(25, 10, 10, id="explicit_limit_10"),
+            pytest.param(35, None, 35, id="large_set_no_limit"),
+            pytest.param(5, 10, 5, id="limit_exceeds_matches"),
+        ],
+    )
+    def test_max_results_parameter(
+        self, sample_operations, num_roles: int, max_results: int | None, expected_count: int
+    ):
+        """Test max_results parameter behavior."""
+        roles = [
+            make_role_definition(f"Role {i}", f"role-id-{i}", ["Microsoft.Test/resource/read"])
+            for i in range(num_roles)
+        ]
+        result = recommend_roles(
+            ["Microsoft.Test/resource/read"],
+            roles,
+            sample_operations,
+            max_results=max_results,
+        )
+        assert len(result) == expected_count
+
+
+# =============================================================================
+# Missing Operations Expanded Tests
+# =============================================================================
+
+
+class TestMissingOperationsExpanded:
+    """Tests for missing_operations_expanded field correctness."""
+
+    def test_zero_coverage_wildcard_has_expanded_ops(self, sample_operations):
+        """When a role has 0 coverage for a wildcard, expanded ops should be populated."""
+        # Role with NO data plane permissions
+        reader_role = make_role_definition(
+            "Reader", "reader-id", actions=["*/read"], data_actions=[]
+        )
+
+        # Request both control and data plane */read (no flags = both planes)
+        result = recommend_roles(["*/read"], [reader_role], sample_operations)
+
+        assert len(result) == 1
+        reader = result[0]
+
+        # Reader should have missing data plane operations
+        if reader.missing_operations_count > 0:
+            assert len(reader.missing_operations_expanded) > 0, (
+                "missing_operations_expanded should have samples when missing_operations_count > 0"
+            )
+            # Check that expanded ops are real operation names, not wildcards
+            for op in reader.missing_operations_expanded:
+                assert "*" not in op, f"Expanded op should not be a wildcard: {op}"
+
+
+# =============================================================================
+# Reader Role Edge Cases
+# =============================================================================
+
+
+class TestReaderRoleEdgeCases:
+    """Specific tests for Reader role behavior - a common edge case."""
+
+    @pytest.mark.parametrize(
+        ("data_flag", "expected_full_match"),
+        [
+            pytest.param(False, True, id="control_plane_only_full_match"),
+            pytest.param(True, False, id="data_plane_only_no_match"),
+        ],
+    )
+    def test_reader_wildcard_with_plane_flag(
+        self, sample_operations, data_flag: bool, expected_full_match: bool
+    ):
+        """Test Reader role behavior with different plane flags."""
+        reader = make_role_definition("Reader", "reader", actions=["*/read"], data_actions=[])
+
+        result = recommend_roles(
+            ["*/read"],
+            [reader],
+            sample_operations,
+            requested_ops_data_flags={"*/read": data_flag},
+        )
+
+        if expected_full_match:
+            assert len(result) == 1
+            assert result[0].is_full_match is True
+            assert result[0].match_percentage == 100.0
+        else:
+            # Reader has no data actions, should not match data-only request
+            assert len(result) == 0
+
+    def test_reader_both_planes_partial_match(self, sample_operations):
+        """Reader requesting both planes should show partial match."""
+        reader = make_role_definition("Reader", "reader", actions=["*/read"], data_actions=[])
+
+        # Request both planes (no flag = both)
+        result = recommend_roles(["*/read"], [reader], sample_operations)
+
+        assert len(result) == 1
+        reader_result = result[0]
+
+        assert reader_result.is_full_match is False
+        assert reader_result.match_percentage < 100.0
+        assert reader_result.missing_operations_count > 0
+        assert reader_result.has_partial_wildcard_match is True
+
+
+# =============================================================================
+# Intra-Request Cache Consistency Tests
+# =============================================================================
+
+
+class TestIntraRequestCacheConsistency:
+    """Tests that RoleRecommendationService uses consistent cache within a request.
+
+    The service captures cache eagerly at construction to ensure op_sets and _cache
+    are always from the same snapshot. This prevents race conditions where a background
+    job swaps the cache mid-request.
+    """
+
+    def test_service_uses_cache_from_construction_time(self, sample_operations):
+        """Service should use the cache provided at construction, not global singleton."""
+        from azurerbac.cache.models import CacheData
         from azurerbac.matching.recommendation_service import RoleRecommendationService
 
-        # First call with current operations
-        svc = RoleRecommendationService(sample_operations)
+        # Create a custom cache with known data
+        custom_cache = CacheData()
+        custom_cache.role_coverage["test-role-id"] = None  # Mark as known
 
-        # Get the cache and set it to stale values
-        cache = get_cache_service().container.cache
-        old_counts = cache.cache_ops_count
-        cache.cache_ops_count = CacheOpsCount(999, 999)  # Set to wrong values
+        # Create service with explicit cache
+        svc = RoleRecommendationService(
+            sample_operations,
+            requested_ops_data_flags=None,
+            caches=custom_cache,
+        )
 
-        # Now check staleness - should detect the difference
-        was_stale = svc.check_cache_staleness()
+        # Verify it uses our custom cache, not global
+        assert svc._caches is custom_cache
+        assert "test-role-id" in svc._caches.role_coverage
 
-        # Restore original counts
-        cache.cache_ops_count = old_counts
+    def test_service_captures_cache_eagerly_when_none_provided(self, sample_operations):
+        """When no cache provided, service captures global cache at construction."""
+        from unittest.mock import patch
 
-        assert was_stale  # Should have detected staleness
+        from azurerbac.cache.models import CacheData
+        from azurerbac.matching.recommendation_service import RoleRecommendationService
+
+        # Create two different cache instances
+        cache_v1 = CacheData()
+        cache_v1.role_coverage["v1-marker"] = None
+
+        cache_v2 = CacheData()
+        cache_v2.role_coverage["v2-marker"] = None
+
+        # Track which cache to return
+        current_cache = [cache_v1]  # Use list to allow mutation in nested function
+
+        def mock_get_default_cache():
+            return current_cache[0]
+
+        with patch(
+            "azurerbac.matching.recommendation_service._get_default_cache",
+            side_effect=mock_get_default_cache,
+        ):
+            # Create service - should capture cache_v1
+            svc = RoleRecommendationService(sample_operations)
+
+            # Verify it captured cache_v1
+            assert "v1-marker" in svc._caches.role_coverage
+
+            # Now swap the global cache to v2
+            current_cache[0] = cache_v2
+
+            # Service should STILL use cache_v1 (captured at construction)
+            assert "v1-marker" in svc._caches.role_coverage
+            assert "v2-marker" not in svc._caches.role_coverage
+
+    def test_new_service_gets_fresh_cache(self, sample_operations):
+        """Each new service instance captures the current cache state."""
+        from unittest.mock import patch
+
+        from azurerbac.cache.models import CacheData
+        from azurerbac.matching.recommendation_service import RoleRecommendationService
+
+        cache_v1 = CacheData()
+        cache_v1.role_coverage["v1-marker"] = None
+
+        cache_v2 = CacheData()
+        cache_v2.role_coverage["v2-marker"] = None
+
+        current_cache = [cache_v1]
+
+        def mock_get_default_cache():
+            return current_cache[0]
+
+        with patch(
+            "azurerbac.matching.recommendation_service._get_default_cache",
+            side_effect=mock_get_default_cache,
+        ):
+            # First service gets v1
+            svc1 = RoleRecommendationService(sample_operations)
+            assert "v1-marker" in svc1._caches.role_coverage
+
+            # Swap cache
+            current_cache[0] = cache_v2
+
+            # Second service gets v2 (fresh)
+            svc2 = RoleRecommendationService(sample_operations)
+            assert "v2-marker" in svc2._caches.role_coverage
+
+            # First service still has v1
+            assert "v1-marker" in svc1._caches.role_coverage

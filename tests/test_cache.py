@@ -57,28 +57,32 @@ class TestGetMatchingOperations:
         cache: dict[PatternCacheKey, set[str]] = {}
         result = get_matching_operations("*/read", operation_names, False, cache)
 
-        assert "Microsoft.Storage/storageAccounts/read" in result
-        assert "Microsoft.Compute/virtualMachines/read" in result
-        assert "Microsoft.KeyVault/vaults/read" in result
-        assert "Microsoft.KeyVault/vaults/secrets/read" in result
-        assert "Microsoft.Storage/storageAccounts/write" not in result
+        # Result contains lowered operation names
+        assert "microsoft.storage/storageaccounts/read" in result
+        assert "microsoft.compute/virtualmachines/read" in result
+        assert "microsoft.keyvault/vaults/read" in result
+        assert "microsoft.keyvault/vaults/secrets/read" in result
+        assert "microsoft.storage/storageaccounts/write" not in result
 
     def test_matches_provider_wildcard(self, operation_names: set[str]):
         """Test matching Microsoft.Storage/* pattern."""
         cache: dict[PatternCacheKey, set[str]] = {}
         result = get_matching_operations("Microsoft.Storage/*", operation_names, False, cache)
 
-        assert "Microsoft.Storage/storageAccounts/read" in result
-        assert "Microsoft.Storage/storageAccounts/write" in result
-        assert "Microsoft.Storage/storageAccounts/delete" in result
-        assert "Microsoft.Compute/virtualMachines/read" not in result
+        # Result contains lowered operation names
+        assert "microsoft.storage/storageaccounts/read" in result
+        assert "microsoft.storage/storageaccounts/write" in result
+        assert "microsoft.storage/storageaccounts/delete" in result
+        assert "microsoft.compute/virtualmachines/read" not in result
 
     def test_matches_star_pattern(self, operation_names: set[str]):
         """Test matching * pattern (matches all)."""
         cache: dict[PatternCacheKey, set[str]] = {}
         result = get_matching_operations("*", operation_names, False, cache)
 
-        assert result == operation_names
+        # Result is lowered version of all operation names
+        expected = {op.lower() for op in operation_names}
+        assert result == expected
 
     def test_caches_results(self, operation_names: set[str]):
         """Test that results are cached and reused."""
@@ -103,7 +107,7 @@ class TestGetMatchingOperations:
         result1 = get_matching_operations("*/READ", operation_names, Plane.DATA, cache)
         result2 = get_matching_operations("*/read", operation_names, Plane.DATA, cache)
 
-        # Both should use the same cache key (lowercase)
+        # Both should use the same cache key (lowered)
         assert PatternCacheKey("*/read", Plane.DATA) in cache
         assert PatternCacheKey("*/READ", Plane.DATA) not in cache
         assert result1 == result2
@@ -135,6 +139,245 @@ class TestGetMatchingOperations:
         )
 
         assert result == set()
+
+
+class TestLowerOptimization:
+    """Tests ensuring lower optimization works correctly across cache and matching."""
+
+    def test_role_coverage_stores_lowered(self, operation_names: set[str]):
+        """Test that role coverage stores operations lowered."""
+        from azurerbac.cache.build import precompute_all
+
+        operations = [
+            OperationData(name="Microsoft.Storage/storageAccounts/read", is_data_action=False),
+            OperationData(name="Microsoft.Storage/storageAccounts/write", is_data_action=False),
+            OperationData(
+                name="Microsoft.Storage/storageAccounts/blobServices/read", is_data_action=True
+            ),
+        ]
+        roles = [
+            RoleDefinition.model_validate(
+                {
+                    "name": "test-role-id",
+                    "properties": {
+                        "roleName": "Test Role",
+                        "type": "BuiltInRole",
+                        "permissions": [{"actions": ["Microsoft.Storage/storageAccounts/read"]}],
+                    },
+                }
+            )
+        ]
+
+        cache_data = precompute_all(roles, operations)
+
+        coverage = cache_data.role_coverage.get("test-role-id")
+        assert coverage is not None
+        assert "microsoft.storage/storageaccounts/read" in coverage.control
+        assert "Microsoft.Storage/storageAccounts/read" not in coverage.control
+
+    def test_pattern_match_cache_stores_lowered(self, operation_names: set[str]):
+        """Test that pattern match cache stores operations lowered."""
+        cache: dict[PatternCacheKey, set[str]] = {}
+        result = get_matching_operations(
+            "Microsoft.Storage/*", operation_names, Plane.CONTROL, cache
+        )
+
+        # All results should be lowered
+        for op in result:
+            assert op == op.lower(), f"Operation {op} is not lowered"
+
+        # Cache should contain lowered
+        cached = cache.get(PatternCacheKey("microsoft.storage/*", Plane.CONTROL))
+        assert cached is not None
+        for op in cached:
+            assert op == op.lower()
+
+    def test_case_insensitive_lookup_works(self, operation_names: set[str]):
+        """Test that lookups work regardless of input case."""
+        cache: dict[PatternCacheKey, set[str]] = {}
+
+        # Query with original case
+        result1 = get_matching_operations(
+            "Microsoft.Storage/*", operation_names, Plane.CONTROL, cache
+        )
+
+        # Query with uppercase
+        result2 = get_matching_operations(
+            "MICROSOFT.STORAGE/*", operation_names, Plane.CONTROL, cache
+        )
+
+        # Query with lowered
+        result3 = get_matching_operations(
+            "microsoft.storage/*", operation_names, Plane.CONTROL, cache
+        )
+
+        # All should return the same results
+        assert result1 == result2 == result3
+
+    def test_wildcard_pattern_returns_lowered(self, operation_names: set[str]):
+        """Test that wildcard * pattern returns all operations lowered."""
+        cache: dict[PatternCacheKey, set[str]] = {}
+        result = get_matching_operations("*", operation_names, Plane.CONTROL, cache)
+
+        # Result should be all lowered
+        expected = {op.lower() for op in operation_names}
+        assert result == expected
+
+    def test_explicit_operation_lookup_case_insensitive(self):
+        """Test that explicit operation names are matched case-insensitively."""
+        from azurerbac.cache.build import precompute_all
+
+        operations = [
+            OperationData(name="Microsoft.Storage/storageAccounts/read", is_data_action=False),
+        ]
+        roles = [
+            RoleDefinition.model_validate(
+                {
+                    "name": "role1",
+                    "properties": {
+                        "roleName": "Role 1",
+                        "type": "BuiltInRole",
+                        "permissions": [{"actions": ["microsoft.storage/storageaccounts/READ"]}],
+                    },
+                }
+            )
+        ]
+
+        cache_data = precompute_all(roles, operations)
+
+        coverage = cache_data.role_coverage.get("role1")
+        assert coverage is not None
+        # Should be stored lowered regardless of input case
+        assert "microsoft.storage/storageaccounts/read" in coverage.control
+
+    def test_cache_consistency_with_recommend_roles(self, operation_names: set[str]):
+        """Test that cached and non-cached paths return same results."""
+        from azurerbac.cache.build import precompute_all
+        from azurerbac.matching.role_recommender import recommend_roles
+        from tests.helpers import clear_computed_caches
+
+        operations = [
+            OperationData(name="Microsoft.Storage/storageAccounts/read", is_data_action=False),
+            OperationData(name="Microsoft.Storage/storageAccounts/write", is_data_action=False),
+            OperationData(name="Microsoft.Compute/virtualMachines/read", is_data_action=False),
+        ]
+        roles = [
+            RoleDefinition.model_validate(
+                {
+                    "name": "storage-reader",
+                    "properties": {
+                        "roleName": "Storage Reader",
+                        "type": "BuiltInRole",
+                        "permissions": [{"actions": ["Microsoft.Storage/*/read"]}],
+                    },
+                }
+            ),
+            RoleDefinition.model_validate(
+                {
+                    "name": "storage-contrib",
+                    "properties": {
+                        "roleName": "Storage Contributor",
+                        "type": "BuiltInRole",
+                        "permissions": [{"actions": ["Microsoft.Storage/*"]}],
+                    },
+                }
+            ),
+        ]
+
+        clear_computed_caches()
+
+        # Without cache
+        result_no_cache = recommend_roles(
+            ["Microsoft.Storage/storageAccounts/read"],
+            roles,
+            operations,
+        )
+
+        # With cache
+        get_cache_service().swap_in_memory(precompute_all(roles, operations))
+        result_with_cache = recommend_roles(
+            ["Microsoft.Storage/storageAccounts/read"],
+            roles,
+            operations,
+        )
+
+        # Same number of results
+        assert len(result_no_cache) == len(result_with_cache)
+
+        # Same roles matched
+        no_cache_ids = {r.role_id for r in result_no_cache}
+        with_cache_ids = {r.role_id for r in result_with_cache}
+        assert no_cache_ids == with_cache_ids
+
+        # Same matched operation counts
+        for r_no, r_with in zip(
+            sorted(result_no_cache, key=lambda x: x.role_id),
+            sorted(result_with_cache, key=lambda x: x.role_id),
+            strict=True,
+        ):
+            assert r_no.matched_operations_count == r_with.matched_operations_count
+
+    def test_ops_lowered_to_orig_restores_casing(self):
+        """Test that ops_lowered_to_orig correctly restores original operation casing."""
+        from azurerbac.cache.build import precompute_all
+        from azurerbac.cache.container import CacheContainer
+
+        operations = [
+            OperationData(name="Microsoft.Storage/storageAccounts/read", is_data_action=False),
+            OperationData(
+                name="Microsoft.Compute/virtualMachines/start/action", is_data_action=False
+            ),
+            OperationData(name="Microsoft.KeyVault/vaults/secrets/read", is_data_action=True),
+        ]
+        roles = [
+            RoleDefinition.model_validate(
+                {
+                    "name": "test-role",
+                    "properties": {
+                        "roleName": "Test Role",
+                        "type": "BuiltInRole",
+                        "permissions": [
+                            {"actions": ["Microsoft.Storage/*", "Microsoft.Compute/*"]}
+                        ],
+                    },
+                }
+            )
+        ]
+
+        cache_data = precompute_all(roles, operations)
+        container = CacheContainer()
+        container.swap(cache_data)
+
+        # Verify mapping exists and is correct
+        mapping = container.get_ops_lowered_to_orig()
+        assert (
+            mapping["microsoft.storage/storageaccounts/read"]
+            == "Microsoft.Storage/storageAccounts/read"
+        )
+        assert (
+            mapping["microsoft.compute/virtualmachines/start/action"]
+            == "Microsoft.Compute/virtualMachines/start/action"
+        )
+        assert (
+            mapping["microsoft.keyvault/vaults/secrets/read"]
+            == "Microsoft.KeyVault/vaults/secrets/read"
+        )
+
+        # Verify restore_operation_casing works
+        lowered_ops = [
+            "microsoft.storage/storageaccounts/read",
+            "microsoft.compute/virtualmachines/start/action",
+        ]
+        restored = container.restore_operation_casing(lowered_ops)
+        assert restored == [
+            "Microsoft.Storage/storageAccounts/read",
+            "Microsoft.Compute/virtualMachines/start/action",
+        ]
+
+        # Verify unknown operations are returned as-is
+        unknown_ops = ["unknown.operation/read"]
+        restored_unknown = container.restore_operation_casing(unknown_ops)
+        assert restored_unknown == ["unknown.operation/read"]
 
 
 # =============================================================================
@@ -187,8 +430,8 @@ class TestBuildOperationsPrefixIndex:
 
         assert result == {}
 
-    def test_lowercase_prefix_keys(self, operation_names: set[str]):
-        """Test that prefix keys are lowercase."""
+    def test_lowered_prefix_keys(self, operation_names: set[str]):
+        """Test that prefix keys are lowered."""
         cache: dict[int, dict[str, set[str]]] = {}
         result = build_operations_prefix_index(operation_names, 1, cache)
 
@@ -397,6 +640,17 @@ class TestPreloadCache:
         cache.swap(new_cache_data)
 
         assert cache.get("my_key") is None
+
+    def test_swap_clears_role_pages(self):
+        """Test swap clears role_pages cache."""
+        cache = CacheContainer()
+        page_key = "roles:active::name:asc:1:50"
+        cache.set_role_page(page_key, [{"role_id": "role-1"}])
+
+        new_cache_data = CacheData()
+        cache.swap(new_cache_data)
+
+        assert cache.get_role_page(page_key) is None
 
 
 class TestPreloadCacheIntegration:

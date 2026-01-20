@@ -192,6 +192,11 @@ class CacheData:
         """Set of all operation names (original case)."""
         return {op.name for op in self.all_operations}
 
+    @cached_property
+    def ops_lowered_to_orig(self) -> dict[str, str]:
+        """Mapping from lowered operation name to original casing."""
+        return {op.name.lower(): op.name for op in self.all_operations}
+
     def get_role_definitions(self) -> list[RoleDefinition]:
         """Get all active roles as RoleDefinition objects."""
         return [r.definition for r in self.roles_by_id.values() if r.status == RoleStatus.ACTIVE]

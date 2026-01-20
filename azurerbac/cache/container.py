@@ -101,11 +101,11 @@ class CacheContainer:
         return self._cache.role_coverage.get(role_id)
 
     def get_ops_folded_to_orig(self) -> dict[str, str]:
-        """Get mapping from casefolded operation name to original casing."""
+        """Get mapping from lowered operation name to original casing."""
         return self._cache.ops_folded_to_orig
 
     def restore_operation_casing(self, ops: Iterable[str]) -> list[str]:
-        """Restore original casing for casefolded operation names."""
+        """Restore original casing for lowered operation names."""
         ops_map = self._cache.ops_folded_to_orig
         return [ops_map.get(op, op) for op in ops]
 
@@ -123,7 +123,7 @@ class CacheContainer:
         Returns the number of built-in roles that grant the specified operation.
         Uses the pre-computed role coverage cache.
         """
-        return self._cache.operation_role_count.get(operation_name.casefold(), 0)
+        return self._cache.operation_role_count.get(operation_name.lower(), 0)
 
     def get_role_page(self, page_key: str) -> Any:
         """Get a cached role page or count value."""

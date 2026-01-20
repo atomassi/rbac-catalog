@@ -40,12 +40,12 @@ def get_matching_operations(
     plane: Plane,
     pattern_cache: dict[PatternCacheKey, set[str]],
 ) -> set[str]:
-    """Get operations matching a pattern (returns casefolded)."""
-    key = PatternCacheKey(pattern.casefold(), plane)
+    """Get operations matching a pattern (returns lowered)."""
+    key = PatternCacheKey(pattern.lower(), plane)
     if key in pattern_cache:
         return pattern_cache[key]
 
-    matching = {op.casefold() for op in ops if matches_pattern(op, pattern)}
+    matching = {op.lower() for op in ops if matches_pattern(op, pattern)}
     pattern_cache[key] = matching
     return matching
 
@@ -63,7 +63,7 @@ def build_operations_prefix_index(
     for op in ops:
         slash_idx = op.find("/")
         if slash_idx > 0:
-            prefix = op[: slash_idx + 1].casefold()
+            prefix = op[: slash_idx + 1].lower()
             index.setdefault(prefix, set()).add(op)
 
     prefix_cache[plane] = index
@@ -79,14 +79,14 @@ def _add_operations_for_patterns(
     pattern_match: dict[PatternCacheKey, set[str]],
     ops_folded_to_orig: dict[str, str],
 ) -> None:
-    """Add operations matching patterns to destination set (casefolded)."""
+    """Add operations matching patterns to destination set (lowered)."""
     for pattern in patterns:
         if pattern == "*":
             dst.update(ops_folded_to_orig.keys())
         elif is_wildcard_pattern(pattern):
             dst.update(get_matching_operations(pattern, all_ops, plane, pattern_match))
         else:
-            pattern_folded = pattern.casefold()
+            pattern_folded = pattern.lower()
             if pattern_folded in ops_folded_to_orig:
                 dst.add(pattern_folded)
 
@@ -113,7 +113,7 @@ def _collect_role_patterns(roles: list[RoleDefinition]) -> set[str]:
             )
             for action in all_actions:
                 if is_wildcard_pattern(action):
-                    patterns.add(action.casefold())
+                    patterns.add(action.lower())
     return patterns
 
 
@@ -222,7 +222,7 @@ def precompute_all(
     providers: set[str] = {
         op.provider_display_name for op in all_operations if op.provider_display_name
     }
-    unique_providers = sorted(providers, key=str.casefold)
+    unique_providers = sorted(providers, key=str.lower)
 
     # Build computed data into temporary dicts
     pattern_match: dict[PatternCacheKey, set[str]] = {}
@@ -238,9 +238,9 @@ def precompute_all(
 
     logger.debug("Operations: %d control, %d data plane", len(all_control_ops), len(all_data_ops))
 
-    # Build casefolded lookup sets for case-insensitive matching
-    control_ops_folded_to_orig = {op.casefold(): op for op in all_control_ops}
-    data_ops_folded_to_orig = {op.casefold(): op for op in all_data_ops}
+    # Build lowered lookup sets for case-insensitive matching
+    control_ops_folded_to_orig = {op.lower(): op for op in all_control_ops}
+    data_ops_folded_to_orig = {op.lower(): op for op in all_data_ops}
 
     cache_ops_count = CacheOpsCount(len(all_control_ops), len(all_data_ops))
 

@@ -123,7 +123,7 @@ def get_roles_allowing_operation(
     cache_resolved = _get_cache(cache)
 
     # Check cache first
-    cache_key = f"roles_allowing_op:{operation_name.casefold()}:{is_data_action}"
+    cache_key = f"roles_allowing_op:{operation_name.lower()}:{is_data_action}"
     if (cached := cache_resolved.get(cache_key)) is not None:
         return cached
 
@@ -135,7 +135,7 @@ def get_roles_allowing_operation(
     )
 
     allowing_roles: list[RoleAllowingOperation] = []
-    operation_folded = operation_name.casefold()
+    operation_folded = operation_name.lower()
 
     for role in all_roles:
         analyzer = RolePermissionAnalyzer(role, cache=cache_resolved)

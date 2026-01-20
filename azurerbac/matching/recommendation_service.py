@@ -139,7 +139,7 @@ class RoleRecommendationService:
         self._cache = caches
 
         self._ops_folded_to_orig: dict[str, str] = {
-            op.name.casefold(): op.name for op in all_operations
+            op.name.lower(): op.name for op in all_operations
         }
 
         # Pre-computed wildcard matches (populated by compute_wildcard_matches)
@@ -219,11 +219,11 @@ class RoleRecommendationService:
         """Classify a single operation into the appropriate bucket.
 
         Extracted for clarity and testability (SRP).
-        Note: Operations are stored casefolded for case-insensitive matching
+        Note: Operations are stored lowered for case-insensitive matching
         with RoleCoverage.
         """
         is_wildcard = is_wildcard_pattern(op)
-        op_folded = op.casefold()
+        op_folded = op.lower()
 
         # Case 1: Explicit data action flag provided
         if op in self.requested_ops_data_flags:
@@ -241,7 +241,7 @@ class RoleRecommendationService:
             self._classify_wildcard_to_planes(op, control_wildcards, data_wildcards)
             return
 
-        # Case 3: Explicit operation - classify by lookup (op_sets is casefolded)
+        # Case 3: Explicit operation - classify by lookup (op_sets is lowered)
         if op_folded in self.op_sets.all_data:
             data.add(op_folded)
         else:

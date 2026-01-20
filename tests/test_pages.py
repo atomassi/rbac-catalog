@@ -38,7 +38,7 @@ class TestComputeRoleEffectivePermissionsServices:
 
         # Create mock app_cache with pre-computed coverage
         mock_app_cache = MagicMock()
-        # Cache stores casefolded operation names
+        # Cache stores lowered operation names
         mock_app_cache.get_role_coverage.return_value = (
             {"microsoft.storage/storageaccounts/read"},
             set(),
@@ -75,7 +75,7 @@ class TestComputeRoleEffectivePermissionsServices:
             {"name": "Microsoft.Storage/storageAccounts/delete", "is_data_action": False},
         ]
 
-        # Create mock with delete excluded (cache stores casefolded)
+        # Create mock with delete excluded (cache stores lowered)
         mock_app_cache = MagicMock()
         mock_app_cache.get_role_coverage.return_value = (
             {
@@ -280,7 +280,7 @@ class TestGetRolesAllowingOperationServices:
             )
         ]
         mock_app_cache.get_all_roles.return_value = roles
-        # Cache stores casefolded operation names for O(1) lookup
+        # Cache stores lowered operation names for O(1) lookup
         mock_app_cache.get_role_coverage.return_value = (
             {"microsoft.storage/storageaccounts/read"},
             set(),

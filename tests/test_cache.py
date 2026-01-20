@@ -57,7 +57,7 @@ class TestGetMatchingOperations:
         cache: dict[PatternCacheKey, set[str]] = {}
         result = get_matching_operations("*/read", operation_names, False, cache)
 
-        # Result contains casefolded operation names
+        # Result contains lowered operation names
         assert "microsoft.storage/storageaccounts/read" in result
         assert "microsoft.compute/virtualmachines/read" in result
         assert "microsoft.keyvault/vaults/read" in result
@@ -69,7 +69,7 @@ class TestGetMatchingOperations:
         cache: dict[PatternCacheKey, set[str]] = {}
         result = get_matching_operations("Microsoft.Storage/*", operation_names, False, cache)
 
-        # Result contains casefolded operation names
+        # Result contains lowered operation names
         assert "microsoft.storage/storageaccounts/read" in result
         assert "microsoft.storage/storageaccounts/write" in result
         assert "microsoft.storage/storageaccounts/delete" in result
@@ -80,8 +80,8 @@ class TestGetMatchingOperations:
         cache: dict[PatternCacheKey, set[str]] = {}
         result = get_matching_operations("*", operation_names, False, cache)
 
-        # Result is casefolded version of all operation names
-        expected = {op.casefold() for op in operation_names}
+        # Result is lowered version of all operation names
+        expected = {op.lower() for op in operation_names}
         assert result == expected
 
     def test_caches_results(self, operation_names: set[str]):
@@ -107,7 +107,7 @@ class TestGetMatchingOperations:
         result1 = get_matching_operations("*/READ", operation_names, Plane.DATA, cache)
         result2 = get_matching_operations("*/read", operation_names, Plane.DATA, cache)
 
-        # Both should use the same cache key (casefolded)
+        # Both should use the same cache key (lowered)
         assert PatternCacheKey("*/read", Plane.DATA) in cache
         assert PatternCacheKey("*/READ", Plane.DATA) not in cache
         assert result1 == result2
@@ -141,11 +141,11 @@ class TestGetMatchingOperations:
         assert result == set()
 
 
-class TestCasefoldOptimization:
-    """Tests ensuring casefold optimization works correctly across cache and matching."""
+class TestLowerOptimization:
+    """Tests ensuring lower optimization works correctly across cache and matching."""
 
-    def test_role_coverage_stores_casefolded(self, operation_names: set[str]):
-        """Test that role coverage stores operations casefolded."""
+    def test_role_coverage_stores_lowered(self, operation_names: set[str]):
+        """Test that role coverage stores operations lowered."""
         from azurerbac.cache.build import precompute_all
 
         operations = [
@@ -175,22 +175,22 @@ class TestCasefoldOptimization:
         assert "microsoft.storage/storageaccounts/read" in coverage.control
         assert "Microsoft.Storage/storageAccounts/read" not in coverage.control
 
-    def test_pattern_match_cache_stores_casefolded(self, operation_names: set[str]):
-        """Test that pattern match cache stores operations casefolded."""
+    def test_pattern_match_cache_stores_lowered(self, operation_names: set[str]):
+        """Test that pattern match cache stores operations lowered."""
         cache: dict[PatternCacheKey, set[str]] = {}
         result = get_matching_operations(
             "Microsoft.Storage/*", operation_names, Plane.CONTROL, cache
         )
 
-        # All results should be casefolded
+        # All results should be lowered
         for op in result:
-            assert op == op.casefold(), f"Operation {op} is not casefolded"
+            assert op == op.lower(), f"Operation {op} is not lowered"
 
-        # Cache should contain casefolded
+        # Cache should contain lowered
         cached = cache.get(PatternCacheKey("microsoft.storage/*", Plane.CONTROL))
         assert cached is not None
         for op in cached:
-            assert op == op.casefold()
+            assert op == op.lower()
 
     def test_case_insensitive_lookup_works(self, operation_names: set[str]):
         """Test that lookups work regardless of input case."""
@@ -206,7 +206,7 @@ class TestCasefoldOptimization:
             "MICROSOFT.STORAGE/*", operation_names, Plane.CONTROL, cache
         )
 
-        # Query with casefolded
+        # Query with lowered
         result3 = get_matching_operations(
             "microsoft.storage/*", operation_names, Plane.CONTROL, cache
         )
@@ -214,13 +214,13 @@ class TestCasefoldOptimization:
         # All should return the same results
         assert result1 == result2 == result3
 
-    def test_wildcard_pattern_returns_casefolded(self, operation_names: set[str]):
-        """Test that wildcard * pattern returns all operations casefolded."""
+    def test_wildcard_pattern_returns_lowered(self, operation_names: set[str]):
+        """Test that wildcard * pattern returns all operations lowered."""
         cache: dict[PatternCacheKey, set[str]] = {}
         result = get_matching_operations("*", operation_names, Plane.CONTROL, cache)
 
-        # Result should be all casefolded
-        expected = {op.casefold() for op in operation_names}
+        # Result should be all lowered
+        expected = {op.lower() for op in operation_names}
         assert result == expected
 
     def test_explicit_operation_lookup_case_insensitive(self):
@@ -247,7 +247,7 @@ class TestCasefoldOptimization:
 
         coverage = cache_data.role_coverage.get("role1")
         assert coverage is not None
-        # Should be stored casefolded regardless of input case
+        # Should be stored lowered regardless of input case
         assert "microsoft.storage/storageaccounts/read" in coverage.control
 
     def test_cache_consistency_with_recommend_roles(self, operation_names: set[str]):
@@ -364,11 +364,11 @@ class TestCasefoldOptimization:
         )
 
         # Verify restore_operation_casing works
-        casefolded_ops = [
+        lowered_ops = [
             "microsoft.storage/storageaccounts/read",
             "microsoft.compute/virtualmachines/start/action",
         ]
-        restored = container.restore_operation_casing(casefolded_ops)
+        restored = container.restore_operation_casing(lowered_ops)
         assert restored == [
             "Microsoft.Storage/storageAccounts/read",
             "Microsoft.Compute/virtualMachines/start/action",
@@ -430,13 +430,13 @@ class TestBuildOperationsPrefixIndex:
 
         assert result == {}
 
-    def test_casefolded_prefix_keys(self, operation_names: set[str]):
-        """Test that prefix keys are casefolded."""
+    def test_lowered_prefix_keys(self, operation_names: set[str]):
+        """Test that prefix keys are lowered."""
         cache: dict[int, dict[str, set[str]]] = {}
         result = build_operations_prefix_index(operation_names, 1, cache)
 
         for key in result:
-            assert key == key.casefold()
+            assert key == key.lower()
             assert key.endswith("/")
 
     def test_operations_without_slash_ignored(self):

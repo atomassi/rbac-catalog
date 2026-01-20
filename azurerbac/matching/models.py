@@ -146,15 +146,15 @@ class ClassifiedOperations:
 
 @dataclass(frozen=True, slots=True)
 class OperationSets:
-    """Pre-computed operation sets for matching (casefolded)."""
+    """Pre-computed operation sets for matching (lowered)."""
 
     all_control: frozenset[str]
     all_data: frozenset[str]
 
     @classmethod
     def from_operations(cls, operations: list[OperationData]) -> OperationSets:
-        control = frozenset(op.name.casefold() for op in operations if not op.is_data_action)
-        data = frozenset(op.name.casefold() for op in operations if op.is_data_action)
+        control = frozenset(op.name.lower() for op in operations if not op.is_data_action)
+        data = frozenset(op.name.lower() for op in operations if op.is_data_action)
         return cls(all_control=control, all_data=data)
 
 

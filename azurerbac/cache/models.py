@@ -194,8 +194,8 @@ class CacheData:
 
     @cached_property
     def ops_folded_to_orig(self) -> dict[str, str]:
-        """Mapping from casefolded operation name to original casing."""
-        return {op.name.casefold(): op.name for op in self.all_operations}
+        """Mapping from lowered operation name to original casing."""
+        return {op.name.lower(): op.name for op in self.all_operations}
 
     def get_role_definitions(self) -> list[RoleDefinition]:
         """Get all active roles as RoleDefinition objects."""

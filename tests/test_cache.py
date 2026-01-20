@@ -641,6 +641,17 @@ class TestPreloadCache:
 
         assert cache.get("my_key") is None
 
+    def test_swap_clears_role_pages(self):
+        """Test swap clears role_pages cache."""
+        cache = CacheContainer()
+        page_key = "roles:active::name:asc:1:50"
+        cache.set_role_page(page_key, [{"role_id": "role-1"}])
+
+        new_cache_data = CacheData()
+        cache.swap(new_cache_data)
+
+        assert cache.get_role_page(page_key) is None
+
 
 class TestPreloadCacheIntegration:
     """Integration tests for _preload_cache with mocked database."""

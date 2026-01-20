@@ -70,8 +70,9 @@ class CacheContainer:
     def swap(self, new_cache: CacheData) -> None:
         """Atomically swap the entire cache."""
         self._cache = new_cache
+        self._role_pages.clear()
         self._misc_cache.clear()
-        logger.debug("Cache swapped, misc_cache cleared")
+        logger.debug("Cache swapped, role_pages and misc_cache cleared")
 
     def get_role_by_id(self, role_id: str) -> CachedRole | None:
         """Get cached role by ID."""

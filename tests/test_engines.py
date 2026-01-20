@@ -1239,8 +1239,14 @@ class TestEmbeddingModelOptimizations:
             loop_results.append((doc_id, sim))
         loop_results.sort(key=lambda x: x[1], reverse=True)
 
-        # Should have same ranking
-        assert [r[0] for r in vectorized_results] == [r[0] for r in loop_results[:3]]
+        # Should return the same set of roles (ordering may differ for ties)
+        assert {r[0] for r in vectorized_results} == {r[0] for r in loop_results[:3]}
+
+        # Scores should match (within floating-point tolerance)
+        vectorized_scores = {r[0]: r[1] for r in vectorized_results}
+        loop_scores = {r[0]: r[1] for r in loop_results[:3]}
+        for role_id, score in vectorized_scores.items():
+            assert score == pytest.approx(loop_scores[role_id], abs=1e-6)
 
 
 class TestEmbeddingModelEdgeCases:

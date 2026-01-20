@@ -40,12 +40,12 @@ def get_matching_operations(
     plane: Plane,
     pattern_cache: dict[PatternCacheKey, set[str]],
 ) -> set[str]:
-    """Get operations matching a pattern."""
-    key = PatternCacheKey(pattern.lower(), plane)
+    """Get operations matching a pattern (returns casefolded)."""
+    key = PatternCacheKey(pattern.casefold(), plane)
     if key in pattern_cache:
         return pattern_cache[key]
 
-    matching = {op for op in ops if matches_pattern(op, pattern)}
+    matching = {op.casefold() for op in ops if matches_pattern(op, pattern)}
     pattern_cache[key] = matching
     return matching
 
@@ -63,7 +63,7 @@ def build_operations_prefix_index(
     for op in ops:
         slash_idx = op.find("/")
         if slash_idx > 0:
-            prefix = op[: slash_idx + 1].lower()
+            prefix = op[: slash_idx + 1].casefold()
             index.setdefault(prefix, set()).add(op)
 
     prefix_cache[plane] = index
@@ -77,18 +77,18 @@ def _add_operations_for_patterns(
     all_ops: set[str],
     plane: Plane,
     pattern_match: dict[PatternCacheKey, set[str]],
-    ops_lower_to_orig: dict[str, str],
+    ops_folded_to_orig: dict[str, str],
 ) -> None:
-    """Add operations matching patterns to destination set."""
+    """Add operations matching patterns to destination set (casefolded)."""
     for pattern in patterns:
         if pattern == "*":
-            dst.update(all_ops)
+            dst.update(ops_folded_to_orig.keys())
         elif is_wildcard_pattern(pattern):
             dst.update(get_matching_operations(pattern, all_ops, plane, pattern_match))
         else:
-            orig_op = ops_lower_to_orig.get(pattern.lower())
-            if orig_op:
-                dst.add(orig_op)
+            pattern_folded = pattern.casefold()
+            if pattern_folded in ops_folded_to_orig:
+                dst.add(pattern_folded)
 
 
 def _precompute_common_patterns(
@@ -113,7 +113,7 @@ def _collect_role_patterns(roles: list[RoleDefinition]) -> set[str]:
             )
             for action in all_actions:
                 if is_wildcard_pattern(action):
-                    patterns.add(action.lower())
+                    patterns.add(action.casefold())
     return patterns
 
 
@@ -122,8 +122,8 @@ def _compute_role_coverage(
     all_control_ops: set[str],
     all_data_ops: set[str],
     pattern_match: dict[PatternCacheKey, set[str]],
-    control_ops_lower_to_orig: dict[str, str],
-    data_ops_lower_to_orig: dict[str, str],
+    control_ops_folded_to_orig: dict[str, str],
+    data_ops_folded_to_orig: dict[str, str],
 ) -> RoleCoverage:
     """Compute effective operations (granted - excluded) for a role."""
     control_granted: set[str] = set()
@@ -138,7 +138,7 @@ def _compute_role_coverage(
             all_ops=all_control_ops,
             plane=Plane.CONTROL,
             pattern_match=pattern_match,
-            ops_lower_to_orig=control_ops_lower_to_orig,
+            ops_folded_to_orig=control_ops_folded_to_orig,
         )
         _add_operations_for_patterns(
             control_excluded,
@@ -146,7 +146,7 @@ def _compute_role_coverage(
             all_ops=all_control_ops,
             plane=Plane.CONTROL,
             pattern_match=pattern_match,
-            ops_lower_to_orig=control_ops_lower_to_orig,
+            ops_folded_to_orig=control_ops_folded_to_orig,
         )
         _add_operations_for_patterns(
             data_granted,
@@ -154,7 +154,7 @@ def _compute_role_coverage(
             all_ops=all_data_ops,
             plane=Plane.DATA,
             pattern_match=pattern_match,
-            ops_lower_to_orig=data_ops_lower_to_orig,
+            ops_folded_to_orig=data_ops_folded_to_orig,
         )
         _add_operations_for_patterns(
             data_excluded,
@@ -162,7 +162,7 @@ def _compute_role_coverage(
             all_ops=all_data_ops,
             plane=Plane.DATA,
             pattern_match=pattern_match,
-            ops_lower_to_orig=data_ops_lower_to_orig,
+            ops_folded_to_orig=data_ops_folded_to_orig,
         )
 
     return RoleCoverage(control_granted - control_excluded, data_granted - data_excluded)
@@ -175,11 +175,9 @@ def _build_operation_role_count(
     counts: dict[str, int] = {}
     for cov in role_coverage.values():
         for op in cov.control:
-            op_lower = op.lower()
-            counts[op_lower] = counts.get(op_lower, 0) + 1
+            counts[op] = counts.get(op, 0) + 1
         for op in cov.data:
-            op_lower = op.lower()
-            counts[op_lower] = counts.get(op_lower, 0) + 1
+            counts[op] = counts.get(op, 0) + 1
     return counts
 
 
@@ -240,9 +238,9 @@ def precompute_all(
 
     logger.debug("Operations: %d control, %d data plane", len(all_control_ops), len(all_data_ops))
 
-    # Build lowercase lookup sets for case-insensitive matching
-    control_ops_lower_to_orig = {op.lower(): op for op in all_control_ops}
-    data_ops_lower_to_orig = {op.lower(): op for op in all_data_ops}
+    # Build casefolded lookup sets for case-insensitive matching
+    control_ops_folded_to_orig = {op.casefold(): op for op in all_control_ops}
+    data_ops_folded_to_orig = {op.casefold(): op for op in all_data_ops}
 
     cache_ops_count = CacheOpsCount(len(all_control_ops), len(all_data_ops))
 
@@ -271,16 +269,18 @@ def precompute_all(
             continue
 
         builtin_count += 1
-        net_control, net_data = _compute_role_coverage(
+        coverage = _compute_role_coverage(
             role,
             all_control_ops,
             all_data_ops,
             pattern_match,
-            control_ops_lower_to_orig,
-            data_ops_lower_to_orig,
+            control_ops_folded_to_orig,
+            data_ops_folded_to_orig,
         )
-        role_coverage[role.role_id] = RoleCoverage(net_control, net_data)
-        role_net_permissions[role.role_id] = RoleNetPermissions(len(net_control), len(net_data))
+        role_coverage[role.role_id] = coverage
+        role_net_permissions[role.role_id] = RoleNetPermissions(
+            len(coverage.control), len(coverage.data)
+        )
 
     logger.debug("Computed coverage for %d built-in roles", builtin_count)
 

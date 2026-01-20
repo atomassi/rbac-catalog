@@ -101,8 +101,8 @@ def compute_role_effective_permissions(
 
 
 def _operation_in_set(operation_lower: str, operation_set: set[str]) -> bool:
-    """Check if operation is in set (case-insensitive)."""
-    return any(op.lower() == operation_lower for op in operation_set)
+    """Check if operation is in set."""
+    return operation_lower in operation_set
 
 
 def _get_cache(cache: CacheContainer | None) -> CacheContainer:
@@ -123,7 +123,7 @@ def get_roles_allowing_operation(
     cache_resolved = _get_cache(cache)
 
     # Check cache first
-    cache_key = f"roles_allowing_op:{operation_name.lower()}:{is_data_action}"
+    cache_key = f"roles_allowing_op:{operation_name.casefold()}:{is_data_action}"
     if (cached := cache_resolved.get(cache_key)) is not None:
         return cached
 
@@ -131,7 +131,7 @@ def get_roles_allowing_operation(
         return []
 
     allowing_roles: list[RoleAllowingOperation] = []
-    operation_lower = operation_name.lower()
+    operation_folded = operation_name.casefold()
 
     for role in all_roles:
         analyzer = RolePermissionAnalyzer(role, cache=cache_resolved)
@@ -142,7 +142,7 @@ def get_roles_allowing_operation(
         control_effective, data_effective = cached_coverage
         operation_set = data_effective if is_data_action else control_effective
 
-        if not _operation_in_set(operation_lower, operation_set):
+        if not _operation_in_set(operation_folded, operation_set):
             continue
 
         match_result = analyzer.find_matching_pattern(operation_name, is_data_action=is_data_action)

@@ -145,19 +145,22 @@ def get_matching_operations(
     This is the core optimization - we cache the result of pattern matching
     so subsequent calls with the same pattern are instant.
 
+    Note: Returns lowercase operation names for O(1) membership tests.
+    Expects all_operations to contain lowercase names.
+
     Args:
         pattern: The pattern to match operations against.
-        all_operations: Set of all operation names to search.
+        all_operations: Set of all operation names to search (lowercase).
         plane: Optional plane for cache lookup (CONTROL or DATA).
         caches: Optional cache container (defaults to global singleton).
     """
     cache = _get_cache(caches)
 
-    key = PatternCacheKey(pattern.lower(), plane) if plane is not None else None
+    key = PatternCacheKey(pattern.casefold(), plane) if plane is not None else None
     if key is not None and (cached := cache.pattern_match.get(key)) is not None:
         return cached
 
-    # Find matching operations
+    # Find matching operations - result is already lowercase since all_operations is lowercase
     matching = {op for op in all_operations if matches_pattern(op, pattern)}
 
     if key is not None:
@@ -399,7 +402,7 @@ def count_wildcard_matches(
     count = len(matching)
 
     if plane is not None:
-        cache.wildcard_count[PatternCacheKey(pattern.lower(), plane)] = count
+        cache.wildcard_count[PatternCacheKey(pattern.casefold(), plane)] = count
 
     return count
 

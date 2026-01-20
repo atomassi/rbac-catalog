@@ -32,7 +32,6 @@ def recommend_roles(
 
     # Initialize service and prepare classification
     svc = RoleRecommendationService(all_operations, requested_ops_data_flags)
-    svc.check_cache_staleness()
 
     classified = svc.classify_operations(requested_operations)
     logger.debug(

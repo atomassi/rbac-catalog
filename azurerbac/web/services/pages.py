@@ -136,14 +136,19 @@ def get_roles_allowing_operation(
 
     allowing_roles: list[RoleAllowingOperation] = []
     operation_lowered = operation_name.lower()
+    all_operations = cache_resolved.get_all_operations()
 
     for role in all_roles:
         analyzer = RolePermissionAnalyzer(role, cache=cache_resolved)
-        cached_coverage = analyzer.get_cached_coverage()
-        if not cached_coverage:
-            continue
 
-        control_effective, data_effective = cached_coverage
+        # Use cached coverage if available, otherwise compute on-demand
+        # This handles the case when the coverage cache is invalidated due to staleness
+        cached_coverage = analyzer.get_cached_coverage()
+        if cached_coverage:
+            control_effective, data_effective = cached_coverage
+        else:
+            control_effective, data_effective = analyzer.compute_coverage(all_operations)
+
         operation_set = data_effective if is_data_action else control_effective
 
         if not _operation_in_set(operation_lowered, operation_set):

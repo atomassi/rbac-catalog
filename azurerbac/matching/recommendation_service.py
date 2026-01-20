@@ -132,11 +132,14 @@ class RoleRecommendationService:
         Args:
             all_operations: List of all Azure operations.
             requested_ops_data_flags: Mapping of operation names to is_data_action flags.
-            caches: Optional cache data. If None, uses global singleton (lazy).
+            caches: Optional cache data. If None, captures global singleton eagerly.
         """
         self.op_sets = OperationSets.from_operations(all_operations)
         self.requested_ops_data_flags = requested_ops_data_flags or {}
-        self._cache = caches
+        # Capture cache eagerly to ensure op_sets and _cache are always in sync.
+        # This prevents race conditions where background refresh swaps in new cache
+        # between reading all_operations and accessing _caches.
+        self._cache = caches if caches is not None else _get_default_cache()
 
         self._ops_lowered_to_orig: dict[str, str] = {
             op.name.lower(): op.name for op in all_operations
@@ -153,10 +156,8 @@ class RoleRecommendationService:
 
     @property
     def _caches(self) -> CacheData:
-        """Get the cache data (injected or global singleton)."""
-        if self._cache is not None:
-            return self._cache
-        return _get_default_cache()
+        """Get the cache data (captured at construction time)."""
+        return self._cache
 
     def restore_original_casing(self, operations: set[str]) -> list[str]:
         """Restore original casing for operation names."""
@@ -649,50 +650,6 @@ class RoleRecommendationService:
             )
 
         return RoleNetPermissions(control_count, data_count)
-
-    def check_cache_staleness(self) -> bool:
-        """Check if the role coverage cache is stale and invalidate if needed.
-
-        Returns:
-            True if cache was invalidated.
-        """
-        cached_control_count, cached_data_count = self._caches.cache_ops_count
-        current_control_count = len(self.op_sets.all_control)
-        current_data_count = len(self.op_sets.all_data)
-
-        # Cache is stale if either plane count differs
-        # The (cached_control_count > 0 or cached_data_count > 0) check ensures
-        # we only invalidate when there's actually cached data to invalidate
-        has_cached_data = cached_control_count > 0 or cached_data_count > 0
-        counts_differ = (
-            current_control_count != cached_control_count or current_data_count != cached_data_count
-        )
-        cache_is_stale = has_cached_data and counts_differ
-
-        if cache_is_stale:
-            logger.warning(
-                "Role coverage cache is stale: control ops %d -> %d, data ops %d -> %d. "
-                "Invalidating cache.",
-                cached_control_count,
-                current_control_count,
-                cached_data_count,
-                current_data_count,
-            )
-            self._caches.role_coverage.clear()
-            self._caches.role_net_permissions.clear()
-            self._caches.pattern_match.clear()
-            self._caches.wildcard_count.clear()
-            self._caches.partial_coverage.clear()
-            return True
-
-        logger.debug(
-            "Cache valid: control=%d, data=%d, role_coverage=%d entries, pattern_match=%d entries",
-            current_control_count,
-            current_data_count,
-            len(self._caches.role_coverage),
-            len(self._caches.pattern_match),
-        )
-        return False
 
     def has_full_cache(self) -> bool:
         """Check if full role coverage cache is available."""

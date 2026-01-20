@@ -280,7 +280,7 @@ class TestGetRolesAllowingOperationServices:
             )
         ]
         mock_app_cache.get_all_roles.return_value = roles
-        # Cache stores lowercase operation names for O(1) lookup
+        # Cache stores casefolded operation names for O(1) lookup
         mock_app_cache.get_role_coverage.return_value = (
             {"microsoft.storage/storageaccounts/read"},
             set(),

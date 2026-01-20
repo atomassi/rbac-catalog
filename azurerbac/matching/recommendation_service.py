@@ -219,11 +219,11 @@ class RoleRecommendationService:
         """Classify a single operation into the appropriate bucket.
 
         Extracted for clarity and testability (SRP).
-        Note: Operations are stored lowercase for case-insensitive matching
+        Note: Operations are stored casefolded for case-insensitive matching
         with RoleCoverage.
         """
         is_wildcard = is_wildcard_pattern(op)
-        op_lower = op.lower()
+        op_folded = op.casefold()
 
         # Case 1: Explicit data action flag provided
         if op in self.requested_ops_data_flags:
@@ -233,7 +233,7 @@ class RoleRecommendationService:
                 if is_data_action
                 else (control_wildcards if is_wildcard else control)
             )
-            target_set.add(op_lower if not is_wildcard else op)
+            target_set.add(op_folded if not is_wildcard else op)
             return
 
         # Case 2: Wildcard without explicit flag - check both planes
@@ -241,11 +241,11 @@ class RoleRecommendationService:
             self._classify_wildcard_to_planes(op, control_wildcards, data_wildcards)
             return
 
-        # Case 3: Explicit operation - classify by lookup (op_sets is lowercase)
-        if op_lower in self.op_sets.all_data:
-            data.add(op_lower)
+        # Case 3: Explicit operation - classify by lookup (op_sets is casefolded)
+        if op_folded in self.op_sets.all_data:
+            data.add(op_folded)
         else:
-            control.add(op_lower)
+            control.add(op_folded)
 
     def _classify_wildcard_to_planes(
         self,

@@ -145,12 +145,12 @@ def get_matching_operations(
     This is the core optimization - we cache the result of pattern matching
     so subsequent calls with the same pattern are instant.
 
-    Note: Returns lowercase operation names for O(1) membership tests.
-    Expects all_operations to contain lowercase names.
+    Note: Returns casefolded operation names for O(1) membership tests.
+    Expects all_operations to contain casefolded names.
 
     Args:
         pattern: The pattern to match operations against.
-        all_operations: Set of all operation names to search (lowercase).
+        all_operations: Set of all operation names to search (casefolded).
         plane: Optional plane for cache lookup (CONTROL or DATA).
         caches: Optional cache container (defaults to global singleton).
     """
@@ -160,7 +160,7 @@ def get_matching_operations(
     if key is not None and (cached := cache.pattern_match.get(key)) is not None:
         return cached
 
-    # Find matching operations - result is already lowercase since all_operations is lowercase
+    # Find matching operations - result is already casefolded since all_operations is casefolded
     matching = {op for op in all_operations if matches_pattern(op, pattern)}
 
     if key is not None:

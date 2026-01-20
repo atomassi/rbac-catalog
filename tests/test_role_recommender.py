@@ -407,16 +407,16 @@ class TestOperationSets:
     """Tests for OperationSets value object."""
 
     def test_from_operations_creates_correct_sets(self, sample_operations):
-        """from_operations should separate control and data plane operations (lowercase)."""
+        """from_operations should separate control and data plane operations (casefolded)."""
         from azurerbac.matching.models import OperationSets
 
         op_sets = OperationSets.from_operations(sample_operations)
 
-        # Control plane operations (stored lowercase)
+        # Control plane operations (stored casefolded)
         assert "microsoft.storage/storageaccounts/read" in op_sets.all_control
         assert "microsoft.compute/virtualmachines/read" in op_sets.all_control
 
-        # Data plane operations (stored lowercase)
+        # Data plane operations (stored casefolded)
         assert "microsoft.keyvault/vaults/secrets/read" in op_sets.all_data
         assert (
             "microsoft.storage/storageaccounts/blobservices/containers/blobs/read"
@@ -439,7 +439,7 @@ class TestRecommendationService:
             ]
         )
 
-        # Operations are stored lowercase for case-insensitive matching
+        # Operations are stored casefolded for case-insensitive matching
         assert "microsoft.storage/storageaccounts/read" in classified.control
         assert "microsoft.keyvault/vaults/secrets/read" in classified.data
 

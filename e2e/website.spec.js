@@ -927,6 +927,63 @@ test.describe('Operation Detail Page', () => {
     await expect(page.locator('th:has-text("Actions")').first()).toBeVisible();
     await expect(page.locator('th:has-text("Data Actions")').first()).toBeVisible();
   });
+
+  test('should copy Operation Name without JS errors when clicking button', async ({ page, context }) => {
+    // Grant clipboard permissions for copy tests
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+
+    // Listen for page errors
+    const errors = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+
+    await page.goto('/operations/Microsoft.Storage/storageAccounts/read');
+    await page.waitForLoadState('domcontentloaded');
+    
+    // Wait for Clipboard utility to be loaded
+    await page.waitForFunction(() => typeof window.Clipboard !== 'undefined');
+
+    // Find and click the Operation Name copy button
+    const copyButton = page.locator('button[title="Copy Operation Name"]');
+    await expect(copyButton).toBeVisible();
+    await copyButton.click();
+
+    // Verify tooltip appeared (auto-waits for condition)
+    const tooltip = copyButton.locator('.copied-tooltip');
+    await expect(tooltip).toHaveCSS('opacity', '1');
+
+    // Verify the correct content was copied to clipboard
+    const clipboardContent = await page.evaluate(() => navigator.clipboard.readText());
+    expect(clipboardContent).toBe('Microsoft.Storage/storageAccounts/read');
+
+    // Check no JS errors occurred
+    expect(errors).toHaveLength(0);
+  });
+
+  test('should show visual feedback when copying Operation Name', async ({ page, context }) => {
+    // Grant clipboard permissions for copy tests
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+
+    await page.goto('/operations/Microsoft.Storage/storageAccounts/read');
+    await page.waitForLoadState('domcontentloaded');
+    
+    // Wait for Clipboard utility to be loaded
+    await page.waitForFunction(() => typeof window.Clipboard !== 'undefined');
+
+    const copyButton = page.locator('button[title="Copy Operation Name"]');
+    await expect(copyButton).toBeVisible();
+
+    // Before click: copy icon visible, check icon hidden
+    const copyIcon = copyButton.locator('.copy-icon');
+    const checkIcon = copyButton.locator('.check-icon');
+    await expect(copyIcon).toBeVisible();
+    await expect(checkIcon).not.toBeVisible();
+
+    // Click copy button
+    await copyButton.click();
+
+    // After click: check icon should become visible
+    await expect(checkIcon).toBeVisible();
+  });
 });
 
 // =============================================================================

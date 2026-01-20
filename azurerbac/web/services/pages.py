@@ -130,6 +130,10 @@ def get_roles_allowing_operation(
     if not (all_roles := cache_resolved.get_all_roles()):
         return []
 
+    logger.debug(
+        "allowing_roles cache miss for %s, scanning %d roles", operation_name, len(all_roles)
+    )
+
     allowing_roles: list[RoleAllowingOperation] = []
     operation_folded = operation_name.casefold()
 
@@ -161,6 +165,12 @@ def get_roles_allowing_operation(
     allowing_roles.sort(key=lambda x: x.role_name.lower())
 
     cache_resolved.set(cache_key, allowing_roles)
+    logger.debug(
+        "allowing_roles computed: %d roles allow %s, cached as %s",
+        len(allowing_roles),
+        operation_name,
+        cache_key,
+    )
 
     return allowing_roles
 

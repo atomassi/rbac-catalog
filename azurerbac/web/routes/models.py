@@ -7,12 +7,6 @@ from pydantic import BaseModel, Field
 from azurerbac.azure.models import OperationData
 
 
-class ErrorResponse(BaseModel):
-    """Standard error response."""
-
-    detail: str
-
-
 class HealthResponse(BaseModel):
     """Health check response."""
 

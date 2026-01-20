@@ -8,7 +8,9 @@ import logging
 from collections.abc import Iterable
 from dataclasses import replace
 from datetime import datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Final
+
+from cachetools import LRUCache
 
 from azurerbac.cache.models import CacheData, CachedChangeEvent, CachedRole
 from azurerbac.core.constants import DEFAULT_SEARCH_LIMIT
@@ -17,17 +19,25 @@ from azurerbac.telemetry import track_cache_hit
 
 if TYPE_CHECKING:
     from azurerbac.azure.models import OperationData, RoleDefinition
+    from azurerbac.web.services.models import RoleAllowingOperation
 
 logger = logging.getLogger(__name__)
+
+# Maximum entries in the allowing_roles cache (roles granting each operation)
+# Estimated ~10KB per entry ≈ 50MB max memory
+_ALLOWING_ROLES_CACHE_MAX_SIZE: Final[int] = 5000
+
+# Type alias for the misc cache value type
+RoleAllowingOperationList = list["RoleAllowingOperation"]
 
 
 class CacheContainer:
     """Thread-safe in-memory cache."""
 
     __slots__ = (
+        "_allowing_roles_cache",
         "_cache",
         "_loaded_version",
-        "_misc_cache",
         "_pending_reload",
         "_reload_lock",
         "_role_pages",
@@ -36,7 +46,9 @@ class CacheContainer:
     def __init__(self) -> None:
         self._cache: CacheData = CacheData()
         self._role_pages: dict[str, list] = {}  # Paginated role listings
-        self._misc_cache: dict[str, Any] = {}  # Dynamic key-value cache
+        self._allowing_roles_cache: LRUCache[str, RoleAllowingOperationList] = LRUCache(
+            maxsize=_ALLOWING_ROLES_CACHE_MAX_SIZE
+        )
         self._loaded_version: str | None = None
         self._reload_lock = asyncio.Lock()
         self._pending_reload = False
@@ -71,8 +83,8 @@ class CacheContainer:
         """Atomically swap the entire cache."""
         self._cache = new_cache
         self._role_pages.clear()
-        self._misc_cache.clear()
-        logger.debug("Cache swapped, role_pages and misc_cache cleared")
+        self._allowing_roles_cache.clear()
+        logger.debug("Cache swapped, role_pages and allowing_roles_cache cleared")
 
     def get_role_by_id(self, role_id: str) -> CachedRole | None:
         """Get cached role by ID."""
@@ -139,13 +151,19 @@ class CacheContainer:
     def get_role_pages_count(self) -> int:
         return len(self._role_pages)
 
-    def get(self, key: str) -> Any:
-        result = self._misc_cache.get(key)
+    def get(self, key: str) -> RoleAllowingOperationList | None:
+        result = self._allowing_roles_cache.get(key)
         track_cache_hit("allowing_roles", result is not None, key)
         return result
 
-    def set(self, key: str, value: Any) -> None:
-        self._misc_cache[key] = value
+    def set(self, key: str, value: RoleAllowingOperationList) -> None:
+        was_at_capacity = len(self._allowing_roles_cache) >= _ALLOWING_ROLES_CACHE_MAX_SIZE
+        self._allowing_roles_cache[key] = value
+        if was_at_capacity:
+            logger.debug(
+                "allowing_roles_cache at capacity (%d), LRU eviction occurred",
+                _ALLOWING_ROLES_CACHE_MAX_SIZE,
+            )
 
     def set_metadata(
         self,
@@ -209,6 +227,6 @@ class CacheContainer:
         """Reset in-memory cache to empty state."""
         self._cache = CacheData()
         self._role_pages.clear()
-        self._misc_cache.clear()
+        self._allowing_roles_cache.clear()
         self._loaded_version = None
         self._pending_reload = False

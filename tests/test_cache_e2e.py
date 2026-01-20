@@ -749,7 +749,7 @@ class TestInvalidationFlow:
         cache_data = build_complete_cache(sample_roles, sample_operations)
         get_cache_service().container.swap(cache_data)
         get_cache_service().container._role_pages["page1"] = [{"test": True}]
-        get_cache_service().container._allowing_roles_cache["key1"] = "value1"
+        get_cache_service().container._allowing_roles_cache["key1"] = []  # type: ignore[assignment]
         await get_cache_service().backend.save(get_cache_service().container.cache)
 
         # Verify everything exists
@@ -772,15 +772,15 @@ class TestInvalidationFlow:
         """Atomic swap clears allowing_roles_cache."""
         # Populate allowing_roles cache
         container = get_cache_service().container
-        container._allowing_roles_cache["roles_allowing_op:test"] = ["role1", "role2"]
-        assert container.get("roles_allowing_op:test") is not None
+        container._allowing_roles_cache["roles_allowing_op:test"] = []  # type: ignore[assignment]
+        assert container.get_allowing_roles("roles_allowing_op:test") is not None
 
         # Swap with new cache
         new_cache = CacheData(all_operations=sample_operations)
         container.swap(new_cache)
 
-        # Misc cache should be cleared
-        assert get_cache_service().container.get("roles_allowing_op:test") is None
+        # allowing_roles_cache should be cleared
+        assert get_cache_service().container.get_allowing_roles("roles_allowing_op:test") is None
 
 
 # =============================================================================
@@ -1240,7 +1240,7 @@ class TestInvalidationAfterDataChange:
         # Populate memory cache
         populate_cache_with_operations(get_cache_service().container, sample_operations)
         get_cache_service().container._role_pages["page1"] = [{"role_id": "test"}]
-        get_cache_service().container._allowing_roles_cache["key1"] = "value1"
+        get_cache_service().container._allowing_roles_cache["key1"] = []  # type: ignore[assignment]
 
         # Invalidate all
         await get_cache_service().invalidate_all()
@@ -1258,15 +1258,15 @@ class TestInvalidationAfterDataChange:
         """Verify atomic swap clears allowing_roles_cache."""
         # Populate allowing_roles cache
         container = get_cache_service().container
-        container._allowing_roles_cache["roles_allowing_op:test"] = [{"role_id": "test"}]
-        assert container.get("roles_allowing_op:test") is not None
+        container._allowing_roles_cache["roles_allowing_op:test"] = []  # type: ignore[assignment]
+        assert container.get_allowing_roles("roles_allowing_op:test") is not None
 
         # Atomic swap with new data
         new_cache = CacheData(all_operations=sample_operations)
         container.swap(new_cache)
 
-        # Misc cache should be cleared
-        assert get_cache_service().container.get("roles_allowing_op:test") is None
+        # allowing_roles_cache should be cleared
+        assert get_cache_service().container.get_allowing_roles("roles_allowing_op:test") is None
 
 
 # =============================================================================

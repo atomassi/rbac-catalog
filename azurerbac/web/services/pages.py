@@ -124,7 +124,7 @@ def get_roles_allowing_operation(
 
     # Check cache first
     cache_key = f"roles_allowing_op:{operation_name.lower()}:{is_data_action}"
-    if (cached := cache_resolved.get(cache_key)) is not None:
+    if (cached := cache_resolved.get_allowing_roles(cache_key)) is not None:
         return cached
 
     if not (all_roles := cache_resolved.get_all_roles()):
@@ -169,7 +169,7 @@ def get_roles_allowing_operation(
 
     allowing_roles.sort(key=lambda x: x.role_name.lower())
 
-    cache_resolved.set(cache_key, allowing_roles)
+    cache_resolved.set_allowing_roles(cache_key, allowing_roles)
     logger.debug(
         "allowing_roles computed: %d roles allow %s, cached as %s",
         len(allowing_roles),

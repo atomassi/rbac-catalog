@@ -20,18 +20,18 @@ class TestCacheContainer:
         cache = CacheContainer()
 
         # Test supported keys
-        cache.set("unique_providers", ["Provider1"])
-        assert cache.get("unique_providers") == ["Provider1"]
+        cache.set_allowing_roles("unique_providers", ["Provider1"])
+        assert cache.get_allowing_roles("unique_providers") == ["Provider1"]
 
-        cache.set("last_scan", {"timestamp": 123})
-        assert cache.get("last_scan") == {"timestamp": 123}
+        cache.set_allowing_roles("last_scan", {"timestamp": 123})
+        assert cache.get_allowing_roles("last_scan") == {"timestamp": 123}
 
     def test_cache_returns_none_for_missing_key(self):
         """Test that missing keys return None."""
         from azurerbac.cache import CacheContainer
 
         cache = CacheContainer()
-        result = cache.get("nonexistent")
+        result = cache.get_allowing_roles("nonexistent")
         assert result is None
 
     def test_cache_role_pages(self):
@@ -50,13 +50,13 @@ class TestCacheContainer:
         from azurerbac.cache import CacheContainer
 
         cache = CacheContainer()
-        cache.set("custom_key", ["value1"])
+        cache.set_allowing_roles("custom_key", ["value1"])
         cache.set_role_page("roles:page:1", [{"role_id": "test"}])
 
         cache.reset()
 
         # Misc cache cleared
-        assert cache.get("custom_key") is None
+        assert cache.get_allowing_roles("custom_key") is None
         # Role pages cleared
         assert cache.get_role_page("roles:page:1") is None
         # CacheData fields reset to defaults
@@ -246,8 +246,8 @@ class TestCacheSimplicity:
 
         cache = CacheContainer()
         # Should work without TTL parameter for supported keys
-        cache.set("unique_providers", ["Test"])
-        assert cache.get("unique_providers") == ["Test"]
+        cache.set_allowing_roles("unique_providers", ["Test"])
+        assert cache.get_allowing_roles("unique_providers") == ["Test"]
 
 
 class TestCacheContainerThreadSafety:
@@ -274,7 +274,7 @@ class TestCacheContainerThreadSafety:
         def writer():
             try:
                 for i in range(100):
-                    cache.set(f"test_{i}", f"value_{i}")
+                    cache.set_allowing_roles(f"test_{i}", [])  # type: ignore[arg-type]
             except Exception as e:
                 errors.append(e)
 
@@ -298,12 +298,12 @@ class TestCacheContainerInvalidateAll:
         from azurerbac.cache import CacheContainer
 
         cache = CacheContainer()
-        cache.set("key1", "value1")
+        cache.set_allowing_roles("key1", "value1")
         populate_cache_with_operations(cache, sample_operations)
 
         cache.reset()
 
-        assert cache.get("key1") is None
+        assert cache.get_allowing_roles("key1") is None
         assert len(cache.cache.all_operations) == 0
 
     def test_invalidate_all_clears_computed_caches(self, sample_operations):
@@ -429,10 +429,10 @@ class TestRolesAllowingOperationCaching:
             ),
         ]
         cache_key = "roles_allowing_op:microsoft.storage/read:False"
-        cache.set(cache_key, mock_result)
+        cache.set_allowing_roles(cache_key, mock_result)
 
         # Verify it's cached
-        cached = cache.get(cache_key)
+        cached = cache.get_allowing_roles(cache_key)
         assert cached is not None
         assert len(cached) == 2
         assert cached[0].role_name == "Reader"
@@ -458,22 +458,22 @@ class TestRolesAllowingOperationCaching:
             )
 
         # Cache multiple operation results with proper typed models
-        cache.set("roles_allowing_op:op1:False", [make_role("r1")])
-        cache.set("roles_allowing_op:op2:True", [make_role("r2")])
-        cache.set("roles_allowing_op:op3:False", [make_role("r3")])
+        cache.set_allowing_roles("roles_allowing_op:op1:False", [make_role("r1")])
+        cache.set_allowing_roles("roles_allowing_op:op2:True", [make_role("r2")])
+        cache.set_allowing_roles("roles_allowing_op:op3:False", [make_role("r3")])
 
         # Verify all are cached
-        assert cache.get("roles_allowing_op:op1:False") is not None
-        assert cache.get("roles_allowing_op:op2:True") is not None
-        assert cache.get("roles_allowing_op:op3:False") is not None
+        assert cache.get_allowing_roles("roles_allowing_op:op1:False") is not None
+        assert cache.get_allowing_roles("roles_allowing_op:op2:True") is not None
+        assert cache.get_allowing_roles("roles_allowing_op:op3:False") is not None
 
         # Invalidate all
         cache.reset()
 
         # Verify all are cleared
-        assert cache.get("roles_allowing_op:op1:False") is None
-        assert cache.get("roles_allowing_op:op2:True") is None
-        assert cache.get("roles_allowing_op:op3:False") is None
+        assert cache.get_allowing_roles("roles_allowing_op:op1:False") is None
+        assert cache.get_allowing_roles("roles_allowing_op:op2:True") is None
+        assert cache.get_allowing_roles("roles_allowing_op:op3:False") is None
 
     def test_different_operations_have_different_cache_keys(self):
         """Test that different operations use different cache keys."""
@@ -514,14 +514,14 @@ class TestRolesAllowingOperationCaching:
             condition_text=None,
         )
 
-        cache.set("roles_allowing_op:microsoft.storage/read:False", [storage_role])
-        cache.set("roles_allowing_op:microsoft.compute/read:False", [compute_role])
-        cache.set("roles_allowing_op:microsoft.storage/read:True", [data_role])
+        cache.set_allowing_roles("roles_allowing_op:microsoft.storage/read:False", [storage_role])
+        cache.set_allowing_roles("roles_allowing_op:microsoft.compute/read:False", [compute_role])
+        cache.set_allowing_roles("roles_allowing_op:microsoft.storage/read:True", [data_role])
 
         # Verify they're independent
-        storage_result = cache.get("roles_allowing_op:microsoft.storage/read:False")
-        compute_result = cache.get("roles_allowing_op:microsoft.compute/read:False")
-        data_result = cache.get("roles_allowing_op:microsoft.storage/read:True")
+        storage_result = cache.get_allowing_roles("roles_allowing_op:microsoft.storage/read:False")
+        compute_result = cache.get_allowing_roles("roles_allowing_op:microsoft.compute/read:False")
+        data_result = cache.get_allowing_roles("roles_allowing_op:microsoft.storage/read:True")
 
         assert storage_result[0].role_name == "storage-reader"
         assert compute_result[0].role_name == "compute-reader"
@@ -539,14 +539,16 @@ class TestCacheConsistencyOnRebuild:
 
         # Set up some initial cache entries via set_metadata for unique_providers
         cache.set_metadata(unique_providers=["Old Provider"])
-        cache.set("roles_allowing_op:old_op:False", [{"role": "old"}])
+        cache.set_allowing_roles("roles_allowing_op:old_op:False", [{"role": "old"}])
 
         # Invalidate all
         cache.reset()
 
         # Verify all entries are cleared (CacheData fields return defaults)
         assert cache.cache.unique_providers == []  # Default is empty list
-        assert cache.get("roles_allowing_op:old_op:False") is None  # misc_cache cleared
+        assert (
+            cache.get_allowing_roles("roles_allowing_op:old_op:False") is None
+        )  # misc_cache cleared
 
 
 class TestRoleCoverageRaceCondition:
@@ -597,8 +599,8 @@ class TestRoleCoverageRaceCondition:
         ]
 
         # Simulate the BUG scenario: all_role_jsons is set but coverage cache is empty
-        cache.set("all_role_jsons", mock_roles)
-        cache.set("all_operations", sample_operations)
+        cache.set_allowing_roles("all_role_jsons", mock_roles)
+        cache.set_allowing_roles("all_operations", sample_operations)
 
         # Clear the role coverage cache (simulating state after
         # _cache.clear() but before precompute)

@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 # Estimated ~10KB per entry ≈ 50MB max memory
 _ALLOWING_ROLES_CACHE_MAX_SIZE: Final[int] = 5000
 
-# Type alias for the misc cache value type
+# Type alias for the allowing_roles_cache value type
 RoleAllowingOperationList = list["RoleAllowingOperation"]
 
 
@@ -151,19 +151,13 @@ class CacheContainer:
     def get_role_pages_count(self) -> int:
         return len(self._role_pages)
 
-    def get(self, key: str) -> RoleAllowingOperationList | None:
+    def get_allowing_roles(self, key: str) -> RoleAllowingOperationList | None:
         result = self._allowing_roles_cache.get(key)
         track_cache_hit("allowing_roles", result is not None, key)
         return result
 
-    def set(self, key: str, value: RoleAllowingOperationList) -> None:
-        was_at_capacity = len(self._allowing_roles_cache) >= _ALLOWING_ROLES_CACHE_MAX_SIZE
+    def set_allowing_roles(self, key: str, value: RoleAllowingOperationList) -> None:
         self._allowing_roles_cache[key] = value
-        if was_at_capacity:
-            logger.debug(
-                "allowing_roles_cache at capacity (%d), LRU eviction occurred",
-                _ALLOWING_ROLES_CACHE_MAX_SIZE,
-            )
 
     def set_metadata(
         self,

@@ -193,7 +193,7 @@ class CacheData:
         return {op.name for op in self.all_operations}
 
     @cached_property
-    def ops_folded_to_orig(self) -> dict[str, str]:
+    def ops_lowered_to_orig(self) -> dict[str, str]:
         """Mapping from lowered operation name to original casing."""
         return {op.name.lower(): op.name for op in self.all_operations}
 

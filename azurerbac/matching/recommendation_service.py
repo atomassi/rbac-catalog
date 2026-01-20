@@ -112,7 +112,7 @@ class RoleRecommendationService:
 
     __slots__ = (
         "_cache",
-        "_ops_folded_to_orig",
+        "_ops_lowered_to_orig",
         "_plane_factory",
         "control_wildcard_ops",
         "data_wildcard_ops",
@@ -138,7 +138,7 @@ class RoleRecommendationService:
         self.requested_ops_data_flags = requested_ops_data_flags or {}
         self._cache = caches
 
-        self._ops_folded_to_orig: dict[str, str] = {
+        self._ops_lowered_to_orig: dict[str, str] = {
             op.name.lower(): op.name for op in all_operations
         }
 
@@ -160,7 +160,7 @@ class RoleRecommendationService:
 
     def restore_original_casing(self, operations: set[str]) -> list[str]:
         """Restore original casing for operation names."""
-        return [self._ops_folded_to_orig.get(op, op) for op in operations]
+        return [self._ops_lowered_to_orig.get(op, op) for op in operations]
 
     def get_cache_stats(self) -> CacheStats:
         """Get current cache entry counts for logging.
@@ -223,7 +223,7 @@ class RoleRecommendationService:
         with RoleCoverage.
         """
         is_wildcard = is_wildcard_pattern(op)
-        op_folded = op.lower()
+        op_lowered = op.lower()
 
         # Case 1: Explicit data action flag provided
         if op in self.requested_ops_data_flags:
@@ -233,7 +233,7 @@ class RoleRecommendationService:
                 if is_data_action
                 else (control_wildcards if is_wildcard else control)
             )
-            target_set.add(op_folded if not is_wildcard else op)
+            target_set.add(op_lowered if not is_wildcard else op)
             return
 
         # Case 2: Wildcard without explicit flag - check both planes
@@ -242,10 +242,10 @@ class RoleRecommendationService:
             return
 
         # Case 3: Explicit operation - classify by lookup (op_sets is lowered)
-        if op_folded in self.op_sets.all_data:
-            data.add(op_folded)
+        if op_lowered in self.op_sets.all_data:
+            data.add(op_lowered)
         else:
-            control.add(op_folded)
+            control.add(op_lowered)
 
     def _classify_wildcard_to_planes(
         self,
@@ -720,14 +720,14 @@ class RoleRecommendationService:
         for op in missing_ops:
             if not is_wildcard_pattern(op):
                 # Restore original casing for explicit operations
-                expanded.append(self._ops_folded_to_orig.get(op, op))
+                expanded.append(self._ops_lowered_to_orig.get(op, op))
                 total_count += 1
                 continue
 
             result = self._expand_wildcard_missing(ctx, op, classified, aggregator)
             if result.operations:
                 # Restore original casing for expanded operations
-                restored = [self._ops_folded_to_orig.get(op, op) for op in result.operations]
+                restored = [self._ops_lowered_to_orig.get(op, op) for op in result.operations]
                 self._extend_unique_sorted(expanded, restored)
                 total_count += result.total
             else:

@@ -100,13 +100,13 @@ class CacheContainer:
         """
         return self._cache.role_coverage.get(role_id)
 
-    def get_ops_folded_to_orig(self) -> dict[str, str]:
+    def get_ops_lowered_to_orig(self) -> dict[str, str]:
         """Get mapping from lowered operation name to original casing."""
-        return self._cache.ops_folded_to_orig
+        return self._cache.ops_lowered_to_orig
 
     def restore_operation_casing(self, ops: Iterable[str]) -> list[str]:
         """Restore original casing for lowered operation names."""
-        ops_map = self._cache.ops_folded_to_orig
+        ops_map = self._cache.ops_lowered_to_orig
         return [ops_map.get(op, op) for op in ops]
 
     def get_role_net_permissions(self, role_id: str) -> RoleNetPermissions | None:

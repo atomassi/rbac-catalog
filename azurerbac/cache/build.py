@@ -77,18 +77,18 @@ def _add_operations_for_patterns(
     all_ops: set[str],
     plane: Plane,
     pattern_match: dict[PatternCacheKey, set[str]],
-    ops_folded_to_orig: dict[str, str],
+    ops_lower_to_orig: dict[str, str],
 ) -> None:
     """Add operations matching patterns to destination set (lowered)."""
     for pattern in patterns:
         if pattern == "*":
-            dst.update(ops_folded_to_orig.keys())
+            dst.update(ops_lower_to_orig.keys())
         elif is_wildcard_pattern(pattern):
             dst.update(get_matching_operations(pattern, all_ops, plane, pattern_match))
         else:
-            pattern_folded = pattern.lower()
-            if pattern_folded in ops_folded_to_orig:
-                dst.add(pattern_folded)
+            pattern_lower = pattern.lower()
+            if pattern_lower in ops_lower_to_orig:
+                dst.add(pattern_lower)
 
 
 def _precompute_common_patterns(
@@ -122,8 +122,8 @@ def _compute_role_coverage(
     all_control_ops: set[str],
     all_data_ops: set[str],
     pattern_match: dict[PatternCacheKey, set[str]],
-    control_ops_folded_to_orig: dict[str, str],
-    data_ops_folded_to_orig: dict[str, str],
+    control_ops_lower_to_orig: dict[str, str],
+    data_ops_lower_to_orig: dict[str, str],
 ) -> RoleCoverage:
     """Compute effective operations (granted - excluded) for a role."""
     control_granted: set[str] = set()
@@ -138,7 +138,7 @@ def _compute_role_coverage(
             all_ops=all_control_ops,
             plane=Plane.CONTROL,
             pattern_match=pattern_match,
-            ops_folded_to_orig=control_ops_folded_to_orig,
+            ops_lower_to_orig=control_ops_lower_to_orig,
         )
         _add_operations_for_patterns(
             control_excluded,
@@ -146,7 +146,7 @@ def _compute_role_coverage(
             all_ops=all_control_ops,
             plane=Plane.CONTROL,
             pattern_match=pattern_match,
-            ops_folded_to_orig=control_ops_folded_to_orig,
+            ops_lower_to_orig=control_ops_lower_to_orig,
         )
         _add_operations_for_patterns(
             data_granted,
@@ -154,7 +154,7 @@ def _compute_role_coverage(
             all_ops=all_data_ops,
             plane=Plane.DATA,
             pattern_match=pattern_match,
-            ops_folded_to_orig=data_ops_folded_to_orig,
+            ops_lower_to_orig=data_ops_lower_to_orig,
         )
         _add_operations_for_patterns(
             data_excluded,
@@ -162,7 +162,7 @@ def _compute_role_coverage(
             all_ops=all_data_ops,
             plane=Plane.DATA,
             pattern_match=pattern_match,
-            ops_folded_to_orig=data_ops_folded_to_orig,
+            ops_lower_to_orig=data_ops_lower_to_orig,
         )
 
     return RoleCoverage(control_granted - control_excluded, data_granted - data_excluded)
@@ -239,8 +239,8 @@ def precompute_all(
     logger.debug("Operations: %d control, %d data plane", len(all_control_ops), len(all_data_ops))
 
     # Build lowered lookup sets for case-insensitive matching
-    control_ops_folded_to_orig = {op.lower(): op for op in all_control_ops}
-    data_ops_folded_to_orig = {op.lower(): op for op in all_data_ops}
+    control_ops_lower_to_orig = {op.lower(): op for op in all_control_ops}
+    data_ops_lower_to_orig = {op.lower(): op for op in all_data_ops}
 
     cache_ops_count = CacheOpsCount(len(all_control_ops), len(all_data_ops))
 
@@ -274,8 +274,8 @@ def precompute_all(
             all_control_ops,
             all_data_ops,
             pattern_match,
-            control_ops_folded_to_orig,
-            data_ops_folded_to_orig,
+            control_ops_lower_to_orig,
+            data_ops_lower_to_orig,
         )
         role_coverage[role.role_id] = coverage
         role_net_permissions[role.role_id] = RoleNetPermissions(

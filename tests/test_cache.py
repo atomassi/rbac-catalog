@@ -317,8 +317,8 @@ class TestLowerOptimization:
         ):
             assert r_no.matched_operations_count == r_with.matched_operations_count
 
-    def test_ops_folded_to_orig_restores_casing(self):
-        """Test that ops_folded_to_orig correctly restores original operation casing."""
+    def test_ops_lowered_to_orig_restores_casing(self):
+        """Test that ops_lowered_to_orig correctly restores original operation casing."""
         from azurerbac.cache.build import precompute_all
         from azurerbac.cache.container import CacheContainer
 
@@ -349,7 +349,7 @@ class TestLowerOptimization:
         container.swap(cache_data)
 
         # Verify mapping exists and is correct
-        mapping = container.get_ops_folded_to_orig()
+        mapping = container.get_ops_lowered_to_orig()
         assert (
             mapping["microsoft.storage/storageaccounts/read"]
             == "Microsoft.Storage/storageAccounts/read"

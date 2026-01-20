@@ -135,7 +135,7 @@ def get_roles_allowing_operation(
     )
 
     allowing_roles: list[RoleAllowingOperation] = []
-    operation_folded = operation_name.lower()
+    operation_lowered = operation_name.lower()
 
     for role in all_roles:
         analyzer = RolePermissionAnalyzer(role, cache=cache_resolved)
@@ -146,7 +146,7 @@ def get_roles_allowing_operation(
         control_effective, data_effective = cached_coverage
         operation_set = data_effective if is_data_action else control_effective
 
-        if not _operation_in_set(operation_folded, operation_set):
+        if not _operation_in_set(operation_lowered, operation_set):
             continue
 
         match_result = analyzer.find_matching_pattern(operation_name, is_data_action=is_data_action)

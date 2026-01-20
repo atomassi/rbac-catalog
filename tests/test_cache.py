@@ -623,23 +623,23 @@ class TestPreloadCache:
         assert cache.get_role_page(page_key) == roles
         assert cache.get_role_page("nonexistent") is None
 
-    def test_misc_cache(self):
-        """Test misc key-value cache."""
+    def test_allowing_roles_cache(self):
+        """Test allowing_roles key-value cache."""
         cache = CacheContainer()
 
-        cache.set("my_key", {"data": "value"})
-        assert cache.get("my_key") == {"data": "value"}
-        assert cache.get("missing") is None
+        cache.set_allowing_roles("my_key", [])  # type: ignore[arg-type]
+        assert cache.get_allowing_roles("my_key") == []
+        assert cache.get_allowing_roles("missing") is None
 
-    def test_swap_clears_misc_cache(self):
-        """Test swap clears misc_cache."""
+    def test_swap_clears_allowing_roles_cache(self):
+        """Test swap clears allowing_roles_cache."""
         cache = CacheContainer()
-        cache.set("my_key", "value")
+        cache.set_allowing_roles("my_key", [])  # type: ignore[arg-type]
 
         new_cache_data = CacheData()
         cache.swap(new_cache_data)
 
-        assert cache.get("my_key") is None
+        assert cache.get_allowing_roles("my_key") is None
 
     def test_swap_clears_role_pages(self):
         """Test swap clears role_pages cache."""

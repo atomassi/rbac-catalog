@@ -302,19 +302,19 @@ class TestGetRolesAllowingOperationServices:
                 condition_text=None,
             )
         ]
-        mock_app_cache.get.return_value = cached_roles
+        mock_app_cache.get_allowing_roles.return_value = cached_roles
 
         result = get_roles_allowing_operation("Microsoft.Storage/read", False, mock_app_cache)
 
         assert result == cached_roles
-        mock_app_cache.get.assert_called_once()
+        mock_app_cache.get_allowing_roles.assert_called_once()
 
     def test_finds_roles_by_operation(self):
         """Test finding roles that allow an operation."""
         from azurerbac.web.services.pages import get_roles_allowing_operation
 
         mock_app_cache = MagicMock()
-        mock_app_cache.get.return_value = None  # Cache miss
+        mock_app_cache.get_allowing_roles.return_value = None  # Cache miss
 
         # Mock role data using RoleDefinition
         roles = [
@@ -349,7 +349,7 @@ class TestGetRolesAllowingOperationServices:
         from azurerbac.web.services.pages import get_roles_allowing_operation
 
         mock_app_cache = MagicMock()
-        mock_app_cache.get.return_value = None
+        mock_app_cache.get_allowing_roles.return_value = None
 
         roles = [
             RoleDefinition.model_validate(
@@ -381,7 +381,7 @@ class TestGetRolesAllowingOperationServices:
         from azurerbac.web.services.pages import get_roles_allowing_operation
 
         mock_app_cache = MagicMock()
-        mock_app_cache.get.return_value = None
+        mock_app_cache.get_allowing_roles.return_value = None
 
         # Need at least one role for caching to happen
         roles = [
@@ -405,8 +405,8 @@ class TestGetRolesAllowingOperationServices:
         get_roles_allowing_operation("Microsoft.Storage/read", False, mock_app_cache)
 
         # Should cache the result
-        mock_app_cache.set.assert_called_once()
-        cache_key = mock_app_cache.set.call_args[0][0]
+        mock_app_cache.set_allowing_roles.assert_called_once()
+        cache_key = mock_app_cache.set_allowing_roles.call_args[0][0]
         assert "roles_allowing_op:" in cache_key
 
 

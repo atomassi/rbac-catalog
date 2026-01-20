@@ -19,7 +19,11 @@ from azurerbac.web.services.feeds import (
 router = APIRouter(tags=["feeds"])
 
 
-@router.get("/feeds/changelog.atom", response_class=Response)
+@router.get(
+    "/feeds/changelog.atom",
+    response_class=Response,
+    responses={200: {"content": {"application/atom+xml": {}}}},
+)
 async def changelog_atom_feed(
     request: Request,
     deps: Annotated[BaseDeps, Depends(get_api_deps)],
@@ -42,7 +46,11 @@ async def changelog_atom_feed(
     )
 
 
-@router.get("/feeds/changelog.rss", response_class=Response)
+@router.get(
+    "/feeds/changelog.rss",
+    response_class=Response,
+    responses={200: {"content": {"application/rss+xml": {}}}},
+)
 async def changelog_rss_feed(
     request: Request,
     deps: Annotated[BaseDeps, Depends(get_api_deps)],

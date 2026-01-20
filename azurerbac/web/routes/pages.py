@@ -7,7 +7,7 @@ import uuid
 from typing import Annotated
 from urllib.parse import unquote
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from azurerbac.core.enums import SortOrder
@@ -45,8 +45,16 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["pages"])
 
 
-@router.get("/roles/{role_id}", response_class=HTMLResponse, name="role_detail")
-@router.get("/roles/{role_id}/{slug}", response_class=HTMLResponse, name="role_detail_slug")
+@router.get(
+    "/roles/{role_id}",
+    response_class=HTMLResponse,
+    name="role_detail",
+)
+@router.get(
+    "/roles/{role_id}/{slug}",
+    response_class=HTMLResponse,
+    name="role_detail_slug",
+)
 async def role_detail(
     request: Request,
     role_id: uuid.UUID,
@@ -71,7 +79,7 @@ async def role_detail(
     )
 
     if result.cached_role is None:
-        return deps.templates.TemplateResponse(request, "404.html", status_code=404)
+        raise HTTPException(status_code=404)
 
     role = result.cached_role
     role_def = result.definition
@@ -215,27 +223,7 @@ async def operation_detail(
     operation = deps.app_cache.cache.ops_by_name_lower.get(decoded_name.lower())
 
     if not operation:
-        # Return 404-like response
-        return deps.templates.TemplateResponse(
-            request,
-            "operation_detail.html",
-            {
-                "request": request,
-                "operation": {
-                    "name": decoded_name,
-                    "description": None,
-                    "display_name": None,
-                    "is_data_action": False,
-                },
-                "allowing_roles": [],
-                "q": q,
-                "page": page,
-                "limit": limit,
-                "is_data_action": is_data_action_filter,
-                "provider": provider,
-            },
-            status_code=404,
-        )
+        raise HTTPException(status_code=404)
 
     # Find roles that allow this operation
     allowing_roles = get_roles_allowing_operation(operation.name, operation.is_data_action)

@@ -20,6 +20,7 @@ from azurerbac.core.constants import DEFAULT_SEARCH_LIMIT
 from azurerbac.core.patterns import is_wildcard_pattern
 from azurerbac.matching import recommend_roles
 from azurerbac.web.constants import (
+    AI_RATE_LIMIT_PER_MINUTE,
     MAX_QUERY_LENGTH,
     MAX_SEARCH_LIMIT,
     MIN_AI_QUERY_CHARS,
@@ -143,7 +144,7 @@ async def api_recommend_roles(
 
 
 @router.post("/ai-recommend", response_model=AIRecommendResponse)
-@limiter.limit("10/minute")
+@limiter.limit(f"{AI_RATE_LIMIT_PER_MINUTE}/minute")
 async def ai_recommend_endpoint(
     request: Request,
     body: AIRecommendRequest,

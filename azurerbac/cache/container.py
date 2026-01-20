@@ -140,7 +140,7 @@ class CacheContainer:
 
     def get(self, key: str) -> Any:
         result = self._misc_cache.get(key)
-        track_cache_hit("misc", result is not None, key)
+        track_cache_hit("allowing_roles", result is not None, key)
         return result
 
     def set(self, key: str, value: Any) -> None:

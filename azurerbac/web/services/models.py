@@ -235,9 +235,13 @@ class RolePermissionAnalyzer:
         return self._cache.get_role_coverage(self.role_id)
 
     def compute_coverage(self, all_operations: list[OperationData]) -> RoleCoverage:
-        """Compute coverage from operation list."""
-        all_control_ops = {op.name for op in all_operations if not op.is_data_action}
-        all_data_ops = {op.name for op in all_operations if op.is_data_action}
+        """Compute coverage from operation list.
+
+        Note: Operations are lowercased to match the cache behavior.
+        restore_operation_casing() expects lowercased operation names.
+        """
+        all_control_ops = {op.name.lower() for op in all_operations if not op.is_data_action}
+        all_data_ops = {op.name.lower() for op in all_operations if op.is_data_action}
         return self.raw.compute_effective(all_control_ops, all_data_ops)
 
     def get_effective_permissions(

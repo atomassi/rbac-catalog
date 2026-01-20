@@ -230,6 +230,56 @@ class TestComputeRoleEffectivePermissionsServices:
         assert result.control_plane_count == 1
         assert "Microsoft.Storage/storageAccounts/read" in result.control_plane_actions
 
+    def test_cache_miss_lowercases_operations_for_restore(self):
+        """Test that cache miss path lowercases operations for restore_operation_casing.
+
+        This is a regression test for a bug where compute_coverage passed operations
+        with original casing, but restore_operation_casing expected lowercased names.
+        """
+        from azurerbac.web.services.pages import compute_role_effective_permissions
+
+        role = make_role_definition(
+            "Test Role",
+            "test-role-id",
+            actions=["Microsoft.Storage/storageAccounts/read"],
+        )
+
+        # Operations with mixed casing (as returned by Azure API)
+        all_operations = [
+            OperationData(name="Microsoft.Storage/storageAccounts/read", is_data_action=False),
+            OperationData(name="Microsoft.Compute/virtualMachines/read", is_data_action=False),
+        ]
+
+        mock_app_cache = MagicMock()
+        # Cache miss - forces manual computation
+        mock_app_cache.get_role_coverage.return_value = None
+
+        # Track what restore_operation_casing receives
+        received_ops: list[list[str]] = []
+
+        def track_restore(ops):
+            received_ops.append(list(ops))
+            # Simulate the mapping
+            ops_map = {
+                "microsoft.storage/storageaccounts/read": "Microsoft.Storage/storageAccounts/read",
+            }
+            return [ops_map.get(op, op) for op in ops]
+
+        mock_app_cache.restore_operation_casing.side_effect = track_restore
+
+        result = compute_role_effective_permissions(role, all_operations, mock_app_cache)
+
+        # Verify restore_operation_casing was called with LOWERCASED operations
+        assert len(received_ops) == 2  # control + data
+        control_ops_received = received_ops[0]
+        assert "microsoft.storage/storageaccounts/read" in control_ops_received
+        # Should NOT contain original casing
+        assert "Microsoft.Storage/storageAccounts/read" not in control_ops_received
+
+        # Final result should have restored casing
+        assert result.control_plane_count == 1
+        assert "Microsoft.Storage/storageAccounts/read" in result.control_plane_actions
+
 
 class TestGetRolesAllowingOperationServices:
     """Tests for get_roles_allowing_operation function in services module."""

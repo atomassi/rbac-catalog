@@ -22,6 +22,7 @@ from azurerbac.matching.models import (
 )
 
 if TYPE_CHECKING:
+    from azurerbac.analytics.models import AnalyticsData
     from azurerbac.azure.models import OperationData, RoleDefinition
 
 CACHE_VERSION: Final[str] = "v7"
@@ -186,6 +187,9 @@ class CacheData:
     wildcard_count: dict[PatternCacheKey, int] = field(default_factory=dict)
     operations_by_prefix_computed: dict[Plane, dict[str, set[str]]] = field(default_factory=dict)
     cache_ops_count: CacheOpsCount = field(default_factory=lambda: CacheOpsCount(0, 0))
+
+    # Pre-computed analytics data (for dashboard)
+    analytics: AnalyticsData | None = None
 
     @cached_property
     def ops_names_set(self) -> set[str]:

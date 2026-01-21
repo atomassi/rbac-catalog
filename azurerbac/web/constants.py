@@ -54,7 +54,7 @@ CSP_HEADER: Final = (
     "style-src 'self' 'unsafe-inline' fonts.googleapis.com; "
     "font-src 'self' fonts.gstatic.com; "
     "img-src 'self' data:; "
-    "connect-src 'self' cloudflareinsights.com; "
+    "connect-src 'self' cdn.jsdelivr.net cloudflareinsights.com; "
     "frame-ancestors 'none'; "
     "base-uri 'self'; "
     "form-action 'self'"

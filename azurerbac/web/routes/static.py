@@ -187,6 +187,13 @@ async def sitemap_xml(request: Request) -> Response:
     <changefreq>weekly</changefreq>
     <priority>0.85</priority>
   </url>""",
+        # Analytics page - updated weekly
+        f"""  <url>
+    <loc>{SITE_URL}/analytics</loc>
+    <lastmod>{today}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>""",
         # About page - informational
         f"""  <url>
     <loc>{SITE_URL}/about</loc>

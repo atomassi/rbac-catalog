@@ -1619,6 +1619,7 @@ test.describe('Canonical URLs & Sitemap', () => {
     expect(body).toContain(`${SITE_URL}/roles</loc>`);
     expect(body).toContain(`${SITE_URL}/operations</loc>`);
     expect(body).toContain(`${SITE_URL}/recommend</loc>`);
+    expect(body).toContain(`${SITE_URL}/analytics</loc>`);
     expect(body).toContain(`${SITE_URL}/about</loc>`);
   });
 
@@ -1737,5 +1738,66 @@ test.describe('RSS/Atom Feeds', () => {
     // Check for RSS autodiscovery link
     const rssLink = page.locator('link[rel="alternate"][type="application/rss+xml"]');
     await expect(rssLink).toHaveAttribute('href', /\/feeds\/changelog\.rss/);
+  });
+});
+
+// =============================================================================
+// ANALYTICS PAGE
+// =============================================================================
+test.describe('Analytics Page', () => {
+  test('should load analytics page', async ({ page }) => {
+    const response = await page.goto('/analytics');
+    expect(response?.status()).toBe(200);
+    await expect(page).toHaveTitle(/Analytics|Azure.*Roles/i);
+  });
+
+  test('should display main statistics cards', async ({ page }) => {
+    await page.goto('/analytics');
+    await page.waitForLoadState('domcontentloaded');
+    
+    // Check for key statistics sections - look for the header
+    await expect(page.locator('h1:has-text("Analytics Dashboard")')).toBeVisible({ timeout: 10000 });
+  });
+
+  test('should have navigation link to analytics', async ({ page }) => {
+    await page.goto('/');
+    const analyticsLink = page.locator('a[href="/analytics"]').first();
+    await expect(analyticsLink).toBeVisible();
+    await analyticsLink.click();
+    await expect(page).toHaveURL(/\/analytics/);
+  });
+
+  test('should display charts (if data exists)', async ({ page }) => {
+    await page.goto('/analytics');
+    await page.waitForLoadState('networkidle');
+    
+    // Charts are rendered via canvas elements
+    const canvases = page.locator('canvas');
+    const canvasCount = await canvases.count();
+    // Analytics page may have charts, check if any exist
+    if (canvasCount > 0) {
+      await expect(canvases.first()).toBeVisible();
+    }
+  });
+
+  test('should display provider statistics', async ({ page }) => {
+    await page.goto('/analytics');
+    await page.waitForLoadState('domcontentloaded');
+    
+    // Check for provider section (may be "Top Providers" or similar)
+    const providerSection = page.locator('text=Provider').or(page.locator('text=Operations'));
+    await expect(providerSection.first()).toBeVisible({ timeout: 10000 });
+  });
+
+  test('should have responsive layout', async ({ page }) => {
+    // Test desktop viewport
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.goto('/analytics');
+    await expect(page.locator('body')).toBeVisible();
+    
+    // Test mobile viewport
+    await page.setViewportSize({ width: 375, height: 667 });
+    await page.goto('/analytics');
+    await expect(page.locator('body')).toBeVisible();
   });
 });

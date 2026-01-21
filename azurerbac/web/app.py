@@ -54,6 +54,7 @@ from azurerbac.web.middleware import (
     add_security_headers,
     redirect_old_domain,
 )
+from azurerbac.web.routes import analytics as analytics_routes
 from azurerbac.web.routes import api as api_routes
 from azurerbac.web.routes import dashboard as dashboard_routes
 from azurerbac.web.routes import feeds as feeds_routes
@@ -221,6 +222,9 @@ app.include_router(health_routes.router)
 # Page routes (/roles/{id}, /operations, /recommend, /about)
 # Uses FastAPI dependency injection
 app.include_router(pages_routes.router)
+
+# Analytics routes (/analytics)
+app.include_router(analytics_routes.router)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Static Files and Middleware

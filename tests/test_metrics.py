@@ -577,10 +577,6 @@ class TestWorkerOperationContext:
 
         from azurerbac.telemetry.tracing import WorkerOperationContext
 
-        # Mock ImportError when opentelemetry is imported
-        def raise_import_error(*args, **kwargs):
-            raise ImportError("No module named 'opentelemetry'")
-
         with (
             patch.dict("sys.modules", {"opentelemetry": None}),
             patch(

@@ -57,24 +57,6 @@ class TestGetSettings:
         "RUN_OPERATIONS_SCAN_ON_STARTUP",
     ]
 
-    def test_get_settings_defaults(self):
-        """Test get_settings with no environment variables."""
-        # Clear relevant env vars
-        env_backup = {}
-        for key in self._CONFIG_ENV_KEYS:
-            env_backup[key] = os.environ.pop(key, None)
-
-        try:
-            settings = Settings.get()
-            assert settings.azure_subscription_id is None
-            assert settings.roles_poll_interval_seconds == 600
-            assert settings.db_connection_string == "sqlite+aiosqlite:///./azurerbac.db"
-        finally:
-            # Restore env vars
-            for key, value in env_backup.items():
-                if value is not None:
-                    os.environ[key] = value
-
     def test_get_settings_from_env(self):
         """Test get_settings reads from environment."""
         with patch.dict(

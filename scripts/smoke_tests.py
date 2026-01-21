@@ -48,6 +48,7 @@ PAGES_WITH_CONTENT: Final = [
     ("Operations list", "/operations", ["Azure Operations", "Granted By"]),
     ("Recommend page", "/recommend", ["Find Least-Privilege"]),
     ("About page", "/about", ["Azure RBAC"]),
+    ("Analytics page", "/analytics", ["Analytics"]),
     (
         "Role detail (Reader)",
         "/roles/acdd72a7-3385-48ef-bd42-f606fba81ae7",

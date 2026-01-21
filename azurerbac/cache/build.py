@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import time
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -30,6 +31,9 @@ from azurerbac.matching.models import (
     RoleCoverage,
     RoleNetPermissions,
 )
+
+if TYPE_CHECKING:
+    from azurerbac.analytics.models import AnalyticsData
 
 logger = logging.getLogger(__name__)
 
@@ -190,6 +194,7 @@ def precompute_all(
     all_change_events: list[CachedChangeEvent] | None = None,
     last_scan: datetime | None = None,
     first_scan: datetime | None = None,
+    analytics: AnalyticsData | None = None,
 ) -> CacheData:
     """Pre-compute ALL caches and return complete CacheData.
 
@@ -208,6 +213,7 @@ def precompute_all(
         all_change_events: Optional list of change events.
         last_scan: Optional timestamp.
         first_scan: Optional timestamp.
+        analytics: Optional pre-computed analytics data.
 
     Returns:
         Complete CacheData with all computed fields.
@@ -311,6 +317,7 @@ def precompute_all(
         wildcard_count=wildcard_count,
         operations_by_prefix_computed=operations_by_prefix_computed,
         cache_ops_count=cache_ops_count,
+        analytics=analytics,
     )
 
     elapsed = time.time() - start
@@ -425,7 +432,7 @@ async def build_from_db(session: AsyncSession) -> CacheData:
         operations_hash=operations_hash,
     )
 
-    # Precompute all caches and build complete CacheData
+    # Precompute all caches (without analytics yet)
     cache_data = precompute_all(
         role_definitions,
         all_operations,
@@ -435,6 +442,19 @@ async def build_from_db(session: AsyncSession) -> CacheData:
         last_scan=truncate_microseconds(last_scan),
         first_scan=truncate_microseconds(first_scan),
     )
+
+    # Build analytics data (now we have role_net_permissions available)
+    from azurerbac.analytics.service import AnalyticsService
+
+    analytics_service = AnalyticsService()
+    all_ops_lower = {op.name.lower() for op in all_operations}
+    analytics_data = await analytics_service.build_from_db(
+        session,
+        all_ops_lower,
+        roles_by_id=roles_by_id,
+        role_net_permissions=cache_data.role_net_permissions,
+    )
+    cache_data.analytics = analytics_data
 
     logger.info(
         f"Cache built: {len(active_roles)} roles, {len(all_operations)} operations, "

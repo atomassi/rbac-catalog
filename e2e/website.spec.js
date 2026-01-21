@@ -604,26 +604,29 @@ test.describe('Role Detail Page', () => {
   });
 
   test('should not show Copy/Download buttons for deleted role', async ({ page }) => {
-    // This test requires a deleted role in the database
-    // Skip if no deleted roles exist
-    await page.goto('/recent');
-    const deletedBadge = page.locator('text=Deleted').first();
-    const deletedRoleCount = await deletedBadge.count();
+    // Navigate to recent page filtered by deleted events
+    await page.goto('/recent?event_type=deleted');
+    await page.waitForLoadState('domcontentloaded');
     
-    if (deletedRoleCount > 0) {
-      // Click on a deleted role
-      const deletedRow = page.locator('tr:has-text("Deleted")').first();
-      const roleLink = deletedRow.locator('a[href^="/roles/"]').first();
-      await roleLink.click();
-      await page.waitForLoadState('domcontentloaded');
-      
-      // Copy/Download buttons should not be visible
-      const copyJsonButton = page.locator('button[title="Copy JSON"]');
-      const downloadJsonButton = page.locator('button[title="Download JSON"]');
-      
-      await expect(copyJsonButton).not.toBeVisible();
-      await expect(downloadJsonButton).not.toBeVisible();
+    // Find a role link on the page (deleted roles still have links to their detail page)
+    const roleLink = page.locator('a[href^="/roles/"]').first();
+    const hasDeletedRole = await roleLink.count() > 0;
+    
+    // Skip if no deleted roles exist in this database
+    if (!hasDeletedRole) {
+      test.skip();
+      return;
     }
+    
+    await roleLink.click();
+    await page.waitForLoadState('domcontentloaded');
+    
+    // Copy/Download buttons should not be visible for deleted roles
+    const copyJsonButton = page.locator('button[title="Copy JSON"]');
+    const downloadJsonButton = page.locator('button[title="Download JSON"]');
+    
+    await expect(copyJsonButton).not.toBeVisible();
+    await expect(downloadJsonButton).not.toBeVisible();
   });
 });
 
@@ -1619,6 +1622,7 @@ test.describe('Canonical URLs & Sitemap', () => {
     expect(body).toContain(`${SITE_URL}/roles</loc>`);
     expect(body).toContain(`${SITE_URL}/operations</loc>`);
     expect(body).toContain(`${SITE_URL}/recommend</loc>`);
+    expect(body).toContain(`${SITE_URL}/analytics</loc>`);
     expect(body).toContain(`${SITE_URL}/about</loc>`);
   });
 
@@ -1737,5 +1741,99 @@ test.describe('RSS/Atom Feeds', () => {
     // Check for RSS autodiscovery link
     const rssLink = page.locator('link[rel="alternate"][type="application/rss+xml"]');
     await expect(rssLink).toHaveAttribute('href', /\/feeds\/changelog\.rss/);
+  });
+});
+
+// =============================================================================
+// ANALYTICS PAGE
+// =============================================================================
+test.describe('Analytics Page', () => {
+  test('should load analytics page', async ({ page }) => {
+    const response = await page.goto('/analytics');
+    expect(response?.status()).toBe(200);
+    await expect(page).toHaveTitle(/Analytics|Azure.*Roles/i);
+  });
+
+  test('should display main statistics cards', async ({ page }) => {
+    await page.goto('/analytics');
+    await page.waitForLoadState('domcontentloaded');
+    
+    // Check for key statistics sections - look for the header
+    await expect(page.locator('h1:has-text("Analytics Dashboard")')).toBeVisible({ timeout: 10000 });
+  });
+
+  test('should have navigation link to analytics', async ({ page }) => {
+    await page.goto('/');
+    const analyticsLink = page.locator('a[href="/analytics"]').first();
+    await expect(analyticsLink).toBeVisible();
+    await analyticsLink.click();
+    await expect(page).toHaveURL(/\/analytics/);
+  });
+
+  test('should display charts (if data exists)', async ({ page }) => {
+    await page.goto('/analytics');
+    await page.waitForLoadState('networkidle');
+    
+    // Charts are rendered via canvas elements
+    const canvases = page.locator('canvas');
+    const canvasCount = await canvases.count();
+    // Analytics page may have charts, check if any exist
+    if (canvasCount > 0) {
+      await expect(canvases.first()).toBeVisible();
+    }
+  });
+
+  test('should display provider statistics', async ({ page }) => {
+    await page.goto('/analytics');
+    await page.waitForLoadState('domcontentloaded');
+    
+    // Check for provider section (may be "Top Providers" or similar)
+    const providerSection = page.locator('text=Provider').or(page.locator('text=Operations'));
+    await expect(providerSection.first()).toBeVisible({ timeout: 10000 });
+  });
+
+  test('should have responsive layout', async ({ page }) => {
+    // Test desktop viewport
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.goto('/analytics');
+    await expect(page.locator('body')).toBeVisible();
+    
+    // Test mobile viewport
+    await page.setViewportSize({ width: 375, height: 667 });
+    await page.goto('/analytics');
+    await expect(page.locator('body')).toBeVisible();
+  });
+
+  test('clicking role from analytics sets back context', async ({ page }) => {
+    await page.goto('/analytics');
+    await page.waitForLoadState('networkidle');
+    
+    // Use a link from "Top 10 Roles" section - these come from cache and always exist
+    // (Recently Created/Deleted may reference roles no longer in the database)
+    const section = page.locator('text=Top 10 Roles by Effective').first();
+    await section.scrollIntoViewIfNeeded();
+    
+    const roleLink = section.locator('xpath=ancestor::div[contains(@class,"bg-white")]').locator('a[href^="/roles/"]').first();
+    
+    if (await roleLink.count() === 0) {
+      test.skip();
+      return;
+    }
+    
+    await roleLink.click();
+    await page.waitForLoadState('networkidle');
+    
+    // Should be on a role page
+    await expect(page).toHaveURL(/\/roles\//);
+    
+    // Back button should say "Back to Analytics"
+    const backLabel = page.locator('#back-label');
+    await expect(backLabel).toBeVisible();
+    await expect(backLabel).toContainText(/Back to Analytics/i);
+    
+    // Verify clicking back returns to analytics
+    await page.locator('#back-button').click();
+    await page.waitForLoadState('networkidle');
+    await expect(page).toHaveURL(/\/analytics/);
   });
 });

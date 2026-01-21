@@ -1,0 +1,858 @@
+<!doctype html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Prevent dark mode flash -->
+    <script>
+    (function() {
+        var stored = localStorage.getItem('darkMode');
+        var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        var hour = new Date().getHours();
+        var isNight = hour >= 19 || hour < 7;
+        if (stored === 'true' || (stored === null && (prefersDark || isNight))) {
+            document.documentElement.classList.add('dark');
+        }
+    })();
+    </script>
+    <title>Analytics - Azure RBAC Catalog</title>
+    <meta name="description" content="Analytics dashboard for Azure RBAC role changes. Track additions, updates, and deletions over time. Monitor Microsoft's RBAC evolution.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="{{ site_url }}/analytics">
+    
+    <!-- Open Graph -->
+    <meta property="og:title" content="Analytics - Azure RBAC Catalog">
+    <meta property="og:description" content="Analytics dashboard for Azure RBAC role changes. Track additions, updates, and deletions over time.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="{{ site_url }}/analytics">
+    <meta property="og:site_name" content="Azure RBAC Catalog">
+    <meta property="og:image" content="{{ site_url }}/static/images/og-image.png">
+    <meta property="og:image:type" content="image/png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:locale" content="en_US">
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Analytics - Azure RBAC Catalog">
+    <meta name="twitter:description" content="Analytics dashboard for Azure RBAC role changes. Track additions, updates, and deletions over time.">
+    <meta name="twitter:image" content="{{ site_url }}/static/images/og-image.png">
+    
+    <!-- Breadcrumb Schema -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+            {
+                "@type": "ListItem",
+                "position": 1,
+                "name": "Home",
+                "item": "{{ site_url }}/"
+            },
+            {
+                "@type": "ListItem",
+                "position": 2,
+                "name": "Analytics",
+                "item": "{{ site_url }}/analytics"
+            }
+        ]
+    }
+    </script>
+    
+    <!-- Favicon -->
+    <link rel="icon" href="/favicon.ico" sizes="any">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192.png">
+    <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48.png">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    
+    <!-- Sitemap reference -->
+    <link rel="sitemap" type="application/xml" href="/sitemap.xml">
+
+    <!-- Preload critical resources -->
+    <link rel="preload" href="/static/css/tailwind.min.css" as="style">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    
+    <link rel="stylesheet" href="/static/css/tailwind.min.css">
+    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"></noscript>
+    
+    <!-- Chart.js for visualizations -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    
+    <!-- Alpine.js for interactivity -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <style>
+        [x-cloak] { display: none !important; }
+    </style>
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .gradient-bg {
+            background: linear-gradient(135deg, #0078d4 0%, #005a9e 50%, #003d6a 100%);
+        }
+        .stat-card {
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.15);
+        }
+        .chart-container {
+            position: relative;
+            height: 300px;
+        }
+        @media (max-width: 640px) {
+            .chart-container {
+                height: 250px;
+            }
+        }
+    </style>
+</head>
+<body class="h-full bg-slate-50 dark:bg-slate-900 transition-colors duration-200">
+    <script src="/static/js/nav-state.js" defer></script>
+    <div class="min-h-full">
+        <!-- Header with gradient -->
+        <div class="gradient-bg">
+            <nav class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex items-center justify-between h-16 sm:h-20">
+                    <!-- Logo - hidden on mobile to save space -->
+                    <div class="hidden sm:flex items-center">
+                        <a href="/" class="flex-shrink-0 flex items-center group">
+                            <div class="bg-white/20 backdrop-blur-sm rounded-xl p-2 group-hover:bg-white/30 transition-colors">
+                                <svg class="h-7 w-7 sm:h-8 sm:w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                                </svg>
+                            </div>
+                            <div class="ml-3">
+                                <span class="text-lg sm:text-xl font-bold text-white group-hover:text-azure-100 transition-colors">Azure RBAC Catalog</span>
+                            </div>
+                        </a>
+                    </div>
+                    <!-- Mobile: Show small logo -->
+                    <div class="sm:hidden flex items-center">
+                        <a href="/" class="flex items-center group" aria-label="Azure RBAC Catalog Home">
+                            <div class="bg-white/20 backdrop-blur-sm rounded-lg p-1.5 group-hover:bg-white/30 transition-colors">
+                                <svg class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                                </svg>
+                            </div>
+                        </a>
+                    </div>
+                    <!-- Navigation tabs -->
+                    <div class="flex items-center">
+                        <div class="flex items-center bg-white/10 backdrop-blur-sm rounded-2xl p-1.5 sm:p-2 gap-1 sm:gap-2">
+                            <a href="/recent" class="ai-nav-link group flex items-center justify-center px-3 sm:px-4 py-2.5 sm:py-2.5 rounded-xl text-xs sm:text-base sm:w-[133px] font-semibold transition-all duration-200 text-white hover:bg-white/20" aria-label="Recent Changes">
+                                <svg class="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                <span class="hidden sm:inline ml-2">Recent</span>
+                            </a>
+                            <a href="/roles" class="ai-nav-link group flex items-center justify-center px-3 sm:px-4 py-2.5 sm:py-2.5 rounded-xl text-xs sm:text-base sm:w-[133px] font-semibold transition-all duration-200 text-white hover:bg-white/20" aria-label="Browse Roles">
+                                <svg class="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 12h16.5m-16.5 3.75h16.5M3.75 19.5h16.5M5.625 4.5h12.75a1.875 1.875 0 010 3.75H5.625a1.875 1.875 0 010-3.75z" />
+                                </svg>
+                                <span class="hidden sm:inline ml-2">Roles</span>
+                            </a>
+                            <a href="/operations" class="ai-nav-link group flex items-center justify-center px-3 sm:px-4 py-2.5 sm:py-2.5 rounded-xl text-xs sm:text-base sm:w-[133px] font-semibold transition-all duration-200 text-white hover:bg-white/20" aria-label="Browse Operations">
+                                <svg class="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M10.343 3.94c.09-.542.56-.94 1.11-.94h1.093c.55 0 1.02.398 1.11.94l.149.894c.07.424.384.764.78.93.398.164.855.142 1.205-.108l.737-.527a1.125 1.125 0 011.45.12l.773.774c.39.389.44 1.002.12 1.45l-.527.737c-.25.35-.272.806-.107 1.204.165.397.505.71.93.78l.893.15c.543.09.94.559.94 1.109v1.094c0 .55-.397 1.02-.94 1.11l-.894.149c-.424.07-.764.383-.929.78-.165.398-.143.854.107 1.204l.527.738c.32.447.269 1.06-.12 1.45l-.774.773a1.125 1.125 0 01-1.449.12l-.738-.527c-.35-.25-.806-.272-1.204-.107-.397.165-.71.505-.78.929l-.15.894c-.09.542-.56.94-1.11.94h-1.094c-.55 0-1.019-.398-1.11-.94l-.148-.894c-.071-.424-.384-.764-.781-.93-.398-.164-.854-.142-1.204.108l-.738.527c-.447.32-1.06.269-1.45-.12l-.773-.774a1.125 1.125 0 01-.12-1.45l.527-.737c.25-.35.273-.806.108-1.204-.165-.397-.506-.71-.93-.78l-.894-.15c-.542-.09-.94-.56-.94-1.109v-1.094c0-.55.398-1.02.94-1.11l.894-.149c.424-.07.765-.383.93-.78.165-.398.143-.854-.108-1.204l-.526-.738a1.125 1.125 0 01.12-1.45l.773-.773a1.125 1.125 0 011.45-.12l.737.527c.35.25.807.272 1.204.107.397-.165.71-.505.78-.929l.15-.894z" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                </svg>
+                                <span class="hidden sm:inline ml-2">Operations</span>
+                            </a>
+                            <a href="/recommend" class="ai-nav-link group flex items-center justify-center px-3 sm:px-4 py-2.5 sm:py-2.5 rounded-xl text-xs sm:text-base sm:w-[133px] font-semibold transition-all duration-200 text-white hover:bg-white/20" aria-label="Role Recommender">
+                                <svg class="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z" />
+                                </svg>
+                                <span class="hidden sm:inline ml-2">Recommend</span>
+                            </a>
+                            <a href="/analytics" class="ai-nav-link group flex items-center justify-center px-3 sm:px-4 py-2.5 sm:py-2.5 rounded-xl text-xs sm:text-base sm:w-[133px] font-semibold transition-all duration-200 bg-white text-azure-700 shadow-md" aria-label="Analytics">
+                                <svg class="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
+                                </svg>
+                                <span class="hidden sm:inline ml-2">Analytics</span>
+                            </a>
+                            <a href="/about" class="ai-nav-link group flex items-center justify-center px-3 sm:px-4 py-2.5 sm:py-2.5 rounded-xl text-xs sm:text-base sm:w-[133px] font-semibold transition-all duration-200 text-white hover:bg-white/20" aria-label="About">
+                                <svg class="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
+                                </svg>
+                                <span class="hidden sm:inline ml-2">About</span>
+                            </a>
+                            <!-- Dark mode toggle -->
+                            <div class="w-px h-6 bg-white/20 mx-1 sm:mx-2 self-center"></div>
+                            <button id="dark-mode-toggle" type="button" class="flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-white/10 hover:bg-white/25 text-white transition-all duration-200" title="Toggle dark mode" aria-pressed="false">
+                                <svg class="sun-icon hidden w-4 h-4 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />
+                                </svg>
+                                <svg class="moon-icon w-4 h-4 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z" />
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </nav>
+            <!-- Hero section -->
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-12 pt-4">
+                <div class="flex items-center gap-3 mb-3">
+                    <h1 class="text-3xl sm:text-4xl font-bold text-white">Analytics Dashboard</h1>
+                </div>
+                <p class="text-azure-200 text-lg">Track Azure RBAC role changes and monitor Microsoft's permission evolution</p>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 sm:pt-6">
+            
+            <!-- Cumulative Statistics (Since First Scan) -->
+            <section class="mb-8">
+                <h2 class="text-xl font-semibold text-slate-900 dark:text-white mb-4 flex items-center">
+                    <svg class="h-6 w-6 text-azure-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                    Cumulative Statistics
+                    <span class="ml-2 text-sm font-normal text-slate-500 dark:text-slate-400">(since first scan)</span>
+                </h2>
+                <!-- Row 1: Add, Update, Delete -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+                    <div class="stat-card bg-white dark:bg-slate-800 rounded-xl shadow-lg p-4">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0 rounded-lg p-2 ml-1 bg-emerald-100 dark:bg-emerald-900/30">
+                                <svg class="h-5 w-5 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                                </svg>
+                            </div>
+                            <div class="ml-3">
+                                <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Roles Added</p>
+                                <p class="text-xl font-bold text-slate-900 dark:text-white">{{ "{:,}".format(analytics.all_time.total_additions) }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="stat-card bg-white dark:bg-slate-800 rounded-xl shadow-lg p-4">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0 rounded-lg p-2 ml-1 bg-amber-100 dark:bg-amber-900/30">
+                                <svg class="h-5 w-5 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+                                </svg>
+                            </div>
+                            <div class="ml-3">
+                                <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Role Updates</p>
+                                <p class="text-xl font-bold text-slate-900 dark:text-white">{{ "{:,}".format(analytics.all_time.total_updates) }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="stat-card bg-white dark:bg-slate-800 rounded-xl shadow-lg p-4">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0 rounded-lg p-2 ml-1 bg-red-100 dark:bg-red-900/30">
+                                <svg class="h-5 w-5 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 12h-15" />
+                                </svg>
+                            </div>
+                            <div class="ml-3">
+                                <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Roles Deleted</p>
+                                <p class="text-xl font-bold text-slate-900 dark:text-white">{{ "{:,}".format(analytics.all_time.total_deletions) }}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Row 2: Scans, First, Last -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div class="stat-card bg-white dark:bg-slate-800 rounded-xl shadow-lg p-4">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0 rounded-lg p-2 ml-1 bg-azure-100 dark:bg-azure-900/30">
+                                <svg class="h-5 w-5 text-azure-600 dark:text-azure-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+                                </svg>
+                            </div>
+                            <div class="ml-3">
+                                <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Total Scans</p>
+                                <p class="text-xl font-bold text-slate-900 dark:text-white">{{ "{:,}".format(analytics.all_time.total_scans) }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="stat-card bg-white dark:bg-slate-800 rounded-xl shadow-lg p-4">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0 rounded-lg p-2 ml-1 bg-slate-100 dark:bg-slate-700">
+                                <svg class="h-5 w-5 text-slate-600 dark:text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
+                                </svg>
+                            </div>
+                            <div class="ml-3">
+                                <p class="text-sm font-medium text-slate-500 dark:text-slate-400">First Scan</p>
+                                <p class="text-sm font-bold text-slate-900 dark:text-white">{{ analytics.all_time.first_scan_date.strftime('%Y-%m-%d · %H:%M UTC') if analytics.all_time.first_scan_date else 'N/A' }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="stat-card bg-white dark:bg-slate-800 rounded-xl shadow-lg p-4">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0 rounded-lg p-2 ml-1 bg-slate-100 dark:bg-slate-700">
+                                <svg class="h-5 w-5 text-slate-600 dark:text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                            </div>
+                            <div class="ml-3">
+                                <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Last Scan</p>
+                                <p class="text-sm font-bold text-slate-900 dark:text-white">{{ analytics.all_time.last_scan_date.strftime('%Y-%m-%d · %H:%M UTC') if analytics.all_time.last_scan_date else 'N/A' }}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Rolling Stats -->
+            <section class="mb-8">
+                <h2 class="text-xl font-semibold text-slate-900 dark:text-white mb-4 flex items-center">
+                    <svg class="h-6 w-6 text-purple-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Rolling Statistics
+                </h2>
+                <div class="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-4">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <!-- 30-Day Stats -->
+                        <div class="sm:border-r border-b sm:border-b-0 border-slate-200 dark:border-slate-700 pb-4 sm:pb-0 sm:pr-4">
+                            <h3 class="text-sm font-semibold text-slate-600 dark:text-slate-400 mb-2">Last 30 Days</h3>
+                            <div class="flex items-center flex-wrap gap-2 sm:gap-4">
+                                <span class="text-emerald-600 dark:text-emerald-400 font-bold">+{{ analytics.rolling_30d.additions }}</span>
+                                <span class="text-amber-600 dark:text-amber-400 font-bold">~{{ analytics.rolling_30d.updates }}</span>
+                                <span class="text-red-600 dark:text-red-400 font-bold">-{{ analytics.rolling_30d.deletions }}</span>
+                                <span class="text-xs text-slate-500 dark:text-slate-400">({{ "%.2f"|format(analytics.rolling_30d.daily_avg) }}/day)</span>
+                            </div>
+                        </div>
+                        <!-- 90-Day Stats -->
+                        <div class="sm:pl-4">
+                            <h3 class="text-sm font-semibold text-slate-600 dark:text-slate-400 mb-2">Last 90 Days</h3>
+                            <div class="flex items-center flex-wrap gap-2 sm:gap-4">
+                                <span class="text-emerald-600 dark:text-emerald-400 font-bold">+{{ analytics.rolling_90d.additions }}</span>
+                                <span class="text-amber-600 dark:text-amber-400 font-bold">~{{ analytics.rolling_90d.updates }}</span>
+                                <span class="text-red-600 dark:text-red-400 font-bold">-{{ analytics.rolling_90d.deletions }}</span>
+                                <span class="text-xs text-slate-500 dark:text-slate-400">({{ "%.2f"|format(analytics.rolling_90d.daily_avg) }}/day)</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Changes Over Time Chart -->
+            <section class="mb-8">
+                <h2 class="text-xl font-semibold text-slate-900 dark:text-white mb-4 flex items-center">
+                    <svg class="h-6 w-6 text-indigo-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+                    </svg>
+                    Changes Over Time (Last 6 Months)
+                </h2>
+                <div class="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6">
+                    <div class="chart-container">
+                        <canvas id="changesChart"></canvas>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Role Lifecycle Insights - Compact Layout -->
+            <section class="mb-8">
+                <h2 class="text-xl font-semibold text-slate-900 dark:text-white mb-4 flex items-center">
+                    <svg class="h-6 w-6 text-cyan-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+                    </svg>
+                    Role Activity
+                </h2>
+                <div class="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-4 sm:p-6">
+                    <!-- Row 1: Recently Created | Recently Deleted -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 sm:gap-12 pb-6 sm:pb-8 mb-6 sm:mb-8 border-b border-slate-200 dark:border-slate-700">
+                        <!-- Recently Created -->
+                        <div>
+                            <h3 class="text-sm font-semibold text-slate-600 dark:text-slate-400 mb-3 flex items-center">
+                                <span class="w-2 h-2 bg-emerald-500 rounded-full mr-2"></span>
+                                Recently Created
+                            </h3>
+                            {% if analytics.recently_created %}
+                            <ul class="space-y-2">
+                                {% for role in analytics.recently_created[:5] %}
+                                <li class="flex items-center justify-between text-sm">
+                                    <a href="/roles/{{ role.role_id }}" onclick="NavState.setBackContext('analytics')" class="text-azure-600 dark:text-azure-400 hover:underline truncate flex-1 mr-2" title="{{ role.role_name }}">
+                                        {{ role.role_name }}
+                                    </a>
+                                    <span class="text-xs text-slate-400 whitespace-nowrap">
+                                        {{ role.created_at.strftime('%b %d') if role.created_at else '' }}
+                                    </span>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                            {% else %}
+                            <p class="text-sm text-slate-500 dark:text-slate-400">None yet</p>
+                            {% endif %}
+                        </div>
+
+                        <!-- Recently Deleted -->
+                        <div>
+                            <h3 class="text-sm font-semibold text-slate-600 dark:text-slate-400 mb-3 flex items-center">
+                                <span class="w-2 h-2 bg-red-500 rounded-full mr-2"></span>
+                                Recently Deleted
+                            </h3>
+                            {% if analytics.recently_deleted %}
+                            <ul class="space-y-2">
+                                {% for role in analytics.recently_deleted[:5] %}
+                                <li class="flex items-center justify-between text-sm">
+                                    <a href="/roles/{{ role.role_id }}" onclick="NavState.setBackContext('analytics')" class="text-azure-600 dark:text-azure-400 hover:underline truncate flex-1 mr-2" title="{{ role.role_name }}">
+                                        {{ role.role_name }}
+                                    </a>
+                                    <span class="text-xs text-slate-400 whitespace-nowrap">
+                                        {{ role.deleted_at.strftime('%b %d') if role.deleted_at else '' }}
+                                    </span>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                            {% else %}
+                            <p class="text-sm text-slate-500 dark:text-slate-400">None yet</p>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Row 2: Recently Updated | Most Updated -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 sm:gap-12">
+                        <!-- Recently Updated -->
+                        <div>
+                            <h3 class="text-sm font-semibold text-slate-600 dark:text-slate-400 mb-3 flex items-center">
+                                <span class="w-2 h-2 bg-blue-500 rounded-full mr-2"></span>
+                                Recently Updated
+                            </h3>
+                            {% if analytics.recently_updated %}
+                            <ul class="space-y-2">
+                                {% for role in analytics.recently_updated[:5] %}
+                                <li class="flex items-center justify-between text-sm">
+                                    <a href="/roles/{{ role.role_id }}" onclick="NavState.setBackContext('analytics')" class="text-azure-600 dark:text-azure-400 hover:underline truncate flex-1 mr-2" title="{{ role.role_name }}">
+                                        {{ role.role_name }}
+                                    </a>
+                                    <span class="text-xs text-slate-400 whitespace-nowrap">
+                                        {{ role.last_updated.strftime('%b %d') if role.last_updated else '' }}
+                                    </span>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                            {% else %}
+                            <p class="text-sm text-slate-500 dark:text-slate-400">None yet</p>
+                            {% endif %}
+                        </div>
+
+                        <!-- Most Updated -->
+                        <div>
+                            <h3 class="text-sm font-semibold text-slate-600 dark:text-slate-400 mb-3 flex items-center">
+                                <span class="w-2 h-2 bg-yellow-500 rounded-full mr-2"></span>
+                                Most Updated
+                            </h3>
+                            {% if analytics.frequently_updated %}
+                            <ul class="space-y-2">
+                                {% for role in analytics.frequently_updated[:5] %}
+                                <li class="flex items-center justify-between text-sm">
+                                    <a href="/roles/{{ role.role_id }}" onclick="NavState.setBackContext('analytics')" class="text-azure-600 dark:text-azure-400 hover:underline truncate flex-1 mr-2" title="{{ role.role_name }}">
+                                        {{ role.role_name }}
+                                    </a>
+                                    <span class="text-xs bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 px-1.5 py-0.5 rounded font-medium">
+                                        {{ role.update_count }}×
+                                    </span>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                            {% else %}
+                            <p class="text-sm text-slate-500 dark:text-slate-400">None yet</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Volatile Roles -->
+            {% if analytics.volatile_roles %}
+            <section class="mb-8">
+                <h2 class="text-xl font-semibold text-slate-900 dark:text-white mb-4 flex items-center">
+                    <svg class="h-6 w-6 text-orange-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                    Volatile Roles (3+ Updates in 90 Days)
+                </h2>
+                <div class="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6">
+                    <p class="text-sm text-slate-600 dark:text-slate-400 mb-4">
+                        These roles have been updated frequently in the last 90 days. Consider reviewing them for permission changes.
+                    </p>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {% for role in analytics.volatile_roles %}
+                        <a href="/roles/{{ role.role_id }}" onclick="NavState.setBackContext('analytics')" class="flex items-center justify-between p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg hover:bg-orange-100 dark:hover:bg-orange-900/30 transition-colors">
+                            <span class="text-sm text-slate-700 dark:text-slate-300 truncate max-w-[200px]">{{ role.role_name }}</span>
+                            <span class="text-xs bg-orange-200 dark:bg-orange-800 text-orange-800 dark:text-orange-200 px-2 py-0.5 rounded-full font-semibold ml-2">
+                                {{ role.update_count }}×
+                            </span>
+                        </a>
+                        {% endfor %}
+                    </div>
+                </div>
+            </section>
+            {% endif %}
+
+            <!-- Permission Growth Analysis -->
+            <section class="mb-8">
+                <h2 class="text-xl font-semibold text-slate-900 dark:text-white mb-4 flex items-center">
+                    <svg class="h-6 w-6 text-violet-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
+                    </svg>
+                    Permission Growth Analysis
+                </h2>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div class="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-5 text-center">
+                        <p class="text-3xl font-bold {% if analytics.permission_stats.total_actions_added > 0 %}text-emerald-600 dark:text-emerald-400{% else %}text-slate-600 dark:text-slate-400{% endif %}">{{ ('+' ~ "{:,}".format(analytics.permission_stats.total_actions_added)) if analytics.permission_stats.total_actions_added > 0 else '0' }}</p>
+                        <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Actions Added</p>
+                    </div>
+                    <div class="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-5 text-center">
+                        <p class="text-3xl font-bold {% if analytics.permission_stats.total_actions_removed > 0 %}text-red-600 dark:text-red-400{% else %}text-slate-600 dark:text-slate-400{% endif %}">{{ ('-' ~ "{:,}".format(analytics.permission_stats.total_actions_removed)) if analytics.permission_stats.total_actions_removed > 0 else '0' }}</p>
+                        <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Actions Removed</p>
+                    </div>
+                    <div class="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-5 text-center">
+                        <p class="text-3xl font-bold {% if analytics.permission_stats.total_data_actions_added > 0 %}text-emerald-600 dark:text-emerald-400{% else %}text-slate-600 dark:text-slate-400{% endif %}">{{ ('+' ~ "{:,}".format(analytics.permission_stats.total_data_actions_added)) if analytics.permission_stats.total_data_actions_added > 0 else '0' }}</p>
+                        <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Data Actions Added</p>
+                    </div>
+                    <div class="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-5 text-center">
+                        <p class="text-3xl font-bold {% if analytics.permission_stats.total_data_actions_removed > 0 %}text-red-600 dark:text-red-400{% else %}text-slate-600 dark:text-slate-400{% endif %}">{{ ('-' ~ "{:,}".format(analytics.permission_stats.total_data_actions_removed)) if analytics.permission_stats.total_data_actions_removed > 0 else '0' }}</p>
+                        <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Data Actions Removed</p>
+                    </div>
+                </div>
+                <div class="mt-4 mb-6 bg-white dark:bg-slate-800 rounded-xl shadow-lg p-4">
+                    <p class="text-sm text-slate-600 dark:text-slate-400">
+                        <strong>Net Change:</strong> 
+                        <span class="{{ 'text-emerald-600' if analytics.permission_stats.net_actions_change >= 0 else 'text-red-600' }}">
+                            {{ '+' if analytics.permission_stats.net_actions_change >= 0 else '' }}{{ "{:,}".format(analytics.permission_stats.net_actions_change) }} control actions
+                        </span>
+                        and
+                        <span class="{{ 'text-emerald-600' if analytics.permission_stats.net_data_actions_change >= 0 else 'text-red-600' }}">
+                            {{ '+' if analytics.permission_stats.net_data_actions_change >= 0 else '' }}{{ "{:,}".format(analytics.permission_stats.net_data_actions_change) }} data actions
+                        </span>
+                        across {{ "{:,}".format(analytics.all_time.total_updates) }} role updates.
+                    </p>
+                </div>
+                
+                <!-- Top Roles by Permissions -->
+                {% if analytics.top_roles_by_actions or analytics.top_roles_by_data_actions %}
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- Top 10 Roles by Effective Control Plane Actions -->
+                    <div class="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6 overflow-hidden">
+                        <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Top 10 Roles by Effective Control Plane Actions</h3>
+                        <div class="space-y-2">
+                            {% for role in analytics.top_roles_by_actions[:10] %}
+                            <div class="flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+                                <span class="flex-shrink-0 w-6 h-6 flex items-center justify-center bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-white text-xs font-bold rounded-full">{{ loop.index }}</span>
+                                <a href="/roles/{{ role.role_id }}" onclick="NavState.setBackContext('analytics')" class="text-sm font-medium text-azure-600 dark:text-azure-400 hover:underline truncate flex-1" title="{{ role.role_name }}">
+                                    {{ role.role_name }}
+                                </a>
+                                <span class="text-sm font-bold text-slate-700 dark:text-slate-300 tabular-nums whitespace-nowrap">{{ "{:,}".format(role.count) }}</span>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <!-- Top 10 Roles by Effective Data Plane Actions -->
+                    <div class="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6 overflow-hidden">
+                        <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Top 10 Roles by Effective Data Plane Actions</h3>
+                        <div class="space-y-2">
+                            {% for role in analytics.top_roles_by_data_actions[:10] %}
+                            <div class="flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+                                <span class="flex-shrink-0 w-6 h-6 flex items-center justify-center bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-white text-xs font-bold rounded-full">{{ loop.index }}</span>
+                                <a href="/roles/{{ role.role_id }}" onclick="NavState.setBackContext('analytics')" class="text-sm font-medium text-azure-600 dark:text-azure-400 hover:underline truncate flex-1" title="{{ role.role_name }}">
+                                    {{ role.role_name }}
+                                </a>
+                                <span class="text-sm font-bold text-slate-700 dark:text-slate-300 tabular-nums whitespace-nowrap">{{ "{:,}".format(role.count) }}</span>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            </section>
+
+            <!-- Operations Insights -->
+            <section class="mb-8">
+                <h2 class="text-xl font-semibold text-slate-900 dark:text-white mb-4 flex items-center">
+                    <svg class="h-6 w-6 text-teal-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                    </svg>
+                    Operations Insights
+                </h2>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+                    <div class="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6 text-center">
+                        <p class="text-3xl font-bold text-slate-900 dark:text-white">{{ "{:,}".format(analytics.total_operations) }}</p>
+                        <p class="text-sm text-slate-500 dark:text-slate-400">Total Operations</p>
+                    </div>
+                    <div class="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6 text-center">
+                        <p class="text-3xl font-bold text-slate-900 dark:text-white">{{ "{:,}".format(analytics.total_providers) }}</p>
+                        <p class="text-sm text-slate-500 dark:text-slate-400">Resource Providers</p>
+                    </div>
+                    <div class="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6 text-center">
+                        <p class="text-3xl font-bold text-emerald-600 dark:text-emerald-400">+{{ "{:,}".format(analytics.new_operations_30d) }}</p>
+                        <p class="text-sm text-slate-500 dark:text-slate-400">New Operations (30d)</p>
+                    </div>
+                </div>
+                
+                <!-- Recently Added Operations (collapsible) -->
+                {% if analytics.recent_operations %}
+                <div class="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6" x-data="{ open: false }">
+                    <button @click="open = !open" class="w-full flex items-center justify-between text-left">
+                        <h3 class="text-lg font-semibold text-slate-900 dark:text-white flex items-center">
+                            <svg class="h-5 w-5 text-emerald-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                            </svg>
+                            Recently Added Operations
+                            <span class="ml-2 text-sm font-normal text-slate-500 dark:text-slate-400">({{ analytics.recent_operations|length }} in last 30 days)</span>
+                        </h3>
+                        <svg class="h-5 w-5 text-slate-500 transition-transform" :class="{ 'rotate-180': open }" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                        </svg>
+                    </button>
+                    <div x-show="open" x-cloak x-transition class="mt-4 space-y-2 max-h-96 overflow-y-auto">
+                        {% for op in analytics.recent_operations %}
+                        <div class="flex items-start justify-between py-2 border-b border-slate-100 dark:border-slate-700 last:border-0">
+                            <div class="flex-1 min-w-0">
+                                <a href="/operations/{{ op.name }}" class="text-sm font-mono text-azure-600 dark:text-azure-400 hover:underline break-all">
+                                    {{ op.name }}
+                                </a>
+                                {% if op.display_name %}
+                                <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">{{ op.display_name }}</p>
+                                {% endif %}
+                            </div>
+                            <div class="ml-4 flex-shrink-0 text-right">
+                                {% if op.first_seen_at %}
+                                <span class="text-xs text-slate-500 dark:text-slate-400">{{ op.first_seen_at.strftime('%b %d') }}</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+            </section>
+
+            <!-- Top Providers by Operations -->
+            <section class="mb-8">
+                <h2 class="text-xl font-semibold text-slate-900 dark:text-white mb-4 flex items-center">
+                    <svg class="h-6 w-6 text-teal-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
+                    </svg>
+                    Top 10 Providers by Operations
+                </h2>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-4 sm:p-6">
+                        <div class="chart-container" style="height: 500px;">
+                            <canvas id="providersChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6">
+                        <div class="space-y-2">
+                            {% for provider in analytics.top_providers[:10] %}
+                            <div class="flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+                                <span class="flex-shrink-0 w-6 h-6 flex items-center justify-center bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-white text-xs font-bold rounded-full">{{ loop.index }}</span>
+                                <span class="text-sm font-medium text-slate-700 dark:text-slate-200 truncate flex-1" title="{{ provider.provider }}">
+                                    {{ provider.provider }}
+                                </span>
+                                <span class="text-sm font-bold text-slate-700 dark:text-slate-300 tabular-nums whitespace-nowrap">{{ "{:,}".format(provider.operation_count) }}</span>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+
+        <!-- Footer -->
+        <footer class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div class="border-t border-slate-200 pt-8">
+                <div class="flex flex-col items-center" style="gap: 20px;">
+                    <!-- Internal navigation links for SEO -->
+                    <nav class="flex flex-col sm:flex-row flex-wrap justify-center items-center text-sm" style="gap: 12px 24px;">
+                        <a href="/recent" class="ai-nav-link text-slate-600 hover:text-azure-600 transition-colors">Recent Changes</a>
+                        <a href="/roles" class="ai-nav-link text-slate-600 hover:text-azure-600 transition-colors">Browse Roles</a>
+                        <a href="/operations" class="ai-nav-link text-slate-600 hover:text-azure-600 transition-colors">Browse Operations</a>
+                        <a href="/recommend" class="ai-nav-link text-slate-600 hover:text-azure-600 transition-colors">Role Recommender</a>
+                        <a href="/analytics" class="ai-nav-link text-slate-600 hover:text-azure-600 transition-colors">Analytics</a>
+                        <a href="/about" class="ai-nav-link text-slate-600 hover:text-azure-600 transition-colors">About</a>
+                        <a href="/sitemap.xml" class="text-slate-600 hover:text-azure-600 transition-colors">Sitemap</a>
+                        <span class="hidden sm:inline text-slate-300">|</span>
+                        <a href="/feeds/changelog.atom" class="text-slate-600 hover:text-orange-500 transition-colors" title="Subscribe via RSS/Atom">
+                            <svg class="w-5 h-5" viewBox="0 0 24 24" aria-hidden="true"><rect width="24" height="24" rx="4" fill="#f97316"/><circle cx="7" cy="17" r="2.5" fill="white"/><path d="M5 12.5c3.5 0 6.5 3 6.5 6.5h3c0-5.25-4.25-9.5-9.5-9.5v3z" fill="white"/><path d="M5 7c6.5 0 12 5.5 12 12h3c0-8.25-6.75-15-15-15v3z" fill="white"/></svg>
+                        </a>
+                    </nav>
+                    <div class="text-center px-4">
+                        <p class="text-sm text-slate-600">Azure RBAC Built-in Role Definitions Catalog — Track changes to <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles" target="_blank" rel="noopener noreferrer" class="text-azure-600 underline font-medium hover:text-azure-700">Azure built-in roles</a></p>
+                        <p class="text-xs text-slate-500 mt-3">{{ app_version }}</p>
+                        <p class="text-xs text-slate-500 mt-3 leading-relaxed">This site is not affiliated with or endorsed by Microsoft.<br class="sm:hidden"> Content is provided "as is" without warranty of any kind.</p>
+                    </div>
+                </div>
+            </div>
+        </footer>
+    </div>
+    
+    <!-- Dark mode handler -->
+    <script src="/static/js/darkmode.js" defer></script>
+    
+    <!-- Chart initialization -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Chart.js dark mode detection
+            const isDark = document.documentElement.classList.contains('dark');
+            const textColor = isDark ? '#94a3b8' : '#64748b';
+            const gridColor = isDark ? 'rgba(51, 65, 85, 0.5)' : 'rgba(203, 213, 225, 0.4)';
+            
+            // Changes over time chart
+            const changesCtx = document.getElementById('changesChart').getContext('2d');
+            const chartData = {{ daily_chart_data | tojson }};
+            
+            new Chart(changesCtx, {
+                type: 'bar',
+                data: {
+                    labels: chartData.labels,
+                    datasets: [
+                        {
+                            label: 'Additions',
+                            data: chartData.additions,
+                            backgroundColor: 'rgba(16, 185, 129, 0.8)',
+                            borderColor: 'rgb(16, 185, 129)',
+                            borderWidth: 1
+                        },
+                        {
+                            label: 'Updates',
+                            data: chartData.updates,
+                            backgroundColor: 'rgba(245, 158, 11, 0.8)',
+                            borderColor: 'rgb(245, 158, 11)',
+                            borderWidth: 1
+                        },
+                        {
+                            label: 'Deletions',
+                            data: chartData.deletions,
+                            backgroundColor: 'rgba(239, 68, 68, 0.8)',
+                            borderColor: 'rgb(239, 68, 68)',
+                            borderWidth: 1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        intersect: false,
+                        mode: 'index'
+                    },
+                    scales: {
+                        x: {
+                            stacked: true,
+                            ticks: {
+                                color: textColor,
+                                maxTicksLimit: 12,
+                                callback: function(value, index) {
+                                    const date = new Date(chartData.labels[index]);
+                                    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                                }
+                            },
+                            grid: { color: gridColor }
+                        },
+                        y: {
+                            stacked: true,
+                            beginAtZero: true,
+                            ticks: { 
+                                color: textColor,
+                                stepSize: 1,
+                                callback: function(value) {
+                                    if (Number.isInteger(value)) return value;
+                                    return null;
+                                }
+                            },
+                            grid: { color: gridColor }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            align: 'center',
+                            labels: {
+                                color: textColor,
+                                boxWidth: 12,
+                                boxHeight: 12,
+                                padding: 16,
+                                usePointStyle: true,
+                                pointStyle: 'circle'
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                title: function(items) {
+                                    const date = new Date(items[0].label);
+                                    return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+            
+            // Providers chart - generate colors dynamically for all providers
+            const providersCtx = document.getElementById('providersChart').getContext('2d');
+            const providerData = {{ provider_chart_data | tojson }};
+            
+            // Generate colors for all providers
+            const baseColors = [
+                'rgba(20, 184, 166, 0.8)',
+                'rgba(59, 130, 246, 0.8)',
+                'rgba(139, 92, 246, 0.8)',
+                'rgba(236, 72, 153, 0.8)',
+                'rgba(245, 158, 11, 0.8)',
+                'rgba(16, 185, 129, 0.8)',
+                'rgba(99, 102, 241, 0.8)',
+                'rgba(244, 63, 94, 0.8)',
+                'rgba(34, 197, 94, 0.8)',
+                'rgba(168, 85, 247, 0.8)',
+                'rgba(251, 146, 60, 0.8)',
+                'rgba(56, 189, 248, 0.8)',
+                'rgba(192, 132, 252, 0.8)',
+                'rgba(251, 113, 133, 0.8)',
+                'rgba(163, 230, 53, 0.8)'
+            ];
+            const providerColors = providerData.labels.map((_, i) => baseColors[i % baseColors.length]);
+            
+            new Chart(providersCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: providerData.labels,
+                    datasets: [{
+                        data: providerData.values,
+                        backgroundColor: providerColors,
+                        borderWidth: 1,
+                        borderColor: isDark ? '#1e293b' : '#ffffff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: window.innerWidth >= 640,
+                            position: 'bottom',
+                            labels: {
+                                color: textColor,
+                                padding: 20,
+                                usePointStyle: true,
+                                font: { size: 14 }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const totalOps = {{ analytics.total_operations }};
+                                    const percentage = ((context.raw / totalOps) * 100).toFixed(1);
+                                    return `${context.label}: ${context.raw.toLocaleString()} ops (${percentage}% of total)`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+</html>

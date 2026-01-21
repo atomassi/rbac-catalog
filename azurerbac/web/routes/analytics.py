@@ -25,6 +25,9 @@ async def analytics_dashboard(
     """Analytics dashboard page with comprehensive statistics."""
     logger.info("Analytics dashboard requested")
 
+    # Preserve ai=1 parameter if set
+    ai_mode = request.query_params.get("ai") == "1"
+
     analytics = get_analytics_from_cache()
 
     # Convert daily changes to JSON-serializable format for Chart.js
@@ -50,6 +53,7 @@ async def analytics_dashboard(
         "analytics": analytics,
         "daily_chart_data": daily_chart_data,
         "provider_chart_data": provider_chart_data,
+        "ai_mode": ai_mode,
     }
 
     return deps.templates.TemplateResponse(request, "analytics.html", context)

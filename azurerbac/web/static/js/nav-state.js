@@ -7,7 +7,7 @@
  * Debug mode: To enable debug logs, run in browser console:
  *   window.NavStateDebug = true
  *
- * @typedef {'recommend' | 'roles' | 'operations' | 'operation' | 'role' | 'recent'} BackTarget
+ * @typedef {'recommend' | 'roles' | 'operations' | 'operation' | 'role' | 'recent' | 'analytics'} BackTarget
  *
  * @typedef {Object} NavStateData
  * @property {BackTarget} [back] - Where to navigate back to
@@ -194,6 +194,9 @@ const NavState = {
                     url = '/roles';
                 }
                 break;
+            case 'analytics':
+                url = '/analytics';
+                break;
             default:
                 url = '/recent';
         }
@@ -237,6 +240,8 @@ const NavState = {
                 return state.from_role_name
                     ? 'Back to ' + state.from_role_name
                     : 'Back to Role';
+            case 'analytics':
+                return 'Back to Analytics';
             default:
                 return 'Back to Recent';
         }

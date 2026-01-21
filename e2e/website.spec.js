@@ -1803,4 +1803,37 @@ test.describe('Analytics Page', () => {
     await page.goto('/analytics');
     await expect(page.locator('body')).toBeVisible();
   });
+
+  test('clicking role from analytics sets back context', async ({ page }) => {
+    await page.goto('/analytics');
+    await page.waitForLoadState('networkidle');
+    
+    // Use a link from "Top 10 Roles" section - these come from cache and always exist
+    // (Recently Created/Deleted may reference roles no longer in the database)
+    const section = page.locator('text=Top 10 Roles by Effective').first();
+    await section.scrollIntoViewIfNeeded();
+    
+    const roleLink = section.locator('xpath=ancestor::div[contains(@class,"bg-white")]').locator('a[href^="/roles/"]').first();
+    
+    if (await roleLink.count() === 0) {
+      test.skip();
+      return;
+    }
+    
+    await roleLink.click();
+    await page.waitForLoadState('networkidle');
+    
+    // Should be on a role page
+    await expect(page).toHaveURL(/\/roles\//);
+    
+    // Back button should say "Back to Analytics"
+    const backLabel = page.locator('#back-label');
+    await expect(backLabel).toBeVisible();
+    await expect(backLabel).toContainText(/Back to Analytics/i);
+    
+    // Verify clicking back returns to analytics
+    await page.locator('#back-button').click();
+    await page.waitForLoadState('networkidle');
+    await expect(page).toHaveURL(/\/analytics/);
+  });
 });

@@ -604,26 +604,29 @@ test.describe('Role Detail Page', () => {
   });
 
   test('should not show Copy/Download buttons for deleted role', async ({ page }) => {
-    // This test requires a deleted role in the database
-    // Skip if no deleted roles exist
-    await page.goto('/recent');
-    const deletedBadge = page.locator('text=Deleted').first();
-    const deletedRoleCount = await deletedBadge.count();
+    // Navigate to recent page filtered by deleted events
+    await page.goto('/recent?event_type=deleted');
+    await page.waitForLoadState('domcontentloaded');
     
-    if (deletedRoleCount > 0) {
-      // Click on a deleted role
-      const deletedRow = page.locator('tr:has-text("Deleted")').first();
-      const roleLink = deletedRow.locator('a[href^="/roles/"]').first();
-      await roleLink.click();
-      await page.waitForLoadState('domcontentloaded');
-      
-      // Copy/Download buttons should not be visible
-      const copyJsonButton = page.locator('button[title="Copy JSON"]');
-      const downloadJsonButton = page.locator('button[title="Download JSON"]');
-      
-      await expect(copyJsonButton).not.toBeVisible();
-      await expect(downloadJsonButton).not.toBeVisible();
+    // Find a role link on the page (deleted roles still have links to their detail page)
+    const roleLink = page.locator('a[href^="/roles/"]').first();
+    const hasDeletedRole = await roleLink.count() > 0;
+    
+    // Skip if no deleted roles exist in this database
+    if (!hasDeletedRole) {
+      test.skip();
+      return;
     }
+    
+    await roleLink.click();
+    await page.waitForLoadState('domcontentloaded');
+    
+    // Copy/Download buttons should not be visible for deleted roles
+    const copyJsonButton = page.locator('button[title="Copy JSON"]');
+    const downloadJsonButton = page.locator('button[title="Download JSON"]');
+    
+    await expect(copyJsonButton).not.toBeVisible();
+    await expect(downloadJsonButton).not.toBeVisible();
   });
 });
 

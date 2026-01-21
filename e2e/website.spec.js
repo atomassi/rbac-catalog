@@ -1089,6 +1089,19 @@ test.describe('AI Mode Preservation', () => {
     await page.waitForLoadState('domcontentloaded');
     expect(await page.evaluate(() => sessionStorage.getItem('azurerbac_ai_mode'))).toBeNull();
   });
+
+  test('should store ai mode from analytics page', async ({ page }) => {
+    await page.goto('/analytics');
+    await page.evaluate(() => sessionStorage.clear());
+    await page.goto('/analytics?ai=1');
+    await page.waitForLoadState('domcontentloaded');
+    expect(await page.evaluate(() => sessionStorage.getItem('azurerbac_ai_mode'))).toBe('1');
+
+    // Navigate to another page and verify persistence
+    await page.goto('/about');
+    await page.waitForLoadState('domcontentloaded');
+    expect(await page.evaluate(() => sessionStorage.getItem('azurerbac_ai_mode'))).toBe('1');
+  });
 });
 
 // =============================================================================

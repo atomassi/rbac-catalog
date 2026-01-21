@@ -364,3 +364,226 @@ class TestOpenTelemetryIntegration:
         from azurerbac.telemetry import flush_metrics
 
         assert callable(flush_metrics)
+
+
+# =============================================================================
+# Timer Tests
+# =============================================================================
+
+
+class TestTimedOperation:
+    """Tests for TimedOperation context manager."""
+
+    def test_sync_context_manager_logs_completion(self, caplog):
+        """Test that sync context manager logs start and completion."""
+        import logging
+
+        from azurerbac.telemetry.timers import TimedOperation
+
+        test_logger = logging.getLogger("test_timer")
+        test_logger.setLevel(logging.DEBUG)
+
+        with (
+            caplog.at_level(logging.DEBUG, logger="test_timer"),
+            TimedOperation("test_operation", log=test_logger),
+        ):
+            pass
+
+        assert "Starting: test_operation" in caplog.text
+        assert "Completed: test_operation" in caplog.text
+
+    def test_sync_context_manager_logs_failure_on_exception(self, caplog):
+        """Test that sync context manager logs failure when exception occurs."""
+        import logging
+
+        from azurerbac.telemetry.timers import TimedOperation
+
+        test_logger = logging.getLogger("test_timer_fail")
+        test_logger.setLevel(logging.DEBUG)
+
+        with (
+            caplog.at_level(logging.DEBUG, logger="test_timer_fail"),
+            pytest.raises(ValueError),
+            TimedOperation("failing_operation", log=test_logger),
+        ):
+            raise ValueError("Test error")
+
+        assert "Starting: failing_operation" in caplog.text
+        assert "Failed: failing_operation" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_async_context_manager_logs_completion(self, caplog):
+        """Test that async context manager logs start and completion."""
+        import logging
+
+        from azurerbac.telemetry.timers import TimedOperation
+
+        test_logger = logging.getLogger("test_async_timer")
+        test_logger.setLevel(logging.DEBUG)
+
+        with caplog.at_level(logging.DEBUG, logger="test_async_timer"):
+            async with TimedOperation("async_test_operation", log=test_logger):
+                pass
+
+        assert "Starting: async_test_operation" in caplog.text
+        assert "Completed: async_test_operation" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_async_context_manager_logs_failure_on_exception(self, caplog):
+        """Test that async context manager logs failure when exception occurs."""
+        import logging
+
+        from azurerbac.telemetry.timers import TimedOperation
+
+        test_logger = logging.getLogger("test_async_timer_fail")
+        test_logger.setLevel(logging.DEBUG)
+
+        with (
+            caplog.at_level(logging.DEBUG, logger="test_async_timer_fail"),
+            pytest.raises(ValueError),
+        ):
+            async with TimedOperation("async_failing_op", log=test_logger):
+                raise ValueError("Test error")
+
+        assert "Starting: async_failing_op" in caplog.text
+        assert "Failed: async_failing_op" in caplog.text
+
+    def test_uses_default_logger_when_none_provided(self, caplog):
+        """Test that default module logger is used when none provided."""
+        import logging
+
+        from azurerbac.telemetry.timers import TimedOperation
+
+        with (
+            caplog.at_level(logging.DEBUG, logger="azurerbac.telemetry.timers"),
+            TimedOperation("default_logger_test"),
+        ):
+            pass
+
+        assert "default_logger_test" in caplog.text
+
+
+class TestTimedDbQuery:
+    """Tests for TimedDbQuery context manager."""
+
+    def test_sync_tracks_query_with_metrics(self):
+        """Test that sync context manager tracks query metrics."""
+        from unittest.mock import patch
+
+        from azurerbac.telemetry.timers import TimedDbQuery
+
+        with patch("azurerbac.telemetry.metrics.track_db_query") as mock_track:
+            with TimedDbQuery("test_query") as timer:
+                timer.rows = 10
+
+            mock_track.assert_called_once()
+            args = mock_track.call_args[0]
+            assert args[0] == "test_query"
+            assert isinstance(args[1], float)  # elapsed time
+            assert args[2] == 10  # rows
+
+    def test_sync_tracks_query_without_row_count(self):
+        """Test that query is tracked even when row count not set."""
+        from unittest.mock import patch
+
+        from azurerbac.telemetry.timers import TimedDbQuery
+
+        with patch("azurerbac.telemetry.metrics.track_db_query") as mock_track:
+            with TimedDbQuery("no_rows_query"):
+                pass
+
+            mock_track.assert_called_once()
+            args = mock_track.call_args[0]
+            assert args[0] == "no_rows_query"
+            assert args[2] is None  # rows not set
+
+    @pytest.mark.asyncio
+    async def test_async_tracks_query_with_metrics(self):
+        """Test that async context manager tracks query metrics."""
+        from unittest.mock import patch
+
+        from azurerbac.telemetry.timers import TimedDbQuery
+
+        with patch("azurerbac.telemetry.metrics.track_db_query") as mock_track:
+            async with TimedDbQuery("async_test_query") as timer:
+                timer.rows = 25
+
+            mock_track.assert_called_once()
+            args = mock_track.call_args[0]
+            assert args[0] == "async_test_query"
+            assert isinstance(args[1], float)
+            assert args[2] == 25
+
+    @pytest.mark.parametrize(
+        ("query_name", "row_count"),
+        [
+            pytest.param("fetch_roles", 100, id="fetch_roles"),
+            pytest.param("count_operations", 5000, id="count_operations"),
+            pytest.param("update_history", 1, id="single_row_update"),
+            pytest.param("bulk_insert", 0, id="zero_rows"),
+        ],
+    )
+    def test_various_query_types(self, query_name: str, row_count: int):
+        """Test timer works with various query names and row counts."""
+        from unittest.mock import patch
+
+        from azurerbac.telemetry.timers import TimedDbQuery
+
+        with patch("azurerbac.telemetry.metrics.track_db_query") as mock_track:
+            with TimedDbQuery(query_name) as timer:
+                timer.rows = row_count
+
+            args = mock_track.call_args[0]
+            assert args[0] == query_name
+            assert args[2] == row_count
+
+
+# =============================================================================
+# Tracing Context Tests
+# =============================================================================
+
+
+class TestWorkerOperationContext:
+    """Tests for WorkerOperationContext tracing context manager."""
+
+    @pytest.mark.parametrize(
+        ("operation_name",),
+        [
+            pytest.param("role-scan", id="role_scan"),
+            pytest.param("operations-sync", id="operations_sync"),
+            pytest.param("cache-refresh", id="cache_refresh"),
+        ],
+    )
+    def test_context_manager_enters_and_exits(self, operation_name: str):
+        """Test context manager enters and exits without error."""
+        from azurerbac.telemetry.tracing import WorkerOperationContext
+
+        with WorkerOperationContext(operation_name) as ctx:
+            assert ctx.operation_name == operation_name
+
+    def test_does_not_suppress_exceptions(self):
+        """Test exceptions are not suppressed by context manager."""
+        from azurerbac.telemetry.tracing import WorkerOperationContext
+
+        with (
+            pytest.raises(ValueError, match="test error"),
+            WorkerOperationContext("failing-operation"),
+        ):
+            raise ValueError("test error")
+
+    def test_handles_missing_opentelemetry_gracefully(self):
+        """Test graceful handling when opentelemetry is not available."""
+        from unittest.mock import patch
+
+        from azurerbac.telemetry.tracing import WorkerOperationContext
+
+        with (
+            patch.dict("sys.modules", {"opentelemetry": None}),
+            patch(
+                "azurerbac.telemetry.tracing.WorkerOperationContext.__enter__",
+                side_effect=lambda self: self,
+            ),
+        ):
+            # Should not raise when opentelemetry is unavailable
+            ctx = WorkerOperationContext("test-op")
+            assert ctx.operation_name == "test-op"

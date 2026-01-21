@@ -800,3 +800,72 @@ class TestRoleCoverageRaceCondition:
 
         # Cleanup
         clear_computed_caches()
+
+
+# =============================================================================
+# Response Factory Tests
+# =============================================================================
+
+
+class TestResponseFactories:
+    """Tests for API response factory functions."""
+
+    @pytest.mark.parametrize(
+        ("message",),
+        [
+            pytest.param("No operations found", id="no_operations"),
+            pytest.param("Search too short", id="search_short"),
+            pytest.param("", id="empty_message"),
+        ],
+    )
+    def test_empty_search_response(self, message: str):
+        """Test empty_search_response creates correct response."""
+        from azurerbac.web.routes.responses import empty_search_response
+
+        result = empty_search_response(message)
+        assert result.operations == []
+        assert result.total == 0
+        assert result.is_wildcard_search is False
+        assert result.message == message
+
+    @pytest.mark.parametrize(
+        ("error", "mode", "available"),
+        [
+            pytest.param("Engine unavailable", "tfidf", True, id="with_mode_available"),
+            pytest.param("Query too short", "semantic", False, id="with_mode_unavailable"),
+            pytest.param("Error occurred", None, False, id="no_mode"),
+        ],
+    )
+    def test_ai_error_response(self, error: str, mode: str | None, available: bool):
+        """Test ai_error_response creates correct response."""
+        from azurerbac.web.routes.responses import ai_error_response
+
+        result = ai_error_response(error, mode, available)
+        assert result.error == error
+        assert result.recommendations == []
+        if mode:
+            assert result.engine is not None
+            assert result.engine.mode == mode
+            assert result.engine.available == available
+        else:
+            assert result.engine is None
+
+
+class TestErrorMessages:
+    """Tests for ErrorMessages enum."""
+
+    @pytest.mark.parametrize(
+        ("engine_name",),
+        [
+            pytest.param("TFIDF", id="tfidf"),
+            pytest.param("Semantic", id="semantic"),
+            pytest.param("LLM", id="llm"),
+        ],
+    )
+    def test_engine_unavailable_message(self, engine_name: str):
+        """Test engine_unavailable generates correct message."""
+        from azurerbac.web.routes.responses import ErrorMessages
+
+        message = ErrorMessages.engine_unavailable(engine_name)
+        assert engine_name in message
+        assert "unavailable" in message.lower()

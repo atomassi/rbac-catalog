@@ -31,6 +31,34 @@ from azurerbac.airecommender.modes import RecommenderMode
 from azurerbac.azure.models import RoleDefinition
 
 
+class TestRankedRole:
+    """Tests for RankedRole dataclass."""
+
+    @pytest.mark.parametrize(
+        ("score", "keywords"),
+        [
+            pytest.param(0.85, ["read", "storage"], id="with_keywords"),
+            pytest.param(0.95, None, id="without_keywords"),
+            pytest.param(0.0, [], id="zero_score_empty_keywords"),
+        ],
+    )
+    def test_from_embedding_classmethod(self, score: float, keywords: list[str] | None):
+        """Test from_embedding classmethod creates correct instance."""
+        role = RankedRole.from_embedding(
+            role_id="r1",
+            role_name="Storage Reader",
+            description="Reads storage",
+            score=score,
+            keywords=keywords,
+        )
+        assert role.role_id == "r1"
+        assert role.role_name == "Storage Reader"
+        assert role.description == "Reads storage"
+        assert role.embedding_score == score
+        assert role.final_score == score
+        assert role.matched_keywords == (keywords or [])
+
+
 class TestEngineRegistry:
     """Tests for EngineRegistry decorator-based registration."""
 
@@ -2154,3 +2182,204 @@ class TestEngineAvailability:
             knowledge_base=mock_knowledge_base,
         )
         assert engine.is_available() is False
+
+
+# =============================================================================
+# Normalize Functions Tests
+# =============================================================================
+
+
+class TestNormalizeScores:
+    """Tests for normalize_scores function."""
+
+    def test_empty_candidates_returns_empty(self):
+        """Test that empty input returns empty output."""
+        from azurerbac.airecommender.engines.common import normalize_scores
+
+        result = normalize_scores([])
+        assert result == []
+
+    def test_single_candidate_gets_max_normalized(self):
+        """Test single candidate gets normalized within expected range."""
+        from azurerbac.airecommender.engines.common import normalize_scores
+        from azurerbac.airecommender.engines.config import SCORE_CEILING, SCORE_FLOOR
+
+        candidates = [
+            RankedRole(
+                role_id="r1",
+                role_name="Role 1",
+                description="Desc",
+                final_score=0.5,
+            )
+        ]
+        result = normalize_scores(candidates)
+
+        assert len(result) == 1
+        # Single item: score_range=0, so normalized=1.0 -> SCORE_FLOOR + (1.0 * range)
+        assert SCORE_FLOOR <= result[0].final_score <= SCORE_CEILING
+
+    @pytest.mark.parametrize(
+        ("scores", "expected_high", "expected_low"),
+        [
+            pytest.param([0.9, 0.1], 0.95, 0.60, id="wide_range"),
+            pytest.param([0.5, 0.4], 0.95, 0.60, id="narrow_range"),
+            pytest.param([1.0, 0.0], 0.95, 0.60, id="full_range"),
+        ],
+    )
+    def test_minmax_normalization(
+        self, scores: list[float], expected_high: float, expected_low: float
+    ):
+        """Test min-max normalization produces expected range."""
+        from azurerbac.airecommender.engines.common import normalize_scores
+
+        candidates = [
+            RankedRole(
+                role_id=f"r{i}",
+                role_name=f"Role {i}",
+                description="Desc",
+                final_score=score,
+            )
+            for i, score in enumerate(scores)
+        ]
+        result = normalize_scores(candidates)
+
+        result_scores = sorted([c.final_score for c in result], reverse=True)
+        assert result_scores[0] == pytest.approx(expected_high, rel=0.01)
+        assert result_scores[-1] == pytest.approx(expected_low, rel=0.01)
+
+    def test_preserves_relative_order(self):
+        """Test that relative ordering is preserved after normalization."""
+        from azurerbac.airecommender.engines.common import normalize_scores
+
+        candidates = [
+            RankedRole(role_id="high", role_name="High", description="", final_score=0.9),
+            RankedRole(role_id="med", role_name="Medium", description="", final_score=0.5),
+            RankedRole(role_id="low", role_name="Low", description="", final_score=0.1),
+        ]
+        result = normalize_scores(candidates)
+
+        scores_by_id = {c.role_id: c.final_score for c in result}
+        assert scores_by_id["high"] > scores_by_id["med"] > scores_by_id["low"]
+
+
+class TestNormalizeWithSigmoid:
+    """Tests for normalize_with_sigmoid function."""
+
+    def test_empty_candidates_returns_empty(self):
+        """Test that empty input returns empty output."""
+        from azurerbac.airecommender.engines.common import normalize_with_sigmoid
+
+        result = normalize_with_sigmoid(
+            [], midpoint=0.5, steepness=10, output_min=0.6, output_max=0.95
+        )
+        assert result == []
+
+    @pytest.mark.parametrize(
+        ("raw_score", "midpoint", "steepness", "expected_approx"),
+        [
+            pytest.param(0.5, 0.5, 10, 0.775, id="at_midpoint"),
+            pytest.param(0.9, 0.5, 10, 0.95, id="above_midpoint"),
+            pytest.param(0.1, 0.5, 10, 0.60, id="below_midpoint"),
+        ],
+    )
+    def test_sigmoid_transformation(
+        self, raw_score: float, midpoint: float, steepness: float, expected_approx: float
+    ):
+        """Test sigmoid transformation for various inputs."""
+        from azurerbac.airecommender.engines.common import normalize_with_sigmoid
+
+        candidates = [
+            RankedRole(
+                role_id="r1",
+                role_name="Role",
+                description="",
+                final_score=raw_score,
+            )
+        ]
+        result = normalize_with_sigmoid(
+            candidates,
+            midpoint=midpoint,
+            steepness=steepness,
+            output_min=0.60,
+            output_max=0.95,
+        )
+
+        assert result[0].final_score == pytest.approx(expected_approx, abs=0.05)
+
+    def test_preserves_relative_order(self):
+        """Test sigmoid preserves relative ordering."""
+        from azurerbac.airecommender.engines.common import normalize_with_sigmoid
+
+        candidates = [
+            RankedRole(role_id="high", role_name="High", description="", final_score=0.9),
+            RankedRole(role_id="low", role_name="Low", description="", final_score=0.1),
+        ]
+        result = normalize_with_sigmoid(
+            candidates, midpoint=0.5, steepness=10, output_min=0.6, output_max=0.95
+        )
+
+        scores_by_id = {c.role_id: c.final_score for c in result}
+        assert scores_by_id["high"] > scores_by_id["low"]
+
+
+# =============================================================================
+# Exception Tests
+# =============================================================================
+
+
+class TestAIRecommenderExceptions:
+    """Tests for AI recommender exception classes."""
+
+    @pytest.mark.parametrize(
+        ("engine_name",),
+        [
+            pytest.param("HyDE", id="hyde"),
+            pytest.param("LLM", id="llm"),
+            pytest.param("RAG", id="rag"),
+        ],
+    )
+    def test_ollama_client_not_available_error(self, engine_name: str):
+        """Test OllamaClientNotAvailableError stores engine name."""
+        from azurerbac.airecommender.exceptions import OllamaClientNotAvailableError
+
+        exc = OllamaClientNotAvailableError(engine_name)
+        assert exc.engine_name == engine_name
+        assert engine_name in str(exc)
+        assert "Ollama" in str(exc)
+
+    @pytest.mark.parametrize(
+        ("engine_name",),
+        [
+            pytest.param("Semantic", id="semantic"),
+            pytest.param("ColBERT", id="colbert"),
+            pytest.param("CrossEncoder", id="crossencoder"),
+        ],
+    )
+    def test_embedding_model_not_available_error(self, engine_name: str):
+        """Test EmbeddingModelNotAvailableError stores engine name."""
+        from azurerbac.airecommender.exceptions import EmbeddingModelNotAvailableError
+
+        exc = EmbeddingModelNotAvailableError(engine_name)
+        assert exc.engine_name == engine_name
+        assert engine_name in str(exc)
+        assert "embedding" in str(exc)
+
+    def test_knowledge_base_not_initialized_error(self):
+        """Test KnowledgeBaseNotInitializedError message."""
+        from azurerbac.airecommender.exceptions import KnowledgeBaseNotInitializedError
+
+        exc = KnowledgeBaseNotInitializedError()
+        assert "Knowledge base" in str(exc) or "not initialized" in str(exc)
+
+    def test_exceptions_inherit_from_base(self):
+        """Test all exceptions inherit from AIRecommenderError."""
+        from azurerbac.airecommender.exceptions import (
+            AIRecommenderError,
+            EmbeddingModelNotAvailableError,
+            KnowledgeBaseNotInitializedError,
+            OllamaClientNotAvailableError,
+        )
+
+        assert issubclass(OllamaClientNotAvailableError, AIRecommenderError)
+        assert issubclass(EmbeddingModelNotAvailableError, AIRecommenderError)
+        assert issubclass(KnowledgeBaseNotInitializedError, AIRecommenderError)

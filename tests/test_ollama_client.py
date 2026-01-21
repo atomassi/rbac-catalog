@@ -421,3 +421,68 @@ class TestGenerateWithRetry:
             request = call_args[0][0]
             body = json.loads(request.data.decode())
             assert body["model"] == expected_model
+
+
+# =============================================================================
+# extract_json_from_markdown Tests
+# =============================================================================
+
+
+class TestExtractJsonFromMarkdown:
+    """Tests for extract_json_from_markdown function."""
+
+    @pytest.mark.parametrize(
+        ("raw_input", "expected_output"),
+        [
+            pytest.param(
+                '```json\n{"role": "Reader"}\n```',
+                '{"role": "Reader"}',
+                id="json_code_block",
+            ),
+            pytest.param(
+                'Here is the JSON:\n```json\n{"key": "value"}\n```\nEnd of response.',
+                '{"key": "value"}',
+                id="json_block_with_surrounding_text",
+            ),
+            pytest.param(
+                '```\n{"role": "Contributor"}\n```',
+                '{"role": "Contributor"}',
+                id="generic_code_block",
+            ),
+            pytest.param(
+                '{"role": "Owner"}',
+                '{"role": "Owner"}',
+                id="plain_json_no_markdown",
+            ),
+            pytest.param(
+                '  {"role": "Reader"}  ',
+                '{"role": "Reader"}',
+                id="json_with_whitespace",
+            ),
+            pytest.param(
+                '```json\n{"signals": ["read", "write"]}\n```',
+                '{"signals": ["read", "write"]}',
+                id="json_with_array",
+            ),
+            pytest.param(
+                'Response: ```json\n{"nested": {"key": "value"}}\n```',
+                '{"nested": {"key": "value"}}',
+                id="json_with_nested_object",
+            ),
+        ],
+    )
+    def test_markdown_extraction(self, raw_input: str, expected_output: str):
+        """Test extraction of JSON from various markdown formats."""
+        from azurerbac.airecommender.llm.json_repair import extract_json_from_markdown
+
+        result = extract_json_from_markdown(raw_input)
+        assert result.strip() == expected_output.strip()
+
+    def test_multiple_code_blocks_extracts_first(self):
+        """Test that only the first code block is extracted."""
+        from azurerbac.airecommender.llm.json_repair import extract_json_from_markdown
+
+        raw = '```json\n{"first": true}\n```\n\n```json\n{"second": true}\n```'
+        result = extract_json_from_markdown(raw)
+        assert '"first"' in result
+        assert '"second"' not in result

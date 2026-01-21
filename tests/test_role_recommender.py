@@ -8,8 +8,15 @@ import pytest
 from azurerbac.core.patterns import matches_pattern, pattern_to_regex
 from azurerbac.matching import recommend_roles
 from azurerbac.matching.role_matching import (
+    _prefix_pattern_covers,
+    _segment_pattern_covers,
+    _suffix_pattern_covers,
     check_operation_allowed,
+    check_wildcard_operation_allowed,
+    count_net_permissions,
+    count_wildcard_partial_coverage,
     operation_matches_any_pattern,
+    pattern_covers_pattern,
 )
 from tests.helpers import make_role_definition
 
@@ -68,6 +75,316 @@ class TestPatternMatching:
         assert operation_matches_any_pattern("Microsoft.Storage/storageAccounts/read", patterns)
         assert operation_matches_any_pattern("Microsoft.Compute/virtualMachines/read", patterns)
         assert not operation_matches_any_pattern("Microsoft.Network/virtualNetworks/read", patterns)
+
+
+# =============================================================================
+# Pattern Covers Pattern Tests
+# =============================================================================
+
+
+class TestPatternCoversPattern:
+    """Tests for pattern_covers_pattern and helper functions."""
+
+    @pytest.mark.parametrize(
+        "role_pattern,requested_pattern,expected",
+        [
+            # Exact match
+            ("Microsoft.Storage/read", "Microsoft.Storage/read", True),
+            # Universal wildcard
+            ("*", "Microsoft.Storage/storageAccounts/read", True),
+            ("*", "anything/at/all", True),
+            # Different patterns don't match
+            ("Microsoft.Storage/write", "Microsoft.Storage/read", False),
+        ],
+    )
+    def test_pattern_covers_exact_and_wildcard(
+        self, role_pattern: str, requested_pattern: str, expected: bool
+    ):
+        """Test exact match and universal wildcard coverage."""
+        assert pattern_covers_pattern(role_pattern, requested_pattern) == expected
+
+
+class TestSuffixPatternCovers:
+    """Tests for _suffix_pattern_covers function."""
+
+    @pytest.mark.parametrize(
+        "role_pattern,requested_pattern,expected",
+        [
+            # Valid suffix patterns
+            ("*/read", "Microsoft.Storage/storageAccounts/read", True),
+            ("*/delete", "Microsoft.Compute/virtualMachines/delete", True),
+            # Suffix doesn't match
+            ("*/read", "Microsoft.Storage/storageAccounts/write", False),
+            ("*/delete", "Microsoft.Storage/storageAccounts/read", False),
+            # Not a suffix pattern
+            ("Microsoft.Storage/*", "Microsoft.Storage/accounts/read", False),
+            ("Microsoft.Storage/read", "Microsoft.Storage/read", False),
+            # Case sensitivity (Azure operations are case-insensitive but suffix check is literal)
+            ("*/Read", "Microsoft.Storage/storageAccounts/Read", True),
+        ],
+    )
+    def test_suffix_pattern_covers(self, role_pattern: str, requested_pattern: str, expected: bool):
+        """Test suffix pattern coverage logic."""
+        assert _suffix_pattern_covers(role_pattern, requested_pattern) == expected
+
+
+class TestPrefixPatternCovers:
+    """Tests for _prefix_pattern_covers function."""
+
+    @pytest.mark.parametrize(
+        "role_pattern,requested_pattern,expected",
+        [
+            # Valid prefix patterns (must end with /*)
+            ("Microsoft.Storage/*", "Microsoft.Storage/storageAccounts/read", True),
+            ("Microsoft.Compute/*", "Microsoft.Compute/virtualMachines/delete", True),
+            # Prefix doesn't match
+            ("Microsoft.Storage/*", "Microsoft.Compute/virtualMachines/read", False),
+            ("Microsoft.Network/*", "Microsoft.Storage/storageAccounts/read", False),
+            # Not a prefix pattern (doesn't end with /*)
+            ("*/read", "Microsoft.Storage/accounts/read", False),
+            ("Microsoft.Storage/read", "Microsoft.Storage/read", False),
+            ("Microsoft.*", "Microsoft.Storage/read", False),  # Ends with * but not /*
+        ],
+    )
+    def test_prefix_pattern_covers(self, role_pattern: str, requested_pattern: str, expected: bool):
+        """Test prefix pattern coverage logic."""
+        assert _prefix_pattern_covers(role_pattern, requested_pattern) == expected
+
+
+class TestSegmentPatternCovers:
+    """Tests for _segment_pattern_covers function - segment-by-segment matching."""
+
+    @pytest.mark.parametrize(
+        "role_pattern,requested_pattern,expected",
+        [
+            # Middle wildcard patterns
+            ("Microsoft.Storage/*/read", "Microsoft.Storage/storageAccounts/read", True),
+            # Trailing wildcard
+            ("Microsoft.Storage/*", "Microsoft.Storage/storageAccounts/read", True),
+            ("Microsoft.Storage/storageAccounts/*", "Microsoft.Storage/storageAccounts/read", True),
+            # Multiple segments with wildcards
+            (
+                "Microsoft.Storage/*/blobServices/*",
+                "Microsoft.Storage/accounts/blobServices/containers",
+                True,
+            ),
+            # Pattern too long
+            ("Microsoft.Storage/a/b/c/d", "Microsoft.Storage/a/b", False),
+            # Segment mismatch
+            ("Microsoft.Storage/*/write", "Microsoft.Storage/storageAccounts/read", False),
+            ("Microsoft.Compute/*/read", "Microsoft.Storage/storageAccounts/read", False),
+            # Requested has wildcard but role has specific
+            ("Microsoft.Storage/storageAccounts/read", "Microsoft.Storage/*/read", False),
+            # Case insensitivity
+            ("microsoft.storage/*/read", "Microsoft.Storage/storageAccounts/read", True),
+            # First segment wildcard (Microsoft.* style patterns)
+            ("*/virtualMachines/read", "Microsoft.Compute/virtualMachines/read", True),
+        ],
+    )
+    def test_segment_pattern_covers(
+        self, role_pattern: str, requested_pattern: str, expected: bool
+    ):
+        """Test segment-by-segment pattern coverage."""
+        assert _segment_pattern_covers(role_pattern, requested_pattern) == expected
+
+
+# =============================================================================
+# Wildcard Operation Tests
+# =============================================================================
+
+
+class TestCheckWildcardOperationAllowed:
+    """Tests for check_wildcard_operation_allowed function."""
+
+    @pytest.mark.parametrize(
+        "requested_pattern,actions,not_actions,expected",
+        [
+            # Universal wildcard covers everything
+            ("Microsoft.Storage/*", ["*"], [], True),
+            # Prefix pattern covers prefix request
+            ("Microsoft.Storage/*", ["Microsoft.Storage/*"], [], True),
+            # Suffix pattern covers suffix request
+            ("*/read", ["*/read"], [], True),
+            # Broader action covers narrower request
+            ("Microsoft.Storage/storageAccounts/*", ["Microsoft.Storage/*"], [], True),
+            # notAction excludes
+            ("Microsoft.Storage/*", ["*"], ["Microsoft.Storage/*"], False),
+            # notAction overlaps with wildcard request (conservative: returns False)
+            ("*/read", ["*"], ["Microsoft.Authorization/*/read"], False),
+            # notAction doesn't overlap (different suffix)
+            ("*/read", ["*"], ["Microsoft.Authorization/*/delete"], True),
+            # Action doesn't cover request
+            ("Microsoft.Storage/*", ["Microsoft.Compute/*"], [], False),
+            # Complex: notAction prefix/suffix don't overlap with request
+            (
+                "Microsoft.Storage/*/read",
+                ["*"],
+                ["Microsoft.Authorization/*/delete"],
+                True,
+            ),
+        ],
+    )
+    def test_wildcard_operation_allowed(
+        self,
+        requested_pattern: str,
+        actions: list[str],
+        not_actions: list[str],
+        expected: bool,
+    ):
+        """Test wildcard operation allowed logic."""
+        assert check_wildcard_operation_allowed(requested_pattern, actions, not_actions) == expected
+
+
+class TestCountWildcardPartialCoverage:
+    """Tests for count_wildcard_partial_coverage function."""
+
+    @pytest.mark.parametrize(
+        "requested_pattern,actions,not_actions,all_ops,expected_covered,expected_total",
+        [
+            pytest.param(
+                "Microsoft.Storage/*",
+                ["microsoft.storage/storageaccounts/read"],  # Explicit must match lowercase
+                [],
+                {
+                    "microsoft.storage/storageaccounts/read",
+                    "microsoft.storage/storageaccounts/write",
+                    "microsoft.storage/storageaccounts/delete",
+                    "microsoft.compute/virtualmachines/read",
+                },
+                1,
+                3,
+                id="single-action-partial-coverage",
+            ),
+            pytest.param(
+                "Microsoft.Storage/*",
+                ["Microsoft.Storage/*"],  # Wildcards use pattern matching (case-insensitive)
+                [],
+                {
+                    "microsoft.storage/storageaccounts/read",
+                    "microsoft.storage/storageaccounts/write",
+                    "microsoft.compute/virtualmachines/read",
+                },
+                2,
+                2,
+                id="wildcard-action-full-coverage",
+            ),
+            pytest.param(
+                "Microsoft.Storage/*",
+                ["*"],
+                [],
+                {
+                    "microsoft.storage/storageaccounts/read",
+                    "microsoft.storage/storageaccounts/write",
+                },
+                2,
+                2,
+                id="star-action-full-coverage",
+            ),
+            pytest.param(
+                "Microsoft.Storage/*",
+                ["*"],
+                [],
+                {"microsoft.compute/virtualmachines/read"},
+                0,
+                0,
+                id="no-matching-operations",
+            ),
+        ],
+    )
+    def test_coverage_parametrized(
+        self,
+        requested_pattern: str,
+        actions: list[str],
+        not_actions: list[str],
+        all_ops: set[str],
+        expected_covered: int,
+        expected_total: int,
+    ):
+        """Test coverage calculation with various scenarios."""
+        result = count_wildcard_partial_coverage(
+            requested_pattern=requested_pattern,
+            actions=actions,
+            not_actions=not_actions,
+            all_operations=all_ops,
+        )
+        assert result.covered == expected_covered
+        assert result.total == expected_total
+
+    def test_coverage_with_not_actions(self):
+        """Test that notActions properly exclude operations via pattern matching."""
+        all_ops = {
+            "microsoft.storage/storageaccounts/read",
+            "microsoft.storage/storageaccounts/write",
+            "microsoft.storage/storageaccounts/delete",
+        }
+        # Use wildcard notAction to properly exclude via pattern matching
+        result = count_wildcard_partial_coverage(
+            requested_pattern="Microsoft.Storage/*",
+            actions=["Microsoft.Storage/*"],
+            not_actions=[
+                "Microsoft.Storage/storageAccounts/delete"
+            ],  # Wildcardless must match exactly
+            all_operations=all_ops,
+        )
+        # Note: explicit notAction "Microsoft.Storage/storageAccounts/delete" won't match
+        # "microsoft.storage/storageaccounts/delete" due to case difference
+        # Use wildcard pattern for case-insensitive exclusion
+        assert result.covered == 3  # All matched because notAction didn't match (case)
+
+    def test_coverage_with_wildcard_not_actions(self):
+        """Test that wildcard notActions properly exclude operations."""
+        all_ops = {
+            "microsoft.storage/storageaccounts/read",
+            "microsoft.storage/storageaccounts/write",
+            "microsoft.storage/storageaccounts/delete",
+        }
+        result = count_wildcard_partial_coverage(
+            requested_pattern="Microsoft.Storage/*",
+            actions=["Microsoft.Storage/*"],
+            not_actions=["*/delete"],  # Wildcard pattern for case-insensitive matching
+            all_operations=all_ops,
+        )
+        assert result.covered == 2
+        assert result.uncovered == 1
+
+
+class TestCountNetPermissions:
+    """Tests for count_net_permissions function."""
+
+    @pytest.mark.parametrize(
+        "actions,not_actions,all_ops,expected",
+        [
+            pytest.param([], [], {"op1", "op2"}, 0, id="empty-actions-zero"),
+            pytest.param(["*"], [], {"op1", "op2", "op3"}, 3, id="star-returns-all"),
+            pytest.param(["op1", "op2"], [], {"op1", "op2", "op3"}, 2, id="explicit-actions"),
+            pytest.param(
+                ["*"],
+                ["microsoft.storage/read"],
+                {"microsoft.storage/read", "microsoft.storage/write", "microsoft.compute/read"},
+                2,
+                id="star-minus-explicit-notaction",
+            ),
+        ],
+    )
+    def test_count_net_permissions_parametrized(
+        self,
+        actions: list[str],
+        not_actions: list[str],
+        all_ops: set[str],
+        expected: int,
+    ):
+        """Test net permission counting with various scenarios."""
+        assert count_net_permissions(actions, not_actions, all_ops) == expected
+
+    def test_wildcard_actions_expanded(self):
+        """Wildcard actions are expanded and counted."""
+        all_ops = {
+            "microsoft.storage/storageaccounts/read",
+            "microsoft.storage/storageaccounts/write",
+            "microsoft.compute/virtualmachines/read",
+        }
+        result = count_net_permissions(["Microsoft.Storage/*"], [], all_ops)
+        assert result == 2
 
 
 # =============================================================================

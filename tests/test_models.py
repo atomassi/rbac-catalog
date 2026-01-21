@@ -561,3 +561,158 @@ class TestDeletedRoleProperties:
         assert role.created_on is None
         assert role.first_seen_at is None
         assert role.last_seen_at is None
+
+
+# =============================================================================
+# Matching Models Tests
+# =============================================================================
+
+
+class TestMatchingModels:
+    """Tests for matching module models."""
+
+    @pytest.mark.parametrize(
+        "plane,actions,not_actions,expected_none",
+        [
+            pytest.param(
+                None,
+                ["Microsoft.Storage/*"],
+                [],
+                True,
+                id="none_plane_returns_none",
+            ),
+            pytest.param(
+                "CONTROL",
+                ["Microsoft.Storage/*"],
+                [],
+                False,
+                id="control_plane_returns_key",
+            ),
+            pytest.param(
+                "DATA",
+                ["Microsoft.Storage/*"],
+                ["*/delete"],
+                False,
+                id="data_plane_with_not_actions",
+            ),
+        ],
+    )
+    def test_partial_coverage_cache_key_build(
+        self,
+        plane: str | None,
+        actions: list[str],
+        not_actions: list[str],
+        expected_none: bool,
+    ):
+        """Test PartialCoverageCacheKey.build with various inputs."""
+        from azurerbac.matching.models import PartialCoverageCacheKey, Plane
+
+        plane_enum = Plane[plane] if plane else None
+        result = PartialCoverageCacheKey.build(
+            pattern="Microsoft.Storage/*",
+            plane=plane_enum,
+            actions=actions,
+            not_actions=not_actions,
+        )
+
+        if expected_none:
+            assert result is None
+        else:
+            assert result is not None
+            assert result.pattern == "Microsoft.Storage/*"
+            assert result.plane == plane_enum
+            assert result.actions == tuple(sorted(actions))
+            assert result.not_actions == tuple(sorted(not_actions))
+
+    def test_classified_operations_all_requested_property(self):
+        """Test ClassifiedOperations.all_requested union property."""
+        from azurerbac.matching.models import ClassifiedOperations
+
+        ops = ClassifiedOperations(
+            control=frozenset({"op1", "op2"}),
+            data=frozenset({"op3"}),
+            control_wildcards=frozenset({"wc1"}),
+            data_wildcards=frozenset({"wc2"}),
+        )
+
+        result = ops.all_requested
+        assert len(result) == 5
+        assert "op1" in result
+        assert "op3" in result
+        assert "wc1" in result
+        assert "wc2" in result
+
+    def test_classified_operations_len(self):
+        """Test ClassifiedOperations.__len__ returns total count."""
+        from azurerbac.matching.models import ClassifiedOperations
+
+        ops = ClassifiedOperations(
+            control=frozenset({"op1", "op2"}),
+            data=frozenset({"op3"}),
+            control_wildcards=frozenset(),
+            data_wildcards=frozenset({"wc1"}),
+        )
+
+        assert len(ops) == 4
+
+    @pytest.mark.parametrize(
+        "covered,total,expected_missing",
+        [
+            pytest.param(5, 10, 5, id="partial_coverage"),
+            pytest.param(10, 10, 0, id="full_coverage"),
+            pytest.param(0, 10, 10, id="no_coverage"),
+            pytest.param(15, 10, 0, id="over_coverage_clamped_to_zero"),
+        ],
+    )
+    def test_wildcard_coverage_missing_count(self, covered: int, total: int, expected_missing: int):
+        """Test WildcardCoverage.missing_count property."""
+        from azurerbac.matching.models import WildcardCoverage
+
+        wc = WildcardCoverage(
+            pattern="*/read",
+            plane="CONTROL",
+            covered_count=covered,
+            total_count=total,
+        )
+
+        assert wc.missing_count == expected_missing
+
+    def test_role_match_is_full_match_property(self):
+        """Test RoleMatch.is_full_match property."""
+        from azurerbac.matching.models import RoleMatch
+
+        full_match = RoleMatch(
+            role_id="r1",
+            role_name="Full Match",
+            description="Test",
+            matched_operations=["op1", "op2"],
+            missing_operations=[],
+        )
+        assert full_match.is_full_match is True
+
+        partial_match = RoleMatch(
+            role_id="r2",
+            role_name="Partial Match",
+            description="Test",
+            matched_operations=["op1"],
+            missing_operations=["op2"],
+        )
+        assert partial_match.is_full_match is False
+
+    def test_role_match_to_dict(self):
+        """Test RoleMatch.to_dict includes is_full_match."""
+        from azurerbac.matching.models import RoleMatch
+
+        match = RoleMatch(
+            role_id="r1",
+            role_name="Test",
+            description="Test desc",
+            matched_operations=["op1"],
+            missing_operations=[],
+        )
+
+        result = match.to_dict()
+        assert result["role_id"] == "r1"
+        assert result["role_name"] == "Test"
+        assert result["is_full_match"] is True
+        assert "missing_operations" in result

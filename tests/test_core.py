@@ -674,3 +674,158 @@ class TestUtils:
         assert result is not None
         assert result.endswith("Z")
         assert "+00:00" not in result
+
+
+# =============================================================================
+# Pattern Utility Tests
+# =============================================================================
+
+
+class TestPatternUtilities:
+    """Tests for core/patterns.py utility functions."""
+
+    @pytest.mark.parametrize(
+        "pattern,expected",
+        [
+            pytest.param("Microsoft.Storage/*", True, id="trailing_wildcard"),
+            pytest.param("*/read", True, id="leading_wildcard"),
+            pytest.param("Microsoft.*/read", True, id="middle_wildcard"),
+            pytest.param("*", True, id="universal_wildcard"),
+            pytest.param("Microsoft.Storage/read", False, id="no_wildcard"),
+            pytest.param("Microsoft.Storage/storageAccounts/read", False, id="explicit_path"),
+        ],
+    )
+    def test_is_wildcard_pattern(self, pattern: str, expected: bool):
+        """Test is_wildcard_pattern detection."""
+        from azurerbac.core.patterns import is_wildcard_pattern
+
+        assert is_wildcard_pattern(pattern) == expected
+
+    @pytest.mark.parametrize(
+        "pattern,expected",
+        [
+            pytest.param("Microsoft.Storage/*", "Microsoft.Storage/%", id="trailing_wildcard"),
+            pytest.param("*/read", "%/read", id="leading_wildcard"),
+            pytest.param("Microsoft.*/read", "Microsoft.%/read", id="middle_wildcard"),
+            pytest.param("*", "%", id="universal_wildcard"),
+            pytest.param("Microsoft.Storage/read", "Microsoft.Storage/read", id="no_wildcard"),
+            # Escaping special SQL characters
+            pytest.param("test%pattern", r"test\%pattern", id="escape_percent"),
+            pytest.param("test_pattern", r"test\_pattern", id="escape_underscore"),
+        ],
+    )
+    def test_wildcard_to_sql_like(self, pattern: str, expected: str):
+        """Test wildcard_to_sql_like conversion."""
+        from azurerbac.core.patterns import wildcard_to_sql_like
+
+        assert wildcard_to_sql_like(pattern) == expected
+
+    @pytest.mark.parametrize(
+        "patterns,all_ops,expected_count",
+        [
+            pytest.param(
+                ["Microsoft.Storage/*"],
+                {
+                    "microsoft.storage/storageaccounts/read",
+                    "microsoft.storage/storageaccounts/write",
+                    "microsoft.compute/virtualmachines/read",
+                },
+                2,
+                id="prefix_wildcard",
+            ),
+            pytest.param(
+                ["*/read"],
+                {
+                    "microsoft.storage/storageaccounts/read",
+                    "microsoft.compute/virtualmachines/read",
+                    "microsoft.storage/storageaccounts/write",
+                },
+                2,
+                id="suffix_wildcard",
+            ),
+            pytest.param(
+                ["*"],
+                {"op1", "op2", "op3"},
+                3,
+                id="universal_wildcard_returns_all",
+            ),
+            pytest.param(
+                ["microsoft.storage/storageaccounts/read"],
+                {
+                    "microsoft.storage/storageaccounts/read",
+                    "microsoft.storage/storageaccounts/write",
+                },
+                1,
+                id="explicit_case_insensitive_match",
+            ),
+            pytest.param(
+                ["Microsoft.Storage/storageAccounts/read"],  # Mixed case
+                {
+                    "microsoft.storage/storageaccounts/read",  # Lowercase
+                    "microsoft.storage/storageaccounts/write",
+                },
+                1,
+                id="explicit_mixed_case_match",
+            ),
+            pytest.param(
+                ["nonexistent/operation"],
+                {"op1", "op2"},
+                0,
+                id="no_match_returns_empty",
+            ),
+            pytest.param(
+                [],
+                {"op1", "op2"},
+                0,
+                id="empty_patterns_returns_empty",
+            ),
+        ],
+    )
+    def test_expand_patterns_to_operations(
+        self, patterns: list[str], all_ops: set[str], expected_count: int
+    ):
+        """Test expand_patterns_to_operations with various patterns."""
+        from azurerbac.core.patterns import expand_patterns_to_operations
+
+        result = expand_patterns_to_operations(patterns, all_ops)
+        assert len(result) == expected_count
+
+    def test_expand_patterns_with_multiple_patterns(self):
+        """Test expanding multiple patterns at once."""
+        from azurerbac.core.patterns import expand_patterns_to_operations
+
+        patterns = ["Microsoft.Storage/*", "Microsoft.Compute/*"]
+        all_ops = {
+            "microsoft.storage/storageaccounts/read",
+            "microsoft.compute/virtualmachines/start",
+            "microsoft.network/virtualnetworks/read",
+        }
+
+        result = expand_patterns_to_operations(patterns, all_ops)
+        assert len(result) == 2
+        assert "microsoft.storage/storageaccounts/read" in result
+        assert "microsoft.compute/virtualmachines/start" in result
+        assert "microsoft.network/virtualnetworks/read" not in result
+
+
+# =============================================================================
+# Enum Tests
+# =============================================================================
+
+
+class TestSortOrder:
+    """Tests for SortOrder enum."""
+
+    @pytest.mark.parametrize(
+        ("order", "is_desc"),
+        [
+            pytest.param("asc", False, id="asc_not_descending"),
+            pytest.param("desc", True, id="desc_is_descending"),
+        ],
+    )
+    def test_is_descending_property(self, order: str, is_desc: bool):
+        """Test is_descending property returns correct value."""
+        from azurerbac.core.enums import SortOrder
+
+        sort_order = SortOrder(order)
+        assert sort_order.is_descending == is_desc

@@ -48,6 +48,7 @@ async def fetch_all_time_stats(session: AsyncSession) -> AllTimeStats:
         select(
             func.coalesce(func.sum(RoleScanStatus.additions), 0).label("adds"),
             func.coalesce(func.sum(RoleScanStatus.updates), 0).label("updates"),
+            func.coalesce(func.sum(RoleScanStatus.deletions), 0).label("deletes"),
             func.count(RoleScanStatus.id).label("scan_count"),
             func.min(RoleScanStatus.scan_timestamp).label("first_scan"),
             func.max(RoleScanStatus.scan_timestamp).label("last_scan"),
@@ -55,15 +56,10 @@ async def fetch_all_time_stats(session: AsyncSession) -> AllTimeStats:
     )
     scan_row = scan_result.one()
 
-    delete_result = await session.execute(
-        select(func.count(RoleHistory.id)).where(RoleHistory.event_type == EventType.DELETED)
-    )
-    deletion_count = delete_result.scalar() or 0
-
     return AllTimeStats(
         total_additions=int(scan_row.adds),
         total_updates=int(scan_row.updates),
-        total_deletions=int(deletion_count),
+        total_deletions=int(scan_row.deletes),
         total_scans=int(scan_row.scan_count),
         first_scan_date=scan_row.first_scan,
         last_scan_date=scan_row.last_scan,
@@ -78,27 +74,16 @@ async def fetch_rolling_stats(session: AsyncSession, window_days: int) -> Rollin
         select(
             func.coalesce(func.sum(RoleScanStatus.additions), 0).label("adds"),
             func.coalesce(func.sum(RoleScanStatus.updates), 0).label("updates"),
+            func.coalesce(func.sum(RoleScanStatus.deletions), 0).label("deletes"),
         ).where(RoleScanStatus.scan_timestamp >= cutoff)
     )
     scan_row = scan_result.one()
-
-    delete_result = await session.execute(
-        select(func.count(RoleHistory.id))
-        .join(RoleScanStatus, RoleScanStatus.id == RoleHistory.scan_id)
-        .where(
-            and_(
-                RoleHistory.event_type == EventType.DELETED,
-                RoleScanStatus.scan_timestamp >= cutoff,
-            )
-        )
-    )
-    deletion_count = delete_result.scalar() or 0
 
     stats = RollingStats(
         window_days=window_days,
         additions=int(scan_row.adds),
         updates=int(scan_row.updates),
-        deletions=int(deletion_count),
+        deletions=int(scan_row.deletes),
     )
     logger.debug(
         "Rolling %dd stats: +%d adds, ~%d updates, -%d deletions",
@@ -122,55 +107,22 @@ async def fetch_daily_changes(
             func.date(RoleScanStatus.scan_timestamp).label("scan_date"),
             func.sum(RoleScanStatus.additions).label("adds"),
             func.sum(RoleScanStatus.updates).label("updates"),
+            func.sum(RoleScanStatus.deletions).label("deletes"),
         )
         .where(RoleScanStatus.scan_timestamp >= cutoff)
         .group_by(func.date(RoleScanStatus.scan_timestamp))
         .order_by(func.date(RoleScanStatus.scan_timestamp))
     )
 
-    delete_result = await session.execute(
-        select(
-            func.date(RoleScanStatus.scan_timestamp).label("del_date"),
-            func.count(RoleHistory.id).label("del_count"),
-        )
-        .join(RoleScanStatus, RoleScanStatus.id == RoleHistory.scan_id)
-        .where(
-            and_(
-                RoleHistory.event_type == EventType.DELETED,
-                RoleScanStatus.scan_timestamp >= cutoff,
-            )
-        )
-        .group_by(func.date(RoleScanStatus.scan_timestamp))
-    )
-
-    # Build lookup dictionaries by date
-    adds_by_date: dict[str, int] = {}
-    updates_by_date: dict[str, int] = {}
-    deletions_by_date: dict[str, int] = {}
-    all_dates: set[str] = set()
-
-    for row in scan_result.all():
-        date_key = str(row.scan_date) if row.scan_date else ""
-        if date_key:
-            adds_by_date[date_key] = int(row.adds or 0)
-            updates_by_date[date_key] = int(row.updates or 0)
-            all_dates.add(date_key)
-
-    for row in delete_result.all():
-        date_key = str(row.del_date) if row.del_date else ""
-        if date_key:
-            deletions_by_date[date_key] = int(row.del_count)
-            all_dates.add(date_key)
-
-    # Combine results for all dates
     daily_list = [
         DailyChanges(
-            date=date_key,
-            additions=adds_by_date.get(date_key, 0),
-            updates=updates_by_date.get(date_key, 0),
-            deletions=deletions_by_date.get(date_key, 0),
+            date=str(row.scan_date) if row.scan_date else "",
+            additions=int(row.adds or 0),
+            updates=int(row.updates or 0),
+            deletions=int(row.deletes or 0),
         )
-        for date_key in sorted(all_dates)
+        for row in scan_result.all()
+        if row.scan_date
     ]
     logger.debug("Daily changes: %d days with activity", len(daily_list))
     return daily_list

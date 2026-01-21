@@ -7,16 +7,11 @@ from __future__ import annotations
 
 import datetime as dt
 from dataclasses import dataclass, field
-from typing import ClassVar, Final
+from typing import ClassVar
 
 from azurerbac.analytics.serialization import SerializableMixin
 from azurerbac.core.types import JsonDict
 from azurerbac.core.utils import format_datetime, parse_datetime
-
-VOLATILE_THRESHOLD: Final[int] = 3
-TOP_N_ROLES: Final[int] = 10
-TOP_N_PROVIDERS: Final[int] = 15
-DAILY_CHANGES_DAYS: Final[int] = 180
 
 
 @dataclass(frozen=True, slots=True)

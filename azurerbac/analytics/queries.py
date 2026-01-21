@@ -9,11 +9,13 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import and_, case, distinct, func, select
 
-from azurerbac.analytics.models import (
+from azurerbac.analytics.constants import (
     DAILY_CHANGES_DAYS,
     TOP_N_PROVIDERS,
     TOP_N_ROLES,
     VOLATILE_THRESHOLD,
+)
+from azurerbac.analytics.models import (
     AllTimeStats,
     DailyChanges,
     DeletedRole,

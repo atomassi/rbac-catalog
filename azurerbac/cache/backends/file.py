@@ -159,6 +159,10 @@ class FileCacheBackend(CacheBackend):
             if data.all_change_events:
                 data_dict["all_change_events"] = [ev.to_dict() for ev in data.all_change_events]
 
+            # Convert analytics data to dict
+            if data.analytics is not None:
+                data_dict["analytics"] = data.analytics.to_dict()
+
             packed = serialize_to_bytes(data_dict)
 
             with open(temp_file, "wb") as f:
@@ -210,6 +214,12 @@ class FileCacheBackend(CacheBackend):
                 ]
 
             self._reconstruct_coverage_data(data_dict)
+
+            # Reconstruct analytics data
+            if analytics_raw := data_dict.get("analytics"):
+                from azurerbac.analytics.models import AnalyticsData
+
+                data_dict["analytics"] = AnalyticsData.from_dict(analytics_raw)
 
             data = CacheData(metadata=metadata, **data_dict)
             logger.info(

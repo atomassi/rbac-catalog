@@ -5,6 +5,7 @@ Tests for the pure functions in azurerbac.cache.build:
 - build_operations_prefix_index
 """
 
+import datetime as dt
 import os
 import pickle
 from datetime import UTC, datetime
@@ -12,6 +13,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from azurerbac.analytics.models import AnalyticsData, DailyChanges
 from azurerbac.azure.models import OperationData, RoleDefinition
 from azurerbac.cache import (
     CacheContainer,
@@ -1124,6 +1126,59 @@ class TestCacheFileOperations:
         backend = get_cache_service().backend
         result = await backend.load()
         assert result is None
+
+    async def test_save_and_load_analytics_data(
+        self, temp_cache_dir, sample_roles, sample_operations
+    ) -> None:
+        """Test that analytics data is correctly reconstructed when loading from disk."""
+        backend = get_cache_service().backend
+
+        # Create analytics data with daily changes
+        analytics = AnalyticsData(
+            daily_changes=[
+                DailyChanges(date=dt.date(2026, 1, 15), additions=5, updates=3, deletions=1),
+                DailyChanges(date=dt.date(2026, 1, 16), additions=2, updates=0, deletions=0),
+            ],
+            new_operations_30d=10,
+            total_operations=100,
+            total_providers=15,
+        )
+
+        metadata = CacheMetadata(
+            roles_count=len(sample_roles),
+            operations_count=len(sample_operations),
+        )
+        roles_by_id = make_cached_roles_by_id(sample_roles)
+        data = CacheData(
+            metadata=metadata,
+            roles_by_id=roles_by_id,
+            all_operations=sample_operations,
+            analytics=analytics,
+        )
+
+        # Save and load
+        await backend.save(data)
+        loaded = await backend.load()
+
+        # Verify analytics is an AnalyticsData object, not a dict
+        assert loaded is not None
+        assert loaded.analytics is not None
+        assert isinstance(loaded.analytics, AnalyticsData)
+
+        # Verify analytics data is correct
+        assert len(loaded.analytics.daily_changes) == 2
+        assert loaded.analytics.daily_changes[0].additions == 5
+        assert loaded.analytics.daily_changes[0].updates == 3
+        assert loaded.analytics.daily_changes[0].deletions == 1
+        assert loaded.analytics.new_operations_30d == 10
+        assert loaded.analytics.total_operations == 100
+        assert loaded.analytics.total_providers == 15
+
+        # Verify daily_changes items are DailyChanges objects (not dicts)
+        for dc in loaded.analytics.daily_changes:
+            assert isinstance(dc, DailyChanges)
+            assert hasattr(dc, "date")
+            assert hasattr(dc, "additions")
 
 
 # =============================================================================

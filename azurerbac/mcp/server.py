@@ -67,6 +67,11 @@ class MCPServer:
         self._mcp = FastMCP(name=MCP_SERVER_NAME, instructions=MCP_SERVER_INSTRUCTIONS)
         # Configure internal path to "/" so when mounted at /mcp, endpoint is /mcp (not /mcp/mcp)
         self._mcp.settings.streamable_http_path = "/"
+        # Allow production host for DNS rebinding protection
+        # Standard HTTPS (443) sends Host header without port
+        if self._mcp.settings.transport_security:
+            self._mcp.settings.transport_security.allowed_hosts.append("rbac-catalog.dev")
+            self._mcp.settings.transport_security.allowed_origins.append("https://rbac-catalog.dev")
         self._register_tools()
         track_event("mcp_server_initialized", {})
         logger.info("MCP server '%s' initialized", MCP_SERVER_NAME)

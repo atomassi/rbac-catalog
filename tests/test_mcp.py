@@ -277,7 +277,7 @@ class TestTransportSecurity:
         from azurerbac.web.constants import NEW_DOMAIN
 
         # Create first server
-        _server1 = MCPServer(mock_cache)
+        MCPServer(mock_cache)
         # Create second server (would share settings if they're class-level)
         server2 = MCPServer(mock_cache)
 

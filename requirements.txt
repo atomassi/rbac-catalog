@@ -11,6 +11,9 @@ python-multipart==0.0.21
 apscheduler==3.11.2
 slowapi==0.1.9
 azure-identity==1.25.1
+
+# Model Context Protocol (MCP) for AI assistant integrations
+mcp==1.25.0
 azure-mgmt-authorization==4.0.0
 python-dotenv==1.2.1
 httpx==0.28.1

@@ -37,7 +37,11 @@ The site runs on Azure with Cloudflare CDN.
 
 ```mermaid
 flowchart TD
-    USER((👥  Users)):::user
+    subgraph Clients[" "]
+        direction LR
+        USER((👥 Users)):::user
+        AI((🤖 Agents)):::ai
+    end
     GH[GitHub Actions]:::github
     CDN[Cloudflare]:::cdn
     
@@ -45,21 +49,23 @@ flowchart TD
         CR[(Container<br/>Registry)]:::azure
         AS[App Service]:::azure
         PG[(PostgreSQL)]:::db
-        AI[App Insights]:::monitor
+        INSIGHTS[App Insights]:::monitor
         OL[Ollama VM<br/>B2a v2]:::ollama
         GPU[GPU VM<br/>NVIDIA A10]:::gpu
     end
     
-    USER -->|requests| CDN
+    USER -->|web| CDN
+    AI -->|MCP| CDN
     CDN -->|proxy| AS
     GH -->|push image| CR
     CR -->|deploy| AS
     AS <-->|queries/ingestion| PG
-    AS -->|telemetry| AI
+    AS -->|telemetry| INSIGHTS
     AS -->|inference| OL
     GPU -.->|models| OL
     
     classDef user fill:#FFC107,color:#000,stroke:#FFA000,stroke-width:2px
+    classDef ai fill:#10B981,color:#fff,stroke:#059669,stroke-width:2px
     classDef github fill:#24292e,color:#fff,stroke:#1a1e22,stroke-width:2px
     classDef cdn fill:#F6821F,color:#fff,stroke:#d4700f,stroke-width:2px
     classDef azure fill:#0078D4,color:#fff,stroke:#005a9e,stroke-width:2px
@@ -69,6 +75,7 @@ flowchart TD
     classDef monitor fill:#68217A,color:#fff,stroke:#4e185c,stroke-width:2px
     
     style AZ fill:#E6F2FA,stroke:#0078D4,stroke-width:2px,rx:10
+    style Clients fill:none,stroke:none
 ```
 
 ### Cost
@@ -101,6 +108,97 @@ The AI Role Recommender supports **8 different modes**, each with different spee
 | **RAG** | Retrieval-Augmented Generation with LLM reranking | Embeddings + Ollama |
 | **HyDE** | Hypothetical document generation + semantic search | Embeddings + Ollama |
 | **Hybrid** | Multi-stage: TF-IDF → Embeddings → LLM pipeline | All components |
+
+## MCP Server Integration
+
+Azure RBAC Catalog exposes an [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server for AI assistants like GitHub Copilot, Claude, and Cursor. This allows AI tools to query Azure RBAC data directly.
+
+> [!WARNING]
+> **Known Limitation:** If the MCP server restarts, clients (VS Code, Claude Desktop) must reconnect. In VS Code, use `Cmd+Shift+P` → "Developer: Reload Window". See the [MCP troubleshooting guide](https://modelcontextprotocol.io/docs/tools/debugging) for more details.
+
+### Endpoint
+
+```
+https://rbac-catalog.dev/mcp/
+```
+
+The server uses Streamable HTTP transport (stateless mode with JSON responses) for scalable communication.
+
+### Available Tools
+
+| Tool | Description |
+|------|-------------|
+| `search_operations` | Search Azure operations by name/pattern (supports wildcards like `Microsoft.Storage/*/read`) |
+| `search_roles` | Search roles by name or description |
+| `get_role` | Get detailed role info including all permissions |
+| `get_role_permissions` | Get expanded list of actual operations a role grants |
+| `recommend_roles` | Find least-privilege roles for specific operations |
+| `ai_recommend` | Natural language role recommendations |
+
+### Example Usage
+
+**Natural language queries you can ask your AI assistant:**
+
+```
+"What Azure roles can read blob storage?"
+"I need to manage virtual machines but not delete them"
+"Find the least-privilege role for reading Key Vault secrets"
+"What permissions does the Storage Blob Data Contributor role have?"
+"Compare Reader vs Contributor roles"
+"Which roles allow Microsoft.Storage/storageAccounts/blobServices/containers/blobs/read and Microsoft.Storage/storageAccounts/blobServices/containers/blobs/tags/read?"
+"What operations correspond to Microsoft.Storage/*?"
+"Describe role b7e6dc6d-f1e8-4753-8033-0f276bb0955b"
+```
+
+**Direct tool invocations:**
+
+Search for storage operations:
+```
+search_operations("Microsoft.Storage/storageAccounts/read", limit=10)
+```
+
+Find all operations under a resource provider (wildcard search):
+```
+search_operations("Microsoft.Storage/*", limit=50)
+```
+
+Find roles matching a description:
+```
+search_roles("blob storage", limit=5)
+```
+
+Get AI-powered recommendations:
+```
+ai_recommend("I need to read and write blobs in Azure Storage", top_k=3)
+```
+
+Find least-privilege roles for specific operations:
+```
+recommend_roles(["Microsoft.Storage/storageAccounts/read", "Microsoft.Storage/storageAccounts/blobServices/containers/read"], max_results=5)
+```
+
+Find roles that grant specific blob operations:
+```
+recommend_roles(["Microsoft.Storage/storageAccounts/blobServices/containers/blobs/read", "Microsoft.Storage/storageAccounts/blobServices/containers/blobs/tags/read"], max_results=5)
+```
+
+Get detailed info about a role by ID:
+```
+get_role("b7e6dc6d-f1e8-4753-8033-0f276bb0955b")
+```
+
+Get detailed info about a role by name:
+```
+get_role("Storage Blob Data Reader")
+```
+
+### Rate Limiting
+
+The MCP server implements dual-layer rate limiting using token bucket algorithm:
+- **Global**: Protects against server overload (shared bucket across all clients)
+- **Per-session**: Prevents individual clients from monopolizing resources (separate bucket per session ID)
+
+Tokens refill continuously at a configurable rate, allowing burst capacity while enforcing sustained limits. Rate-limited requests receive informative error messages with retry-after guidance. Session buckets use LRU eviction to bound memory usage.
 
 ## LLM Fine-Tuning
 
@@ -194,6 +292,7 @@ azurerbac/
 ├── cache/           # Caching layer for roles and operations
 ├── core/            # Database models and utilities
 ├── matching/        # Operation-to-role matching for least-privilege role composition
+├── mcp/             # MCP server for AI assistant integrations
 ├── telemetry/       # Application Insights integration
 └── web/             # FastAPI app, routes, templates
 

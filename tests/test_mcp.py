@@ -264,17 +264,17 @@ class TestTransportSecurity:
 
     def test_adds_production_origin_to_allowed_origins(self, mock_cache: MagicMock) -> None:
         """Verify production origin is added to allowed_origins when transport_security exists."""
-        from azurerbac.web.constants import NEW_DOMAIN
+        from azurerbac.web.constants import SITE_URL
 
         server = MCPServer(mock_cache)
         transport_security = server._mcp.settings.transport_security  # pyright: ignore[reportPrivateUsage]
 
         assert transport_security is not None
-        assert f"https://{NEW_DOMAIN}" in transport_security.allowed_origins
+        assert SITE_URL in transport_security.allowed_origins
 
     def test_no_duplicate_entries_on_multiple_instantiation(self, mock_cache: MagicMock) -> None:
         """Verify multiple MCPServer instances don't create duplicate entries."""
-        from azurerbac.web.constants import NEW_DOMAIN
+        from azurerbac.web.constants import NEW_DOMAIN, SITE_URL
 
         # Create first server
         MCPServer(mock_cache)
@@ -286,7 +286,7 @@ class TestTransportSecurity:
         ts = server2._mcp.settings.transport_security  # pyright: ignore[reportPrivateUsage]
         assert ts is not None
         assert ts.allowed_hosts.count(NEW_DOMAIN) == 1
-        assert ts.allowed_origins.count(f"https://{NEW_DOMAIN}") == 1
+        assert ts.allowed_origins.count(SITE_URL) == 1
 
 
 class TestValidateInput:

@@ -118,7 +118,12 @@ templates.env.globals["site_url"] = SITE_URL
 
 # Create MCP Starlette app for mounting
 # Configured with streamable_http_path="/" so endpoint is /mcp (not /mcp/mcp)
-_mcp_server = create_mcp_server(get_cache_service().container)
+if settings.mcp_server_enabled:
+    _mcp_server = create_mcp_server(get_cache_service().container)
+else:
+    from azurerbac.mcp import create_disabled_mcp_app
+
+    _mcp_server = create_disabled_mcp_app()
 
 
 # ─────────────────────────────────────────────────────────────────────────────

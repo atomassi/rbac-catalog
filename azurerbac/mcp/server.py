@@ -476,3 +476,35 @@ def create_mcp_server(cache: CacheContainer) -> Starlette:
     the endpoint is /mcp (not /mcp/mcp).
     """
     return MCPServer(cache).streamable_http_app()
+
+
+def create_disabled_mcp_app() -> Starlette:
+    """Create a disabled MCP app that returns 503 for all requests.
+
+    Used when MCP_SERVER_ENABLED is False to gracefully disable the MCP server
+    while still responding to requests with an informative message.
+    """
+    from starlette.requests import Request
+    from starlette.responses import JSONResponse
+    from starlette.routing import Route
+
+    async def disabled_handler(request: Request) -> JSONResponse:
+        """Return 503 Service Unavailable for all MCP requests."""
+        return JSONResponse(
+            {
+                "jsonrpc": "2.0",
+                "error": {
+                    "code": -32000,
+                    "message": "MCP server is currently unavailable. Please try again later.",
+                },
+                "id": None,
+            },
+            status_code=503,
+        )
+
+    return Starlette(
+        routes=[
+            Route("/", disabled_handler, methods=["GET", "POST"]),
+            Route("/{path:path}", disabled_handler, methods=["GET", "POST"]),
+        ],
+    )

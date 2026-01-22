@@ -164,17 +164,17 @@ async def fetch_recently_updated_roles(
     session: AsyncSession,
     limit: int = TOP_N_ROLES,
 ) -> list[RecentlyUpdatedRole]:
-    """Fetch most recently updated roles (sorted by azure_updated_on)."""
+    """Fetch most recently updated roles (sorted by date, no minimum updates filter)."""
     result = await session.execute(
         select(
             RoleHistory.role_id,
             Role.role_name,
-            RoleHistory.azure_updated_on.label("last_updated"),
+            RoleScanStatus.scan_timestamp.label("last_updated"),
         )
         .join(Role, Role.role_id == RoleHistory.role_id)
+        .join(RoleScanStatus, RoleScanStatus.id == RoleHistory.scan_id)
         .where(RoleHistory.event_type == EventType.UPDATED)
-        .where(RoleHistory.azure_updated_on.isnot(None))
-        .order_by(RoleHistory.azure_updated_on.desc())
+        .order_by(RoleScanStatus.scan_timestamp.desc())
         .limit(limit)
     )
 

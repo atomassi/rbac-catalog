@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -23,6 +24,9 @@ from azurerbac.analytics.models import (
     TopRoleByPermissions,
 )
 from azurerbac.analytics.service import AnalyticsService
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 # =============================================================================
 # Fixtures
@@ -567,6 +571,152 @@ class TestComputeTopRolesByPermissions:
 
         assert top_by_actions == []
         assert top_by_data_actions == []
+
+
+class TestFetchRecentlyUpdatedRoles:
+    """Tests for fetch_recently_updated_roles query function."""
+
+    async def test_returns_roles_ordered_by_azure_updated_on(
+        self, db_session: AsyncSession
+    ) -> None:
+        """Verify roles are returned in descending azure_updated_on order."""
+        from azurerbac.analytics.queries import fetch_recently_updated_roles
+        from azurerbac.core.constants import EventType, RoleStatus
+        from azurerbac.core.models import Role, RoleHistory
+
+        # Create test roles
+        role1 = Role(role_id="role-1", role_name="Role One", status=RoleStatus.ACTIVE)
+        role2 = Role(role_id="role-2", role_name="Role Two", status=RoleStatus.ACTIVE)
+        role3 = Role(role_id="role-3", role_name="Role Three", status=RoleStatus.ACTIVE)
+        db_session.add_all([role1, role2, role3])
+        await db_session.flush()
+
+        # Create history entries with different azure_updated_on timestamps
+        now = dt.datetime.now(dt.UTC)
+        history1 = RoleHistory(
+            role_id="role-1",
+            role_name="Role One",
+            version_number=2,
+            event_type=EventType.UPDATED,
+            azure_updated_on=now - dt.timedelta(days=3),  # Oldest
+            role_json={"name": "role-1"},
+            diff_json={},
+            summary="Updated role 1",
+        )
+        history2 = RoleHistory(
+            role_id="role-2",
+            role_name="Role Two",
+            version_number=2,
+            event_type=EventType.UPDATED,
+            azure_updated_on=now - dt.timedelta(days=1),  # Newest
+            role_json={"name": "role-2"},
+            diff_json={},
+            summary="Updated role 2",
+        )
+        history3 = RoleHistory(
+            role_id="role-3",
+            role_name="Role Three",
+            version_number=2,
+            event_type=EventType.UPDATED,
+            azure_updated_on=now - dt.timedelta(days=2),  # Middle
+            role_json={"name": "role-3"},
+            diff_json={},
+            summary="Updated role 3",
+        )
+        db_session.add_all([history1, history2, history3])
+        await db_session.commit()
+
+        result = await fetch_recently_updated_roles(db_session, limit=10)
+
+        assert len(result) == 3
+        # Should be ordered by azure_updated_on descending (newest first)
+        assert result[0].role_id == "role-2"
+        assert result[1].role_id == "role-3"
+        assert result[2].role_id == "role-1"
+
+    async def test_excludes_null_azure_updated_on(self, db_session: AsyncSession) -> None:
+        """Verify rows with NULL azure_updated_on are excluded."""
+        from azurerbac.analytics.queries import fetch_recently_updated_roles
+        from azurerbac.core.constants import EventType, RoleStatus
+        from azurerbac.core.models import Role, RoleHistory
+
+        # Create test roles
+        role1 = Role(role_id="role-with-date", role_name="Has Date", status=RoleStatus.ACTIVE)
+        role2 = Role(role_id="role-no-date", role_name="No Date", status=RoleStatus.ACTIVE)
+        db_session.add_all([role1, role2])
+        await db_session.flush()
+
+        now = dt.datetime.now(dt.UTC)
+        # One with azure_updated_on set
+        history_with_date = RoleHistory(
+            role_id="role-with-date",
+            role_name="Has Date",
+            version_number=2,
+            event_type=EventType.UPDATED,
+            azure_updated_on=now,
+            role_json={"name": "role-with-date"},
+            diff_json={},
+            summary="Updated",
+        )
+        # One with NULL azure_updated_on
+        history_no_date = RoleHistory(
+            role_id="role-no-date",
+            role_name="No Date",
+            version_number=2,
+            event_type=EventType.UPDATED,
+            azure_updated_on=None,  # NULL
+            role_json={"name": "role-no-date"},
+            diff_json={},
+            summary="Updated",
+        )
+        db_session.add_all([history_with_date, history_no_date])
+        await db_session.commit()
+
+        result = await fetch_recently_updated_roles(db_session, limit=10)
+
+        assert len(result) == 1
+        assert result[0].role_id == "role-with-date"
+
+    async def test_only_includes_updated_events(self, db_session: AsyncSession) -> None:
+        """Verify only UPDATED event types are returned."""
+        from azurerbac.analytics.queries import fetch_recently_updated_roles
+        from azurerbac.core.constants import EventType, RoleStatus
+        from azurerbac.core.models import Role, RoleHistory
+
+        role = Role(role_id="test-role", role_name="Test Role", status=RoleStatus.ACTIVE)
+        db_session.add(role)
+        await db_session.flush()
+
+        now = dt.datetime.now(dt.UTC)
+        # CREATED event - should be excluded
+        created_history = RoleHistory(
+            role_id="test-role",
+            role_name="Test Role",
+            version_number=1,
+            event_type=EventType.CREATED,
+            azure_updated_on=now,
+            role_json={"name": "test-role"},
+            diff_json={},
+            summary="Created",
+        )
+        # UPDATED event - should be included
+        updated_history = RoleHistory(
+            role_id="test-role",
+            role_name="Test Role",
+            version_number=2,
+            event_type=EventType.UPDATED,
+            azure_updated_on=now - dt.timedelta(hours=1),
+            role_json={"name": "test-role"},
+            diff_json={},
+            summary="Updated",
+        )
+        db_session.add_all([created_history, updated_history])
+        await db_session.commit()
+
+        result = await fetch_recently_updated_roles(db_session, limit=10)
+
+        assert len(result) == 1
+        assert result[0].role_id == "test-role"
 
 
 class TestComputeTopProviders:

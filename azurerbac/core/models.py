@@ -258,6 +258,13 @@ Index(
     RoleHistory.scan_id.desc(),
 )
 
+# Composite index for analytics queries filtering by event_type and azure_updated_on
+Index(
+    "ix_role_history_type_azure_updated",
+    RoleHistory.event_type,
+    RoleHistory.azure_updated_on.desc(),
+)
+
 
 class RoleScanStatus(Base):
     """Tracks each role scan run."""

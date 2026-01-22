@@ -249,6 +249,46 @@ class TestValidationError:
         assert str(err) == "test error message"
 
 
+class TestTransportSecurity:
+    """Tests for MCP transport security configuration."""
+
+    def test_adds_production_domain_to_allowed_hosts(self, mock_cache: MagicMock) -> None:
+        """Verify production domain is added to allowed_hosts when transport_security exists."""
+        from azurerbac.web.constants import NEW_DOMAIN
+
+        server = MCPServer(mock_cache)
+        transport_security = server._mcp.settings.transport_security  # pyright: ignore[reportPrivateUsage]
+
+        assert transport_security is not None
+        assert NEW_DOMAIN in transport_security.allowed_hosts
+
+    def test_adds_production_origin_to_allowed_origins(self, mock_cache: MagicMock) -> None:
+        """Verify production origin is added to allowed_origins when transport_security exists."""
+        from azurerbac.web.constants import SITE_URL
+
+        server = MCPServer(mock_cache)
+        transport_security = server._mcp.settings.transport_security  # pyright: ignore[reportPrivateUsage]
+
+        assert transport_security is not None
+        assert SITE_URL in transport_security.allowed_origins
+
+    def test_no_duplicate_entries_on_multiple_instantiation(self, mock_cache: MagicMock) -> None:
+        """Verify multiple MCPServer instances don't create duplicate entries."""
+        from azurerbac.web.constants import NEW_DOMAIN, SITE_URL
+
+        # Create first server
+        MCPServer(mock_cache)
+        # Create second server (would share settings if they're class-level)
+        server2 = MCPServer(mock_cache)
+
+        # Each server should have exactly one entry for production domain
+        # (checking server2 since it's the latest instantiation)
+        ts = server2._mcp.settings.transport_security  # pyright: ignore[reportPrivateUsage]
+        assert ts is not None
+        assert ts.allowed_hosts.count(NEW_DOMAIN) == 1
+        assert ts.allowed_origins.count(SITE_URL) == 1
+
+
 class TestValidateInput:
     """Tests for InputValidator.validate method."""
 

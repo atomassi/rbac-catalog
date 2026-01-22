@@ -46,6 +46,7 @@ from azurerbac.mcp.constants import (
 )
 from azurerbac.mcp.utils import InputValidator, TokenBucketRateLimiter, ToolTimer, ValidationError
 from azurerbac.telemetry import track_event, track_gauge
+from azurerbac.web.constants import NEW_DOMAIN, SITE_URL
 
 logger = logging.getLogger(__name__)
 
@@ -70,8 +71,10 @@ class MCPServer:
         # Allow production host for DNS rebinding protection
         # Standard HTTPS (443) sends Host header without port
         if self._mcp.settings.transport_security:
-            self._mcp.settings.transport_security.allowed_hosts.append("rbac-catalog.dev")
-            self._mcp.settings.transport_security.allowed_origins.append("https://rbac-catalog.dev")
+            if NEW_DOMAIN not in self._mcp.settings.transport_security.allowed_hosts:
+                self._mcp.settings.transport_security.allowed_hosts.append(NEW_DOMAIN)
+            if SITE_URL not in self._mcp.settings.transport_security.allowed_origins:
+                self._mcp.settings.transport_security.allowed_origins.append(SITE_URL)
         self._register_tools()
         track_event("mcp_server_initialized", {})
         logger.info("MCP server '%s' initialized", MCP_SERVER_NAME)

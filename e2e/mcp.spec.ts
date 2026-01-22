@@ -4,7 +4,7 @@
  * Tests the MCP Streamable HTTP endpoint availability and basic tool invocations.
  * Run with: npx playwright test e2e/mcp.spec.ts
  */
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 
 const MCP_HTTP_URL = '/mcp';
 

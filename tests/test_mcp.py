@@ -3,8 +3,9 @@
 from unittest.mock import MagicMock
 
 import pytest
+from starlette.testclient import TestClient
 
-from azurerbac.mcp.server import MCPServer
+from azurerbac.mcp.server import MCPServer, create_disabled_mcp_app
 from azurerbac.mcp.utils import InputValidator, ToolTimer, ValidationError
 
 # =============================================================================
@@ -307,3 +308,43 @@ class TestValidateInput:
     def test_raises_validation_error_on_suspicious_input(self) -> None:
         with pytest.raises(ValidationError, match="Invalid query format"):
             InputValidator.validate("<script>alert(1)</script>", 100, 1, "Query")
+
+
+# =============================================================================
+# Disabled MCP App Tests
+# =============================================================================
+
+
+class TestDisabledMCPApp:
+    """Tests for the disabled MCP app."""
+
+    @pytest.fixture
+    def disabled_client(self) -> TestClient:
+        """Create a test client for the disabled MCP app."""
+        app = create_disabled_mcp_app()
+        return TestClient(app)
+
+    def test_root_returns_503(self, disabled_client: TestClient) -> None:
+        response = disabled_client.post("/")
+        assert response.status_code == 503
+        data = response.json()
+        assert data["error"]["code"] == -32000
+        assert "unavailable" in data["error"]["message"].lower()
+
+    def test_subpath_returns_503(self, disabled_client: TestClient) -> None:
+        response = disabled_client.post("/some/path")
+        assert response.status_code == 503
+        data = response.json()
+        assert data["error"]["code"] == -32000
+
+    def test_get_request_returns_503(self, disabled_client: TestClient) -> None:
+        response = disabled_client.get("/")
+        assert response.status_code == 503
+
+    def test_response_is_jsonrpc_format(self, disabled_client: TestClient) -> None:
+        response = disabled_client.post("/")
+        data = response.json()
+        assert "jsonrpc" in data
+        assert data["jsonrpc"] == "2.0"
+        assert "error" in data
+        assert "id" in data

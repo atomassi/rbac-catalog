@@ -42,6 +42,7 @@ class EnvVars:
     IS_PRODUCTION: Final = "IS_PRODUCTION"
     PYTEST_CURRENT_TEST: Final = "PYTEST_CURRENT_TEST"
     USE_RBAC_API: Final = "USE_RBAC_API"
+    MCP_SERVER_ENABLED: Final = "MCP_SERVER_ENABLED"
 
 
 _BOOL_TRUE_VALUES: Final = frozenset({"1", "true", "yes", "y", "on"})
@@ -93,6 +94,7 @@ class Settings(BaseModel):
     app_insights_connection_string: str = ""
     is_production: bool = False
     use_rbac_api: bool = False
+    mcp_server_enabled: bool = True
 
     @property
     def environment_name(self) -> str:
@@ -138,6 +140,7 @@ def _load_settings() -> Settings:
         app_insights_connection_string=app_insights,
         is_production=_get_bool(EnvVars.IS_PRODUCTION, False),
         use_rbac_api=_get_bool(EnvVars.USE_RBAC_API, False),
+        mcp_server_enabled=_get_bool(EnvVars.MCP_SERVER_ENABLED, True),
     )
 
 

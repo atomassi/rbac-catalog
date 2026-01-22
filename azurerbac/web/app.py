@@ -14,7 +14,7 @@ from __future__ import annotations
 import logging
 import os
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, nullcontext
 from pathlib import Path
 
 if not os.environ.get("PYTEST_CURRENT_TEST"):
@@ -44,7 +44,7 @@ from azurerbac.core import (
     RoleScanStatus,
     create_sessionmaker,
 )
-from azurerbac.mcp import create_mcp_server
+from azurerbac.mcp import create_disabled_mcp_app, create_mcp_server
 from azurerbac.settings import Settings, is_running_in_azure, is_running_in_pytest
 from azurerbac.web.constants import GZIP_MIN_SIZE, SITE_URL
 from azurerbac.web.dependencies import BaseDeps, DashboardDeps, PagesDeps
@@ -118,7 +118,11 @@ templates.env.globals["site_url"] = SITE_URL
 
 # Create MCP Starlette app for mounting
 # Configured with streamable_http_path="/" so endpoint is /mcp (not /mcp/mcp)
-_mcp_server = create_mcp_server(get_cache_service().container)
+# When disabled, create_disabled_mcp_app returns a plain Starlette app (no lifespan_context)
+if settings.mcp_server_enabled:
+    _mcp_server = create_mcp_server(get_cache_service().container)
+else:
+    _mcp_server = create_disabled_mcp_app()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -149,8 +153,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:  # pylint: disable=unus
 
     # Run MCP lifespan alongside our background tasks
     # This initializes the MCP session manager's task group
+    # Note: Only the real MCP server has router.lifespan_context; the disabled app
+    # is a plain Starlette app, so we use nullcontext() as a no-op fallback
+    mcp_lifespan = (
+        _mcp_server.router.lifespan_context(_mcp_server)
+        if settings.mcp_server_enabled
+        else nullcontext()
+    )
     async with (
-        _mcp_server.router.lifespan_context(_mcp_server),
+        mcp_lifespan,
         anyio.create_task_group() as tg,
     ):
         tg.start_soon(cache_refresh_task, SessionLocal, name="cache-refresh")

@@ -37,7 +37,11 @@ The site runs on Azure with Cloudflare CDN.
 
 ```mermaid
 flowchart TD
-    USER((👥  Users)):::user
+    subgraph Clients[" "]
+        direction LR
+        USER((👥 Users)):::user
+        AI((🤖 Agents)):::ai
+    end
     GH[GitHub Actions]:::github
     CDN[Cloudflare]:::cdn
     
@@ -45,21 +49,23 @@ flowchart TD
         CR[(Container<br/>Registry)]:::azure
         AS[App Service]:::azure
         PG[(PostgreSQL)]:::db
-        AI[App Insights]:::monitor
+        INSIGHTS[App Insights]:::monitor
         OL[Ollama VM<br/>B2a v2]:::ollama
         GPU[GPU VM<br/>NVIDIA A10]:::gpu
     end
     
-    USER -->|requests| CDN
+    USER -->|web| CDN
+    AI -->|MCP| CDN
     CDN -->|proxy| AS
     GH -->|push image| CR
     CR -->|deploy| AS
     AS <-->|queries/ingestion| PG
-    AS -->|telemetry| AI
+    AS -->|telemetry| INSIGHTS
     AS -->|inference| OL
     GPU -.->|models| OL
     
     classDef user fill:#FFC107,color:#000,stroke:#FFA000,stroke-width:2px
+    classDef ai fill:#10B981,color:#fff,stroke:#059669,stroke-width:2px
     classDef github fill:#24292e,color:#fff,stroke:#1a1e22,stroke-width:2px
     classDef cdn fill:#F6821F,color:#fff,stroke:#d4700f,stroke-width:2px
     classDef azure fill:#0078D4,color:#fff,stroke:#005a9e,stroke-width:2px
@@ -69,6 +75,7 @@ flowchart TD
     classDef monitor fill:#68217A,color:#fff,stroke:#4e185c,stroke-width:2px
     
     style AZ fill:#E6F2FA,stroke:#0078D4,stroke-width:2px,rx:10
+    style Clients fill:none,stroke:none
 ```
 
 ### Cost

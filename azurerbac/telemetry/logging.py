@@ -104,6 +104,10 @@ def configure_logging(component: str = "app", level: int = logging.INFO) -> str 
     logging.getLogger("msal").setLevel(logging.WARNING)
     logging.getLogger("aiosqlite").setLevel(logging.WARNING)
 
+    # MCP/SSE loggers - INFO to reduce verbosity while still seeing key events
+    logging.getLogger("sse_starlette.sse").setLevel(logging.INFO)
+    logging.getLogger("mcp.server.lowlevel.server").setLevel(logging.INFO)
+
     formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
     log_file_path = None

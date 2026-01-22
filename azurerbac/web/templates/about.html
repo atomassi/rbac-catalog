@@ -286,6 +286,14 @@
                                 <h3 class="font-semibold text-slate-800 mb-2">🤖 Role Recommender</h3>
                                 <p class="text-sm text-slate-600">Find the least-privilege role for your specific permission requirements.</p>
                             </div>
+                            <div class="bg-slate-50 rounded-lg p-4 border border-slate-200">
+                                <h3 class="font-semibold text-slate-800 mb-2">📡 RSS Feeds</h3>
+                                <p class="text-sm text-slate-600">Subscribe to <a href="/feeds/changelog.atom" class="text-azure-600 hover:underline">Atom</a> or <a href="/feeds/changelog.rss" class="text-azure-600 hover:underline">RSS</a> feeds to get notified when roles are added, updated, or deprecated.</p>
+                            </div>
+                            <div class="bg-slate-50 rounded-lg p-4 border border-slate-200">
+                                <h3 class="font-semibold text-slate-800 mb-2">🔌 MCP Server</h3>
+                                <p class="text-sm text-slate-600">Connect AI assistants like GitHub Copilot, Claude, or Cursor to query Azure RBAC data directly via <a href="https://modelcontextprotocol.io/" target="_blank" rel="noopener" class="text-azure-600 hover:underline">Model Context Protocol</a>.</p>
+                            </div>
                         </div>
                     </section>
 
@@ -317,6 +325,32 @@
                             <details class="border border-slate-200 rounded-lg overflow-hidden">
                                 <summary class="bg-slate-50 px-4 py-3 cursor-pointer font-semibold text-slate-800 hover:bg-slate-100 transition-colors">Can I use this for my organization?</summary>
                                 <p class="px-4 py-3 text-sm text-slate-600">Absolutely! Use it to research roles, design RBAC strategies, train team members, or as a reference during security reviews.</p>
+                            </details>
+                            <details class="border border-slate-200 rounded-lg overflow-hidden">
+                                <summary class="bg-slate-50 px-4 py-3 cursor-pointer font-semibold text-slate-800 hover:bg-slate-100 transition-colors">How do I use the MCP server with my AI assistant?</summary>
+                                <div class="px-4 py-3 text-sm text-slate-600">
+                                    <p class="mb-3">The MCP (Model Context Protocol) server allows AI assistants like GitHub Copilot, Claude, and Cursor to query Azure RBAC data directly. To connect:</p>
+                                    <p class="mb-2"><strong>Endpoint:</strong> <code class="bg-slate-100 px-1.5 py-0.5 rounded text-xs">https://rbac-catalog.dev/mcp/</code></p>
+                                    <p class="mb-2"><strong>VS Code / GitHub Copilot:</strong> Add to your <code class="bg-slate-100 px-1.5 py-0.5 rounded text-xs">.vscode/mcp.json</code>:</p>
+                                    <pre class="bg-slate-800 text-slate-100 p-3 rounded-lg text-xs overflow-x-auto mb-3"><code>{
+  "servers": {
+    "azure-rbac-catalog": {
+      "type": "http",
+      "url": "https://rbac-catalog.dev/mcp/"
+    }
+  }
+}</code></pre>
+                                    <p class="mb-2">Once connected, you can ask natural language questions like:</p>
+                                    <ul class="ml-4 space-y-1 mb-3">
+                                        <li class="flex items-start"><span class="text-azure-500 mr-2">•</span><em>"What permissions does the Storage Blob Data Contributor role have?"</em></li>
+                                        <li class="flex items-start"><span class="text-azure-500 mr-2">•</span><em>"Compare Storage Blob Data Contributor and Storage Blob Data Owner"</em></li>
+                                        <li class="flex items-start"><span class="text-azure-500 mr-2">•</span><em>"What operations correspond to Microsoft.Storage/*/read?"</em></li>
+                                        <li class="flex items-start"><span class="text-azure-500 mr-2">•</span><em>"Which roles allow Microsoft.Storage/storageAccounts/blobServices/containers/blobs/read?"</em></li>
+                                        <li class="flex items-start"><span class="text-azure-500 mr-2">•</span><em>"What Azure roles can read blob storage?"</em></li>
+                                        <li class="flex items-start"><span class="text-azure-500 mr-2">•</span><em>"Find the least-privilege role for reading Key Vault secrets"</em></li>
+                                    </ul>
+                                    <p>See the <a href="https://modelcontextprotocol.io/docs" target="_blank" rel="noopener" class="text-azure-600 hover:underline">MCP documentation</a> for more details on configuring your client.</p>
+                                </div>
                             </details>
                             <details class="border border-slate-200 rounded-lg overflow-hidden">
                                 <summary class="bg-slate-50 px-4 py-3 cursor-pointer font-semibold text-slate-800 hover:bg-slate-100 transition-colors">Where can I learn more about Azure RBAC?</summary>

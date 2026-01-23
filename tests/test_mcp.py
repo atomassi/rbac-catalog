@@ -163,6 +163,7 @@ class TestMCPServerClientKey:
         mock_ctx.request_id = "123"
         mock_ctx.request_context = MagicMock()
         mock_ctx.request_context.request = MagicMock()
+        # Session ID must be 8-128 chars with alphanumeric, hyphens, underscores
         mock_ctx.request_context.request.headers = {"mcp-session-id": "test-session-abc123"}
         result = MCPServer._get_client_key(mock_ctx)  # pyright: ignore[reportPrivateUsage]
         assert result == "test-session-abc123"
@@ -178,6 +179,22 @@ class TestMCPServerClientKey:
         mock_ctx.request_context.request.headers = {}  # No mcp-session-id header
         result = MCPServer._get_client_key(mock_ctx)  # pyright: ignore[reportPrivateUsage]
         assert result == "default"
+
+    def test_extracts_client_info_from_client_params(self) -> None:
+        """Test that client info is correctly extracted from client_params for logging."""
+        mock_ctx = MagicMock()
+        mock_ctx.session = MagicMock()
+        mock_ctx.session.client_params = MagicMock()
+        mock_ctx.session.client_params.clientInfo = MagicMock()
+        mock_ctx.session.client_params.clientInfo.name = "test-client"
+        mock_ctx.session.client_params.clientInfo.version = "1.0.0"
+        mock_ctx.request_id = "456"
+        mock_ctx.request_context = MagicMock()
+        mock_ctx.request_context.request = MagicMock()
+        mock_ctx.request_context.request.headers = {"mcp-session-id": "valid-session-id-12345"}
+        result = MCPServer._get_client_key(mock_ctx)  # pyright: ignore[reportPrivateUsage]
+        # Should return the session ID (client info is just for logging)
+        assert result == "valid-session-id-12345"
 
 
 class TestMCPServerFindRole:

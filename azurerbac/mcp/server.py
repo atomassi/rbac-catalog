@@ -94,7 +94,16 @@ class MCPServer:
     def _get_client_key(ctx: Context | None) -> str:
         """Extract client identifier for rate limiting.
 
-        Uses mcp-session-id header as key for rate limiting.
+        This method derives the client key from the ``mcp-session-id`` HTTP
+        header, which is fully client-provided and not backed by any
+        server-side session object or authenticated identity.
+
+        Because the session ID comes from an untrusted header, it can be
+        spoofed or rotated by the client and should only be used as a
+        best-effort key for rate limiting, not as an authorization mechanism
+        or a strong abuse-prevention control.
+
+        See: https://modelcontextprotocol.io/specification/draft/basic/transports
         """
         if ctx is None:
             logger.debug("No MCP context provided, using 'default' client key")

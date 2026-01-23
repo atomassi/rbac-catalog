@@ -4,6 +4,7 @@ from typing import Final
 
 # Server metadata
 MCP_SERVER_NAME: Final = "azure-rbac-catalog"
+MCP_SESSION_ID_HEADER: Final = "mcp-session-id"
 MCP_SERVER_INSTRUCTIONS: Final = (
     "Azure RBAC Catalog provides tools to search Azure built-in roles, "
     "find operations (permissions), and get least-privilege role recommendations. "

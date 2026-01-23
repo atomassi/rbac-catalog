@@ -84,11 +84,12 @@ async def role_detail(
     role = result.cached_role
     role_def = result.definition
 
-    # SEO: Validate slug and redirect if necessary
+    # SEO: Get expected slug for canonical URL
     role_name = getattr(role, "role_name", "") or (role_def.role_name if role_def else "")
     expected_slug = slugify(role_name)
 
-    if slug != expected_slug:
+    # If no slug provided, serve content directly (helps GUID-based searches)
+    if slug is not None and slug != expected_slug:
         url = build_role_redirect_url(
             request,
             role_id_str,

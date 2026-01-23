@@ -54,11 +54,6 @@ def _get_environment_name() -> str:
     return value if value in _VALID_ENVIRONMENTS else "local"
 
 
-def is_deployed() -> bool:
-    """Check if running in a deployed environment (not local)."""
-    return _get_environment_name() in _VALID_ENVIRONMENTS
-
-
 def is_running_in_pytest() -> bool:
     """Check if running inside pytest."""
     return bool(os.getenv(EnvVars.PYTEST_CURRENT_TEST))

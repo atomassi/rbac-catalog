@@ -853,7 +853,7 @@
                         <div class="flex flex-wrap items-center gap-2 sm:gap-4 sm:justify-between">
                             <!-- Event Type Filter -->
                             <div class="flex items-center gap-2">
-                                <span class="text-xs font-medium text-slate-400 uppercase tracking-wider hidden sm:inline">Filter</span>
+                                <span class="text-xs font-medium text-slate-500 uppercase tracking-wider hidden sm:inline">Filter</span>
                                 <div class="inline-flex rounded-lg bg-white border border-slate-200 p-1 shadow-sm">
                                     <a href="{{ build_recent_url(new_page=1, new_event_type='all') }}" class="px-2 sm:px-3 py-1.5 text-xs font-medium rounded-md transition-all {{ 'bg-azure-500 text-white shadow-sm' if event_type == 'all' else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}">All</a>
                                     <a href="{{ build_recent_url(new_page=1, new_event_type='created') }}" class="px-2 sm:px-3 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-emerald-500 text-white shadow-sm' if event_type == 'created' else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}"><span class="hidden sm:inline">Created</span><span class="sm:hidden">New</span></a>
@@ -864,7 +864,7 @@
                             
                             <!-- Time Range Filter -->
                             <div class="flex items-center gap-2">
-                                <span class="text-xs font-medium text-slate-400 uppercase tracking-wider hidden sm:inline">From</span>
+                                <span class="text-xs font-medium text-slate-500 uppercase tracking-wider hidden sm:inline">From</span>
                                 <div class="inline-flex rounded-lg bg-white border border-slate-200 p-1 shadow-sm">
                                     <a href="{{ build_recent_url(new_page=1, new_days=7) }}" class="px-1.5 sm:px-3 py-1.5 text-xs font-medium rounded-md transition-all {{ 'bg-slate-700 text-white shadow-sm' if days == 7 else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}"><span class="hidden sm:inline">7 days</span><span class="sm:hidden">7d</span></a>
                                     <a href="{{ build_recent_url(new_page=1, new_days=15) }}" class="px-1.5 sm:px-3 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-slate-700 text-white shadow-sm' if days == 15 else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}"><span class="hidden sm:inline">15 days</span><span class="sm:hidden">15d</span></a>
@@ -876,13 +876,13 @@
                             
                             <!-- Per Page Filter -->
                             <div class="flex items-center gap-2">
-                                <span class="text-xs font-medium text-slate-400 uppercase tracking-wider hidden sm:inline">Show</span>
+                                <span class="text-xs font-medium text-slate-500 uppercase tracking-wider hidden sm:inline">Show</span>
                                 <div class="inline-flex rounded-lg bg-white border border-slate-200 p-1 shadow-sm">
                                     <a href="{{ build_recent_url(new_page=1, new_limit=25) }}" class="px-2 py-1.5 text-xs font-medium rounded-md transition-all {{ 'bg-slate-700 text-white shadow-sm' if limit == 25 else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}">25</a>
                                     <a href="{{ build_recent_url(new_page=1, new_limit=100) }}" class="px-2 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-slate-700 text-white shadow-sm' if limit == 100 else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}">100</a>
                                     <a href="{{ build_recent_url(new_page=1, new_limit=500) }}" class="px-2 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-slate-700 text-white shadow-sm' if limit == 500 else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}">500</a>
                                 </div>
-                                <span class="text-xs text-slate-400 hidden sm:inline">per page</span>
+                                <span class="text-xs text-slate-500 hidden sm:inline">per page</span>
                             </div>
                             
                             <!-- Results count -->
@@ -891,8 +891,8 @@
                                     {{ total_events }} changes
                                 </span>
                                 {% if total_pages > 1 %}
-                                <span class="text-xs text-slate-400 hidden sm:inline">Page {{ page }} of {{ total_pages }}</span>
-                                <span class="text-xs text-slate-400 sm:hidden">Page {{ page }}/{{ total_pages }}</span>
+                                <span class="text-xs text-slate-500 hidden sm:inline">Page {{ page }} of {{ total_pages }}</span>
+                                <span class="text-xs text-slate-500 sm:hidden">Page {{ page }}/{{ total_pages }}</span>
                                 {% endif %}
                             </div>
                         </div>

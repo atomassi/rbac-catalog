@@ -12,11 +12,13 @@ A comprehensive catalog and monitoring tool for [Azure built-in RBAC roles](http
 ## Features
 
 - **Role Catalog** — Browse all 800+ Azure built-in roles with full permission details
-- **Operation Explorer** — Search 15,000+ resource provider operations
+- **Operation Explorer** — Search 20,000+ resource provider operations
 - **Change Tracking** — Monitor when Microsoft adds, modifies, or deprecates roles
 - **AI Role Recommender** — Describe what you need in natural language, get least-privilege role suggestions
 - **Diff Viewer** — See exactly what changed between role versions
 - **8 AI Recommendation Modes** — From fast keyword matching to LLM-powered semantic understanding
+- **MCP Server** — Integrate with AI agents via Model Context Protocol for automated role discovery
+- **RSS/Atom Feeds** — Subscribe to role changes in your favorite feed reader
 
 ## Tech Stack
 
@@ -113,9 +115,6 @@ The AI Role Recommender supports **8 different modes**, each with different spee
 
 Azure RBAC Catalog exposes an [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server for AI assistants like GitHub Copilot, Claude, and Cursor. This allows AI tools to query Azure RBAC data directly.
 
-> [!WARNING]
-> **Known Limitation:** If the MCP server restarts, clients (VS Code, Claude Desktop) must reconnect. In VS Code, use `Cmd+Shift+P` → "Developer: Reload Window". See the [MCP troubleshooting guide](https://modelcontextprotocol.io/docs/tools/debugging) for more details.
-
 ### Endpoint
 
 ```
@@ -123,6 +122,21 @@ https://rbac-catalog.dev/mcp/
 ```
 
 The server uses Streamable HTTP transport (stateless mode with JSON responses) for scalable communication.
+
+### VS Code / GitHub Copilot Setup
+
+Create `.vscode/mcp.json` in your workspace:
+
+```json
+{
+  "servers": {
+    "azure-rbac-catalog": {
+      "type": "http",
+      "url": "https://rbac-catalog.dev/mcp/"
+    }
+  }
+}
+```
 
 ### Available Tools
 
@@ -140,14 +154,13 @@ The server uses Streamable HTTP transport (stateless mode with JSON responses) f
 **Natural language queries you can ask your AI assistant:**
 
 ```
-"What Azure roles can read blob storage?"
-"I need to manage virtual machines but not delete them"
-"Find the least-privilege role for reading Key Vault secrets"
-"What permissions does the Storage Blob Data Contributor role have?"
-"Compare Reader vs Contributor roles"
-"Which roles allow Microsoft.Storage/storageAccounts/blobServices/containers/blobs/read and Microsoft.Storage/storageAccounts/blobServices/containers/blobs/tags/read?"
-"What operations correspond to Microsoft.Storage/*?"
-"Describe role b7e6dc6d-f1e8-4753-8033-0f276bb0955b"
+- "What permissions does the Storage Blob Data Contributor role have?"
+- "Compare Storage Blob Data Contributor and Storage Blob Data Owner"
+- "Which roles allow Microsoft.Storage/storageAccounts/blobServices/containers/blobs/read and Microsoft.Storage/storageAccounts/blobServices/containers/blobs/tags/read?"
+- "What operations correspond to Microsoft.Storage/*?"
+- "Describe role b7e6dc6d-f1e8-4753-8033-0f276bb0955b"
+- "What Azure roles can read blob storage?"
+- "Find the least-privilege role for reading Key Vault secrets"
 ```
 
 **Direct tool invocations:**

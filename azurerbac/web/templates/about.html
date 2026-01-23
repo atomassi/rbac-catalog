@@ -342,9 +342,23 @@
                             <details class="border border-slate-200 rounded-lg overflow-hidden">
                                 <summary class="bg-slate-50 px-4 py-3 cursor-pointer font-semibold text-slate-800 hover:bg-slate-100 transition-colors">How do I use the MCP server with my AI assistant?</summary>
                                 <div class="px-4 py-3 text-sm text-slate-600">
-                                    <p class="mb-3">The MCP (Model Context Protocol) server allows AI assistants like GitHub Copilot, Claude, and Cursor to query Azure RBAC data directly. To connect:</p>
-                                    <p class="mb-2"><strong>Endpoint:</strong> <code class="bg-slate-100 px-1.5 py-0.5 rounded text-xs">https://rbac-catalog.dev/mcp/</code></p>
-                                    <p class="mb-2"><strong>VS Code / GitHub Copilot:</strong> Add to your <code class="bg-slate-100 px-1.5 py-0.5 rounded text-xs">.vscode/mcp.json</code>:</p>
+                                    <p class="mb-3">The MCP (Model Context Protocol) server allows AI assistants like GitHub Copilot, Claude, and Cursor to query Azure RBAC data directly.</p>
+                                    
+                                    <p class="mb-3 font-semibold text-slate-700">Setup for VS Code / GitHub Copilot:</p>
+                                    <div class="space-y-2 mb-4">
+                                        <div class="flex items-center">
+                                            <span class="flex-shrink-0 w-5 h-5 bg-azure-500 text-white text-[10px] font-bold rounded-full inline-flex items-center justify-center mr-2">1</span>
+                                            <span>Open any folder in VS Code — this becomes your "workspace"</span>
+                                        </div>
+                                        <div class="flex items-center">
+                                            <span class="flex-shrink-0 w-5 h-5 bg-azure-500 text-white text-[10px] font-bold rounded-full inline-flex items-center justify-center mr-2">2</span>
+                                            <span>Create this file: <code class="bg-slate-100 px-1.5 py-0.5 rounded text-xs font-mono">.vscode/mcp.json</code></span>
+                                        </div>
+                                        <div class="flex items-center">
+                                            <span class="flex-shrink-0 w-5 h-5 bg-azure-500 text-white text-[10px] font-bold rounded-full inline-flex items-center justify-center mr-2">3</span>
+                                            <span>Paste this configuration and save:</span>
+                                        </div>
+                                    </div>
                                     <pre class="bg-slate-800 text-slate-100 p-3 rounded-lg text-xs overflow-x-auto mb-3"><code>{
   "servers": {
     "azure-rbac-catalog": {
@@ -353,16 +367,16 @@
     }
   }
 }</code></pre>
-                                    <p class="mb-2">Once connected, you can ask natural language questions like:</p>
+                                    <p class="mb-4 text-xs text-slate-500">💡 <strong>Tip:</strong> The MCP server will be available whenever you open that folder (or any subfolder) in VS Code. To use it everywhere, add the config to a folder you always have open, or configure it globally in VS Code settings under <code class="bg-slate-100 px-1 py-0.5 rounded">github.copilot.chat.mcp.servers</code>.</p>
+                                    
+                                    <p class="mb-2 font-semibold text-slate-700">Example questions you can ask:</p>
                                     <ul class="ml-4 space-y-1 mb-3">
                                         <li class="flex items-start"><span class="text-azure-500 mr-2">•</span><em>"What permissions does the Storage Blob Data Contributor role have?"</em></li>
                                         <li class="flex items-start"><span class="text-azure-500 mr-2">•</span><em>"Compare Storage Blob Data Contributor and Storage Blob Data Owner"</em></li>
                                         <li class="flex items-start"><span class="text-azure-500 mr-2">•</span><em>"What operations correspond to Microsoft.Storage/*/read?"</em></li>
-                                        <li class="flex items-start"><span class="text-azure-500 mr-2">•</span><em>"Which roles allow Microsoft.Storage/storageAccounts/blobServices/containers/blobs/read?"</em></li>
-                                        <li class="flex items-start"><span class="text-azure-500 mr-2">•</span><em>"What Azure roles can read blob storage?"</em></li>
                                         <li class="flex items-start"><span class="text-azure-500 mr-2">•</span><em>"Find the least-privilege role for reading Key Vault secrets"</em></li>
                                     </ul>
-                                    <p>See the <a href="https://modelcontextprotocol.io/docs" target="_blank" rel="noopener" class="text-azure-600 hover:underline">MCP documentation</a> for more details on configuring your client.</p>
+                                    <p>See the <a href="https://modelcontextprotocol.io/docs" target="_blank" rel="noopener" class="text-azure-600 hover:underline">MCP documentation</a> for more details.</p>
                                 </div>
                             </details>
                             <details class="border border-slate-200 rounded-lg overflow-hidden">

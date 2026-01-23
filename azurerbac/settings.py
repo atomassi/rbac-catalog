@@ -88,8 +88,8 @@ class Settings(BaseModel):
     ollama_model: str = "qwen-rbac-v5"
     log_level: str = "INFO"
     cache_backend: str = "file"
-    cache_check_interval_seconds: int = Field(default=30, gt=0)
-    db_rebuild_interval_seconds: int = Field(default=10800, gt=0)
+    cache_check_interval_seconds: int = Field(default=900, gt=0)
+    db_rebuild_interval_seconds: int = Field(default=21600, gt=0)
     enable_embeddings_in_tests: bool = False
     app_insights_connection_string: str = ""
     is_production: bool = False
@@ -134,8 +134,8 @@ def _load_settings() -> Settings:
         ollama_base_url=os.getenv(EnvVars.OLLAMA_BASE_URL, "http://localhost:11434"),
         ollama_model=os.getenv(EnvVars.OLLAMA_MODEL, "qwen-rbac-v5"),
         log_level=os.getenv(EnvVars.LOG_LEVEL, "INFO").upper(),
-        cache_check_interval_seconds=_get_int(EnvVars.CACHE_CHECK_INTERVAL_SECONDS, 30),
-        db_rebuild_interval_seconds=_get_int(EnvVars.DB_REBUILD_INTERVAL_SECONDS, 10800),
+        cache_check_interval_seconds=_get_int(EnvVars.CACHE_CHECK_INTERVAL_SECONDS, 900),
+        db_rebuild_interval_seconds=_get_int(EnvVars.DB_REBUILD_INTERVAL_SECONDS, 21600),
         enable_embeddings_in_tests=_get_bool(EnvVars.AZURERBAC_ENABLE_EMBEDDINGS_IN_TESTS, False),
         app_insights_connection_string=app_insights,
         is_production=_get_bool(EnvVars.IS_PRODUCTION, False),

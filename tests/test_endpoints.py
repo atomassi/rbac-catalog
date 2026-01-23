@@ -148,8 +148,8 @@ class TestRoleDetail:
         assert self.TEST_ROLE_ID in response.text
 
     @pytest.mark.asyncio
-    async def test_role_redirects_to_slug(self, test_client):
-        """Test that accessing role without slug redirects to slug URL."""
+    async def test_role_without_slug_returns_200(self, test_client):
+        """Test that accessing role without slug returns 200 (for SEO - GUIDs are indexable)."""
         client, session_maker = test_client
         async with session_maker() as session:
             existing = await session.get(Role, self.TEST_ROLE_ID)
@@ -158,12 +158,33 @@ class TestRoleDetail:
                 await session.commit()
 
         response = await client.get(f"/roles/{self.TEST_ROLE_ID}", follow_redirects=False)
-        assert response.status_code == 301
-        assert f"/roles/{self.TEST_ROLE_ID}/test-role" in response.headers["location"]
+        assert response.status_code == 200
+        assert "Test Role" in response.text
+        # Canonical should point to slug version
+        assert f"/roles/{self.TEST_ROLE_ID}/test-role" in response.text
 
     @pytest.mark.asyncio
-    async def test_role_id_without_dashes_returns_200(self, test_client):
-        """Test that role_id without dashes (32-char hex) is normalized and works."""
+    async def test_role_faq_schema_uses_effective_perms(self, test_client):
+        """Test that FAQPage schema uses effective_perms (not permissions) for action counts."""
+        client, session_maker = test_client
+        async with session_maker() as session:
+            existing = await session.get(Role, self.TEST_ROLE_ID)
+            if not existing:
+                _make_test_snapshot(session, self.TEST_ROLE_ID, "Test Role")
+                await session.commit()
+
+        response = await client.get(f"/roles/{self.TEST_ROLE_ID}/test-role")
+        assert response.status_code == 200
+        # FAQPage schema should be present and use effective_perms variables
+        assert "FAQPage" in response.text
+        assert "What permissions does Test Role have?" in response.text
+        # Should NOT contain broken template variable references
+        assert "permissions.actions" not in response.text
+        assert "permissions.data_actions" not in response.text
+
+    @pytest.mark.asyncio
+    async def test_role_id_without_dashes_with_slug_returns_200(self, test_client):
+        """Test that role_id without dashes (32-char hex) is normalized and works with slug."""
         client, session_maker = test_client
         # UUID with dashes
         role_id_dashes = "754c1a27-40dc-4708-8ad4-2bffdeee09e8"
@@ -187,8 +208,8 @@ class TestRoleDetail:
         assert "Test UUID Role" in response.text
 
     @pytest.mark.asyncio
-    async def test_role_id_without_dashes_redirects_to_slug(self, test_client):
-        """Test that role_id without dashes redirects to proper slug URL."""
+    async def test_role_id_without_dashes_returns_200(self, test_client):
+        """Test that role_id without dashes returns 200 (normalized and serves content)."""
         client, session_maker = test_client
         role_id_dashes = "754c1a27-40dc-4708-8ad4-2bffdeee09e8"
         role_id_no_dashes = "754c1a2740dc47088ad42bffdeee09e8"
@@ -199,11 +220,12 @@ class TestRoleDetail:
                 _make_test_snapshot(session, role_id_dashes, "Test UUID Role")
                 await session.commit()
 
-        # Access without dashes and no slug - should redirect
+        # Access without dashes and no slug - should return 200 (SEO: GUIDs are indexable)
         response = await client.get(f"/roles/{role_id_no_dashes}", follow_redirects=False)
-        assert response.status_code == 301
-        # Redirect should use the canonical UUID with dashes
-        assert f"/roles/{role_id_dashes}/test-uuid-role" in response.headers["location"]
+        assert response.status_code == 200
+        assert "Test UUID Role" in response.text
+        # Canonical should use the normalized UUID with dashes
+        assert f"/roles/{role_id_dashes}/test-uuid-role" in response.text
 
     @pytest.mark.parametrize(
         ("role_id", "expected_status"),

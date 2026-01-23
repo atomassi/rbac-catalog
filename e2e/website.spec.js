@@ -390,12 +390,21 @@ test.describe('Role Detail Page', () => {
     await expect(page.locator('text=Effective Permissions')).toBeVisible();
   });
 
-  test('should redirect to slugified URL', async ({ page }) => {
-    // Access role without slug, should redirect to URL with slug
+  test('should serve content without slug and include canonical with slug', async ({ page }) => {
+    // Access role without slug - should return 200 with content (for SEO: GUIDs are indexable)
     const response = await page.goto('/roles/acdd72a7-3385-48ef-bd42-f606fba81ae7');
-    // Should get a redirect or final URL should include the slug
     await page.waitForLoadState('domcontentloaded');
-    expect(page.url()).toMatch(/\/roles\/acdd72a7-3385-48ef-bd42-f606fba81ae7\/.+/);
+    expect(response?.status()).toBe(200);
+    
+    // Should stay on the same URL (no redirect)
+    expect(page.url()).toMatch(/\/roles\/acdd72a7-3385-48ef-bd42-f606fba81ae7$/);
+    
+    // Should have canonical link pointing to slug version
+    const canonical = await page.locator('link[rel="canonical"]').getAttribute('href');
+    expect(canonical).toMatch(/\/roles\/acdd72a7-3385-48ef-bd42-f606fba81ae7\/.+/);
+    
+    // Content should be visible (use heading to avoid multiple matches)
+    await expect(page.getByRole('heading', { name: 'Reader' })).toBeVisible();
   });
 
   test('should display role JSON with Z suffix timestamps', async ({ page }) => {

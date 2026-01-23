@@ -45,7 +45,7 @@ from azurerbac.core import (
     create_sessionmaker,
 )
 from azurerbac.mcp import create_disabled_mcp_app, create_mcp_server
-from azurerbac.settings import Settings, is_running_in_azure, is_running_in_pytest
+from azurerbac.settings import Settings, is_running_in_pytest
 from azurerbac.web.constants import GZIP_MIN_SIZE, SITE_URL
 from azurerbac.web.dependencies import BaseDeps, DashboardDeps, PagesDeps
 from azurerbac.web.filters import diff_lines, format_date, format_datetime, full_json_diff
@@ -70,8 +70,8 @@ from azurerbac.web.services.startup import (
 )
 from azurerbac.web.utils import slugify, urlencode_path
 
-# Load .env for local development only (Azure App Service sets WEBSITE_SITE_NAME)
-if not is_running_in_azure() and not is_running_in_pytest():
+# Load .env for local development only
+if not Settings.get().is_deployed and not is_running_in_pytest():
     try:
         from dotenv import load_dotenv
 

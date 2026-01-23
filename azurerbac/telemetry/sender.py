@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 from typing import Any, ClassVar, Final
 
-from azurerbac.settings import Settings, is_running_in_azure
+from azurerbac.settings import Settings
 
 # Default timeout for flushing metrics to Azure Monitor
 TELEMETRY_FLUSH_TIMEOUT_MS: Final = 10000
@@ -35,7 +35,7 @@ class MetricsSender:
         This is handled automatically by app.py and worker.py at startup.
         """
         settings = Settings.get()
-        if not is_running_in_azure():
+        if not settings.is_deployed:
             logger.debug("Metrics disabled: not running in Azure")
             return False
         if not settings.app_insights_connection_string:

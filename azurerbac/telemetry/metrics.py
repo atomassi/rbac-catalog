@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from azurerbac.settings import Settings, is_running_in_azure
+from azurerbac.settings import Settings
 from azurerbac.telemetry.sender import MetricsSender
 
 if TYPE_CHECKING:
@@ -32,7 +32,8 @@ __all__ = [
 
 
 def _metrics_enabled() -> bool:
-    return is_running_in_azure() and bool(Settings.get().app_insights_connection_string)
+    settings = Settings.get()
+    return settings.is_deployed and bool(settings.app_insights_connection_string)
 
 
 def flush_metrics(timeout_ms: int | None = None) -> bool:

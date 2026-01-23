@@ -16,8 +16,8 @@ logger = logging.getLogger(__name__)
 class EnvVars:
     """Environment variable names."""
 
+    APP_ENVIRONMENT_NAME: Final = "APP_ENVIRONMENT_NAME"
     AZURE_SUBSCRIPTION_ID: Final = "AZURE_SUBSCRIPTION_ID"
-    WEBSITE_SITE_NAME: Final = "WEBSITE_SITE_NAME"
     ROLES_POLL_INTERVAL_SECONDS: Final = "ROLES_POLL_INTERVAL_SECONDS"
     OPERATIONS_POLL_INTERVAL_SECONDS: Final = "OPERATIONS_POLL_INTERVAL_SECONDS"
     ROLE_SCAN_ENABLED: Final = "ROLE_SCAN_ENABLED"
@@ -39,18 +39,24 @@ class EnvVars:
     DB_REBUILD_INTERVAL_SECONDS: Final = "DB_REBUILD_INTERVAL_SECONDS"
     AZURERBAC_ENABLE_EMBEDDINGS_IN_TESTS: Final = "AZURERBAC_ENABLE_EMBEDDINGS_IN_TESTS"
     APPLICATIONINSIGHTS_CONNECTION_STRING: Final = "APPLICATIONINSIGHTS_CONNECTION_STRING"
-    IS_PRODUCTION: Final = "IS_PRODUCTION"
     PYTEST_CURRENT_TEST: Final = "PYTEST_CURRENT_TEST"
     USE_RBAC_API: Final = "USE_RBAC_API"
     MCP_SERVER_ENABLED: Final = "MCP_SERVER_ENABLED"
 
 
 _BOOL_TRUE_VALUES: Final = frozenset({"1", "true", "yes", "y", "on"})
+_VALID_ENVIRONMENTS: Final = frozenset({"production", "staging", "ppe"})
 
 
-def is_running_in_azure() -> bool:
-    """Check if running in Azure App Service."""
-    return bool(os.getenv(EnvVars.WEBSITE_SITE_NAME))
+def _get_environment_name() -> str:
+    """Get environment name from APP_ENVIRONMENT_NAME env var."""
+    value = os.getenv(EnvVars.APP_ENVIRONMENT_NAME, "local").lower().strip()
+    return value if value in _VALID_ENVIRONMENTS else "local"
+
+
+def is_deployed() -> bool:
+    """Check if running in a deployed environment (not local)."""
+    return _get_environment_name() in _VALID_ENVIRONMENTS
 
 
 def is_running_in_pytest() -> bool:
@@ -92,13 +98,14 @@ class Settings(BaseModel):
     db_rebuild_interval_seconds: int = Field(default=3600, gt=0)
     enable_embeddings_in_tests: bool = False
     app_insights_connection_string: str = ""
-    is_production: bool = False
+    environment_name: str = "local"
     use_rbac_api: bool = False
     mcp_server_enabled: bool = True
 
     @property
-    def environment_name(self) -> str:
-        return "production" if self.is_production else "staging"
+    def is_deployed(self) -> bool:
+        """Check if running in any deployed environment (not local)."""
+        return self.environment_name in _VALID_ENVIRONMENTS
 
     @classmethod
     def reset(cls) -> None:
@@ -110,9 +117,10 @@ class Settings(BaseModel):
 
 
 def _load_settings() -> Settings:
+    env_name = _get_environment_name()
     app_insights = (
         os.getenv(EnvVars.APPLICATIONINSIGHTS_CONNECTION_STRING, "")
-        if is_running_in_azure()
+        if env_name in _VALID_ENVIRONMENTS
         else ""
     )
     return Settings(
@@ -138,7 +146,7 @@ def _load_settings() -> Settings:
         db_rebuild_interval_seconds=_get_int(EnvVars.DB_REBUILD_INTERVAL_SECONDS, 3600),
         enable_embeddings_in_tests=_get_bool(EnvVars.AZURERBAC_ENABLE_EMBEDDINGS_IN_TESTS, False),
         app_insights_connection_string=app_insights,
-        is_production=_get_bool(EnvVars.IS_PRODUCTION, False),
+        environment_name=env_name,
         use_rbac_api=_get_bool(EnvVars.USE_RBAC_API, False),
         mcp_server_enabled=_get_bool(EnvVars.MCP_SERVER_ENABLED, True),
     )

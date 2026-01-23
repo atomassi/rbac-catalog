@@ -72,7 +72,7 @@ class Settings(BaseModel):
     """Application settings from environment variables."""
 
     azure_subscription_id: str | None = None
-    roles_poll_interval_seconds: int = Field(default=600, gt=0)
+    roles_poll_interval_seconds: int = Field(default=7200, gt=0)
     operations_poll_interval_seconds: int = Field(default=86400, gt=0)
     role_scan_enabled: bool = True
     operations_scan_enabled: bool = True
@@ -89,7 +89,7 @@ class Settings(BaseModel):
     log_level: str = "INFO"
     cache_backend: str = "file"
     cache_check_interval_seconds: int = Field(default=30, gt=0)
-    db_rebuild_interval_seconds: int = Field(default=3600, gt=0)
+    db_rebuild_interval_seconds: int = Field(default=10800, gt=0)
     enable_embeddings_in_tests: bool = False
     app_insights_connection_string: str = ""
     is_production: bool = False
@@ -117,7 +117,7 @@ def _load_settings() -> Settings:
     )
     return Settings(
         azure_subscription_id=os.getenv(EnvVars.AZURE_SUBSCRIPTION_ID),
-        roles_poll_interval_seconds=_get_int(EnvVars.ROLES_POLL_INTERVAL_SECONDS, 600),
+        roles_poll_interval_seconds=_get_int(EnvVars.ROLES_POLL_INTERVAL_SECONDS, 7200),
         operations_poll_interval_seconds=_get_int(EnvVars.OPERATIONS_POLL_INTERVAL_SECONDS, 86400),
         role_scan_enabled=_get_bool(EnvVars.ROLE_SCAN_ENABLED, True),
         operations_scan_enabled=_get_bool(EnvVars.OPERATIONS_SCAN_ENABLED, True),
@@ -135,7 +135,7 @@ def _load_settings() -> Settings:
         ollama_model=os.getenv(EnvVars.OLLAMA_MODEL, "qwen-rbac-v5"),
         log_level=os.getenv(EnvVars.LOG_LEVEL, "INFO").upper(),
         cache_check_interval_seconds=_get_int(EnvVars.CACHE_CHECK_INTERVAL_SECONDS, 30),
-        db_rebuild_interval_seconds=_get_int(EnvVars.DB_REBUILD_INTERVAL_SECONDS, 3600),
+        db_rebuild_interval_seconds=_get_int(EnvVars.DB_REBUILD_INTERVAL_SECONDS, 10800),
         enable_embeddings_in_tests=_get_bool(EnvVars.AZURERBAC_ENABLE_EMBEDDINGS_IN_TESTS, False),
         app_insights_connection_string=app_insights,
         is_production=_get_bool(EnvVars.IS_PRODUCTION, False),

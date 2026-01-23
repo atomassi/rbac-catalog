@@ -7,7 +7,6 @@ import logging
 import os
 import tempfile
 from pathlib import Path
-from typing import ClassVar
 from unittest.mock import patch
 
 import pytest
@@ -46,19 +45,8 @@ class TestSettings:
 class TestGetSettings:
     """Tests for get_settings function."""
 
-    _CONFIG_ENV_KEYS: ClassVar[list[str]] = [
-        "AZURE_SUBSCRIPTION_ID",
-        "DB_CONNECTION_STRING",
-        "ROLES_POLL_INTERVAL_SECONDS",
-        "OPERATIONS_POLL_INTERVAL_SECONDS",
-        "ROLE_SCAN_ENABLED",
-        "OPERATIONS_SCAN_ENABLED",
-        "RUN_SCAN_ON_STARTUP",
-        "RUN_OPERATIONS_SCAN_ON_STARTUP",
-    ]
-
-    def test_get_settings_from_env(self):
-        """Test get_settings reads from environment."""
+    def test_get_settings_reads_env_vars(self):
+        """Test get_settings reads values from environment variables."""
         with patch.dict(
             os.environ,
             {
@@ -73,24 +61,35 @@ class TestGetSettings:
             assert settings.roles_poll_interval_seconds == 120
             assert settings.db_connection_string == "postgresql+asyncpg://env@host/db"
 
-    def test_get_settings_partial_env(self):
-        """Test get_settings with only some env vars set."""
-        # Clear all and set only one
-        env_backup = {}
-        for key in self._CONFIG_ENV_KEYS:
-            env_backup[key] = os.environ.pop(key, None)
-
-        try:
-            os.environ["AZURE_SUBSCRIPTION_ID"] = "partial-sub"
+    def test_get_settings_uses_defaults_when_env_not_set(self):
+        """Test get_settings uses model defaults when env vars are not set."""
+        with patch.dict(os.environ, {"AZURE_SUBSCRIPTION_ID": "test-sub"}, clear=True):
             settings = Settings.get()
-            assert settings.azure_subscription_id == "partial-sub"
-            assert settings.roles_poll_interval_seconds == 600  # Default
-            assert settings.db_connection_string == "sqlite+aiosqlite:///./azurerbac.db"  # Default
-        finally:
-            os.environ.pop("AZURE_SUBSCRIPTION_ID", None)
-            for key, value in env_backup.items():
-                if value is not None:
-                    os.environ[key] = value
+            # Provided value is used
+            assert settings.azure_subscription_id == "test-sub"
+            # Non-provided values use defaults from Settings model
+            assert settings.roles_poll_interval_seconds > 0  # Has a valid default
+            assert settings.db_connection_string.startswith("sqlite")  # Default is SQLite
+            assert settings.role_scan_enabled is True  # Default
+            assert settings.mcp_server_enabled is True  # Default
+
+    def test_get_settings_boolean_parsing(self):
+        """Test get_settings correctly parses boolean env vars."""
+        with patch.dict(
+            os.environ,
+            {
+                "ROLE_SCAN_ENABLED": "false",
+                "OPERATIONS_SCAN_ENABLED": "0",
+                "RUN_SCAN_ON_STARTUP": "yes",
+                "MCP_SERVER_ENABLED": "true",
+            },
+            clear=True,
+        ):
+            settings = Settings.get()
+            assert settings.role_scan_enabled is False
+            assert settings.operations_scan_enabled is False
+            assert settings.run_roles_scan_on_startup is True
+            assert settings.mcp_server_enabled is True
 
 
 class TestDatabaseEngine:

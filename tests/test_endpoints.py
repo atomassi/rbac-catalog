@@ -164,6 +164,25 @@ class TestRoleDetail:
         assert f"/roles/{self.TEST_ROLE_ID}/test-role" in response.text
 
     @pytest.mark.asyncio
+    async def test_role_faq_schema_uses_effective_perms(self, test_client):
+        """Test that FAQPage schema uses effective_perms (not permissions) for action counts."""
+        client, session_maker = test_client
+        async with session_maker() as session:
+            existing = await session.get(Role, self.TEST_ROLE_ID)
+            if not existing:
+                _make_test_snapshot(session, self.TEST_ROLE_ID, "Test Role")
+                await session.commit()
+
+        response = await client.get(f"/roles/{self.TEST_ROLE_ID}/test-role")
+        assert response.status_code == 200
+        # FAQPage schema should be present and use effective_perms variables
+        assert "FAQPage" in response.text
+        assert "What permissions does Test Role have?" in response.text
+        # Should NOT contain broken template variable references
+        assert "permissions.actions" not in response.text
+        assert "permissions.data_actions" not in response.text
+
+    @pytest.mark.asyncio
     async def test_role_id_without_dashes_with_slug_returns_200(self, test_client):
         """Test that role_id without dashes (32-char hex) is normalized and works with slug."""
         client, session_maker = test_client

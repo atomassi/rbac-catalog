@@ -394,6 +394,7 @@ test.describe('Role Detail Page', () => {
     // Access role without slug - should return 200 with content (for SEO: GUIDs are indexable)
     const response = await page.goto('/roles/acdd72a7-3385-48ef-bd42-f606fba81ae7');
     await page.waitForLoadState('domcontentloaded');
+    expect(response?.status()).toBe(200);
     
     // Should stay on the same URL (no redirect)
     expect(page.url()).toMatch(/\/roles\/acdd72a7-3385-48ef-bd42-f606fba81ae7$/);

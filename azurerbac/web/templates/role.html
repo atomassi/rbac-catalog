@@ -138,7 +138,7 @@
                 "name": "What permissions does {{ role.role_name }} have?",
                 "acceptedAnswer": {
                     "@type": "Answer",
-                    "text": "The {{ role.role_name }} role (ID: {{ role.role_id }}) grants {% if permissions and permissions.actions %}{{ permissions.actions | length }} control plane action(s){% endif %}{% if permissions and permissions.data_actions %} and {{ permissions.data_actions | length }} data plane action(s){% endif %}. View the full permissions list on this page."
+                    "text": "The {{ role.role_name }} role (ID: {{ role.role_id }}) grants {% if effective_perms and effective_perms.control_plane_actions %}{{ effective_perms.control_plane_actions | length }} control plane action(s){% endif %}{% if effective_perms and effective_perms.data_plane_actions %} and {{ effective_perms.data_plane_actions | length }} data plane action(s){% endif %}. View the full permissions list on this page."
                 }
             },
             {
@@ -263,7 +263,7 @@
                 </div>
 
                 <h1 class="text-3xl sm:text-4xl font-bold text-white mb-2">{{ role.role_name }}</h1>
-                <p class="text-azure-200 text-sm font-mono" id="role-definition-id" aria-label="Role Definition ID: {{ role.role_id }}">Role ID: <span itemprop="identifier">{{ role.role_id }}</span></p>
+                <p class="text-azure-200 text-sm font-mono" id="role-definition-id" aria-label="Role Definition ID: {{ role.role_id }}">Role ID: <span>{{ role.role_id }}</span></p>
             </div>
         </div>
 

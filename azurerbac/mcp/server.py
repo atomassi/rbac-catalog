@@ -32,6 +32,7 @@ from azurerbac.mcp.constants import (
     MAX_ROLES_LIMIT,
     MCP_SERVER_INSTRUCTIONS,
     MCP_SERVER_NAME,
+    MCP_SESSION_ID_HEADER,
     MIN_AI_QUERY_LENGTH,
     MIN_QUERY_LENGTH,
     RATE_LIMIT_GLOBAL_CAPACITY,
@@ -45,7 +46,7 @@ from azurerbac.mcp.constants import (
     SEARCH_ROLES_DESC,
 )
 from azurerbac.mcp.utils import InputValidator, TokenBucketRateLimiter, ToolTimer, ValidationError
-from azurerbac.telemetry import track_event, track_gauge
+from azurerbac.telemetry import track_event
 from azurerbac.web.constants import NEW_DOMAIN, SITE_URL
 
 logger = logging.getLogger(__name__)
@@ -83,8 +84,8 @@ class MCPServer:
         """Get Starlette Streamable HTTP app (modern MCP transport)."""
         return self._mcp.streamable_http_app()
 
-    def _timer(self, tool_name: str) -> ToolTimer:
-        return ToolTimer(tool_name)
+    def _timer(self, tool_name: str, session_id: str = "unknown") -> ToolTimer:
+        return ToolTimer(tool_name, session_id)
 
     def _track_rate_limit(self, tool_name: str, limit_type: str) -> None:
         track_event("mcp_rate_limit", {"tool": tool_name, "type": limit_type})
@@ -93,16 +94,39 @@ class MCPServer:
     def _get_client_key(ctx: Context | None) -> str:
         """Extract client identifier for rate limiting.
 
-        Uses session object identity as key since client_id is not sent by most clients.
-        In Streamable HTTP mode, each session gets a unique ServerSession instance.
+        Uses mcp-session-id header as key for rate limiting.
         """
         if ctx is None:
             logger.debug("No MCP context provided, using 'default' client key")
             return "default"
-        # Use session object id - stable for the lifetime of the session
-        session_key = f"session_{id(ctx.session)}"
-        logger.debug("MCP session_key=%s, request_id=%s", session_key, ctx.request_id)
-        return session_key
+
+        # Extract client info for logging
+        client_name = "unknown"
+        client_version = ""
+        if (
+            ctx.session
+            and hasattr(ctx.session, "client_params")
+            and ctx.session.client_params
+            and (client_info := getattr(ctx.session.client_params, "clientInfo", None))
+        ):
+            client_name = getattr(client_info, "name", "unknown") or "unknown"
+            client_version = getattr(client_info, "version", "") or ""
+
+        # Get session ID from mcp-session-id header
+        session_id = "default"
+        if ctx.request_context and ctx.request_context.request:
+            headers = getattr(ctx.request_context.request, "headers", {})
+            session_id = headers.get(MCP_SESSION_ID_HEADER, "default")
+
+        logger.debug(
+            "MCP client=%s/%s, session=%s, request_id=%s",
+            client_name,
+            client_version,
+            session_id,
+            ctx.request_id,
+        )
+
+        return session_id
 
     # -------------------------------------------------------------------------
     # Rate limiting
@@ -153,7 +177,6 @@ class MCPServer:
             self._track_rate_limit(tool_name, "session")
             return f"Rate limit exceeded. Please wait {result.wait_seconds:.0f} seconds."
 
-        track_gauge("mcp_active_sessions", len(self._session_last_activity))
         return None
 
     # -------------------------------------------------------------------------
@@ -185,11 +208,17 @@ class MCPServer:
         def search_operations(
             query: str, limit: int = DEFAULT_OPERATIONS_LIMIT, ctx: Context | None = None
         ) -> str:
-            logger.debug("search_operations called: query=%r, limit=%d", query, limit)
-            if err := self._check_rate_limit("search_operations", self._get_client_key(ctx)):
+            session_id = self._get_client_key(ctx)
+            logger.debug(
+                "search_operations called: query=%r, limit=%d, session=%s",
+                query,
+                limit,
+                session_id,
+            )
+            if err := self._check_rate_limit("search_operations", session_id):
                 return err
 
-            with self._timer("search_operations") as timer:
+            with self._timer("search_operations", session_id) as timer:
                 try:
                     query = InputValidator.validate(
                         query, MAX_QUERY_LENGTH, MIN_QUERY_LENGTH, "Query"
@@ -221,11 +250,17 @@ class MCPServer:
         def search_roles(
             query: str, limit: int = DEFAULT_ROLES_LIMIT, ctx: Context | None = None
         ) -> str:
-            logger.debug("search_roles called: query=%r, limit=%d", query, limit)
-            if err := self._check_rate_limit("search_roles", self._get_client_key(ctx)):
+            session_id = self._get_client_key(ctx)
+            logger.debug(
+                "search_roles called: query=%r, limit=%d, session=%s",
+                query,
+                limit,
+                session_id,
+            )
+            if err := self._check_rate_limit("search_roles", session_id):
                 return err
 
-            with self._timer("search_roles") as timer:
+            with self._timer("search_roles", session_id) as timer:
                 try:
                     query = InputValidator.validate(
                         query, MAX_QUERY_LENGTH, MIN_QUERY_LENGTH, "Query"
@@ -258,11 +293,16 @@ class MCPServer:
 
         @self._mcp.tool(description=GET_ROLE_DESC)
         def get_role(role_id_or_name: str, ctx: Context | None = None) -> str:
-            logger.debug("get_role called: role_id_or_name=%r", role_id_or_name)
-            if err := self._check_rate_limit("get_role", self._get_client_key(ctx)):
+            session_id = self._get_client_key(ctx)
+            logger.debug(
+                "get_role called: role_id_or_name=%r, session=%s",
+                role_id_or_name,
+                session_id,
+            )
+            if err := self._check_rate_limit("get_role", session_id):
                 return err
 
-            with self._timer("get_role") as timer:
+            with self._timer("get_role", session_id) as timer:
                 try:
                     role_id_or_name = InputValidator.validate(
                         role_id_or_name, MAX_ROLE_ID_LENGTH, 1, "Role identifier"
@@ -307,15 +347,17 @@ class MCPServer:
         def get_role_permissions(
             role_id_or_name: str, include_data_actions: bool = True, ctx: Context | None = None
         ) -> str:
+            session_id = self._get_client_key(ctx)
             logger.debug(
-                "get_role_permissions called: role=%r, include_data=%s",
+                "get_role_permissions called: role=%r, include_data=%s, session=%s",
                 role_id_or_name,
                 include_data_actions,
+                session_id,
             )
-            if err := self._check_rate_limit("get_role_permissions", self._get_client_key(ctx)):
+            if err := self._check_rate_limit("get_role_permissions", session_id):
                 return err
 
-            with self._timer("get_role_permissions") as timer:
+            with self._timer("get_role_permissions", session_id) as timer:
                 try:
                     role_id_or_name = InputValidator.validate(
                         role_id_or_name, MAX_ROLE_ID_LENGTH, 1, "Role identifier"
@@ -358,16 +400,18 @@ class MCPServer:
             max_results: int = DEFAULT_RECOMMEND_LIMIT,
             ctx: Context | None = None,
         ) -> str:
+            session_id = self._get_client_key(ctx)
             logger.debug(
-                "recommend_roles_tool called: ops=%d, wildcards_ctrl=%d, wildcards_data=%d",
+                "recommend_roles_tool: ops=%d, wildcards_ctrl=%d, wildcards_data=%d, session=%s",
                 len(operations or []),
                 len(wildcards_control or []),
                 len(wildcards_data or []),
+                session_id,
             )
-            if err := self._check_rate_limit("recommend_roles_tool", self._get_client_key(ctx)):
+            if err := self._check_rate_limit("recommend_roles_tool", session_id):
                 return err
 
-            with self._timer("recommend_roles_tool") as timer:
+            with self._timer("recommend_roles_tool", session_id) as timer:
                 all_ops = (operations or []) + (wildcards_control or []) + (wildcards_data or [])
                 if not all_ops:
                     timer.fail()
@@ -429,11 +473,17 @@ class MCPServer:
         def ai_recommend(
             query: str, top_k: int = DEFAULT_AI_RECOMMEND_LIMIT, ctx: Context | None = None
         ) -> str:
-            logger.debug("ai_recommend called: query=%r, top_k=%d", query, top_k)
-            if err := self._check_rate_limit("ai_recommend", self._get_client_key(ctx)):
+            session_id = self._get_client_key(ctx)
+            logger.debug(
+                "ai_recommend called: query=%r, top_k=%d, session=%s",
+                query,
+                top_k,
+                session_id,
+            )
+            if err := self._check_rate_limit("ai_recommend", session_id):
                 return err
 
-            with self._timer("ai_recommend") as timer:
+            with self._timer("ai_recommend", session_id) as timer:
                 try:
                     query = InputValidator.validate(
                         query, MAX_AI_QUERY_LENGTH, MIN_AI_QUERY_LENGTH, "Query"

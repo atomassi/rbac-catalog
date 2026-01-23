@@ -155,13 +155,29 @@ class TestMCPServerClientKey:
         result = MCPServer._get_client_key(None)  # pyright: ignore[reportPrivateUsage]
         assert result == "default"
 
-    def test_returns_session_based_key_with_context(self) -> None:
+    def test_returns_session_id_from_header(self) -> None:
+        """Test that session ID is extracted from mcp-session-id header."""
         mock_ctx = MagicMock()
-        mock_ctx.session = object()  # Unique object
+        mock_ctx.session = MagicMock()
+        mock_ctx.session.client_params = None
         mock_ctx.request_id = "123"
+        mock_ctx.request_context = MagicMock()
+        mock_ctx.request_context.request = MagicMock()
+        mock_ctx.request_context.request.headers = {"mcp-session-id": "test-session-abc123"}
         result = MCPServer._get_client_key(mock_ctx)  # pyright: ignore[reportPrivateUsage]
-        assert result.startswith("session_")
-        assert str(id(mock_ctx.session)) in result
+        assert result == "test-session-abc123"
+
+    def test_returns_default_when_no_session_header(self) -> None:
+        """Test that 'default' is returned when mcp-session-id header is missing."""
+        mock_ctx = MagicMock()
+        mock_ctx.session = MagicMock()
+        mock_ctx.session.client_params = None
+        mock_ctx.request_id = "123"
+        mock_ctx.request_context = MagicMock()
+        mock_ctx.request_context.request = MagicMock()
+        mock_ctx.request_context.request.headers = {}  # No mcp-session-id header
+        result = MCPServer._get_client_key(mock_ctx)  # pyright: ignore[reportPrivateUsage]
+        assert result == "default"
 
 
 class TestMCPServerFindRole:

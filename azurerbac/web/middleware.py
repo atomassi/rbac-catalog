@@ -14,6 +14,7 @@ from azurerbac.web.constants import (
     CACHE_HEADER_MAIN_PAGE,
     CACHE_HEADER_NONE,
     CACHE_HEADER_STATIC,
+    COOP_HEADER,
     CSP_HEADER,
     HEALTH_PATHS,
     NEW_DOMAIN,
@@ -80,7 +81,9 @@ async def add_security_headers(
     headers["X-Frame-Options"] = "DENY"
     headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     headers["X-XSS-Protection"] = "1; mode=block"
+    headers["X-Content-Type-Options"] = "nosniff"
     headers["Content-Security-Policy"] = CSP_HEADER
+    headers["Cross-Origin-Opener-Policy"] = COOP_HEADER
     headers["Permissions-Policy"] = PERMISSIONS_POLICY_HEADER
 
     return response

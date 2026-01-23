@@ -57,8 +57,14 @@ CSP_HEADER: Final = (
     "connect-src 'self' cdn.jsdelivr.net cloudflareinsights.com; "
     "frame-ancestors 'none'; "
     "base-uri 'self'; "
-    "form-action 'self'"
+    "form-action 'self'; "
+    "object-src 'none'; "
+    "upgrade-insecure-requests"
 )
+
+# Cross-Origin-Opener-Policy header for origin isolation
+COOP_HEADER: Final = "same-origin"
+
 PERMISSIONS_POLICY_HEADER: Final = (
     "accelerometer=(), camera=(), geolocation=(), gyroscope=(), "
     "magnetometer=(), microphone=(), payment=(), usb=(), interest-cohort=()"

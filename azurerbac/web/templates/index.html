@@ -797,7 +797,7 @@
                                                     </span>
                                                     {% endif %}
                                                 </div>
-                                                <code class="text-xs font-mono text-slate-400 mt-0.5">{{ role.role_id }}</code>
+                                                <code class="text-xs font-mono text-slate-500 mt-0.5">{{ role.role_id }}</code>
                                             </div>
                                         </td>
                                         <td class="hide-mobile px-6 py-4 text-center">
@@ -919,7 +919,7 @@
                                             <div class="text-sm font-semibold text-azure-600">
                                                 <a href="{{ role_url(ev.role_id, ev.role_name) }}" onclick="NavState.setBackContext('recent')" class="hover:text-azure-700 hover:underline">{{ ev.role_name }}</a>
                                             </div>
-                                            <code class="text-xs font-mono text-slate-400 hidden sm:block">{{ ev.role_id }}</code>
+                                            <code class="text-xs font-mono text-slate-500 hidden sm:block">{{ ev.role_id }}</code>
                                         </td>
                                         <td class="px-2 sm:px-6 py-3 whitespace-nowrap">
                                             {% if ev.event_type == 'created' %}

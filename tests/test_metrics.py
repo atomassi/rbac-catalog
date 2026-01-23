@@ -197,11 +197,12 @@ class TestMetricsSenderSingleton:
 class TestTrackFunctions:
     """Test individual track functions accept correct parameters."""
 
-    def test_track_cache_stats_extracts_correct_values(self, local_env, mock_app_cache):
-        """track_cache_stats should extract values from cache_container."""
+    def test_track_db_fallback_logs_correctly(self, local_env):
+        """track_db_fallback should log and handle parameters."""
         metrics_module = local_env
         # Should not raise (no-op when local)
-        metrics_module.track_cache_stats(mock_app_cache)
+        metrics_module.track_db_fallback("role_detail", "cache_miss", "test-role-id")
+        metrics_module.track_db_fallback("role_history", "not_in_cache")
 
 
 # =============================================================================
@@ -241,13 +242,6 @@ class TestMetricsDimensions:
 
 class TestMetricsErrorHandling:
     """Test that metrics functions handle errors gracefully."""
-
-    def test_track_cache_stats_handles_missing_attributes(self, local_env):
-        """track_cache_stats should handle missing cache attributes."""
-        metrics_module = local_env
-        mock_cache = MagicMock(spec=[])  # Empty spec = no attributes
-        # Should not raise - error is caught
-        metrics_module.track_cache_stats(mock_cache)
 
     def test_track_metric_with_negative_value(self, local_env):
         """track_metric should accept negative values."""

@@ -15,7 +15,7 @@ from cachetools import LRUCache
 from azurerbac.cache.models import CacheData, CachedChangeEvent, CachedRole, Sitemap
 from azurerbac.core.constants import DEFAULT_SEARCH_LIMIT
 from azurerbac.matching.models import RoleCoverage, RoleNetPermissions
-from azurerbac.telemetry import track_cache_hit
+from azurerbac.telemetry import track_cache_call, track_cache_hit
 
 if TYPE_CHECKING:
     from azurerbac.azure.models import OperationData, RoleDefinition
@@ -88,13 +88,19 @@ class CacheContainer:
 
     def get_role_by_id(self, role_id: str) -> CachedRole | None:
         """Get cached role by ID."""
-        return self._cache.roles_by_id.get(role_id)
+        result = self._cache.roles_by_id.get(role_id)
+        track_cache_call("get_role_by_id", 1 if result else 0, role_id)
+        return result
 
     def get_all_roles(self) -> list[RoleDefinition]:
-        return self._cache.get_role_definitions()
+        result = self._cache.get_role_definitions()
+        track_cache_call("get_all_roles", len(result))
+        return result
 
     def get_all_operations(self) -> list[OperationData]:
-        return self._cache.all_operations
+        result = self._cache.all_operations
+        track_cache_call("get_all_operations", len(result))
+        return result
 
     def get_change_events(self) -> list[CachedChangeEvent]:
         return self._cache.all_change_events
@@ -113,7 +119,9 @@ class CacheContainer:
         Returns a RoleCoverage NamedTuple with control and data operation sets
         that the role grants, after applying notActions/notDataActions exclusions.
         """
-        return self._cache.role_coverage.get(role_id)
+        result = self._cache.role_coverage.get(role_id)
+        track_cache_call("get_role_coverage", 1 if result else 0, role_id)
+        return result
 
     def get_ops_lowered_to_orig(self) -> dict[str, str]:
         """Get mapping from lowered operation name to original casing."""
@@ -146,7 +154,9 @@ class CacheContainer:
         Returns list of role_ids that grant the specified operation.
         Uses the pre-computed operation_to_roles inverted index.
         """
-        return self._cache.operation_to_roles.get(operation_name.lower(), [])
+        result = self._cache.operation_to_roles.get(operation_name.lower(), [])
+        track_cache_call("get_roles_for_operation", len(result), operation_name)
+        return result
 
     def get_role_page(self, page_key: str) -> Any:
         """Get a cached role page or count value."""
@@ -193,6 +203,7 @@ class CacheContainer:
         """Search operations using pre-built indexes."""
         cache = self._cache
         if not cache.ops_by_name_lower:
+            track_cache_call("search_operations", 0, query)
             return []
 
         q_lower = query.lower()
@@ -208,7 +219,9 @@ class CacheContainer:
             matching = [op for op in cache.ops_by_name_lower.values() if op.matches_search(q_lower)]
 
         matching.sort(key=lambda x: x.name)
-        return matching[:limit]
+        result = matching[:limit]
+        track_cache_call("search_operations", len(result), query)
+        return result
 
     def count_wildcard_matches(self, pattern: str, is_data_action: bool = False) -> int:
         """Count operations matching a wildcard pattern."""

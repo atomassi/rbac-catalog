@@ -19,6 +19,7 @@ from azurerbac.airecommender.modes import RecommenderMode
 from azurerbac.core.constants import DEFAULT_SEARCH_LIMIT
 from azurerbac.core.patterns import is_wildcard_pattern
 from azurerbac.matching import recommend_roles
+from azurerbac.telemetry import track_ai_recommendation, track_role_recommendation
 from azurerbac.web.constants import (
     AI_RATE_LIMIT_PER_MINUTE,
     MAX_QUERY_LENGTH,
@@ -129,6 +130,12 @@ async def api_recommend_roles(
         len(matches),
     )
 
+    track_role_recommendation(
+        operations_count=len(requested_ops),
+        expanded_count=requested_ops_count,
+        result_count=len(matches),
+    )
+
     return RecommendRolesResponse(
         requested_operations=requested_ops,
         requested_operations_count=requested_ops_count,
@@ -171,15 +178,36 @@ async def ai_recommend_endpoint(
         )
     except EngineNotAvailableError as e:
         logger.warning("Engine not available: mode=%s missing=%s", e.mode, e.missing_components)
+        track_ai_recommendation(
+            query=query,
+            requested_mode=requested_mode,
+            actual_mode=e.mode or "unknown",
+            result_count=0,
+            error=f"engine_unavailable: {e.missing_components}",
+        )
         return ai_error_response(
             ErrorMessages.engine_unavailable((e.mode or "Selected").upper()),
             mode=e.mode,
         )
     except ColBERTInitializationError:
         logger.warning("ColBERT initialization failed")
+        track_ai_recommendation(
+            query=query,
+            requested_mode=requested_mode,
+            actual_mode="colbert",
+            result_count=0,
+            error="colbert_init_failed",
+        )
         return ai_error_response(ErrorMessages.engine_unavailable("COLBERT"), mode="colbert")
-    except Exception:
+    except Exception as e:
         logger.exception("AI recommendation failed")
+        track_ai_recommendation(
+            query=query,
+            requested_mode=requested_mode,
+            actual_mode=requested_mode,
+            result_count=0,
+            error=str(e)[:100],
+        )
         return ai_error_response(ErrorMessages.GENERIC_ERROR)
 
     logger.info(
@@ -188,6 +216,14 @@ async def ai_recommend_endpoint(
         requested_mode,
         actual_mode,
         len(recommendations),
+    )
+
+    track_ai_recommendation(
+        query=query,
+        requested_mode=requested_mode,
+        actual_mode=actual_mode,
+        result_count=len(recommendations),
+        fallback=actual_mode != requested_mode,
     )
 
     return AIRecommendResponse(

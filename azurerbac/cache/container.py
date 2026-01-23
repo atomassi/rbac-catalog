@@ -136,15 +136,15 @@ class CacheContainer:
         """Get cached count of roles granting an operation.
 
         Returns the number of built-in roles that grant the specified operation.
-        Uses the pre-computed inverted index.
+        Uses the pre-computed operation_to_roles inverted index.
         """
         return len(self._cache.operation_to_roles.get(operation_name.lower(), []))
 
     def get_roles_for_operation(self, operation_name: str) -> list[str]:
-        """Get role IDs that grant an operation.
+        """Get role IDs that grant an operation (O(1) lookup).
 
         Returns list of role_ids that grant the specified operation.
-        Uses the pre-computed inverted index.
+        Uses the pre-computed operation_to_roles inverted index.
         """
         return self._cache.operation_to_roles.get(operation_name.lower(), [])
 

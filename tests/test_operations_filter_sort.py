@@ -64,7 +64,7 @@ def mock_app_cache() -> MagicMock:
     """Create a mock app cache."""
     cache = MagicMock()
     # Mock role counts: more roles for common operations
-    cache.get_operation_role_count.side_effect = lambda name, *, is_data_action: {
+    cache.get_operation_role_count.side_effect = lambda name: {
         "Microsoft.Compute/virtualMachines/read": 150,
         "Microsoft.Storage/storageAccounts/blobServices/containers/blobs/read": 50,
         "Microsoft.KeyVault/vaults/secrets/read": 75,

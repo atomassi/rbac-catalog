@@ -401,10 +401,10 @@ class TestGetRolesAllowingOperationServices:
 
         get_roles_allowing_operation("Microsoft.Storage/read", False, mock_app_cache)
 
-        # Should cache the result
+        # Should cache the result using lowered operation name as key
         mock_app_cache.set_allowing_roles.assert_called_once()
         cache_key = mock_app_cache.set_allowing_roles.call_args[0][0]
-        assert "roles_allowing_op:" in cache_key
+        assert cache_key == "microsoft.storage/read"
 
 
 class TestEnrichEventWithDiff:

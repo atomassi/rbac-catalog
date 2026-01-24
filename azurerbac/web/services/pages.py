@@ -78,10 +78,7 @@ def sort_operations(
     cache_resolved = cache if cache is not None else get_cache_service().container
 
     # Build tuples with role count for sorting (needed for "roles" sort and enrichment)
-    ops_with_count = [
-        (op, cache_resolved.get_operation_role_count(op.name, is_data_action=op.is_data_action))
-        for op in operations
-    ]
+    ops_with_count = [(op, cache_resolved.get_operation_role_count(op.name)) for op in operations]
 
     if sort == OperationSortField.ROLES:
         # Sort by role count
@@ -123,18 +120,13 @@ def get_roles_allowing_operation(
     """
     cache_resolved = _get_cache(cache)
 
-    # Check cache first
-    cache_key = f"roles_allowing_op:{operation_name.lower()}:{is_data_action}"
+    # Check cache first (key is just lowered operation name)
+    cache_key = operation_name.lower()
     if (cached := cache_resolved.get_allowing_roles(cache_key)) is not None:
         return cached
 
-    operation_lowered = operation_name.lower()
-
-    # lookup using precomputed inverted index (plane-specific)
-    role_ids = cache_resolved.get_roles_for_operation(
-        operation_lowered, is_data_action=is_data_action
-    )
-    if not role_ids:
+    # lookup using precomputed inverted index
+    if not (role_ids := cache_resolved.get_roles_for_operation(cache_key)):
         cache_resolved.set_allowing_roles(cache_key, [])
         return []
 
@@ -154,8 +146,7 @@ def get_roles_allowing_operation(
         role = cached_role.definition
 
         # Get precomputed net permissions (always available for indexed roles)
-        net_perms = cache_resolved.get_role_net_permissions(role_id)
-        if net_perms is None:
+        if (net_perms := cache_resolved.get_role_net_permissions(role_id)) is None:
             logger.error("Cache inconsistency: role %s in index but missing net_perms", role_id)
             continue
 

@@ -174,20 +174,18 @@ def _compute_role_coverage(
 
 def _build_operation_to_roles(
     role_coverage: dict[str, RoleCoverage],
-) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
-    """Build inverted indexes by plane: operation (lowered) -> list of role_ids.
+) -> dict[str, list[str]]:
+    """Build inverted index: operation (lowered) -> list of role_ids.
 
-    Returns:
-        Tuple of (control_index, data_index)
+    Single dict since an operation is either control OR data plane, not both.
     """
-    control_index: dict[str, list[str]] = {}
-    data_index: dict[str, list[str]] = {}
+    index: dict[str, list[str]] = {}
     for role_id, cov in role_coverage.items():
         for op in cov.control:
-            control_index.setdefault(op, []).append(role_id)
+            index.setdefault(op, []).append(role_id)
         for op in cov.data:
-            data_index.setdefault(op, []).append(role_id)
-    return control_index, data_index
+            index.setdefault(op, []).append(role_id)
+    return index
 
 
 def precompute_all(
@@ -295,8 +293,8 @@ def precompute_all(
 
     logger.debug("Computed coverage for %d built-in roles", builtin_count)
 
-    logger.debug("Building operation-to-roles inverted indexes...")
-    control_op_to_roles, data_op_to_roles = _build_operation_to_roles(role_coverage)
+    logger.debug("Building operation-to-roles inverted index...")
+    operation_to_roles = _build_operation_to_roles(role_coverage)
 
     # Build operation indexes
     logger.debug("Building operation indexes...")
@@ -315,8 +313,7 @@ def precompute_all(
         ops_by_prefix=ops_by_prefix,
         role_coverage=role_coverage,
         role_net_permissions=role_net_permissions,
-        control_op_to_roles=control_op_to_roles,
-        data_op_to_roles=data_op_to_roles,
+        operation_to_roles=operation_to_roles,
         pattern_match=pattern_match,
         partial_coverage=partial_coverage,
         wildcard_count=wildcard_count,

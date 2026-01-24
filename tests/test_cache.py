@@ -464,7 +464,7 @@ class TestBuildOperationToRoles:
     """Tests for _build_operation_to_roles function."""
 
     def test_builds_inverted_index_from_coverage(self):
-        """Test that inverted index maps operations to role IDs by plane."""
+        """Test that inverted index maps operations to role IDs."""
         role_coverage = {
             "role-1": RoleCoverage(
                 control={"microsoft.storage/storageaccounts/read"},
@@ -479,29 +479,25 @@ class TestBuildOperationToRoles:
             ),
         }
 
-        control_index, data_index = _build_operation_to_roles(role_coverage)
+        index = _build_operation_to_roles(role_coverage)
 
-        # Control plane: Storage read should be granted by both roles
-        assert "microsoft.storage/storageaccounts/read" in control_index
-        assert set(control_index["microsoft.storage/storageaccounts/read"]) == {"role-1", "role-2"}
+        # Storage read should be granted by both roles
+        assert "microsoft.storage/storageaccounts/read" in index
+        assert set(index["microsoft.storage/storageaccounts/read"]) == {"role-1", "role-2"}
 
-        # Control plane: Compute read should only be role-2
-        assert "microsoft.compute/virtualmachines/read" in control_index
-        assert control_index["microsoft.compute/virtualmachines/read"] == ["role-2"]
+        # Compute read should only be role-2
+        assert "microsoft.compute/virtualmachines/read" in index
+        assert index["microsoft.compute/virtualmachines/read"] == ["role-2"]
 
-        # Data plane: Blob read is data action, only role-1
+        # Blob read is data action, only role-1
         blob_read_op = "microsoft.storage/storageaccounts/blobservices/containers/blobs/read"
-        assert blob_read_op in data_index
-        assert data_index[blob_read_op] == ["role-1"]
+        assert blob_read_op in index
+        assert index[blob_read_op] == ["role-1"]
 
-        # Control plane should NOT have the data action
-        assert blob_read_op not in control_index
-
-    def test_empty_coverage_returns_empty_indexes(self):
-        """Test that empty role coverage returns empty indexes."""
-        control_index, data_index = _build_operation_to_roles({})
-        assert control_index == {}
-        assert data_index == {}
+    def test_empty_coverage_returns_empty_index(self):
+        """Test that empty role coverage returns empty index."""
+        index = _build_operation_to_roles({})
+        assert index == {}
 
     def test_roles_with_no_operations(self):
         """Test roles with empty control and data sets."""
@@ -509,9 +505,8 @@ class TestBuildOperationToRoles:
             "empty-role": RoleCoverage(control=set(), data=set()),
         }
 
-        control_index, data_index = _build_operation_to_roles(role_coverage)
-        assert control_index == {}
-        assert data_index == {}
+        index = _build_operation_to_roles(role_coverage)
+        assert index == {}
 
     def test_preserves_all_role_ids_for_operation(self):
         """Test that all role IDs are preserved when multiple roles grant same operation."""
@@ -521,16 +516,15 @@ class TestBuildOperationToRoles:
             "role-c": RoleCoverage(control={"microsoft.resources/subscriptions/read"}, data=set()),
         }
 
-        control_index, data_index = _build_operation_to_roles(role_coverage)
+        index = _build_operation_to_roles(role_coverage)
 
         sub_read_op = "microsoft.resources/subscriptions/read"
-        assert sub_read_op in control_index
-        assert len(control_index[sub_read_op]) == 3
-        assert set(control_index[sub_read_op]) == {"role-a", "role-b", "role-c"}
-        assert data_index == {}
+        assert sub_read_op in index
+        assert len(index[sub_read_op]) == 3
+        assert set(index[sub_read_op]) == {"role-a", "role-b", "role-c"}
 
-    def test_data_and_control_operations_indexed_separately(self):
-        """Test that control plane and data plane operations go to separate indexes."""
+    def test_control_and_data_operations_in_same_index(self):
+        """Test that control plane and data plane operations go to the same index."""
         role_coverage = {
             "mixed-role": RoleCoverage(
                 control={"microsoft.storage/storageaccounts/write"},
@@ -538,19 +532,17 @@ class TestBuildOperationToRoles:
             ),
         }
 
-        control_index, data_index = _build_operation_to_roles(role_coverage)
+        index = _build_operation_to_roles(role_coverage)
 
-        # Control op should only be in control index
+        # Both ops should be in the same index
         control_op = "microsoft.storage/storageaccounts/write"
-        assert control_op in control_index
-        assert control_op not in data_index
-        assert control_index[control_op] == ["mixed-role"]
-
-        # Data op should only be in data index
         data_op = "microsoft.storage/storageaccounts/blobservices/containers/blobs/write"
-        assert data_op in data_index
-        assert data_op not in control_index
-        assert data_index[data_op] == ["mixed-role"]
+
+        assert control_op in index
+        assert index[control_op] == ["mixed-role"]
+
+        assert data_op in index
+        assert index[data_op] == ["mixed-role"]
 
 
 # =============================================================================

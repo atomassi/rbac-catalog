@@ -187,9 +187,8 @@ class CacheData:
     operations_by_prefix_computed: dict[Plane, dict[str, set[str]]] = field(default_factory=dict)
     cache_ops_count: CacheOpsCount = field(default_factory=lambda: CacheOpsCount(0, 0))
 
-    # Inverted indexes by plane: operation (lowered) -> list of role_ids that grant it
-    control_op_to_roles: dict[str, list[str]] = field(default_factory=dict)
-    data_op_to_roles: dict[str, list[str]] = field(default_factory=dict)
+    # Inverted index: operation (lowered) -> list of role_ids that grant it
+    operation_to_roles: dict[str, list[str]] = field(default_factory=dict)
 
     # Pre-computed analytics data (for dashboard)
     analytics: AnalyticsData | None = None

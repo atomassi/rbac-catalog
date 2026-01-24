@@ -393,6 +393,24 @@ def sample_operations() -> list[OperationData]:
 
 
 @pytest.fixture
+def populated_cache(sample_operations: list[OperationData]) -> Generator[None, None, None]:
+    """Populate the global cache with sample_operations for role recommender tests.
+
+    This fixture must be used by tests that call recommend_roles() or
+    RoleRecommendationService without explicitly providing a cache.
+    """
+    from azurerbac.cache import get_cache_service
+    from azurerbac.cache.build import precompute_all
+
+    # Create minimal cache with just the operations (no roles needed for op_sets)
+    cache = precompute_all(roles=[], all_operations=sample_operations)
+    get_cache_service().swap_in_memory(cache)
+    yield
+    # Reset to empty cache after test
+    get_cache_service().swap_in_memory(precompute_all(roles=[], all_operations=[]))
+
+
+@pytest.fixture
 def large_operations() -> list[OperationData]:
     """Large set of operations to simulate production data volume.
 

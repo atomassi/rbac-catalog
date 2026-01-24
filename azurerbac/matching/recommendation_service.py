@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from azurerbac.azure.models import OperationData, Permission, RoleDefinition
+from azurerbac.azure.models import Permission, RoleDefinition
 from azurerbac.core.constants import DEFAULT_SEARCH_LIMIT
 from azurerbac.core.patterns import is_wildcard_pattern
 from azurerbac.matching.models import (
@@ -122,28 +122,25 @@ class RoleRecommendationService:
 
     def __init__(
         self,
-        all_operations: list[OperationData],
         requested_ops_data_flags: dict[str, bool] | None = None,
         *,
-        caches: CacheData | None = None,
+        cache: CacheData | None = None,
     ) -> None:
-        """Initialize the service with operation data.
+        """Initialize the service.
 
         Args:
-            all_operations: List of all Azure operations.
             requested_ops_data_flags: Mapping of operation names to is_data_action flags.
-            caches: Optional cache data. If None, captures global singleton eagerly.
+            cache: Optional cache data. If None, uses global singleton.
         """
-        self.op_sets = OperationSets.from_operations(all_operations)
-        self.requested_ops_data_flags = requested_ops_data_flags or {}
         # Capture cache eagerly to ensure op_sets and _cache are always in sync.
-        # This prevents race conditions where background refresh swaps in new cache
-        # between reading all_operations and accessing _caches.
-        self._cache = caches if caches is not None else _get_default_cache()
+        self._cache = cache if cache is not None else _get_default_cache()
 
-        self._ops_lowered_to_orig: dict[str, str] = {
-            op.name.lower(): op.name for op in all_operations
-        }
+        # Use cached frozensets (O(1)) instead of rebuilding from operations (O(n))
+        self.op_sets = OperationSets.from_cache(self._cache)
+        self.requested_ops_data_flags = requested_ops_data_flags or {}
+
+        # Use cached mapping instead of rebuilding
+        self._ops_lowered_to_orig = self._cache.ops_lowered_to_orig
 
         # Pre-computed wildcard matches (populated by compute_wildcard_matches)
         self.control_wildcard_ops: dict[str, set[str]] = {}
@@ -162,6 +159,10 @@ class RoleRecommendationService:
     def restore_original_casing(self, operations: set[str]) -> list[str]:
         """Restore original casing for operation names."""
         return [self._ops_lowered_to_orig.get(op, op) for op in operations]
+
+    def get_all_roles(self) -> list[RoleDefinition]:
+        """Get all active roles from the cache."""
+        return self._cache.get_role_definitions()
 
     def get_cache_stats(self) -> CacheStats:
         """Get current cache entry counts for logging.

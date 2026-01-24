@@ -108,10 +108,6 @@ async def api_recommend_roles(
     """Recommend roles based on selected operations."""
     requested_ops, data_flags = request.parse_operations()
 
-    # Get data from cache (preloaded at startup)
-    roles = deps.app_cache.get_all_roles()
-    all_operations = deps.app_cache.get_all_operations()
-
     # Run CPU-bound recommendation in thread pool to avoid blocking event loop
     loop = asyncio.get_running_loop()
     matches = await loop.run_in_executor(
@@ -119,8 +115,6 @@ async def api_recommend_roles(
         partial(
             recommend_roles,
             requested_ops,
-            roles,
-            all_operations,
             requested_ops_data_flags=data_flags,
         ),
     )

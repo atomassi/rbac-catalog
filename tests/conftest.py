@@ -401,13 +401,14 @@ def populated_cache(sample_operations: list[OperationData]) -> Generator[None, N
     """
     from azurerbac.cache import get_cache_service
     from azurerbac.cache.build import precompute_all
+    from azurerbac.cache.models import CacheData
 
     # Create minimal cache with just the operations (no roles needed for op_sets)
     cache = precompute_all(roles=[], all_operations=sample_operations)
     get_cache_service().swap_in_memory(cache)
     yield
-    # Reset to empty cache after test
-    get_cache_service().swap_in_memory(precompute_all(roles=[], all_operations=[]))
+    # Reset to empty cache after test (CacheData() is cheaper than precompute_all)
+    get_cache_service().swap_in_memory(CacheData())
 
 
 @pytest.fixture

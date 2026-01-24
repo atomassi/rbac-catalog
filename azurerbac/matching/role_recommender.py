@@ -43,8 +43,7 @@ def recommend_roles(
     svc = RoleRecommendationService(requested_ops_data_flags=requested_ops_data_flags)
 
     # Use provided roles or get from cache
-    if roles is None:
-        roles = svc.get_all_roles()
+    roles = roles or svc.get_all_roles()
 
     classified = svc.classify_operations(requested_operations)
     logger.debug(
@@ -67,8 +66,7 @@ def recommend_roles(
     # Evaluate each role
     matches: list[RoleMatch] = []
     has_cache = svc.has_full_cache()
-    roles_evaluated = 0
-    roles_with_matches = 0
+    roles_evaluated = roles_with_matches = 0
 
     for role in roles:
         if not svc.is_builtin_role(role):

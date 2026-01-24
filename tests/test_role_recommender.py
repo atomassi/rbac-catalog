@@ -442,20 +442,20 @@ class TestCheckOperationAllowed:
 class TestUserSelectionScenarios:
     """Tests for different user selection scenarios."""
 
-    def test_empty_selection_returns_empty(self, sample_operations, populated_cache):
+    def test_empty_selection_returns_empty(self, populated_cache):
         """Empty selection returns empty results."""
         roles = [make_role_definition("Reader", "r1", ["*/read"])]
         result = recommend_roles([], roles)
         assert result == []
 
-    def test_single_operation_selection(self, sample_operations, populated_cache):
+    def test_single_operation_selection(self, populated_cache):
         """Single operation selection returns matching roles."""
         roles = [make_role_definition("Reader", "r1", ["*/read"])]
         result = recommend_roles(["Microsoft.Storage/storageAccounts/read"], roles)
         assert len(result) >= 1
         assert all(r.is_full_match for r in result)
 
-    def test_multiple_operations_selection(self, sample_operations, populated_cache):
+    def test_multiple_operations_selection(self, populated_cache):
         """Multiple operations selection with partial and full matches."""
         roles = [
             make_role_definition("Storage Admin", "r1", ["Microsoft.Storage/*"]),
@@ -477,7 +477,7 @@ class TestUserSelectionScenarios:
 class TestActionTypes:
     """Tests for control plane vs data plane operations."""
 
-    def test_control_plane_only_role(self, sample_operations, populated_cache):
+    def test_control_plane_only_role(self, populated_cache):
         """Control plane role matches control plane operations."""
         roles = [
             make_role_definition(
@@ -488,7 +488,7 @@ class TestActionTypes:
         assert len(result) == 1
         assert result[0].is_full_match
 
-    def test_data_plane_only_role(self, sample_operations, populated_cache):
+    def test_data_plane_only_role(self, populated_cache):
         """Data plane role matches data plane operations."""
         roles = [
             make_role_definition(
@@ -505,7 +505,7 @@ class TestActionTypes:
         assert len(result) == 1
         assert result[0].is_full_match
 
-    def test_control_plane_not_matched_by_data_role(self, sample_operations, populated_cache):
+    def test_control_plane_not_matched_by_data_role(self, populated_cache):
         """Control plane operation not matched by data plane role."""
         roles = [
             make_role_definition(
@@ -515,7 +515,7 @@ class TestActionTypes:
         result = recommend_roles(["Microsoft.Storage/storageAccounts/read"], roles)
         assert len(result) == 0
 
-    def test_mixed_control_and_data(self, sample_operations, populated_cache):
+    def test_mixed_control_and_data(self, populated_cache):
         """Mixed role matches both control and data plane."""
         roles = [
             make_role_definition(
@@ -562,7 +562,6 @@ class TestHighPrivilegeRoles:
     )
     def test_high_privilege_detection(
         self,
-        sample_operations,
         populated_cache,
         role_name,
         actions,
@@ -576,7 +575,7 @@ class TestHighPrivilegeRoles:
         if result:
             assert result[0].is_high_privilege == expected_high_privilege
 
-    def test_high_privilege_roles_sorted_last(self, sample_operations, populated_cache):
+    def test_high_privilege_roles_sorted_last(self, populated_cache):
         """Non-high-privilege roles should appear before high-privilege roles."""
         roles = [
             make_role_definition("Owner", "r1", ["*"]),
@@ -600,7 +599,7 @@ class TestHighPrivilegeRoles:
 class TestNotActionsExclusions:
     """Tests for notActions and notDataActions exclusions."""
 
-    def test_not_action_excludes_operation(self, sample_operations, populated_cache):
+    def test_not_action_excludes_operation(self, populated_cache):
         """notAction excludes specific operation."""
         roles = [
             make_role_definition(
@@ -613,7 +612,7 @@ class TestNotActionsExclusions:
         result = recommend_roles(["Microsoft.Storage/storageAccounts/delete"], roles)
         assert len(result) == 0
 
-    def test_not_action_allows_other_operations(self, sample_operations, populated_cache):
+    def test_not_action_allows_other_operations(self, populated_cache):
         """notAction doesn't affect non-excluded operations."""
         roles = [
             make_role_definition(
@@ -639,7 +638,7 @@ class TestNotActionsExclusions:
 class TestSortingAndRanking:
     """Tests for result sorting and ranking."""
 
-    def test_full_matches_before_partial(self, sample_operations, populated_cache):
+    def test_full_matches_before_partial(self, populated_cache):
         """Full matches should appear before partial matches."""
         roles = [
             make_role_definition("Partial", "r1", ["Microsoft.Storage/*/read"]),
@@ -654,7 +653,7 @@ class TestSortingAndRanking:
         if full_indices and partial_indices:
             assert max(full_indices) < min(partial_indices)
 
-    def test_no_match_returns_empty(self, sample_operations, populated_cache):
+    def test_no_match_returns_empty(self, populated_cache):
         """No role matches returns empty list."""
         roles = [make_role_definition("Compute Only", "r1", ["Microsoft.Compute/*"])]
         result = recommend_roles(["Microsoft.Storage/storageAccounts/read"], roles)
@@ -730,7 +729,7 @@ class TestOperationSets:
 class TestRecommendationService:
     """Tests for RoleRecommendationService."""
 
-    def test_classify_operations_separates_by_plane(self, sample_operations, populated_cache):
+    def test_classify_operations_separates_by_plane(self, populated_cache):
         """classify_operations should correctly separate control and data operations."""
         from azurerbac.matching.recommendation_service import RoleRecommendationService
 
@@ -746,7 +745,7 @@ class TestRecommendationService:
         assert "microsoft.storage/storageaccounts/read" in classified.control
         assert "microsoft.keyvault/vaults/secrets/read" in classified.data
 
-    def test_classify_operations_handles_wildcards(self, sample_operations, populated_cache):
+    def test_classify_operations_handles_wildcards(self, populated_cache):
         """classify_operations should detect wildcards matching both planes."""
         from azurerbac.matching.recommendation_service import RoleRecommendationService
 
@@ -757,7 +756,7 @@ class TestRecommendationService:
         assert "Microsoft.Storage/*" in classified.control_wildcards
         assert "Microsoft.Storage/*" in classified.data_wildcards
 
-    def test_compute_wildcard_matches_expands_patterns(self, sample_operations, populated_cache):
+    def test_compute_wildcard_matches_expands_patterns(self, populated_cache):
         """compute_wildcard_matches should expand wildcards to actual operations."""
         from azurerbac.matching.recommendation_service import RoleRecommendationService
 
@@ -790,7 +789,6 @@ class TestMaxResultsParameter:
     )
     def test_max_results_parameter(
         self,
-        sample_operations,
         populated_cache,
         num_roles: int,
         max_results: int | None,
@@ -817,7 +815,7 @@ class TestMaxResultsParameter:
 class TestMissingOperationsExpanded:
     """Tests for missing_operations_expanded field correctness."""
 
-    def test_zero_coverage_wildcard_has_expanded_ops(self, sample_operations, populated_cache):
+    def test_zero_coverage_wildcard_has_expanded_ops(self, populated_cache):
         """When a role has 0 coverage for a wildcard, expanded ops should be populated."""
         # Role with NO data plane permissions
         reader_role = make_role_definition(
@@ -856,7 +854,7 @@ class TestReaderRoleEdgeCases:
         ],
     )
     def test_reader_wildcard_with_plane_flag(
-        self, sample_operations, populated_cache, data_flag: bool, expected_full_match: bool
+        self, populated_cache, data_flag: bool, expected_full_match: bool
     ):
         """Test Reader role behavior with different plane flags."""
         reader = make_role_definition("Reader", "reader", actions=["*/read"], data_actions=[])
@@ -875,7 +873,7 @@ class TestReaderRoleEdgeCases:
             # Reader has no data actions, should not match data-only request
             assert len(result) == 0
 
-    def test_reader_both_planes_partial_match(self, sample_operations, populated_cache):
+    def test_reader_both_planes_partial_match(self, populated_cache):
         """Reader requesting both planes should show partial match."""
         reader = make_role_definition("Reader", "reader", actions=["*/read"], data_actions=[])
 
@@ -904,7 +902,7 @@ class TestIntraRequestCacheConsistency:
     job swaps the cache mid-request.
     """
 
-    def test_service_uses_cache_from_construction_time(self, sample_operations, populated_cache):
+    def test_service_uses_cache_from_construction_time(self, populated_cache):
         """Service should use the cache provided at construction, not global singleton."""
         from azurerbac.cache.models import CacheData
         from azurerbac.matching.recommendation_service import RoleRecommendationService
@@ -923,9 +921,7 @@ class TestIntraRequestCacheConsistency:
         assert svc._caches is custom_cache
         assert "test-role-id" in svc._caches.role_coverage
 
-    def test_service_captures_cache_eagerly_when_none_provided(
-        self, sample_operations, populated_cache
-    ):
+    def test_service_captures_cache_eagerly_when_none_provided(self, populated_cache):
         """When no cache provided, service captures global cache at construction."""
         from unittest.mock import patch
 
@@ -962,7 +958,7 @@ class TestIntraRequestCacheConsistency:
             assert "v1-marker" in svc._caches.role_coverage
             assert "v2-marker" not in svc._caches.role_coverage
 
-    def test_new_service_gets_fresh_cache(self, sample_operations, populated_cache):
+    def test_new_service_gets_fresh_cache(self, populated_cache):
         """Each new service instance captures the current cache state."""
         from unittest.mock import patch
 

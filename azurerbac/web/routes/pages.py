@@ -30,6 +30,7 @@ from azurerbac.web.services.models import (
     PaginationInfo,
 )
 from azurerbac.web.services.pages import (
+    add_role_counts,
     build_role_redirect_url,
     compute_role_effective_permissions,
     enrich_event_with_diff,
@@ -164,16 +165,17 @@ async def operations_list(
     )
     filtered_ops = filter_operations(all_operations, search_params)
 
-    # Sort operations - returns list of (OperationData, role_count) tuples
-    sorted_ops_with_counts = sort_operations(filtered_ops, sort, order)
+    # Sort operations (returns list without role counts for efficiency)
+    sorted_ops = sort_operations(filtered_ops, sort, order)
 
-    total_filtered = len(sorted_ops_with_counts)
+    total_filtered = len(sorted_ops)
     pagination = PaginationInfo.compute(total_filtered, page, limit)
-    page_slice = sorted_ops_with_counts[pagination.start_idx : pagination.end_idx]
+    page_slice = sorted_ops[pagination.start_idx : pagination.end_idx]
 
-    # Convert only the paginated slice to typed models
+    # Convert to typed models with role counts (only for paginated slice)
     page_operations = [
-        OperationWithCount.from_operation(op, role_count) for op, role_count in page_slice
+        OperationWithCount.from_operation(op, role_count)
+        for op, role_count in add_role_counts(page_slice)
     ]
 
     return deps.templates.TemplateResponse(

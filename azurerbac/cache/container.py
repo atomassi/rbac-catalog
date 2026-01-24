@@ -210,11 +210,17 @@ class CacheContainer:
         from azurerbac.core.patterns import pattern_to_regex
 
         regex = pattern_to_regex(pattern)
+        pattern_lower = pattern.lower()
+
+        # Use prefix index to reduce search space for provider-scoped patterns
+        source = cache.all_operations
+        if "/" in pattern_lower:
+            prefix = pattern_lower.partition("/")[0]
+            if "*" not in prefix:
+                source = cache.ops_by_prefix.get(prefix, source)
 
         return sum(
-            1
-            for op in cache.all_operations
-            if op.is_data_action == is_data_action and regex.match(op.name)
+            1 for op in source if op.is_data_action == is_data_action and regex.match(op.name)
         )
 
     def reset(self) -> None:

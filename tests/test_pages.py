@@ -406,6 +406,47 @@ class TestGetRolesAllowingOperationServices:
         cache_key = mock_app_cache.set_allowing_roles.call_args[0][0]
         assert cache_key == "microsoft.storage/read"
 
+    def test_raises_on_missing_role_in_cache(self):
+        """Test that RuntimeError is raised when role in index but not in cache."""
+        from azurerbac.web.services.pages import get_roles_allowing_operation
+
+        mock_app_cache = MagicMock()
+        mock_app_cache.get_allowing_roles.return_value = None
+        mock_app_cache.get_roles_for_operation.return_value = ["role1"]
+        mock_app_cache.get_role_by_id.return_value = None  # Role not in cache
+
+        with pytest.raises(RuntimeError, match="role role1 in index but not in cache"):
+            get_roles_allowing_operation("Microsoft.Storage/read", False, mock_app_cache)
+
+    def test_raises_on_missing_net_permissions(self):
+        """Test that RuntimeError is raised when role missing net_perms."""
+        from azurerbac.cache.models import CachedRole
+        from azurerbac.core.constants import RoleStatus
+        from azurerbac.web.services.pages import get_roles_allowing_operation
+
+        mock_app_cache = MagicMock()
+        mock_app_cache.get_allowing_roles.return_value = None
+        mock_app_cache.get_roles_for_operation.return_value = ["role1"]
+
+        role = RoleDefinition.model_validate(
+            {
+                "name": "role1",
+                "properties": {
+                    "roleName": "Test Role",
+                    "type": "BuiltInRole",
+                    "permissions": [{"actions": ["*"]}],
+                },
+            }
+        )
+        mock_app_cache.get_role_by_id.return_value = CachedRole(
+            definition=role,
+            status=RoleStatus.ACTIVE,
+        )
+        mock_app_cache.get_role_net_permissions.return_value = None  # Missing net_perms
+
+        with pytest.raises(RuntimeError, match="role role1 in index but missing net_perms"):
+            get_roles_allowing_operation("Microsoft.Storage/read", False, mock_app_cache)
+
 
 class TestEnrichEventWithDiff:
     """Tests for enrich_event_with_diff function."""

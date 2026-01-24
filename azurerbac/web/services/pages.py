@@ -123,6 +123,7 @@ def get_roles_allowing_operation(
     # Check cache first (key is just lowered operation name)
     cache_key = operation_name.lower()
     if (cached := cache_resolved.get_allowing_roles(cache_key)) is not None:
+        logger.debug("allowing_roles cache hit for %s", operation_name)
         return cached
 
     # lookup using precomputed inverted index
@@ -131,7 +132,7 @@ def get_roles_allowing_operation(
         return []
 
     logger.debug(
-        "allowing_roles cache miss for %s, found %d roles via index",
+        "allowing_roles cache miss for %s, found %d role IDs in index",
         operation_name,
         len(role_ids),
     )
@@ -139,16 +140,16 @@ def get_roles_allowing_operation(
     allowing_roles: list[RoleAllowingOperation] = []
 
     for role_id in role_ids:
-        cached_role = cache_resolved.get_role_by_id(role_id)
-        if cached_role is None:
-            continue
-
-        role = cached_role.definition
+        if (cached_role := cache_resolved.get_role_by_id(role_id)) is None:
+            msg = f"Cache inconsistency: role {role_id} in index but not in cache"
+            raise RuntimeError(msg)
 
         # Get precomputed net permissions (always available for indexed roles)
         if (net_perms := cache_resolved.get_role_net_permissions(role_id)) is None:
-            logger.error("Cache inconsistency: role %s in index but missing net_perms", role_id)
-            continue
+            msg = f"Cache inconsistency: role {role_id} in index but missing net_perms"
+            raise RuntimeError(msg)
+
+        role = cached_role.definition
 
         # TODO: cache match_result in the index during build time
         # to avoid analyzer call per role at query time

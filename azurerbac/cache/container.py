@@ -128,21 +128,27 @@ class CacheContainer:
         """
         return self._cache.role_net_permissions.get(role_id)
 
-    def get_operation_role_count(self, operation_name: str) -> int:
+    def get_operation_role_count(self, operation_name: str, *, is_data_action: bool) -> int:
         """Get cached count of roles granting an operation.
 
         Returns the number of built-in roles that grant the specified operation.
-        Uses the pre-computed operation_to_roles inverted index.
+        Uses the pre-computed plane-specific inverted index.
         """
-        return len(self._cache.operation_to_roles.get(operation_name.lower(), []))
+        op_lower = operation_name.lower()
+        if is_data_action:
+            return len(self._cache.data_op_to_roles.get(op_lower, []))
+        return len(self._cache.control_op_to_roles.get(op_lower, []))
 
-    def get_roles_for_operation(self, operation_name: str) -> list[str]:
+    def get_roles_for_operation(self, operation_name: str, *, is_data_action: bool) -> list[str]:
         """Get role IDs that grant an operation.
 
         Returns list of role_ids that grant the specified operation.
-        Uses the pre-computed operation_to_roles inverted index.
+        Uses the pre-computed plane-specific inverted index.
         """
-        return self._cache.operation_to_roles.get(operation_name.lower(), [])
+        op_lower = operation_name.lower()
+        if is_data_action:
+            return self._cache.data_op_to_roles.get(op_lower, [])
+        return self._cache.control_op_to_roles.get(op_lower, [])
 
     def get_role_page(self, page_key: str) -> Any:
         """Get a cached role page or count value."""

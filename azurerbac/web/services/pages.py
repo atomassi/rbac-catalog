@@ -78,7 +78,10 @@ def sort_operations(
     cache_resolved = cache if cache is not None else get_cache_service().container
 
     # Build tuples with role count for sorting (needed for "roles" sort and enrichment)
-    ops_with_count = [(op, cache_resolved.get_operation_role_count(op.name)) for op in operations]
+    ops_with_count = [
+        (op, cache_resolved.get_operation_role_count(op.name, is_data_action=op.is_data_action))
+        for op in operations
+    ]
 
     if sort == OperationSortField.ROLES:
         # Sort by role count
@@ -127,8 +130,10 @@ def get_roles_allowing_operation(
 
     operation_lowered = operation_name.lower()
 
-    # lookup using precomputed inverted index
-    role_ids = cache_resolved.get_roles_for_operation(operation_lowered)
+    # lookup using precomputed inverted index (plane-specific)
+    role_ids = cache_resolved.get_roles_for_operation(
+        operation_lowered, is_data_action=is_data_action
+    )
     if not role_ids:
         cache_resolved.set_allowing_roles(cache_key, [])
         return []
@@ -148,20 +153,14 @@ def get_roles_allowing_operation(
 
         role = cached_role.definition
 
-        # Get precomputed coverage and net permissions (always available)
-        coverage = cache_resolved.get_role_coverage(role_id)
+        # Get precomputed net permissions (always available for indexed roles)
         net_perms = cache_resolved.get_role_net_permissions(role_id)
+        if net_perms is None:
+            logger.error("Cache inconsistency: role %s in index but missing net_perms", role_id)
+            continue
 
-        if coverage is None or net_perms is None:
-            # Fallback to analyzer if cache somehow missing (shouldn't happen)
-            analyzer = RolePermissionAnalyzer(role, cache=cache_resolved)
-            all_operations = cache_resolved.get_all_operations()
-            control_effective, data_effective = analyzer.compute_coverage(all_operations)
-            control_count, data_count = len(control_effective), len(data_effective)
-        else:
-            control_count, data_count = net_perms.control_count, net_perms.data_count
-
-        # Get matching pattern (still needs analyzer for pattern lookup)
+        # TODO: cache match_result in the index during build time
+        # to avoid analyzer call per role at query time
         analyzer = RolePermissionAnalyzer(role, cache=cache_resolved)
         match_result = analyzer.find_matching_pattern(operation_name, is_data_action=is_data_action)
 
@@ -170,8 +169,8 @@ def get_roles_allowing_operation(
                 role_id=role_id,
                 role_name=role.properties.role_name,
                 role_type=role.properties.type or DEFAULT_ROLE_TYPE,
-                control_count=control_count,
-                data_count=data_count,
+                control_count=net_perms.control_count,
+                data_count=net_perms.data_count,
                 match_result=match_result,
             )
         )

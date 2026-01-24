@@ -29,10 +29,12 @@ from azurerbac.cache import (
 )
 from azurerbac.cache.backends import FileCacheBackend
 from azurerbac.cache.build import (
+    _build_operation_to_roles,
     build_operations_prefix_index,
     get_matching_operations,
 )
 from azurerbac.core.constants import EventType, RoleStatus
+from azurerbac.matching.models import RoleCoverage
 
 
 def make_cached_roles_by_id(roles: list[RoleDefinition]) -> dict[str, CachedRole]:
@@ -451,6 +453,94 @@ class TestBuildOperationsPrefixIndex:
         assert "simpleoperation" not in result
         # Only one prefix should exist
         assert len(result) == 1
+
+
+# =============================================================================
+# _build_operation_to_roles Tests
+# =============================================================================
+
+
+class TestBuildOperationToRoles:
+    """Tests for _build_operation_to_roles function."""
+
+    def test_builds_inverted_index_from_coverage(self):
+        """Test that inverted index maps operations to role IDs."""
+        role_coverage = {
+            "role-1": RoleCoverage(
+                control={"microsoft.storage/storageaccounts/read"},
+                data={"microsoft.storage/storageaccounts/blobservices/containers/blobs/read"},
+            ),
+            "role-2": RoleCoverage(
+                control={
+                    "microsoft.storage/storageaccounts/read",
+                    "microsoft.compute/virtualmachines/read",
+                },
+                data=set(),
+            ),
+        }
+
+        result = _build_operation_to_roles(role_coverage)
+
+        # Storage read should be granted by both roles
+        assert "microsoft.storage/storageaccounts/read" in result
+        assert set(result["microsoft.storage/storageaccounts/read"]) == {"role-1", "role-2"}
+
+        # Compute read should only be role-2
+        assert "microsoft.compute/virtualmachines/read" in result
+        assert result["microsoft.compute/virtualmachines/read"] == ["role-2"]
+
+        # Blob read is data action, only role-1
+        blob_read_op = "microsoft.storage/storageaccounts/blobservices/containers/blobs/read"
+        assert blob_read_op in result
+        assert result[blob_read_op] == ["role-1"]
+
+    def test_empty_coverage_returns_empty_index(self):
+        """Test that empty role coverage returns empty index."""
+        result = _build_operation_to_roles({})
+        assert result == {}
+
+    def test_roles_with_no_operations(self):
+        """Test roles with empty control and data sets."""
+        role_coverage = {
+            "empty-role": RoleCoverage(control=set(), data=set()),
+        }
+
+        result = _build_operation_to_roles(role_coverage)
+        assert result == {}
+
+    def test_preserves_all_role_ids_for_operation(self):
+        """Test that all role IDs are preserved when multiple roles grant same operation."""
+        role_coverage = {
+            "role-a": RoleCoverage(control={"microsoft.resources/subscriptions/read"}, data=set()),
+            "role-b": RoleCoverage(control={"microsoft.resources/subscriptions/read"}, data=set()),
+            "role-c": RoleCoverage(control={"microsoft.resources/subscriptions/read"}, data=set()),
+        }
+
+        result = _build_operation_to_roles(role_coverage)
+
+        sub_read_op = "microsoft.resources/subscriptions/read"
+        assert sub_read_op in result
+        assert len(result[sub_read_op]) == 3
+        assert set(result[sub_read_op]) == {"role-a", "role-b", "role-c"}
+
+    def test_data_and_control_operations_both_indexed(self):
+        """Test that both control plane and data plane operations are indexed."""
+        role_coverage = {
+            "mixed-role": RoleCoverage(
+                control={"microsoft.storage/storageaccounts/write"},
+                data={"microsoft.storage/storageaccounts/blobservices/containers/blobs/write"},
+            ),
+        }
+
+        result = _build_operation_to_roles(role_coverage)
+
+        # Both should be indexed
+        control_op = "microsoft.storage/storageaccounts/write"
+        data_op = "microsoft.storage/storageaccounts/blobservices/containers/blobs/write"
+        assert control_op in result
+        assert data_op in result
+        assert result[control_op] == ["mixed-role"]
+        assert result[data_op] == ["mixed-role"]
 
 
 # =============================================================================

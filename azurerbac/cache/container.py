@@ -88,9 +88,7 @@ class CacheContainer:
 
     def get_role_by_id(self, role_id: str) -> CachedRole | None:
         """Get cached role by ID."""
-        result = self._cache.roles_by_id.get(role_id)
-        track_cache_hit("role", result is not None, role_id)
-        return result
+        return self._cache.roles_by_id.get(role_id)
 
     def get_all_roles(self) -> list[RoleDefinition]:
         return self._cache.get_role_definitions()
@@ -134,9 +132,17 @@ class CacheContainer:
         """Get cached count of roles granting an operation.
 
         Returns the number of built-in roles that grant the specified operation.
-        Uses the pre-computed role coverage cache.
+        Uses the pre-computed operation_to_roles inverted index.
         """
-        return self._cache.operation_role_count.get(operation_name.lower(), 0)
+        return len(self._cache.operation_to_roles.get(operation_name.lower(), []))
+
+    def get_roles_for_operation(self, operation_name: str) -> list[str]:
+        """Get role IDs that grant an operation (O(1) lookup).
+
+        Returns list of role_ids that grant the specified operation.
+        Uses the pre-computed operation_to_roles inverted index.
+        """
+        return self._cache.operation_to_roles.get(operation_name.lower(), [])
 
     def get_role_page(self, page_key: str) -> Any:
         """Get a cached role page or count value."""

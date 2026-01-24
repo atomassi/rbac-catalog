@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any, Final
 
 from cachetools import LRUCache
 
-from azurerbac.cache.models import CacheData, CachedChangeEvent, CachedRole
+from azurerbac.cache.models import CacheData, CachedChangeEvent, CachedRole, Sitemap
 from azurerbac.core.constants import DEFAULT_SEARCH_LIMIT
 from azurerbac.matching.models import RoleCoverage, RoleNetPermissions
 from azurerbac.telemetry import track_cache_hit
@@ -100,6 +100,10 @@ class CacheContainer:
 
     def get_change_events(self) -> list[CachedChangeEvent]:
         return self._cache.all_change_events
+
+    def get_sitemap(self) -> Sitemap | None:
+        """Get pre-built sitemap or None if cache not loaded."""
+        return self._cache.sitemap
 
     def get_events_for_role(self, role_id: str) -> list[CachedChangeEvent]:
         """Get change events for a specific role."""

@@ -16,6 +16,7 @@ from azurerbac.cache.models import (
     CachedRole,
     CacheMetadata,
     PatternCacheKey,
+    Sitemap,
     build_indexes,
     compute_operations_hash,
     compute_roles_hash,
@@ -455,6 +456,10 @@ async def build_from_db(session: AsyncSession) -> CacheData:
         role_net_permissions=cache_data.role_net_permissions,
     )
     cache_data.analytics = analytics_data
+
+    from azurerbac.web.constants import SITE_URL
+
+    cache_data.sitemap = Sitemap.build(roles_by_id, all_operations, SITE_URL)
 
     logger.info(
         f"Cache built: {len(active_roles)} roles, {len(all_operations)} operations, "

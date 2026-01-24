@@ -23,6 +23,7 @@ from azurerbac.cache import (
     CacheMetadata,
     PatternCacheKey,
     Plane,
+    Sitemap,
     compute_operations_hash,
     compute_roles_hash,
     get_cache_service,
@@ -1179,6 +1180,43 @@ class TestCacheFileOperations:
             assert isinstance(dc, DailyChanges)
             assert hasattr(dc, "date")
             assert hasattr(dc, "additions")
+
+    async def test_save_and_load_sitemap_data(
+        self, temp_cache_dir, sample_roles, sample_operations
+    ) -> None:
+        """Test that sitemap data is correctly reconstructed when loading from disk."""
+        backend = get_cache_service().backend
+
+        # Create sitemap data
+        sitemap = Sitemap(
+            content='<?xml version="1.0"?><urlset><url><loc>https://test.com/</loc></url></urlset>',
+            built_at=datetime(2026, 1, 24, 12, 0, 0, tzinfo=UTC),
+        )
+
+        metadata = CacheMetadata(
+            roles_count=len(sample_roles),
+            operations_count=len(sample_operations),
+        )
+        roles_by_id = make_cached_roles_by_id(sample_roles)
+        data = CacheData(
+            metadata=metadata,
+            roles_by_id=roles_by_id,
+            all_operations=sample_operations,
+            sitemap=sitemap,
+        )
+
+        # Save and load
+        await backend.save(data)
+        loaded = await backend.load()
+
+        # Verify sitemap is a Sitemap object, not a dict
+        assert loaded is not None
+        assert loaded.sitemap is not None
+        assert isinstance(loaded.sitemap, Sitemap)
+
+        # Verify sitemap data is correct
+        assert loaded.sitemap.content == sitemap.content
+        assert loaded.sitemap.built_at == sitemap.built_at
 
 
 # =============================================================================

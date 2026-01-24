@@ -163,6 +163,10 @@ class FileCacheBackend(CacheBackend):
             if data.analytics is not None:
                 data_dict["analytics"] = data.analytics.to_dict()
 
+            # Convert sitemap to dict
+            if data.sitemap is not None:
+                data_dict["sitemap"] = data.sitemap.to_dict()
+
             packed = serialize_to_bytes(data_dict)
 
             with open(temp_file, "wb") as f:
@@ -220,6 +224,12 @@ class FileCacheBackend(CacheBackend):
                 from azurerbac.analytics.models import AnalyticsData
 
                 data_dict["analytics"] = AnalyticsData.from_dict(analytics_raw)
+
+            # Reconstruct sitemap data
+            if sitemap_raw := data_dict.get("sitemap"):
+                from azurerbac.cache.models import Sitemap
+
+                data_dict["sitemap"] = Sitemap.from_dict(sitemap_raw)
 
             data = CacheData(metadata=metadata, **data_dict)
             logger.info(

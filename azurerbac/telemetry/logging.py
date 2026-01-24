@@ -6,7 +6,7 @@ import logging
 from pathlib import Path
 from typing import Final
 
-from azurerbac.settings import Settings, is_running_in_azure
+from azurerbac.settings import Settings
 
 LOGS_DIR: Final = Path(__file__).parent.parent.parent / "logs"
 
@@ -111,8 +111,9 @@ def configure_logging(component: str = "app", level: int = logging.INFO) -> str 
     formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
     log_file_path = None
+    settings = Settings.get()
 
-    if not is_running_in_azure():
+    if not settings.is_deployed:
         # Local: console + file logging
         # Console handler
         console_handler = logging.StreamHandler()

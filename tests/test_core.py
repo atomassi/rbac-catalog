@@ -335,7 +335,7 @@ class TestLoggingSetup:
         # Clear APPLICATIONINSIGHTS_CONNECTION_STRING to avoid sending real telemetry
         with patch.dict(
             os.environ,
-            {"WEBSITE_SITE_NAME": "my-app", "APPLICATIONINSIGHTS_CONNECTION_STRING": ""},
+            {"APP_ENVIRONMENT_NAME": "production", "APPLICATIONINSIGHTS_CONNECTION_STRING": ""},
             clear=False,
         ):
             importlib.reload(logging_module)
@@ -345,12 +345,12 @@ class TestLoggingSetup:
             logging_module.configure_logging("azure_test")
 
             root = logging.getLogger()
-            # Should have no FileHandler in Azure
+            # Should have no FileHandler in deployed environments
             file_handlers = [h for h in root.handlers if isinstance(h, logging.FileHandler)]
             assert len(file_handlers) == 0
 
         # Reload to restore local environment
-        os.environ.pop("WEBSITE_SITE_NAME", None)
+        os.environ.pop("APP_ENVIRONMENT_NAME", None)
         importlib.reload(logging_module)
 
     def test_has_stream_handler_locally(self):

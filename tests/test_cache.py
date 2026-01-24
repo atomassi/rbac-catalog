@@ -1197,8 +1197,8 @@ class TestCacheDirectory:
         backend._cache_dir = None  # pyright: ignore[reportPrivateUsage]
 
         with patch.dict(os.environ, {}, clear=True):
-            # Remove WEBSITE_SITE_NAME if present
-            os.environ.pop("WEBSITE_SITE_NAME", None)
+            # Remove APP_ENVIRONMENT_NAME if present to simulate local
+            os.environ.pop("APP_ENVIRONMENT_NAME", None)
             cache_dir = backend.cache_dir
             assert ".cache" in str(cache_dir) or "cache" in str(cache_dir)
 
@@ -1210,7 +1210,7 @@ class TestCacheDirectory:
         backend._cache_dir = None  # pyright: ignore[reportPrivateUsage]
 
         with (
-            patch.dict(os.environ, {"WEBSITE_SITE_NAME": "test-app"}),
+            patch.dict(os.environ, {"APP_ENVIRONMENT_NAME": "production"}),
             patch("pathlib.Path.mkdir"),
         ):
             cache_dir = backend.cache_dir

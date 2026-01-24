@@ -9,7 +9,10 @@ from urllib.parse import quote
 
 from fastapi import APIRouter, Request
 from fastapi.responses import Response
+from sqlalchemy import select
 
+from azurerbac.core import Role
+from azurerbac.core.constants import RoleStatus
 from azurerbac.web.constants import SITE_URL
 from azurerbac.web.utils import slugify
 
@@ -139,13 +142,18 @@ async def apple_touch_icon() -> Response:
 )
 async def sitemap_xml(request: Request) -> Response:
     """Generate dynamic sitemap with all role and operation pages."""
-    # Get all data from cache - no database query needed
+    # Get app_cache and SessionLocal from app.state (shared with main app)
     app_cache = request.app.state.app_cache
+    SessionLocal = request.app.state.api_deps.SessionLocal
 
-    # Get all roles from cache (already sorted by name in cache)
-    all_roles = app_cache.get_all_roles()
-    roles = [(role.name, role.properties.role_name) for role in all_roles]
-    roles.sort(key=lambda x: x[1].lower())  # Sort by role_name
+    async with SessionLocal() as session:
+        # Get all active roles for sitemap
+        result = await session.execute(
+            select(Role.role_id, Role.role_name)
+            .where(Role.status == RoleStatus.ACTIVE)
+            .order_by(Role.role_name)
+        )
+        roles = result.all()
 
     today = dt.datetime.now(dt.UTC).date().isoformat()
 

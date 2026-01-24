@@ -116,8 +116,7 @@ def get_roles_allowing_operation(
 ) -> list[RoleAllowingOperation]:
     """Find roles allowing a specific operation.
 
-    Uses precomputed operation_to_roles index for O(1) lookup instead of
-    scanning all 800+ roles.
+    Uses precomputed operation_to_roles inverted index.
     """
     cache_resolved = _get_cache(cache)
 

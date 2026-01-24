@@ -290,7 +290,6 @@ def precompute_all(
 
     logger.debug("Computed coverage for %d built-in roles", builtin_count)
 
-    # Build operation -> roles inverted index for O(1) lookup
     logger.debug("Building operation-to-roles inverted index...")
     operation_to_roles = _build_operation_to_roles(role_coverage)
 

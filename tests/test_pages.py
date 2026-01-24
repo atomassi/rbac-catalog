@@ -331,7 +331,7 @@ class TestGetRolesAllowingOperationServices:
             }
         )
 
-        # Mock the inverted index lookup (new O(1) approach)
+        # Mock the inverted index lookup
         mock_app_cache.get_roles_for_operation.return_value = ["role1"]
         mock_app_cache.get_role_by_id.return_value = CachedRole(
             definition=role,

@@ -6,7 +6,6 @@ import datetime as dt
 import logging
 import time
 from dataclasses import dataclass, field
-from datetime import datetime
 from functools import cached_property
 from typing import TYPE_CHECKING, Final
 from urllib.parse import quote
@@ -39,7 +38,7 @@ class CachedRole:
 
     definition: RoleDefinition
     status: RoleStatus
-    last_seen_at: datetime | None = None
+    last_seen_at: dt.datetime | None = None
 
     @property
     def role_id(self) -> str:
@@ -58,11 +57,11 @@ class CachedRole:
         return self.definition.description
 
     @property
-    def created_on(self) -> datetime | None:
+    def created_on(self) -> dt.datetime | None:
         return self.definition.properties.created_on
 
     @property
-    def updated_on(self) -> datetime | None:
+    def updated_on(self) -> dt.datetime | None:
         return self.definition.properties.updated_on
 
     def to_dict(self) -> JsonDict:
@@ -91,8 +90,8 @@ class CachedChangeEvent:
     role_id: str
     role_name: str
     event_type: str
-    scan_timestamp: datetime | None = None
-    azure_updated_on: datetime | None = None
+    scan_timestamp: dt.datetime | None = None
+    azure_updated_on: dt.datetime | None = None
     summary: str | None = None
     diff_json: JsonDict | None = None
     role_json: JsonDict | None = None
@@ -134,7 +133,7 @@ class Sitemap:
     """
 
     content: str
-    built_at: datetime
+    built_at: dt.datetime
 
     @classmethod
     def build(
@@ -249,7 +248,7 @@ class Sitemap:
             len(content.encode("utf-8")),
         )
 
-        return cls(content=content, built_at=datetime.now(dt.UTC))
+        return cls(content=content, built_at=dt.datetime.now(dt.UTC))
 
     def to_dict(self) -> JsonDict:
         """Serialize to dict for cache storage."""
@@ -263,7 +262,7 @@ class Sitemap:
         """Deserialize from dict."""
         return cls(
             content=data["content"],
-            built_at=parse_datetime(data["built_at"]) or datetime.now(dt.UTC),
+            built_at=parse_datetime(data["built_at"]) or dt.datetime.now(dt.UTC),
         )
 
 
@@ -318,8 +317,8 @@ class CacheData:
     roles_by_id: dict[str, CachedRole] = field(default_factory=dict)
     all_change_events: list[CachedChangeEvent] = field(default_factory=list)
     unique_providers: list[str] = field(default_factory=list)
-    last_scan: datetime | None = None
-    first_scan: datetime | None = None
+    last_scan: dt.datetime | None = None
+    first_scan: dt.datetime | None = None
 
     # Indexes (built from raw data for fast lookup)
     ops_by_name_lower: dict[str, OperationData] = field(default_factory=dict)

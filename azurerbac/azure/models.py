@@ -5,7 +5,7 @@ from __future__ import annotations
 import datetime as dt
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator, model_validator
 
 from azurerbac.core.constants import DEFAULT_ROLE_TYPE, ROLE_DEFINITION_TYPE
 from azurerbac.core.types import JsonDict
@@ -304,7 +304,7 @@ class OperationData(BaseModel):
     resource_type_display_name: str | None = Field(default=None)
 
     # Pre-computed lowercase search text (avoids 5x .lower() calls per search)
-    _search_text: str = ""
+    _search_text: str = PrivateAttr(default="")
 
     @model_validator(mode="after")
     def _compute_search_text(self) -> OperationData:

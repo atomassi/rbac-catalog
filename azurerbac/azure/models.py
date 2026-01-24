@@ -303,6 +303,22 @@ class OperationData(BaseModel):
     resource_type: str | None = Field(default=None)
     resource_type_display_name: str | None = Field(default=None)
 
+    # Pre-computed lowercase search text (avoids 5x .lower() calls per search)
+    _search_text: str = ""
+
+    @model_validator(mode="after")
+    def _compute_search_text(self) -> OperationData:
+        """Pre-compute lowercased search text for fast matching."""
+        parts = [
+            self.name,
+            self.display_name or "",
+            self.description or "",
+            self.provider_display_name,
+            self.resource_type_display_name or "",
+        ]
+        self._search_text = " ".join(parts).lower()
+        return self
+
     @classmethod
     def from_azure(
         cls,
@@ -341,10 +357,4 @@ class OperationData(BaseModel):
 
     def matches_search(self, query_lower: str) -> bool:
         """Check if operation matches a text search query (case-insensitive)."""
-        return (
-            query_lower in self.name.lower()
-            or query_lower in (self.display_name or "").lower()
-            or query_lower in (self.description or "").lower()
-            or query_lower in (self.provider_display_name or "").lower()
-            or query_lower in (self.resource_type_display_name or "").lower()
-        )
+        return query_lower in self._search_text

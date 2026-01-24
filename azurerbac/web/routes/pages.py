@@ -166,7 +166,7 @@ async def operations_list(
     filtered_ops = filter_operations(all_operations, search_params)
 
     # Sort operations (returns list without role counts for efficiency)
-    sorted_ops = sort_operations(filtered_ops, sort, order)
+    sorted_ops = sort_operations(filtered_ops, sort, order, cache=deps.app_cache)
 
     total_filtered = len(sorted_ops)
     pagination = PaginationInfo.compute(total_filtered, page, limit)
@@ -175,7 +175,7 @@ async def operations_list(
     # Convert to typed models with role counts (only for paginated slice)
     page_operations = [
         OperationWithCount.from_operation(op, role_count)
-        for op, role_count in add_role_counts(page_slice)
+        for op, role_count in add_role_counts(page_slice, cache=deps.app_cache)
     ]
 
     return deps.templates.TemplateResponse(

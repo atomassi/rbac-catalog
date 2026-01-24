@@ -2,19 +2,14 @@
 
 from __future__ import annotations
 
-import datetime as dt
+from http import HTTPStatus
 from pathlib import Path
 from typing import Final
-from urllib.parse import quote
 
 from fastapi import APIRouter, Request
 from fastapi.responses import Response
-from sqlalchemy import select
 
-from azurerbac.core import Role
-from azurerbac.core.constants import RoleStatus
 from azurerbac.web.constants import SITE_URL
-from azurerbac.web.utils import slugify
 
 INDEXNOW_KEY: Final = "4484caab4dbc472ca61ac1141d812336"
 
@@ -141,106 +136,29 @@ async def apple_touch_icon() -> Response:
     responses={200: {"content": {"application/xml": {}}}},
 )
 async def sitemap_xml(request: Request) -> Response:
-    """Generate dynamic sitemap with all role and operation pages."""
-    # Get app_cache and SessionLocal from app.state (shared with main app)
+    """Return pre-built sitemap from cache."""
     app_cache = request.app.state.app_cache
-    SessionLocal = request.app.state.api_deps.SessionLocal
+    sitemap = app_cache.get_sitemap()
 
-    async with SessionLocal() as session:
-        # Get all active roles for sitemap
-        result = await session.execute(
-            select(Role.role_id, Role.role_name)
-            .where(Role.status == RoleStatus.ACTIVE)
-            .order_by(Role.role_name)
-        )
-        roles = result.all()
-
-    today = dt.datetime.now(dt.UTC).date().isoformat()
-
-    urls = [
-        # Home page - canonical URL, highest priority, updated daily
-        # Note: /recent is an alias that redirects canonical to /, so not in sitemap
-        f"""  <url>
-    <loc>{SITE_URL}/</loc>
-    <lastmod>{today}</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>1.0</priority>
-  </url>""",
-        # Roles list page - high priority, updated daily
-        f"""  <url>
-    <loc>{SITE_URL}/roles</loc>
-    <lastmod>{today}</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.95</priority>
-  </url>""",
-        # Operations list page - high priority, updated weekly
-        f"""  <url>
-    <loc>{SITE_URL}/operations</loc>
-    <lastmod>{today}</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>""",
-        # Role Recommender page - high value page
-        f"""  <url>
-    <loc>{SITE_URL}/recommend</loc>
-    <lastmod>{today}</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.85</priority>
-  </url>""",
-        # Analytics page - updated weekly
-        f"""  <url>
-    <loc>{SITE_URL}/analytics</loc>
-    <lastmod>{today}</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>""",
-        # About page - informational
-        f"""  <url>
-    <loc>{SITE_URL}/about</loc>
-    <lastmod>{today}</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.5</priority>
-  </url>""",
-    ]
-
-    for role_id, role_name in roles:
-        slug = slugify(role_name)
-        urls.append(
-            f"""  <url>
-    <loc>{SITE_URL}/roles/{role_id}/{slug}</loc>
-    <lastmod>{today}</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>"""
+    if sitemap is None:
+        # Fallback if cache not yet loaded (shouldn't happen in production)
+        return Response(
+            content='<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>',
+            media_type="application/xml",
+            status_code=HTTPStatus.SERVICE_UNAVAILABLE,
+            headers={"Retry-After": "60"},
         )
 
-    # Add individual operation detail pages to sitemap
-    # Get operations from cache
-    all_operations = app_cache.get_all_operations()
-    for op in all_operations:
-        op_name = op.name
-        if op_name:
-            # URL encode the operation name for the sitemap (encode / as %2F)
-            # This matches the canonical tag and how Googlebot crawls links
-            encoded_name = quote(op_name, safe="")
-            urls.append(
-                f"""  <url>
-    <loc>{SITE_URL}/operations/{encoded_name}</loc>
-    <lastmod>{today}</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>"""
-            )
-
-    sitemap = f"""<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-{chr(10).join(urls)}
-</urlset>"""
+    # Format Last-Modified as HTTP-date (RFC 7231)
+    last_modified = sitemap.built_at.strftime("%a, %d %b %Y %H:%M:%S GMT")
 
     return Response(
-        content=sitemap,
+        content=sitemap.content,
         media_type="application/xml",
-        headers={"Cache-Control": "public, max-age=86400"},  # Cache for 1 day
+        headers={
+            "Cache-Control": "public, max-age=86400",  # Cache for 1 day
+            "Last-Modified": last_modified,
+        },
     )
 
 

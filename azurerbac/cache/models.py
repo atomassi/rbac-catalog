@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
+import datetime as dt
+import logging
 import time
 from dataclasses import dataclass, field
-from datetime import datetime
 from functools import cached_property
 from typing import TYPE_CHECKING, Final
+from urllib.parse import quote
 
 from azurerbac.core.constants import RoleStatus
 from azurerbac.core.types import JsonDict
 from azurerbac.core.utils import format_datetime, parse_datetime
+
+logger = logging.getLogger(__name__)
 from azurerbac.matching.models import (
     CacheOpsCount,
     CoverageResult,
@@ -34,7 +38,7 @@ class CachedRole:
 
     definition: RoleDefinition
     status: RoleStatus
-    last_seen_at: datetime | None = None
+    last_seen_at: dt.datetime | None = None
 
     @property
     def role_id(self) -> str:
@@ -53,11 +57,11 @@ class CachedRole:
         return self.definition.description
 
     @property
-    def created_on(self) -> datetime | None:
+    def created_on(self) -> dt.datetime | None:
         return self.definition.properties.created_on
 
     @property
-    def updated_on(self) -> datetime | None:
+    def updated_on(self) -> dt.datetime | None:
         return self.definition.properties.updated_on
 
     def to_dict(self) -> JsonDict:
@@ -86,8 +90,8 @@ class CachedChangeEvent:
     role_id: str
     role_name: str
     event_type: str
-    scan_timestamp: datetime | None = None
-    azure_updated_on: datetime | None = None
+    scan_timestamp: dt.datetime | None = None
+    azure_updated_on: dt.datetime | None = None
     summary: str | None = None
     diff_json: JsonDict | None = None
     role_json: JsonDict | None = None
@@ -117,6 +121,148 @@ class CachedChangeEvent:
             summary=data.get("summary"),
             diff_json=data.get("diff_json"),
             role_json=data.get("role_json"),
+        )
+
+
+@dataclass(slots=True)
+class Sitemap:
+    """Pre-built sitemap XML content.
+
+    Built once during cache refresh, avoiding iteration over 21k+ operations
+    on every sitemap request.
+    """
+
+    content: str
+    built_at: dt.datetime
+
+    @classmethod
+    def build(
+        cls,
+        roles_by_id: dict[str, CachedRole],
+        all_operations: list[OperationData],
+        site_url: str,
+    ) -> Sitemap:
+        """Build sitemap XML from roles and operations.
+
+        Args:
+            roles_by_id: Dict of role_id -> CachedRole.
+            all_operations: List of all operations.
+            site_url: Base URL for the site (e.g. https://azurerbac.com).
+
+        Returns:
+            Sitemap instance with pre-built XML content.
+        """
+        from azurerbac.web.utils import slugify
+
+        active_roles_count = sum(1 for r in roles_by_id.values() if r.status == RoleStatus.ACTIVE)
+        logger.debug(
+            "Building sitemap: %d roles (%d active), %d operations",
+            len(roles_by_id),
+            active_roles_count,
+            len(all_operations),
+        )
+
+        today = dt.datetime.now(dt.UTC).date().isoformat()
+
+        urls = [
+            # Home page
+            f"""  <url>
+    <loc>{site_url}/</loc>
+    <lastmod>{today}</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
+  </url>""",
+            # Roles list page
+            f"""  <url>
+    <loc>{site_url}/roles</loc>
+    <lastmod>{today}</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
+  </url>""",
+            # Operations list page
+            f"""  <url>
+    <loc>{site_url}/operations</loc>
+    <lastmod>{today}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>""",
+            # Role Recommender page
+            f"""  <url>
+    <loc>{site_url}/recommend</loc>
+    <lastmod>{today}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.85</priority>
+  </url>""",
+            # Analytics page
+            f"""  <url>
+    <loc>{site_url}/analytics</loc>
+    <lastmod>{today}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>""",
+            # About page
+            f"""  <url>
+    <loc>{site_url}/about</loc>
+    <lastmod>{today}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>""",
+        ]
+
+        # Add role pages (sorted by role name) - include all roles (active + deleted)
+        roles = [(role.role_id, role.role_name) for role in roles_by_id.values()]
+        roles.sort(key=lambda x: x[1].lower())
+
+        for role_id, role_name in roles:
+            slug = slugify(role_name)
+            urls.append(
+                f"""  <url>
+    <loc>{site_url}/roles/{role_id}/{slug}</loc>
+    <lastmod>{today}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>"""
+            )
+
+        # Add operation pages
+        for op in all_operations:
+            if op.name:
+                encoded_name = quote(op.name, safe="")
+                urls.append(
+                    f"""  <url>
+    <loc>{site_url}/operations/{encoded_name}</loc>
+    <lastmod>{today}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>"""
+                )
+
+        content = f"""<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+{chr(10).join(urls)}
+</urlset>"""
+
+        logger.debug(
+            "Sitemap built: %d URLs, %d bytes",
+            len(urls),
+            len(content.encode("utf-8")),
+        )
+
+        return cls(content=content, built_at=dt.datetime.now(dt.UTC))
+
+    def to_dict(self) -> JsonDict:
+        """Serialize to dict for cache storage."""
+        return {
+            "content": self.content,
+            "built_at": format_datetime(self.built_at),
+        }
+
+    @classmethod
+    def from_dict(cls, data: JsonDict) -> Sitemap:
+        """Deserialize from dict."""
+        return cls(
+            content=data["content"],
+            built_at=parse_datetime(data["built_at"]) or dt.datetime.now(dt.UTC),
         )
 
 
@@ -171,8 +317,8 @@ class CacheData:
     roles_by_id: dict[str, CachedRole] = field(default_factory=dict)
     all_change_events: list[CachedChangeEvent] = field(default_factory=list)
     unique_providers: list[str] = field(default_factory=list)
-    last_scan: datetime | None = None
-    first_scan: datetime | None = None
+    last_scan: dt.datetime | None = None
+    first_scan: dt.datetime | None = None
 
     # Indexes (built from raw data for fast lookup)
     ops_by_name_lower: dict[str, OperationData] = field(default_factory=dict)
@@ -190,6 +336,9 @@ class CacheData:
 
     # Pre-computed analytics data (for dashboard)
     analytics: AnalyticsData | None = None
+
+    # Pre-built sitemap XML (avoids iterating 21k+ ops on every request)
+    sitemap: Sitemap | None = None
 
     @cached_property
     def ops_names_set(self) -> set[str]:

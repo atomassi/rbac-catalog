@@ -61,7 +61,8 @@ class TimedDbQuery(BaseTimer):
     def _on_exit(self, elapsed: float, exc_type: type[BaseException] | None) -> None:
         from azurerbac.telemetry.metrics import track_db_query
 
-        track_db_query(self.query_name, elapsed, self.rows)
+        duration_ms = round(elapsed * 1000, 2)
+        track_db_query(self.query_name, duration_ms, self.rows)
 
 
 class TimedOperation(BaseTimer):

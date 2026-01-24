@@ -437,29 +437,29 @@ def track_worker_result(
 
 def track_db_query(
     query_name: str,
-    duration_seconds: float,
+    duration_ms: float,
     rows_affected: int | None = None,
 ) -> None:
     """Track database query metrics.
 
     Args:
         query_name: Name of the query (e.g., "fetch_roles", "fetch_operations")
-        duration_seconds: Time taken to execute the query
+        duration_ms: Time taken to execute the query in milliseconds
         rows_affected: Optional number of rows returned/affected
     """
-    props: dict[str, Any] = {"query": query_name}
+    props: dict[str, Any] = {"query": query_name, "duration_ms": duration_ms}
     if rows_affected is not None:
         props["rows"] = rows_affected
 
     rows_str = f" rows={rows_affected}" if rows_affected is not None else ""
-    logger.debug("DB query: %s (%.3fs)%s", query_name, duration_seconds, rows_str)
+    logger.debug("DB query: %s (%.2fms)%s", query_name, duration_ms, rows_str)
 
     if not _metrics_enabled():
         logger.debug("Skipping track_db_query: metrics disabled")
         return
 
     try:
-        track_duration("db_query_duration_seconds", duration_seconds, props)
+        track_duration("db_query_duration_ms", duration_ms, props)
         track_event("db_query_event", props)
     except Exception as e:
         logger.exception("Failed to track db query: %s", e)

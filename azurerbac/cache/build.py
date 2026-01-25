@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import time
+from dataclasses import replace
 from datetime import datetime
 from typing import TYPE_CHECKING
 
@@ -179,10 +180,7 @@ def _compute_role_coverage(
 def _build_operation_to_roles(
     role_coverage: dict[str, RoleCoverage],
 ) -> dict[str, list[str]]:
-    """Build inverted index: operation (lowered) -> list of role_ids.
-
-    Single dict since an operation is either control OR data plane, not both.
-    """
+    """Build inverted index: operation (lowered) -> list of role_ids."""
     index: dict[str, list[str]] = {}
     for role_id, cov in role_coverage.items():
         for op in cov.control:
@@ -462,11 +460,16 @@ async def build_from_db(session: AsyncSession) -> CacheData:
         roles_by_id=roles_by_id,
         role_net_permissions=cache_data.role_net_permissions,
     )
-    cache_data.content.analytics = analytics_data
 
     from azurerbac.web.constants import SITE_URL
 
-    cache_data.content.sitemap = Sitemap.build(roles_by_id, all_operations, SITE_URL)
+    sitemap = Sitemap.build(roles_by_id, all_operations, SITE_URL)
+
+    # Use replace to maintain immutability (CacheData is designed for atomic swaps)
+    cache_data = replace(
+        cache_data,
+        content=replace(cache_data.content, analytics=analytics_data, sitemap=sitemap),
+    )
 
     logger.info(
         f"Cache built: {len(active_roles)} roles, {len(all_operations)} operations, "

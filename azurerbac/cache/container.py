@@ -141,20 +141,14 @@ class CacheContainer:
         return self._cache.role_net_permissions.get(role_id)
 
     def get_operation_role_count(self, operation_name: str) -> int:
-        """Get cached count of roles granting an operation.
-
-        Returns the number of built-in roles that grant the specified operation.
-        Uses the pre-computed operation_to_roles inverted index.
-        """
-        return len(self._cache.operation_to_roles.get(operation_name.lower(), []))
+        """Get cached count of roles granting an operation."""
+        key = operation_name.lower()
+        return len(self._cache.operation_to_roles.get(key, []))
 
     def get_roles_for_operation(self, operation_name: str) -> list[str]:
-        """Get role IDs that grant an operation.
-
-        Returns list of role_ids that grant the specified operation.
-        Uses the pre-computed operation_to_roles inverted index.
-        """
-        result = self._cache.operation_to_roles.get(operation_name.lower(), [])
+        """Get role IDs that grant an operation."""
+        key = operation_name.lower()
+        result = self._cache.operation_to_roles.get(key, [])
         track_cache_call("get_roles_for_operation", operation=operation_name)
         return result
 

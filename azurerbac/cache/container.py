@@ -82,7 +82,7 @@ class CacheContainer:
     def get_role_by_id(self, role_id: str) -> CachedRole | None:
         """Get cached role by ID."""
         result = self._cache.roles_by_id.get(role_id)
-        track_cache_call("get_role_by_id", role_id=role_id)
+        track_cache_hit("role_by_id", result is not None, role_id)
         return result
 
     def get_all_roles(self) -> list[RoleDefinition]:
@@ -123,7 +123,7 @@ class CacheContainer:
         that the role grants, after applying notActions/notDataActions exclusions.
         """
         result = self._cache.role_coverage.get(role_id)
-        track_cache_call("get_role_coverage", role_id=role_id)
+        track_cache_hit("role_coverage", result is not None, role_id)
         return result
 
     def get_ops_lowered_to_orig(self) -> dict[str, str]:
@@ -141,7 +141,9 @@ class CacheContainer:
         Returns a RoleNetPermissions NamedTuple with the count of actual operations
         the role grants after applying notActions/notDataActions exclusions.
         """
-        return self._cache.role_net_permissions.get(role_id)
+        result = self._cache.role_net_permissions.get(role_id)
+        track_cache_hit("role_net_permissions", result is not None, role_id)
+        return result
 
     def get_operation_role_count(self, operation_name: str) -> int:
         """Get cached count of roles granting an operation."""
@@ -151,9 +153,9 @@ class CacheContainer:
     def get_roles_for_operation(self, operation_name: str) -> list[str]:
         """Get role IDs that grant an operation."""
         key = operation_name.lower()
-        result = self._cache.operation_to_roles.get(key, [])
-        track_cache_call("get_roles_for_operation", operation=operation_name)
-        return result
+        result = self._cache.operation_to_roles.get(key)
+        track_cache_hit("operation_to_roles", result is not None, key)
+        return result if result is not None else []
 
     def get_role_page(self, page_key: str) -> Any:
         """Get a cached role page or count value."""

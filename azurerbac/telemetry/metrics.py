@@ -447,9 +447,8 @@ def track_cache_hit(
         hit: True if cache hit, False if cache miss
         key: Optional key being looked up (for debugging)
     """
-    hit_str = "hit" if hit else "miss"
     key_str = f" key={key}" if key else ""
-    logger.debug("Cache %s: %s%s", hit_str, cache_type, key_str)
+    logger.debug("Cache %s: %s%s", "hit" if hit else "miss", cache_type, key_str)
 
     if not _metrics_enabled():
         logger.debug("Skipping track_cache_hit: metrics disabled")

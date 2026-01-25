@@ -29,7 +29,7 @@ class CacheContainer:
     """Thread-safe in-memory cache.
 
     Wraps CacheData and provides convenient accessors. All derived/lazy caches
-    are stored in CacheData.runtime and automatically cleared on swap().
+    (in CacheData.computed and CacheData.request) are replaced on swap().
     """
 
     __slots__ = (
@@ -74,10 +74,10 @@ class CacheContainer:
     def swap(self, new_cache: CacheData) -> None:
         """Atomically swap the entire cache.
 
-        All derived caches in CacheData.runtime are replaced along with the source data.
+        All caches (source, computed, request) are replaced atomically.
         """
         self._cache = new_cache
-        logger.debug("Cache swapped (source + runtime caches replaced)")
+        logger.debug("Cache swapped (source + computed + request caches replaced)")
 
     def get_role_by_id(self, role_id: str) -> CachedRole | None:
         """Get cached role by ID."""

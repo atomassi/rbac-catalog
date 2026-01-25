@@ -730,10 +730,8 @@ class TestGetAnalyticsFromCache:
         mock_analytics = AnalyticsData(computed_at=dt.datetime.now(dt.UTC))
         mock_cache = MagicMock()
         mock_cache.analytics = mock_analytics
-        mock_container = MagicMock()
-        mock_container.cache = mock_cache
         mock_service = MagicMock()
-        mock_service.container = mock_container
+        mock_service.cache = mock_cache
 
         with patch("azurerbac.web.services.analytics.get_cache_service", return_value=mock_service):
             result = get_analytics_from_cache()
@@ -750,10 +748,8 @@ class TestGetAnalyticsFromCache:
 
         mock_cache = MagicMock()
         mock_cache.analytics = None
-        mock_container = MagicMock()
-        mock_container.cache = mock_cache
         mock_service = MagicMock()
-        mock_service.container = mock_container
+        mock_service.cache = mock_cache
 
         with (
             patch("azurerbac.web.services.analytics.get_cache_service", return_value=mock_service),

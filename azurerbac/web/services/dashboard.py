@@ -73,7 +73,7 @@ def _get_default_cache() -> PermissionsCacheProtocol:
     """Get the default cache singleton."""
     from azurerbac.cache import get_cache_service
 
-    return get_cache_service().container
+    return get_cache_service()
 
 
 def enrich_role_with_counts(

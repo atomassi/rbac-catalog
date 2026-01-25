@@ -121,7 +121,7 @@ templates.env.globals["site_url"] = SITE_URL
 # Configured with streamable_http_path="/" so endpoint is /mcp (not /mcp/mcp)
 # When disabled, create_disabled_mcp_app returns a plain Starlette app (no lifespan_context)
 if settings.mcp_server_enabled:
-    _mcp_server = create_mcp_server(get_cache_service().container)
+    _mcp_server = create_mcp_server(get_cache_service())
 else:
     _mcp_server = create_disabled_mcp_app()
 
@@ -188,7 +188,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:  # pylint: disable=unus
 app = FastAPI(title="Azure RBAC Built-in Role Change Monitor", lifespan=lifespan)
 
 # Store cache accessor in app.state for access by route handlers via request.app.state
-app.state.app_cache = get_cache_service().container
+app.state.app_cache = get_cache_service()
 
 # Store SessionLocal on app.state so tests can patch it in one place
 app.state.session_local = SessionLocal
@@ -199,12 +199,12 @@ app.state.session_local = SessionLocal
 
 # Store typed dependency containers on app.state for FastAPI dependency injection
 app.state.api_deps = BaseDeps(
-    app_cache=get_cache_service().container,
+    app_cache=get_cache_service(),
     SessionLocal=SessionLocal,
 )
 
 app.state.dashboard_deps = DashboardDeps(
-    app_cache=get_cache_service().container,
+    app_cache=get_cache_service(),
     SessionLocal=SessionLocal,
     Role=Role,
     RoleHistory=RoleHistory,
@@ -214,7 +214,7 @@ app.state.dashboard_deps = DashboardDeps(
 )
 
 app.state.pages_deps = PagesDeps(
-    app_cache=get_cache_service().container,
+    app_cache=get_cache_service(),
     SessionLocal=SessionLocal,
     Role=Role,
     RoleHistory=RoleHistory,

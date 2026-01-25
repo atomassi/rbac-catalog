@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from fastapi import Request
     from sqlalchemy.ext.asyncio import async_sessionmaker
 
-    from azurerbac.cache import CacheContainer
+    from azurerbac.cache import CacheService
     from azurerbac.core.models import Role, RoleHistory
 
 logger = logging.getLogger(__name__)
@@ -71,7 +71,7 @@ def sort_operations(
     operations: list[OperationData],
     sort: str | OperationSortField,
     order: str | SortOrder,
-    cache: CacheContainer | None = None,
+    cache: CacheService | None = None,
 ) -> list[OperationData]:
     """Sort operations.
 
@@ -80,7 +80,7 @@ def sort_operations(
     """
     from azurerbac.cache import get_cache_service
 
-    cache_resolved = cache if cache is not None else get_cache_service().container
+    cache_resolved = cache if cache is not None else get_cache_service()
     reverse = order == SortOrder.DESC
 
     if sort == OperationSortField.ROLES:
@@ -98,38 +98,38 @@ def sort_operations(
 
 def add_role_counts(
     operations: list[OperationData],
-    cache: CacheContainer | None = None,
+    cache: CacheService | None = None,
 ) -> list[tuple[OperationData, int]]:
     """Add role counts to operations. Call on paginated subset for efficiency."""
     from azurerbac.cache import get_cache_service
 
-    cache_resolved = cache if cache is not None else get_cache_service().container
+    cache_resolved = cache if cache is not None else get_cache_service()
     return [(op, cache_resolved.get_operation_role_count(op.name)) for op in operations]
 
 
 def compute_role_effective_permissions(
     role: RoleDefinition,
     all_operations: list[OperationData],
-    cache: CacheContainer | None = None,
+    cache: CacheService | None = None,
 ) -> RoleEffectivePermissions:
     """Compute effective permissions for a role."""
     analyzer = RolePermissionAnalyzer(role, cache=cache)
     return analyzer.get_effective_permissions(all_operations)
 
 
-def _get_cache(cache: CacheContainer | None) -> CacheContainer:
-    """Get cache container."""
+def _get_cache(cache: CacheService | None) -> CacheService:
+    """Get cache service."""
     if cache is not None:
         return cache
     from azurerbac.cache import get_cache_service
 
-    return get_cache_service().container
+    return get_cache_service()
 
 
 def get_roles_allowing_operation(
     operation_name: str,
     is_data_action: bool,
-    cache: CacheContainer | None = None,
+    cache: CacheService | None = None,
 ) -> list[RoleAllowingOperation]:
     """Find roles allowing a specific operation.
 
@@ -204,7 +204,7 @@ async def get_role_from_cache_or_db(
     role_id: str,
     max_events: int = 200,
     *,
-    cache: CacheContainer | None = None,
+    cache: CacheService | None = None,
 ) -> RoleDetailResult:
     """Get role data from cache or database."""
     from sqlalchemy import func, select
@@ -212,7 +212,7 @@ async def get_role_from_cache_or_db(
     from azurerbac.cache import get_cache_service
     from azurerbac.telemetry import TimedDbQuery, track_db_fallback
 
-    cache_resolved = cache if cache is not None else get_cache_service().container
+    cache_resolved = cache if cache is not None else get_cache_service()
 
     cached_role = cache_resolved.get_role_by_id(role_id)
 

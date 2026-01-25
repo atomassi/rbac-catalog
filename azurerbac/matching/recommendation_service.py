@@ -42,7 +42,7 @@ def _get_default_cache() -> CacheData:
     """Get the default cache from the global singleton."""
     from azurerbac.cache import get_cache_service
 
-    return get_cache_service().container.cache
+    return get_cache_service().cache
 
 
 class PlaneContextFactory:

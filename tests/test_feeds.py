@@ -328,7 +328,7 @@ class TestFeedEndpointsIntegration:
         from azurerbac.web.dependencies import BaseDeps, get_api_deps
 
         # Get cache and inject test events via proper swap pattern
-        cache = get_cache_service().container
+        cache = get_cache_service()
         now = dt.datetime.now(dt.UTC)
         test_events = [
             CachedChangeEvent(
@@ -444,7 +444,7 @@ class TestFeedSmokeTests:
         from azurerbac.web import app as app_module
         from azurerbac.web.dependencies import BaseDeps, get_api_deps
 
-        cache = get_cache_service().container
+        cache = get_cache_service()
 
         test_deps = BaseDeps(
             app_cache=cache,
@@ -693,7 +693,7 @@ class TestFeedEndpointsParametrized:
         from azurerbac.web import app as app_module
         from azurerbac.web.dependencies import BaseDeps, get_api_deps
 
-        cache = get_cache_service().container
+        cache = get_cache_service()
         now = dt.datetime.now(dt.UTC)
         test_events = [
             CachedChangeEvent(

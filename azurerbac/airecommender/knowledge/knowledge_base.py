@@ -14,7 +14,7 @@ from azurerbac.core.types import JsonDict
 
 if TYPE_CHECKING:
     from azurerbac.azure.models import RoleDefinition
-    from azurerbac.cache import CacheContainer
+    from azurerbac.cache import CacheService
 
 logger = logging.getLogger(__name__)
 
@@ -72,12 +72,12 @@ class RoleKnowledgeBase:
         self,
         roles: list[RoleDefinition],
         *,
-        cache: CacheContainer | None = None,
+        cache: CacheService | None = None,
     ) -> None:
         """Build searchable knowledge base from role definitions."""
         from azurerbac.cache import get_cache_service
 
-        cache_resolved = cache if cache is not None else get_cache_service().container
+        cache_resolved = cache if cache is not None else get_cache_service()
 
         self._role_documents = {}
         self._name_to_role_id = {}

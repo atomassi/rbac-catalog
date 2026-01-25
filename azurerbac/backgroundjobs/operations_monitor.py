@@ -10,7 +10,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from azurerbac.azure.models import OperationData
 from azurerbac.backgroundjobs.models import OperationsScanResult
-from azurerbac.cache import get_cache_service
 from azurerbac.core import Operation, OperationScanStatus, utcnow
 
 logger = logging.getLogger(__name__)
@@ -190,13 +189,5 @@ async def apply_operations_scan(
         result.total,
         result.providers,
     )
-
-    # Invalidate and rebuild cache if new operations were added
-    if result.created > 0:
-        logger.info(
-            "New operations added (%d), triggering cache rebuild",
-            result.created,
-        )
-        await get_cache_service().invalidate_and_rebuild(session)
 
     return result

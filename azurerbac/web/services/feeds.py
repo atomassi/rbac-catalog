@@ -6,7 +6,7 @@ import datetime as dt
 import html
 from xml.etree.ElementTree import Element, SubElement, tostring
 
-from azurerbac.cache import CacheContainer
+from azurerbac.cache import CacheService
 from azurerbac.cache.models import CachedChangeEvent
 from azurerbac.core.utils import ensure_utc_or_min
 
@@ -162,7 +162,7 @@ def build_rss_feed(
 
 
 def get_recent_events(
-    cache: CacheContainer,
+    cache: CacheService,
     cutoff: dt.datetime,
     limit: int,
 ) -> list[CachedChangeEvent]:

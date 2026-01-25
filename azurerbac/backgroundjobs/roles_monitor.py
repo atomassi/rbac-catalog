@@ -11,7 +11,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from azurerbac.azure.models import RoleDefinition
 from azurerbac.backgroundjobs.models import RoleScanResult
-from azurerbac.cache import get_cache_service
 from azurerbac.core import (
     EventType,
     Role,
@@ -348,15 +347,5 @@ async def apply_role_scan(session: AsyncSession, roles: list[RoleDefinition]) ->
         result.deleted,
         result.total,
     )
-
-    # Invalidate cache if changes detected
-    if result.has_changes:
-        logger.info(
-            "Roles changed (created=%d, updated=%d, deleted=%d), triggering cache rebuild",
-            result.created,
-            result.updated,
-            result.deleted,
-        )
-        await get_cache_service().invalidate_and_rebuild(session)
 
     return result

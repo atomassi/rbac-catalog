@@ -366,24 +366,9 @@ _ROLE_PAGES_CACHE_MAX_SIZE: Final[int] = 500
 _OPERATION_PAGES_CACHE_MAX_SIZE: Final[int] = 500
 
 
-def _create_allowing_roles_cache() -> LRUCache[str, list[Any]]:
-    """Factory for allowing_roles LRU cache."""
-    return LRUCache(maxsize=_ALLOWING_ROLES_CACHE_MAX_SIZE)
-
-
-def _create_filtered_events_cache() -> LRUCache[str, list[CachedChangeEvent]]:
-    """Factory for filtered_events LRU cache."""
-    return LRUCache(maxsize=_FILTERED_EVENTS_CACHE_MAX_SIZE)
-
-
-def _create_role_pages_cache() -> LRUCache[str, list[Any]]:
-    """Factory for role_pages LRU cache."""
-    return LRUCache(maxsize=_ROLE_PAGES_CACHE_MAX_SIZE)
-
-
-def _create_operation_pages_cache() -> LRUCache[str, Any]:
-    """Factory for operation_pages LRU cache."""
-    return LRUCache(maxsize=_OPERATION_PAGES_CACHE_MAX_SIZE)
+def _lru_cache(maxsize: int) -> LRUCache[str, Any]:
+    """Factory for LRU cache with given maxsize."""
+    return LRUCache(maxsize=maxsize)
 
 
 @dataclass
@@ -409,11 +394,17 @@ class RequestCaches:
     to bound memory usage.
     """
 
-    role_pages: LRUCache[str, list[Any]] = field(default_factory=_create_role_pages_cache)
-    operation_pages: LRUCache[str, Any] = field(default_factory=_create_operation_pages_cache)
-    allowing_roles: LRUCache[str, list[Any]] = field(default_factory=_create_allowing_roles_cache)
-    filtered_events: LRUCache[str, list[CachedChangeEvent]] = field(
-        default_factory=_create_filtered_events_cache
+    role_pages: LRUCache[str, Any] = field(
+        default_factory=lambda: _lru_cache(_ROLE_PAGES_CACHE_MAX_SIZE)
+    )
+    operation_pages: LRUCache[str, Any] = field(
+        default_factory=lambda: _lru_cache(_OPERATION_PAGES_CACHE_MAX_SIZE)
+    )
+    allowing_roles: LRUCache[str, Any] = field(
+        default_factory=lambda: _lru_cache(_ALLOWING_ROLES_CACHE_MAX_SIZE)
+    )
+    filtered_events: LRUCache[str, Any] = field(
+        default_factory=lambda: _lru_cache(_FILTERED_EVENTS_CACHE_MAX_SIZE)
     )
 
 

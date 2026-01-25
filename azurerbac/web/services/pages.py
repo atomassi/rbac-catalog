@@ -210,13 +210,11 @@ async def get_role_from_cache_or_db(
     from sqlalchemy import func, select
 
     from azurerbac.cache import get_cache_service
-    from azurerbac.telemetry import TimedDbQuery, track_cache_hit, track_db_fallback
+    from azurerbac.telemetry import TimedDbQuery, track_db_fallback
 
     cache_resolved = cache if cache is not None else get_cache_service().container
 
     cached_role = cache_resolved.get_role_by_id(role_id)
-    hit = cached_role is not None
-    track_cache_hit("role_detail", hit, role_id)
 
     if cached_role:
         first_scan = cache_resolved.cache.first_scan

@@ -21,7 +21,7 @@ from azurerbac.core.utils import (
     truncate_microseconds,
 )
 from azurerbac.matching.models import RoleNetPermissions
-from azurerbac.telemetry import TimedDbQuery, track_cache_hit, track_db_fallback
+from azurerbac.telemetry import TimedDbQuery, track_db_fallback
 from azurerbac.web.services.models import (
     DashboardSummary,
     PaginatedResult,
@@ -334,13 +334,12 @@ async def fetch_roles_paginated(
 ) -> PaginatedResult[RoleWithCounts]:
     """Fetch paginated roles with caching."""
     cache_key = f"roles:{status_filter}::{sort}:{order}:{page}:{page_size}"
-    count_cache_key = f"roles_count:{status_filter}:"
+    count_cache_key = f"roles_count:{status_filter}"
 
     cached_roles = deps.app_cache.get_role_page(cache_key)
     cached_count = deps.app_cache.get_role_page(count_cache_key)
 
     cache_hit = cached_roles is not None and cached_count is not None
-    track_cache_hit("dashboard_roles", cache_hit, cache_key)
 
     if cache_hit:
         total_pages = _calculate_total_pages(int(cached_count), page_size)
@@ -395,15 +394,12 @@ async def search_roles(
     """Search roles using cache first, fallback to DB."""
     cached_roles = deps.app_cache.cache.roles_by_id
 
-    cache_hit = bool(cached_roles)
-    track_cache_hit("search_roles", cache_hit)
-
-    if cache_hit:
+    if cached_roles:
         return search_roles_in_cache(
             cached_roles, q, status_filter, sort, order, page, page_size, exact_match
         )
 
-    track_db_fallback("search_roles", "cache_empty")  # No user query in telemetry
+    track_db_fallback("search_roles", "cache_empty")
     return await search_roles_in_db(
         session,
         deps,

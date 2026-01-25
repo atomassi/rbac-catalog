@@ -1206,21 +1206,14 @@ class TestCacheFileOperations:
             assert isinstance(coverage.control, set), "control should be a set after load"
             assert isinstance(coverage.data, set), "data should be a set after load"
 
-        # Verify derived properties work (role_net_permissions, cache_ops_count)
-        # These are computed on-access from role_coverage and all_operations
+        # Verify derived properties work (role_net_permissions)
+        # Computed on-access from role_coverage
         assert len(loaded.role_net_permissions) == len(loaded.role_coverage)
         for role_id in loaded.role_coverage:
             net_perms = loaded.role_net_permissions[role_id]
             coverage = loaded.role_coverage[role_id]
             assert net_perms.control_count == len(coverage.control)
             assert net_perms.data_count == len(coverage.data)
-
-        # cache_ops_count is derived from all_operations
-        ops_count = loaded.cache_ops_count
-        control_ops = sum(1 for op in loaded.all_operations if not op.is_data_action)
-        data_ops = sum(1 for op in loaded.all_operations if op.is_data_action)
-        assert ops_count.control == control_ops
-        assert ops_count.data == data_ops
 
     async def test_load_nonexistent_cache(self, temp_cache_dir) -> None:
         """Loading nonexistent cache returns None."""

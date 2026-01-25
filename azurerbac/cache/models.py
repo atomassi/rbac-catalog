@@ -30,7 +30,6 @@ from azurerbac.core.utils import format_datetime, parse_datetime
 
 logger = logging.getLogger(__name__)
 from azurerbac.matching.models import (
-    CacheOpsCount,
     CoverageResult,
     PartialCoverageCacheKey,
     PatternCacheKey,
@@ -478,7 +477,7 @@ class CacheData:
     def role_coverage(self) -> dict[str, RoleCoverage]:
         return self.analysis.role_coverage
 
-    @property
+    @cached_property
     def role_net_permissions(self) -> dict[str, RoleNetPermissions]:
         """Derived from role_coverage: count of control/data ops per role."""
         return {
@@ -501,13 +500,6 @@ class CacheData:
     @property
     def wildcard_count(self) -> dict[PatternCacheKey, int]:
         return self.runtime.wildcard_count
-
-    @property
-    def cache_ops_count(self) -> CacheOpsCount:
-        """Derived from all_operations: count of control vs data ops."""
-        control = sum(1 for op in self.source.all_operations if not op.is_data_action)
-        data = sum(1 for op in self.source.all_operations if op.is_data_action)
-        return CacheOpsCount(control, data)
 
     @property
     def analytics(self) -> AnalyticsData | None:

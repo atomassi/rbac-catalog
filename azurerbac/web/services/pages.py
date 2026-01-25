@@ -133,7 +133,7 @@ def get_roles_allowing_operation(
 ) -> list[RoleAllowingOperation]:
     """Find roles allowing a specific operation.
 
-    Uses precomputed operation_to_roles inverted index.
+    Uses precomputed operation_to_roles index.
     """
     cache_resolved = _get_cache(cache)
 
@@ -210,16 +210,13 @@ async def get_role_from_cache_or_db(
     from sqlalchemy import func, select
 
     from azurerbac.cache import get_cache_service
-    from azurerbac.telemetry import TimedDbQuery
+    from azurerbac.telemetry import TimedDbQuery, track_cache_hit, track_db_fallback
 
     cache_resolved = cache if cache is not None else get_cache_service().container
 
     cached_role = cache_resolved.get_role_by_id(role_id)
-    cache_size = len(cache_resolved.cache.roles_by_id)
-    logger.info(
-        f"Role detail request: role_id={role_id}, "
-        f"cache_size={cache_size}, cache_hit={cached_role is not None}"
-    )
+    hit = cached_role is not None
+    track_cache_hit("role_detail", hit, role_id)
 
     if cached_role:
         first_scan = cache_resolved.cache.first_scan
@@ -232,9 +229,12 @@ async def get_role_from_cache_or_db(
             first_scan=first_scan,
         )
 
-    logger.warning("Cache miss for role %s, falling back to database", role_id)
+    # Cache miss - fall back to database
+    track_db_fallback("role_detail", "cache_miss", role_id)
     async with session_local() as session:
-        role = await session.get(role_snapshot_model, role_id)
+        async with TimedDbQuery("fetch_role_by_id") as timer:
+            role = await session.get(role_snapshot_model, role_id)
+            timer.rows = 1 if role else 0
         if role is None:
             return RoleDetailResult(cached_role=None, definition=None, events=[], first_scan=None)
         role_def = role.last_known_definition
@@ -253,7 +253,8 @@ async def get_role_from_cache_or_db(
         # Get first scan timestamp from RoleScanStatus
         from azurerbac.core import RoleScanStatus
 
-        first_scan = await session.scalar(select(func.min(RoleScanStatus.scan_timestamp)))
+        async with TimedDbQuery("fetch_first_scan_timestamp"):
+            first_scan = await session.scalar(select(func.min(RoleScanStatus.scan_timestamp)))
         first_scan = truncate_microseconds(first_scan)
 
         # Get history entries for this role - RoleHistory has role_id directly

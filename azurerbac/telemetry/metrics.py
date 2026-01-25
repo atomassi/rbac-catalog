@@ -3,28 +3,28 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from azurerbac.settings import Settings
 from azurerbac.telemetry.sender import MetricsSender
-
-if TYPE_CHECKING:
-    from azurerbac.cache import CacheContainer
 
 logger = logging.getLogger(__name__)
 
 __all__ = [
     "flush_metrics",
+    "track_ai_recommendation",
+    "track_cache_call",
     "track_cache_hit",
     "track_cache_refresh",
     "track_cache_refresh_failure",
-    "track_cache_stats",
+    "track_db_fallback",
     "track_db_query",
     "track_duration",
     "track_event",
     "track_gauge",
     "track_metric",
     "track_operations_scan",
+    "track_role_recommendation",
     "track_role_scan",
     "track_startup",
     "track_worker_result",
@@ -132,23 +132,114 @@ def track_event(name: str, properties: dict[str, Any] | None = None) -> None:
         logger.exception("Failed to track event %s: %s", name, e)
 
 
-def track_cache_stats(app_cache: CacheContainer) -> None:
-    """Track cache statistics as custom metrics.
+def track_db_fallback(fallback_type: str, reason: str, key: str | None = None) -> None:
+    """Track when the application falls back to database due to cache miss.
 
     Args:
-        app_cache: The CacheContainer instance to get stats from.
+        fallback_type: Type of data being fetched (e.g., "role_detail", "role_history")
+        reason: Reason for fallback (e.g., "cache_miss", "not_in_cache")
+        key: Optional identifier (e.g., role_id) for local debugging only
     """
+    key_str = f" key={key}" if key else ""
+    logger.debug("DB fallback: type=%s reason=%s%s", fallback_type, reason, key_str)
+
     if not _metrics_enabled():
-        logger.debug("Skipping track_cache_stats: metrics disabled")
         return
 
     try:
-        track_gauge("cache_roles_count", len(app_cache.cache.roles_by_id))
-        track_gauge("cache_operations_count", len(app_cache.get_all_operations()))
-        track_gauge("cache_events_count", len(app_cache.cache.all_change_events))
-        track_gauge("cache_entries_count", app_cache.get_role_pages_count())
+        props: dict[str, Any] = {"type": fallback_type, "reason": reason}
+        track_event("db_fallback", props)
     except Exception as e:
-        logger.exception("Failed to track cache stats: %s", e)
+        logger.exception("Failed to track db fallback: %s", e)
+
+
+def track_cache_call(method: str) -> None:
+    """Track cache method calls for dashboard analytics.
+
+    Args:
+        method: Cache method name (e.g., "get_role_by_id", "search_operations")
+    """
+    logger.debug("Cache call: %s", method)
+
+    if not _metrics_enabled():
+        return
+
+    try:
+        props: dict[str, Any] = {"method": method}
+        track_event("cache_call", props)
+    except Exception as e:
+        logger.exception("Failed to track cache call: %s", e)
+
+
+def track_ai_recommendation(
+    mode: str,
+    result_count: int,
+    is_error: bool = False,
+) -> None:
+    """Track AI recommendation requests for dashboard analytics.
+
+    Args:
+        mode: Recommender mode used (tfidf, semantic, colbert, llm, etc.)
+        result_count: Number of recommendations returned
+        is_error: Whether the request failed
+    """
+    status = "error" if is_error else "success"
+    logger.info(
+        "AI recommendation: mode=%s results=%d status=%s",
+        mode,
+        result_count,
+        status,
+    )
+
+    if not _metrics_enabled():
+        return
+
+    try:
+        props: dict[str, Any] = {
+            "mode": mode,
+            "status": status,
+            "result_count": result_count,
+        }
+        track_event("ai_recommendation", props)
+    except Exception as e:
+        logger.exception("Failed to track AI recommendation: %s", e)
+
+
+def track_role_recommendation(
+    operations_count: int,
+    expanded_count: int,
+    result_count: int,
+    duration_seconds: float | None = None,
+) -> None:
+    """Track operation-based role recommendations for dashboard analytics.
+
+    Args:
+        operations_count: Number of operations requested by user
+        expanded_count: Number of operations after wildcard expansion
+        result_count: Number of matching roles returned
+        duration_seconds: Optional execution time
+    """
+    logger.info(
+        "Role recommendation: ops=%d expanded=%d results=%d",
+        operations_count,
+        expanded_count,
+        result_count,
+    )
+
+    if not _metrics_enabled():
+        return
+
+    try:
+        props: dict[str, Any] = {
+            "operations_count": operations_count,
+            "expanded_count": expanded_count,
+            "result_count": result_count,
+        }
+        track_event("role_recommendation", props)
+        if duration_seconds is not None:
+            track_duration("role_recommendation_duration_seconds", duration_seconds, props)
+    except Exception as e:
+        logger.exception("Failed to track role recommendation: %s", e)
 
 
 def track_startup(duration_seconds: float, roles_count: int, operations_count: int) -> None:
@@ -276,18 +367,8 @@ def track_worker_result(
         result: "success" or "failure"
         duration_seconds: Optional duration of the operation
         error_message: Optional error message if result is "failure"
-
-    Query in App Insights:
-        customMetrics
-        | where name == "worker_operation_result"
-        | extend operation = tostring(customDimensions.operation)
-        | extend result = tostring(customDimensions.result)
-        | summarize count() by operation, result, bin(timestamp, 1h)
     """
     props = {"operation": operation_name, "result": result}
-    if error_message:
-        # Truncate error message to avoid huge dimensions
-        props["error"] = error_message[:200]
 
     parts = [f"Worker op={operation_name} result={result}"]
     if duration_seconds:
@@ -329,14 +410,8 @@ def track_db_query(
 
     Args:
         query_name: Name of the query (e.g., "fetch_roles", "fetch_operations")
-        duration_seconds: Time taken to execute the query
+        duration_seconds: Time taken to execute the query in seconds
         rows_affected: Optional number of rows returned/affected
-
-    Query in App Insights:
-        customMetrics
-        | where name == "db_query_duration_seconds"
-        | extend query = tostring(customDimensions.query)
-        | summarize avg(value), max(value) by query, bin(timestamp, 1h)
     """
     props: dict[str, Any] = {"query": query_name}
     if rows_affected is not None:
@@ -346,7 +421,6 @@ def track_db_query(
     logger.debug("DB query: %s (%.3fs)%s", query_name, duration_seconds, rows_str)
 
     if not _metrics_enabled():
-        logger.debug("Skipping track_db_query: metrics disabled")
         return
 
     try:
@@ -367,14 +441,6 @@ def track_cache_hit(
         cache_type: Type of cache (e.g., "role", "operation", "role_page")
         hit: True if cache hit, False if cache miss
         key: Optional key being looked up (for debugging)
-
-    Query in App Insights:
-        customEvents
-        | where name == "cache_access"
-        | extend cache_type = tostring(customDimensions.cache_type)
-        | extend hit = tobool(customDimensions.hit)
-        | summarize hits=countif(hit), misses=countif(not(hit)) by cache_type, bin(timestamp, 1h)
-        | extend hit_rate = round(100.0 * hits / (hits + misses), 2)
     """
     hit_str = "hit" if hit else "miss"
     key_str = f" key={key}" if key else ""
@@ -386,8 +452,6 @@ def track_cache_hit(
 
     try:
         props: dict[str, Any] = {"cache_type": cache_type, "hit": hit}
-        if key:
-            props["key"] = key[:100]  # Truncate long keys
         track_event("cache_access", props)
     except Exception as e:
         logger.exception("Failed to track cache hit: %s", e)
@@ -402,13 +466,6 @@ def track_cache_refresh_failure(
     Args:
         source: What triggered the refresh ("worker", "periodic")
         reason: Reason for failure
-
-    Query in App Insights:
-        customEvents
-        | where name == "cache_refresh_failure"
-        | extend source = tostring(customDimensions.source)
-        | extend reason = tostring(customDimensions.reason)
-        | summarize count() by source, reason, bin(timestamp, 1h)
     """
     logger.warning("Cache refresh failed (%s): %s", source, reason)
 

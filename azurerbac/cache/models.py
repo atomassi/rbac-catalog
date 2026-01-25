@@ -27,6 +27,7 @@ from urllib.parse import quote
 
 from cachetools import LRUCache
 
+from azurerbac.cache.utils import create_lru_cache, sitemap_url
 from azurerbac.core.constants import RoleStatus
 from azurerbac.core.types import JsonDict
 from azurerbac.core.utils import format_datetime, parse_datetime
@@ -181,48 +182,12 @@ class Sitemap:
         today = dt.datetime.now(dt.UTC).date().isoformat()
 
         urls = [
-            # Home page
-            f"""  <url>
-    <loc>{site_url}/</loc>
-    <lastmod>{today}</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>1.0</priority>
-  </url>""",
-            # Roles list page
-            f"""  <url>
-    <loc>{site_url}/roles</loc>
-    <lastmod>{today}</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.95</priority>
-  </url>""",
-            # Operations list page
-            f"""  <url>
-    <loc>{site_url}/operations</loc>
-    <lastmod>{today}</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>""",
-            # Role Recommender page
-            f"""  <url>
-    <loc>{site_url}/recommend</loc>
-    <lastmod>{today}</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.85</priority>
-  </url>""",
-            # Analytics page
-            f"""  <url>
-    <loc>{site_url}/analytics</loc>
-    <lastmod>{today}</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>""",
-            # About page
-            f"""  <url>
-    <loc>{site_url}/about</loc>
-    <lastmod>{today}</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.5</priority>
-  </url>""",
+            sitemap_url(f"{site_url}/", today, "daily", 1.0),
+            sitemap_url(f"{site_url}/roles", today, "daily", 0.95),
+            sitemap_url(f"{site_url}/operations", today, "weekly", 0.9),
+            sitemap_url(f"{site_url}/recommend", today, "weekly", 0.85),
+            sitemap_url(f"{site_url}/analytics", today, "weekly", 0.7),
+            sitemap_url(f"{site_url}/about", today, "monthly", 0.5),
         ]
 
         # Add role pages (sorted by role name) - include all roles (active + deleted)
@@ -231,27 +196,14 @@ class Sitemap:
 
         for role_id, role_name in roles:
             slug = slugify(role_name)
-            urls.append(
-                f"""  <url>
-    <loc>{site_url}/roles/{role_id}/{slug}</loc>
-    <lastmod>{today}</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>"""
-            )
+            urls.append(sitemap_url(f"{site_url}/roles/{role_id}/{slug}", today, "weekly", 0.8))
 
         # Add operation pages
         for op in all_operations:
             if op.name:
                 encoded_name = quote(op.name, safe="")
-                urls.append(
-                    f"""  <url>
-    <loc>{site_url}/operations/{encoded_name}</loc>
-    <lastmod>{today}</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>"""
-                )
+                loc = f"{site_url}/operations/{encoded_name}"
+                urls.append(sitemap_url(loc, today, "weekly", 0.7))
 
         content = f"""<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
@@ -366,11 +318,6 @@ _ROLE_PAGES_CACHE_MAX_SIZE: Final[int] = 500
 _OPERATION_PAGES_CACHE_MAX_SIZE: Final[int] = 500
 
 
-def _lru_cache(maxsize: int) -> LRUCache[str, Any]:
-    """Factory for LRU cache with given maxsize."""
-    return LRUCache(maxsize=maxsize)
-
-
 @dataclass
 class ComputedCaches:
     """Deterministic caches - expensive to compute, SAVED to disk.
@@ -395,16 +342,16 @@ class RequestCaches:
     """
 
     role_pages: LRUCache[str, Any] = field(
-        default_factory=lambda: _lru_cache(_ROLE_PAGES_CACHE_MAX_SIZE)
+        default_factory=lambda: create_lru_cache(_ROLE_PAGES_CACHE_MAX_SIZE)
     )
     operation_pages: LRUCache[str, Any] = field(
-        default_factory=lambda: _lru_cache(_OPERATION_PAGES_CACHE_MAX_SIZE)
+        default_factory=lambda: create_lru_cache(_OPERATION_PAGES_CACHE_MAX_SIZE)
     )
     allowing_roles: LRUCache[str, Any] = field(
-        default_factory=lambda: _lru_cache(_ALLOWING_ROLES_CACHE_MAX_SIZE)
+        default_factory=lambda: create_lru_cache(_ALLOWING_ROLES_CACHE_MAX_SIZE)
     )
     filtered_events: LRUCache[str, Any] = field(
-        default_factory=lambda: _lru_cache(_FILTERED_EVENTS_CACHE_MAX_SIZE)
+        default_factory=lambda: create_lru_cache(_FILTERED_EVENTS_CACHE_MAX_SIZE)
     )
 
 

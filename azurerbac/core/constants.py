@@ -3,9 +3,10 @@
 from enum import StrEnum
 from typing import Final
 
-# Site URL - used for sitemap generation and canonical URLs
-SITE_DOMAIN: Final[str] = "rbac-catalog.dev"
-SITE_URL: Final[str] = f"https://{SITE_DOMAIN}"
+# Domain constants - canonical source for domain references
+NEW_DOMAIN: Final[str] = "rbac-catalog.dev"
+SITE_DOMAIN: Final[str] = NEW_DOMAIN  # Alias for backwards compatibility
+SITE_URL: Final[str] = f"https://{NEW_DOMAIN}"
 
 
 class EventType(StrEnum):

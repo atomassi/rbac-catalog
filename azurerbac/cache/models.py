@@ -5,14 +5,16 @@ CacheData Structure
 CacheData is the unified cache container holding all application state.
 It's designed for atomic swaps - the entire object is replaced, never mutated.
 
-    CacheData
+    CacheData (immutable snapshot)
     ├── metadata: CacheMetadata          # Versioning and invalidation
     ├── source: SourceData               # Raw DB data (immutable after load)
     ├── indexes: Indexes                 # Fast lookups (deterministic from source)
     ├── analysis: RoleAnalysis           # Expensive precomputation (built once at refresh)
     ├── computed: ComputedCaches         # Expensive caches, SAVED to disk
-    ├── request: RequestCaches           # Cheap caches, NOT saved to disk (rebuilt lazily)
     └── content: PrerenderedContent      # Pre-built responses (analytics, sitemap)
+
+    CacheContainer (mutable wrapper)
+    └── _request_caches: RequestCaches   # Cheap LRU caches, NOT saved (rebuilt lazily)
 """
 
 from __future__ import annotations

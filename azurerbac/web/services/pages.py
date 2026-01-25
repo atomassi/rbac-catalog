@@ -39,23 +39,24 @@ def filter_operations(
     operations: list[OperationData],
     params: OperationSearchParams,
 ) -> list[OperationData]:
-    """Filter operations based on search parameters."""
-    result = operations
+    """Filter operations based on search parameters.
 
-    # Apply text search
-    if params.query:
-        q_lower = params.query.lower()
-        result = [op for op in result if operation_matches_search(op, q_lower)]
+    Uses a single pass through operations to avoid creating multiple
+    intermediate lists (reduces memory allocations and iterations).
+    """
+    # Pre-compute filter values
+    q_lower = params.query.lower() if params.query else None
+    filter_data_action = params.is_data_action
+    filter_provider = params.provider
 
-    # Apply data action filter
-    if params.is_data_action is not None:
-        result = [op for op in result if op.is_data_action == params.is_data_action]
-
-    # Apply provider filter
-    if params.provider:
-        result = [op for op in result if op.provider_display_name == params.provider]
-
-    return result
+    # Single-pass filter combining all conditions
+    return [
+        op
+        for op in operations
+        if (q_lower is None or operation_matches_search(op, q_lower))
+        and (filter_data_action is None or op.is_data_action == filter_data_action)
+        and (not filter_provider or op.provider_display_name == filter_provider)
+    ]
 
 
 # Sort key functions for OperationData objects
@@ -71,23 +72,39 @@ def sort_operations(
     sort: str | OperationSortField,
     order: str | SortOrder,
     cache: CacheContainer | None = None,
-) -> list[tuple[OperationData, int]]:
-    """Sort operations and return with role counts."""
+) -> list[OperationData]:
+    """Sort operations.
+
+    Role counts are NOT fetched here - callers should use add_role_counts()
+    on the paginated subset to avoid 21k lookups when only displaying ~25 items.
+    """
     from azurerbac.cache import get_cache_service
 
     cache_resolved = cache if cache is not None else get_cache_service().container
-
-    # Build tuples with role count for sorting (needed for "roles" sort and enrichment)
-    ops_with_count = [(op, cache_resolved.get_operation_role_count(op.name)) for op in operations]
+    reverse = order == SortOrder.DESC
 
     if sort == OperationSortField.ROLES:
-        # Sort by role count
-        ops_with_count.sort(key=lambda x: x[1], reverse=(order == SortOrder.DESC))
-    else:
-        key_func = _OPERATION_SORT_KEYS.get(sort, _OPERATION_SORT_KEYS[OperationSortField.NAME])
-        ops_with_count.sort(key=lambda x: key_func(x[0]), reverse=(order == SortOrder.DESC))
+        # Sort by role count - need to fetch counts for sorting
+        return sorted(
+            operations,
+            key=lambda op: cache_resolved.get_operation_role_count(op.name),
+            reverse=reverse,
+        )
 
-    return ops_with_count
+    # Sort by other fields - no role count lookup needed
+    key_func = _OPERATION_SORT_KEYS.get(sort, _OPERATION_SORT_KEYS[OperationSortField.NAME])
+    return sorted(operations, key=key_func, reverse=reverse)
+
+
+def add_role_counts(
+    operations: list[OperationData],
+    cache: CacheContainer | None = None,
+) -> list[tuple[OperationData, int]]:
+    """Add role counts to operations. Call on paginated subset for efficiency."""
+    from azurerbac.cache import get_cache_service
+
+    cache_resolved = cache if cache is not None else get_cache_service().container
+    return [(op, cache_resolved.get_operation_role_count(op.name)) for op in operations]
 
 
 def compute_role_effective_permissions(

@@ -202,12 +202,12 @@ class TestSortOperations:
     ):
         """Test sorting by various fields."""
         result = sort_operations(sample_operations, sort_field, order, mock_app_cache)
-        # Result is list of (OperationData, role_count) tuples
+        # Result is now list of OperationData (role counts added separately via add_role_counts)
         if sort_field == "name":
-            values = [op.name for op, _ in result]
+            values = [op.name for op in result]
             expected = sorted(values, key=str.lower, reverse=(order == "desc"))
         else:  # provider
-            values = [op.provider_display_name or "" for op, _ in result]
+            values = [op.provider_display_name or "" for op in result]
             expected = sorted(values, key=str.lower, reverse=(order == "desc"))
         assert values == expected
 
@@ -217,7 +217,7 @@ class TestSortOperations:
         """Test sorting by type (data action) ascending."""
         result = sort_operations(sample_operations, "type", "asc", mock_app_cache)
         # False comes before True
-        types = [op.is_data_action for op, _ in result]
+        types = [op.is_data_action for op in result]
         assert types[:2] == [False, False]
         assert types[2:] == [True, True]
 
@@ -232,9 +232,12 @@ class TestSortOperations:
         self, sample_operations: list[OperationData], mock_app_cache: MagicMock, order: str
     ):
         """Test sorting by role count."""
+        from azurerbac.web.services.pages import add_role_counts
+
         result = sort_operations(sample_operations, "roles", order, mock_app_cache)
-        # Check sorting by role_count (second element of tuple)
-        counts = [role_count for _, role_count in result]
+        # add_role_counts to get the counts for verification
+        with_counts = add_role_counts(result, mock_app_cache)
+        counts = [role_count for _, role_count in with_counts]
         assert counts == sorted(counts, reverse=(order == "desc"))
 
     def test_unknown_sort_defaults_to_name(
@@ -242,5 +245,5 @@ class TestSortOperations:
     ):
         """Test that unknown sort field defaults to name."""
         result = sort_operations(sample_operations, "unknown", "asc", mock_app_cache)
-        names = [op.name for op, _ in result]
+        names = [op.name for op in result]
         assert names == sorted(names, key=str.lower)

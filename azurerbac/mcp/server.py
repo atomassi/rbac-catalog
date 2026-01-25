@@ -456,8 +456,6 @@ class MCPServer:
 
                 matches = recommend_roles(
                     requested_operations=sanitized_ops,
-                    roles=self._cache.get_all_roles(),
-                    all_operations=self._cache.get_all_operations(),
                     max_results=min(max_results, MAX_RECOMMEND_LIMIT),
                     requested_ops_data_flags=data_flags or None,
                 )

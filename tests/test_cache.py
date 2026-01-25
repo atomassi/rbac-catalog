@@ -295,7 +295,6 @@ class TestLowerOptimization:
         result_no_cache = recommend_roles(
             ["Microsoft.Storage/storageAccounts/read"],
             roles,
-            operations,
         )
 
         # With cache
@@ -303,7 +302,6 @@ class TestLowerOptimization:
         result_with_cache = recommend_roles(
             ["Microsoft.Storage/storageAccounts/read"],
             roles,
-            operations,
         )
 
         # Same number of results

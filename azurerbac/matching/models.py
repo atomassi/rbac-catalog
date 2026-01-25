@@ -10,6 +10,7 @@ from azurerbac.core.types import JsonDict
 
 if TYPE_CHECKING:
     from azurerbac.azure.models import OperationData
+    from azurerbac.cache.models import CacheData
 
 from azurerbac.azure.models import Permission
 
@@ -153,9 +154,15 @@ class OperationSets:
 
     @classmethod
     def from_operations(cls, operations: list[OperationData]) -> OperationSets:
+        """Build from raw operation list (slow - iterates all ops)."""
         control = frozenset(op.name.lower() for op in operations if not op.is_data_action)
         data = frozenset(op.name.lower() for op in operations if op.is_data_action)
         return cls(all_control=control, all_data=data)
+
+    @classmethod
+    def from_cache(cls, cache: CacheData) -> OperationSets:
+        """Build from cached frozensets (fast - O(1))."""
+        return cls(all_control=cache.control_ops_lowered, all_data=cache.data_ops_lowered)
 
 
 @dataclass(frozen=True, slots=True)

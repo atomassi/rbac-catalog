@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 
-from azurerbac.azure.models import OperationData, RoleDefinition
+from azurerbac.azure.models import RoleDefinition
 from azurerbac.core import HIGH_PRIVILEGE_ROLES
 from azurerbac.matching.models import RoleMatch
 from azurerbac.matching.recommendation_service import (
@@ -21,17 +21,29 @@ logger = logging.getLogger(__name__)
 
 def recommend_roles(
     requested_operations: list[str],
-    roles: list[RoleDefinition],
-    all_operations: list[OperationData],
+    roles: list[RoleDefinition] | None = None,
     max_results: int | None = None,
     requested_ops_data_flags: dict[str, bool] | None = None,
 ) -> list[RoleMatch]:
-    """Recommend roles that grant the requested operations, sorted by least privilege."""
+    """Recommend roles that grant the requested operations, sorted by least privilege.
+
+    Args:
+        requested_operations: Operations to find roles for.
+        roles: Optional roles to evaluate. If None, uses roles from cache.
+        max_results: Optional limit on results.
+        requested_ops_data_flags: Optional mapping of operation names to is_data_action flags.
+
+    Returns:
+        List of matching roles sorted by least privilege.
+    """
     if not requested_operations:
         return []
 
-    # Initialize service and prepare classification
-    svc = RoleRecommendationService(all_operations, requested_ops_data_flags)
+    # Initialize service (uses cached frozensets, O(1))
+    svc = RoleRecommendationService(requested_ops_data_flags=requested_ops_data_flags)
+
+    # Use provided roles or get from cache
+    roles = roles or svc.get_all_roles()
 
     classified = svc.classify_operations(requested_operations)
     logger.debug(
@@ -54,8 +66,7 @@ def recommend_roles(
     # Evaluate each role
     matches: list[RoleMatch] = []
     has_cache = svc.has_full_cache()
-    roles_evaluated = 0
-    roles_with_matches = 0
+    roles_evaluated = roles_with_matches = 0
 
     for role in roles:
         if not svc.is_builtin_role(role):

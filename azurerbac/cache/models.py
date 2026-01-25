@@ -352,6 +352,16 @@ class CacheData:
         """Mapping from lowered operation name to original casing."""
         return {op.name.lower(): op.name for op in self.all_operations}
 
+    @cached_property
+    def control_ops_lowered(self) -> frozenset[str]:
+        """Frozenset of control plane operation names (lowered)."""
+        return frozenset(op.name.lower() for op in self.all_operations if not op.is_data_action)
+
+    @cached_property
+    def data_ops_lowered(self) -> frozenset[str]:
+        """Frozenset of data plane operation names (lowered)."""
+        return frozenset(op.name.lower() for op in self.all_operations if op.is_data_action)
+
     def get_role_definitions(self) -> list[RoleDefinition]:
         """Get all active roles as RoleDefinition objects."""
         return [r.definition for r in self.roles_by_id.values() if r.status == RoleStatus.ACTIVE]

@@ -156,28 +156,53 @@ async def operations_list(
     # Parse is_data_action filter
     is_data_action_filter = DataActionFilter.parse(is_data_action)
 
-    # Build search params and filter operations (operates on OperationData)
-    search_params = OperationSearchParams(
-        query=q,
-        is_data_action=is_data_action_filter,
-        provider=provider,
-        sort=sort,
-        order=order,
-    )
-    filtered_ops = filter_operations(all_operations, search_params)
-
-    # Sort operations (returns list without role counts for efficiency)
-    sorted_ops = sort_operations(filtered_ops, sort, order, cache=deps.app_cache)
-
-    total_filtered = len(sorted_ops)
-    pagination = PaginationInfo.compute(total_filtered, page, limit)
-    page_slice = sorted_ops[pagination.start_idx : pagination.end_idx]
-
-    # Convert to typed models with role counts (only for paginated slice)
-    page_operations = [
-        OperationWithCount.from_operation(op, role_count)
-        for op, role_count in add_role_counts(page_slice, cache=deps.app_cache)
+    # Build cache key from filter parameters (exclude empty values for cleaner keys)
+    filter_parts = [
+        p
+        for p in [
+            f"q={q}" if q else "",
+            f"da={is_data_action_filter}" if is_data_action_filter is not None else "",
+            f"p={provider}" if provider else "",
+        ]
+        if p
     ]
+    filter_str = ",".join(filter_parts) if filter_parts else "all"
+    cache_key = f"ops:{filter_str}:{sort}:{order}:{page}:{limit}"
+    count_key = f"ops_count:{filter_str}"
+
+    # Try cache first (short-circuits on first miss)
+    if (cached_page := deps.app_cache.get_operation_page(cache_key)) is not None and (
+        cached_count := deps.app_cache.get_operation_page(count_key)
+    ) is not None:
+        # Cache hit - use cached data
+        page_operations = cached_page
+        total_filtered = cached_count
+        pagination = PaginationInfo.compute(total_filtered, page, limit)
+    else:
+        # Cache miss - compute and cache
+        search_params = OperationSearchParams(
+            query=q,
+            is_data_action=is_data_action_filter,
+            provider=provider,
+            sort=sort,
+            order=order,
+        )
+        filtered_ops = filter_operations(all_operations, search_params)
+        sorted_ops = sort_operations(filtered_ops, sort, order, cache=deps.app_cache)
+
+        total_filtered = len(sorted_ops)
+        pagination = PaginationInfo.compute(total_filtered, page, limit)
+        page_slice = sorted_ops[pagination.start_idx : pagination.end_idx]
+
+        # Convert to typed models with role counts (only for paginated slice)
+        page_operations = [
+            OperationWithCount.from_operation(op, role_count)
+            for op, role_count in add_role_counts(page_slice, cache=deps.app_cache)
+        ]
+
+        # Cache the results
+        deps.app_cache.set_operation_page(cache_key, page_operations)
+        deps.app_cache.set_operation_page(count_key, total_filtered)
 
     return deps.templates.TemplateResponse(
         request,

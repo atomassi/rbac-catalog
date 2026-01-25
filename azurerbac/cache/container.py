@@ -170,6 +170,16 @@ class CacheContainer:
     def get_role_pages_count(self) -> int:
         return len(self._cache.request.role_pages)
 
+    def get_operation_page(self, page_key: str) -> Any:
+        """Get a cached operation page or count value."""
+        result = self._cache.request.operation_pages.get(page_key)
+        track_cache_hit("operation_page", result is not None, page_key)
+        return result
+
+    def set_operation_page(self, page_key: str, value: Any) -> None:
+        """Cache an operation page or count value."""
+        self._cache.request.operation_pages[page_key] = value
+
     def get_allowing_roles(self, key: str) -> RoleAllowingOperationList | None:
         result = self._cache.request.allowing_roles.get(key)
         track_cache_hit("allowing_roles", result is not None, key)

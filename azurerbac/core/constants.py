@@ -5,7 +5,6 @@ from typing import Final
 
 # Domain constants - canonical source for domain references
 NEW_DOMAIN: Final[str] = "rbac-catalog.dev"
-SITE_DOMAIN: Final[str] = NEW_DOMAIN  # Alias for backwards compatibility
 SITE_URL: Final[str] = f"https://{NEW_DOMAIN}"
 
 

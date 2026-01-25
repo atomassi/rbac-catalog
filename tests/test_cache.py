@@ -745,11 +745,19 @@ class TestPreloadCache:
 
         assert cache.get_role_page(page_key) is None
 
+    def test_role_pages_cache_count(self):
+        """Test role pages caching for count values."""
+        cache = CacheContainer()
+
+        count_key = "roles_count:active"
+        cache.set_role_page(count_key, 500)
+        assert cache.get_role_page(count_key) == 500
+
     def test_operation_pages_cache(self):
         """Test operation pages caching."""
         cache = CacheContainer()
 
-        page_key = "ops:::name:asc:1:25"
+        page_key = "ops:all:name:asc:1:25"
         operations = [{"name": "Microsoft.Storage/read"}]
 
         cache.set_operation_page(page_key, operations)
@@ -760,14 +768,14 @@ class TestPreloadCache:
         """Test operation pages caching for count values."""
         cache = CacheContainer()
 
-        count_key = "ops_count:::"
+        count_key = "ops_count:all"
         cache.set_operation_page(count_key, 21000)
         assert cache.get_operation_page(count_key) == 21000
 
     def test_swap_clears_operation_pages(self):
         """Test swap clears operation_pages cache."""
         cache = CacheContainer()
-        page_key = "ops:::name:asc:1:25"
+        page_key = "ops:all:name:asc:1:25"
         cache.set_operation_page(page_key, [{"name": "op1"}])
 
         new_cache_data = CacheData()

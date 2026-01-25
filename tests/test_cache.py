@@ -872,7 +872,7 @@ class TestCacheContainerReloadLock:
         service.container.loaded_version = "1000"
 
         mock_op = OperationData(name="op1", isDataAction=False)
-        mock_data = CacheData(
+        mock_data = CacheData.create(
             metadata=CacheMetadata(roles_count=1, operations_count=1),
             roles_by_id=make_cached_roles_by_id(
                 [
@@ -1124,7 +1124,7 @@ class TestCacheData:
         )
         # Convert sample_roles to roles_by_id format
         roles_by_id = make_cached_roles_by_id(sample_roles)
-        data = CacheData(
+        data = CacheData.create(
             metadata=metadata,
             roles_by_id=roles_by_id,
             all_operations=sample_operations,
@@ -1160,7 +1160,7 @@ class TestCacheFileOperations:
         )
         # Build CachedRole objects from RoleDefinitions
         roles_by_id = make_cached_roles_by_id(sample_roles)
-        data = CacheData(
+        data = CacheData.create(
             metadata=metadata,
             roles_by_id=roles_by_id,
             all_operations=sample_operations,
@@ -1181,6 +1181,40 @@ class TestCacheFileOperations:
         for role_id, cached_role in loaded.roles_by_id.items():
             assert cached_role.role_name == roles_by_id[role_id].role_name
 
+    async def test_save_and_load_with_role_coverage(
+        self, temp_cache_dir, sample_roles, sample_operations
+    ) -> None:
+        """Test that role_coverage and derived properties work after disk roundtrip."""
+        from tests.test_cache_e2e import build_complete_cache
+
+        backend = get_cache_service().backend
+
+        # Build a complete cache with role_coverage computed
+        cache_data = build_complete_cache(sample_roles, sample_operations)
+
+        # Save
+        result = await backend.save(cache_data)
+        assert result is True
+
+        # Load
+        loaded = await backend.load()
+        assert loaded is not None
+
+        # Verify role_coverage is properly reconstructed (sets, not lists)
+        assert len(loaded.role_coverage) == len(cache_data.role_coverage)
+        for coverage in loaded.role_coverage.values():
+            assert isinstance(coverage.control, set), "control should be a set after load"
+            assert isinstance(coverage.data, set), "data should be a set after load"
+
+        # Verify derived properties work (role_net_permissions)
+        # Computed on-access from role_coverage
+        assert len(loaded.role_net_permissions) == len(loaded.role_coverage)
+        for role_id in loaded.role_coverage:
+            net_perms = loaded.role_net_permissions[role_id]
+            coverage = loaded.role_coverage[role_id]
+            assert net_perms.control_count == len(coverage.control)
+            assert net_perms.data_count == len(coverage.data)
+
     async def test_load_nonexistent_cache(self, temp_cache_dir) -> None:
         """Loading nonexistent cache returns None."""
         backend = get_cache_service().backend
@@ -1194,7 +1228,9 @@ class TestCacheFileOperations:
         metadata = CacheMetadata(roles_count=len(sample_roles), operations_count=1)
         roles_by_id = make_cached_roles_by_id(sample_roles)
         all_operations = [OperationData(name="test/op", isDataAction=False)]
-        data = CacheData(metadata=metadata, roles_by_id=roles_by_id, all_operations=all_operations)
+        data = CacheData.create(
+            metadata=metadata, roles_by_id=roles_by_id, all_operations=all_operations
+        )
         await backend.save(data)
         assert (temp_cache_dir / "app_cache.msgpack").exists()
 
@@ -1240,7 +1276,7 @@ class TestCacheFileOperations:
             operations_count=len(sample_operations),
         )
         roles_by_id = make_cached_roles_by_id(sample_roles)
-        data = CacheData(
+        data = CacheData.create(
             metadata=metadata,
             roles_by_id=roles_by_id,
             all_operations=sample_operations,
@@ -1288,7 +1324,7 @@ class TestCacheFileOperations:
             operations_count=len(sample_operations),
         )
         roles_by_id = make_cached_roles_by_id(sample_roles)
-        data = CacheData(
+        data = CacheData.create(
             metadata=metadata,
             roles_by_id=roles_by_id,
             all_operations=sample_operations,
@@ -1366,7 +1402,7 @@ class TestCacheReloadLogic:
         service.container.loaded_version = "1000"
 
         # Create incomplete cache data (no operations)
-        incomplete_cache = CacheData(
+        incomplete_cache = CacheData.create(
             roles_by_id=make_cached_roles_by_id(
                 [
                     RoleDefinition.model_validate(
@@ -1398,7 +1434,7 @@ class TestCacheReloadLogic:
         service.container.loaded_version = "1000"
 
         # Create cache with wrong version
-        old_cache = CacheData(
+        old_cache = CacheData.create(
             metadata=CacheMetadata(version="old-version"),
             roles_by_id=make_cached_roles_by_id(
                 [
@@ -1456,7 +1492,7 @@ class TestCacheReloadLogic:
         """backend.save() should reject incomplete cache data."""
         backend = get_cache_service().backend
         # Empty roles
-        data = CacheData(
+        data = CacheData.create(
             roles_by_id={},
             all_operations=[OperationData(name="op1", isDataAction=False)],
         )
@@ -1465,7 +1501,7 @@ class TestCacheReloadLogic:
         assert not (temp_cache_dir / "app_cache.msgpack").exists()
 
         # Empty operations
-        data = CacheData(
+        data = CacheData.create(
             roles_by_id=make_cached_roles_by_id(
                 [
                     RoleDefinition.model_validate(
@@ -1504,7 +1540,7 @@ class TestCacheInvalidation:
             operations_hash=ops_hash,
         )
         roles_by_id = make_cached_roles_by_id(roles_for_hashing)
-        data = CacheData(
+        data = CacheData.create(
             metadata=metadata,
             roles_by_id=roles_by_id,
             all_operations=operations_for_hashing,
@@ -1531,7 +1567,7 @@ class TestCacheInvalidation:
             operations_count=len(operations_for_hashing),
         )
         roles_by_id = make_cached_roles_by_id(roles_for_hashing)
-        data = CacheData(
+        data = CacheData.create(
             metadata=metadata,
             roles_by_id=roles_by_id,
             all_operations=operations_for_hashing,
@@ -1554,7 +1590,7 @@ class TestCacheInvalidation:
             operations_count=len(operations_for_hashing),
         )
         roles_by_id = make_cached_roles_by_id(roles_for_hashing)
-        data = CacheData(
+        data = CacheData.create(
             metadata=metadata,
             roles_by_id=roles_by_id,
             all_operations=operations_for_hashing,

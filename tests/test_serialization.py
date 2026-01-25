@@ -288,33 +288,6 @@ class TestRoundTrip:
         unpacked = deserialize_from_bytes(packed)
         assert unpacked["unicode"] == "こんにちは世界 🌍 émojis"
 
-    def test_cache_ops_count_roundtrip(self):
-        """CacheOpsCount (NamedTuple) survives round-trip with reconstruction.
-
-        NamedTuples are serialized as tuples, which become lists after msgpack.
-        The _reconstruct_coverage_data function in file.py handles converting
-        back to CacheOpsCount.
-        """
-        from azurerbac.matching.models import CacheOpsCount
-
-        data = {"cache_ops_count": CacheOpsCount(100, 50)}
-        packed = serialize_to_bytes(data)
-        unpacked = deserialize_from_bytes(packed)
-
-        # After msgpack, it's a list (NamedTuple -> tuple -> list)
-        assert unpacked["cache_ops_count"] == [100, 50]
-        assert isinstance(unpacked["cache_ops_count"], list)
-
-        # Simulate reconstruction (what file.py does)
-        from azurerbac.cache.backends.file import FileCacheBackend
-
-        FileCacheBackend._reconstruct_coverage_data(unpacked)
-
-        # After reconstruction, it's a proper CacheOpsCount
-        assert isinstance(unpacked["cache_ops_count"], CacheOpsCount)
-        assert unpacked["cache_ops_count"].control == 100
-        assert unpacked["cache_ops_count"].data == 50
-
     def test_partial_coverage_roundtrip(self):
         """partial_coverage CoverageResult reconstruction works correctly.
 
@@ -356,3 +329,87 @@ class TestRoundTrip:
         assert isinstance(result2, CoverageResult)
         assert result2.covered == 0
         assert result2.uncovered_samples == []
+
+    def test_role_coverage_roundtrip(self):
+        """role_coverage RoleCoverage reconstruction works correctly.
+
+        RoleCoverage is a NamedTuple with two sets (control, data).
+        After msgpack, sets become lists. The _reconstruct_coverage_data
+        function must convert them back to RoleCoverage with proper sets.
+        """
+        from azurerbac.cache.backends.file import FileCacheBackend
+        from azurerbac.matching.models import RoleCoverage
+
+        # Simulate what msgpack returns: lists instead of sets
+        data_dict = {
+            "role_coverage": {
+                "role1": [["op1", "op2"], ["data_op1"]],  # lists, not sets
+                "role2": [[], []],  # empty coverage
+            }
+        }
+
+        # Before reconstruction, values are plain lists
+        assert isinstance(data_dict["role_coverage"]["role1"][0], list)
+        assert isinstance(data_dict["role_coverage"]["role1"][1], list)
+
+        # Reconstruction should convert to RoleCoverage with sets
+        FileCacheBackend._reconstruct_coverage_data(data_dict)
+
+        # After reconstruction, values should be RoleCoverage with sets
+        result1 = data_dict["role_coverage"]["role1"]
+        assert isinstance(result1, RoleCoverage), "Should be RoleCoverage"
+        assert isinstance(result1.control, set), "control should be a set"
+        assert isinstance(result1.data, set), "data should be a set"
+        assert result1.control == {"op1", "op2"}
+        assert result1.data == {"data_op1"}
+
+        result2 = data_dict["role_coverage"]["role2"]
+        assert isinstance(result2, RoleCoverage)
+        assert result2.control == set()
+        assert result2.data == set()
+
+    def test_reconstruct_coverage_handles_already_sets(self):
+        """Reconstruction handles values that are already sets (idempotent)."""
+        from azurerbac.cache.backends.file import FileCacheBackend
+        from azurerbac.matching.models import RoleCoverage
+
+        # If already sets (e.g., from in-memory cache), should still work
+        data_dict = {
+            "role_coverage": {
+                "role1": [{"op1", "op2"}, {"data_op1"}],  # already sets
+            }
+        }
+
+        FileCacheBackend._reconstruct_coverage_data(data_dict)
+
+        result = data_dict["role_coverage"]["role1"]
+        assert isinstance(result, RoleCoverage)
+        assert result.control == {"op1", "op2"}
+        assert result.data == {"data_op1"}
+
+    def test_reconstruct_empty_dicts(self):
+        """Reconstruction handles empty dictionaries gracefully."""
+        from azurerbac.cache.backends.file import FileCacheBackend
+
+        data_dict = {
+            "role_coverage": {},
+            "partial_coverage": {},
+        }
+
+        # Should not raise
+        FileCacheBackend._reconstruct_coverage_data(data_dict)
+
+        assert data_dict["role_coverage"] == {}
+        assert data_dict["partial_coverage"] == {}
+
+    def test_reconstruct_missing_keys(self):
+        """Reconstruction handles missing keys gracefully."""
+        from azurerbac.cache.backends.file import FileCacheBackend
+
+        data_dict = {}  # No coverage keys at all
+
+        # Should not raise
+        FileCacheBackend._reconstruct_coverage_data(data_dict)
+
+        assert "role_coverage" not in data_dict
+        assert "partial_coverage" not in data_dict

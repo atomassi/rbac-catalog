@@ -89,7 +89,7 @@ class CacheContainer:
     def get_role_by_id(self, role_id: str) -> CachedRole | None:
         """Get cached role by ID."""
         result = self._cache.roles_by_id.get(role_id)
-        track_cache_call("get_role_by_id")
+        track_cache_call("get_role_by_id", role_id=role_id)
         return result
 
     def get_all_roles(self) -> list[RoleDefinition]:
@@ -120,7 +120,7 @@ class CacheContainer:
         that the role grants, after applying notActions/notDataActions exclusions.
         """
         result = self._cache.role_coverage.get(role_id)
-        track_cache_call("get_role_coverage")
+        track_cache_call("get_role_coverage", role_id=role_id)
         return result
 
     def get_ops_lowered_to_orig(self) -> dict[str, str]:
@@ -141,21 +141,15 @@ class CacheContainer:
         return self._cache.role_net_permissions.get(role_id)
 
     def get_operation_role_count(self, operation_name: str) -> int:
-        """Get cached count of roles granting an operation.
-
-        Returns the number of built-in roles that grant the specified operation.
-        Uses the pre-computed operation_to_roles inverted index.
-        """
-        return len(self._cache.operation_to_roles.get(operation_name.lower(), []))
+        """Get cached count of roles granting an operation."""
+        key = operation_name.lower()
+        return len(self._cache.operation_to_roles.get(key, []))
 
     def get_roles_for_operation(self, operation_name: str) -> list[str]:
-        """Get role IDs that grant an operation.
-
-        Returns list of role_ids that grant the specified operation.
-        Uses the pre-computed operation_to_roles inverted index.
-        """
-        result = self._cache.operation_to_roles.get(operation_name.lower(), [])
-        track_cache_call("get_roles_for_operation")
+        """Get role IDs that grant an operation."""
+        key = operation_name.lower()
+        result = self._cache.operation_to_roles.get(key, [])
+        track_cache_call("get_roles_for_operation", operation=operation_name)
         return result
 
     def get_role_page(self, page_key: str) -> Any:
@@ -186,7 +180,7 @@ class CacheContainer:
         last_scan: datetime | None = None,
         first_scan: datetime | None = None,
     ) -> None:
-        """Set metadata fields."""
+        """Set metadata fields on the source data."""
         updates = {}
         if unique_providers is not None:
             updates["unique_providers"] = unique_providers
@@ -195,7 +189,8 @@ class CacheContainer:
         if first_scan is not None:
             updates["first_scan"] = first_scan
         if updates:
-            self._cache = replace(self._cache, **updates)
+            new_source = replace(self._cache.source, **updates)
+            self._cache = replace(self._cache, source=new_source)
 
     def search_operations(
         self, query: str, limit: int = DEFAULT_SEARCH_LIMIT, is_wildcard: bool = False
@@ -203,7 +198,7 @@ class CacheContainer:
         """Search operations using pre-built indexes."""
         cache = self._cache
         if not cache.ops_by_name_lower:
-            track_cache_call("search_operations")
+            track_cache_call("search_operations", query=query, results=0)
             return []
 
         q_lower = query.lower()
@@ -220,7 +215,7 @@ class CacheContainer:
 
         matching.sort(key=lambda x: x.name)
         result = matching[:limit]
-        track_cache_call("search_operations")
+        track_cache_call("search_operations", query=query, results=len(result))
         return result
 
     def count_wildcard_matches(self, pattern: str, is_data_action: bool = False) -> int:

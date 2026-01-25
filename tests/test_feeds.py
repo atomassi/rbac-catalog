@@ -318,6 +318,8 @@ class TestFeedEndpointsIntegration:
     @pytest.fixture
     async def test_client_with_events(self, async_session_maker):
         """Create test client with seeded change events."""
+        from dataclasses import replace
+
         from httpx import ASGITransport, AsyncClient
 
         from azurerbac.cache import get_cache_service
@@ -325,10 +327,10 @@ class TestFeedEndpointsIntegration:
         from azurerbac.web import app as app_module
         from azurerbac.web.dependencies import BaseDeps, get_api_deps
 
-        # Get cache and inject test events
+        # Get cache and inject test events via proper swap pattern
         cache = get_cache_service().container
         now = dt.datetime.now(dt.UTC)
-        cache._cache.all_change_events = [
+        test_events = [
             CachedChangeEvent(
                 id=1,
                 role_id="test-role-1",
@@ -348,6 +350,8 @@ class TestFeedEndpointsIntegration:
                 summary="Role updated",
             ),
         ]
+        new_source = replace(cache._cache.source, all_change_events=test_events)
+        cache._cache = replace(cache._cache, source=new_source)
 
         test_deps = BaseDeps(
             app_cache=cache,
@@ -680,6 +684,8 @@ class TestFeedEndpointsParametrized:
     @pytest.fixture
     async def test_client_with_events(self, async_session_maker):
         """Create test client with seeded change events."""
+        from dataclasses import replace
+
         from httpx import ASGITransport, AsyncClient
 
         from azurerbac.cache import get_cache_service
@@ -689,7 +695,7 @@ class TestFeedEndpointsParametrized:
 
         cache = get_cache_service().container
         now = dt.datetime.now(dt.UTC)
-        cache._cache.all_change_events = [
+        test_events = [
             CachedChangeEvent(
                 id=1,
                 role_id="test-role-1",
@@ -700,6 +706,8 @@ class TestFeedEndpointsParametrized:
                 summary="Role created",
             ),
         ]
+        new_source = replace(cache._cache.source, all_change_events=test_events)
+        cache._cache = replace(cache._cache, source=new_source)
 
         test_deps = BaseDeps(
             app_cache=cache,

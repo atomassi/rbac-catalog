@@ -1,4 +1,18 @@
-"""Cache data models."""
+"""Cache data models.
+
+CacheData Structure
+===================
+CacheData is the unified cache container holding all application state.
+It's designed for atomic swaps - the entire object is replaced, never mutated.
+
+    CacheData
+    ├── metadata: CacheMetadata          # Versioning and invalidation
+    ├── source: SourceData               # Raw DB data (immutable after load)
+    ├── indexes: Indexes                 # Fast lookups (deterministic from source)
+    ├── analysis: RoleAnalysis           # Expensive precomputation (built once at refresh)
+    ├── runtime: RuntimeCaches           # Memoization (grows lazily during requests)
+    └── content: PrerenderedContent      # Pre-built responses (analytics, sitemap)
+"""
 
 from __future__ import annotations
 
@@ -16,7 +30,6 @@ from azurerbac.core.utils import format_datetime, parse_datetime
 
 logger = logging.getLogger(__name__)
 from azurerbac.matching.models import (
-    CacheOpsCount,
     CoverageResult,
     PartialCoverageCacheKey,
     PatternCacheKey,
@@ -29,7 +42,7 @@ if TYPE_CHECKING:
     from azurerbac.analytics.models import AnalyticsData
     from azurerbac.azure.models import OperationData, RoleDefinition
 
-CACHE_VERSION: Final[str] = "v7"
+CACHE_VERSION: Final[str] = "v9"
 
 
 @dataclass(slots=True)
@@ -306,13 +319,9 @@ class CacheMetadata:
 
 
 @dataclass
-class CacheData:
-    """Unified cache container - all data in one atomically-swappable object."""
+class SourceData:
+    """Raw data loaded from database (immutable after load)."""
 
-    # Metadata (for versioning and invalidation)
-    metadata: CacheMetadata = field(default_factory=CacheMetadata)
-
-    # Raw data (from database)
     all_operations: list[OperationData] = field(default_factory=list)
     roles_by_id: dict[str, CachedRole] = field(default_factory=dict)
     all_change_events: list[CachedChangeEvent] = field(default_factory=list)
@@ -320,27 +329,189 @@ class CacheData:
     last_scan: dt.datetime | None = None
     first_scan: dt.datetime | None = None
 
-    # Indexes (built from raw data for fast lookup)
+
+@dataclass
+class Indexes:
+    """Fast lookup structures (deterministic, built from source)."""
+
     ops_by_name_lower: dict[str, OperationData] = field(default_factory=dict)
     ops_by_prefix: dict[str, list[OperationData]] = field(default_factory=dict)
+    ops_by_prefix_by_plane: dict[Plane, dict[str, set[str]]] = field(default_factory=dict)
 
-    # Computed caches (expensive analysis, rebuilt on data change)
+
+@dataclass
+class RoleAnalysis:
+    """Precomputed role permission analysis (built once at refresh, expensive)."""
+
     role_coverage: dict[str, RoleCoverage] = field(default_factory=dict)
-    role_net_permissions: dict[str, RoleNetPermissions] = field(default_factory=dict)
+    operation_to_roles: dict[str, list[str]] = field(default_factory=dict)
+
+
+@dataclass
+class RuntimeCaches:
+    """Memoization caches (populated lazily during request handling)."""
+
     pattern_match: dict[PatternCacheKey, set[str]] = field(default_factory=dict)
     partial_coverage: dict[PartialCoverageCacheKey, CoverageResult] = field(default_factory=dict)
     wildcard_count: dict[PatternCacheKey, int] = field(default_factory=dict)
-    operations_by_prefix_computed: dict[Plane, dict[str, set[str]]] = field(default_factory=dict)
-    cache_ops_count: CacheOpsCount = field(default_factory=lambda: CacheOpsCount(0, 0))
 
-    # Inverted index: operation (lowered) -> list of role_ids that grant it
-    operation_to_roles: dict[str, list[str]] = field(default_factory=dict)
 
-    # Pre-computed analytics data (for dashboard)
+@dataclass
+class PrerenderedContent:
+    """Pre-built content to avoid expensive re-computation per request."""
+
     analytics: AnalyticsData | None = None
-
-    # Pre-built sitemap XML (avoids iterating 21k+ ops on every request)
     sitemap: Sitemap | None = None
+
+
+@dataclass
+class CacheData:
+    """Unified cache container - all data in one atomically-swappable object."""
+
+    # Metadata (for versioning and invalidation)
+    metadata: CacheMetadata = field(default_factory=CacheMetadata)
+
+    # Data layers (ordered by lifecycle)
+    source: SourceData = field(default_factory=SourceData)  # From DB
+    indexes: Indexes = field(default_factory=Indexes)  # Built from source
+    analysis: RoleAnalysis = field(default_factory=RoleAnalysis)  # Built from source + indexes
+    runtime: RuntimeCaches = field(default_factory=RuntimeCaches)  # Populated lazily
+    content: PrerenderedContent = field(default_factory=PrerenderedContent)  # Pre-built responses
+
+    # =========================================================================
+    # Factory method for flat construction (test convenience)
+    # =========================================================================
+    @classmethod
+    def create(
+        cls,
+        *,
+        metadata: CacheMetadata | None = None,
+        all_operations: list[OperationData] | None = None,
+        roles_by_id: dict[str, CachedRole] | None = None,
+        all_change_events: list[CachedChangeEvent] | None = None,
+        unique_providers: list[str] | None = None,
+        last_scan: dt.datetime | None = None,
+        first_scan: dt.datetime | None = None,
+        ops_by_name_lower: dict[str, OperationData] | None = None,
+        ops_by_prefix: dict[str, list[OperationData]] | None = None,
+        ops_by_prefix_by_plane: dict[Plane, dict[str, set[str]]] | None = None,
+        role_coverage: dict[str, RoleCoverage] | None = None,
+        operation_to_roles: dict[str, list[str]] | None = None,
+        pattern_match: dict[PatternCacheKey, set[str]] | None = None,
+        partial_coverage: dict[PartialCoverageCacheKey, CoverageResult] | None = None,
+        wildcard_count: dict[PatternCacheKey, int] | None = None,
+        analytics: AnalyticsData | None = None,
+        sitemap: Sitemap | None = None,
+    ) -> CacheData:
+        """Create CacheData with flat arguments (for test convenience)."""
+        return cls(
+            metadata=metadata or CacheMetadata(),
+            source=SourceData(
+                all_operations=all_operations or [],
+                roles_by_id=roles_by_id or {},
+                all_change_events=all_change_events or [],
+                unique_providers=unique_providers or [],
+                last_scan=last_scan,
+                first_scan=first_scan,
+            ),
+            indexes=Indexes(
+                ops_by_name_lower=ops_by_name_lower or {},
+                ops_by_prefix=ops_by_prefix or {},
+                ops_by_prefix_by_plane=ops_by_prefix_by_plane or {},
+            ),
+            analysis=RoleAnalysis(
+                role_coverage=role_coverage or {},
+                operation_to_roles=operation_to_roles or {},
+            ),
+            runtime=RuntimeCaches(
+                pattern_match=pattern_match or {},
+                partial_coverage=partial_coverage or {},
+                wildcard_count=wildcard_count or {},
+            ),
+            content=PrerenderedContent(
+                analytics=analytics,
+                sitemap=sitemap,
+            ),
+        )
+
+    # =========================================================================
+    # Convenience accessors (backward compatibility)
+    # =========================================================================
+    @property
+    def all_operations(self) -> list[OperationData]:
+        return self.source.all_operations
+
+    @property
+    def roles_by_id(self) -> dict[str, CachedRole]:
+        return self.source.roles_by_id
+
+    @property
+    def all_change_events(self) -> list[CachedChangeEvent]:
+        return self.source.all_change_events
+
+    @property
+    def unique_providers(self) -> list[str]:
+        return self.source.unique_providers
+
+    @property
+    def last_scan(self) -> dt.datetime | None:
+        return self.source.last_scan
+
+    @property
+    def first_scan(self) -> dt.datetime | None:
+        return self.source.first_scan
+
+    @property
+    def ops_by_name_lower(self) -> dict[str, OperationData]:
+        return self.indexes.ops_by_name_lower
+
+    @property
+    def ops_by_prefix(self) -> dict[str, list[OperationData]]:
+        return self.indexes.ops_by_prefix
+
+    @property
+    def ops_by_prefix_by_plane(self) -> dict[Plane, dict[str, set[str]]]:
+        return self.indexes.ops_by_prefix_by_plane
+
+    @property
+    def role_coverage(self) -> dict[str, RoleCoverage]:
+        return self.analysis.role_coverage
+
+    @cached_property
+    def role_net_permissions(self) -> dict[str, RoleNetPermissions]:
+        """Derived from role_coverage: count of control/data ops per role."""
+        return {
+            role_id: RoleNetPermissions(len(cov.control), len(cov.data))
+            for role_id, cov in self.analysis.role_coverage.items()
+        }
+
+    @property
+    def operation_to_roles(self) -> dict[str, list[str]]:
+        return self.analysis.operation_to_roles
+
+    @property
+    def pattern_match(self) -> dict[PatternCacheKey, set[str]]:
+        return self.runtime.pattern_match
+
+    @property
+    def partial_coverage(self) -> dict[PartialCoverageCacheKey, CoverageResult]:
+        return self.runtime.partial_coverage
+
+    @property
+    def wildcard_count(self) -> dict[PatternCacheKey, int]:
+        return self.runtime.wildcard_count
+
+    @property
+    def analytics(self) -> AnalyticsData | None:
+        return self.content.analytics
+
+    @property
+    def sitemap(self) -> Sitemap | None:
+        return self.content.sitemap
+
+    # =========================================================================
+    # Derived properties (computed lazily from source data)
+    # =========================================================================
 
     @cached_property
     def ops_names_set(self) -> set[str]:

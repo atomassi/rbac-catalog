@@ -149,11 +149,10 @@ def recommend_roles(
     # Log cache stats summary
     stats = svc.get_cache_stats()
     logger.debug(
-        "Cache stats: pattern_match=%d, partial_coverage=%d, role_coverage=%d, "
-        "wildcard_count=%d entries",
+        "Cache stats: role_coverage=%d, pattern_match=%d, partial_coverage=%d, wildcard_count=%d",
+        stats.role_coverage,
         stats.pattern_match,
         stats.partial_coverage,
-        stats.role_coverage,
         stats.wildcard_count,
     )
 

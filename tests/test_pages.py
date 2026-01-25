@@ -310,31 +310,38 @@ class TestGetRolesAllowingOperationServices:
         mock_app_cache.get_allowing_roles.assert_called_once()
 
     def test_finds_roles_by_operation(self):
-        """Test finding roles that allow an operation."""
+        """Test finding roles that allow an operation via inverted index."""
+        from azurerbac.cache.models import CachedRole
+        from azurerbac.core.constants import RoleStatus
+        from azurerbac.matching.models import RoleNetPermissions
         from azurerbac.web.services.pages import get_roles_allowing_operation
 
         mock_app_cache = MagicMock()
         mock_app_cache.get_allowing_roles.return_value = None  # Cache miss
 
         # Mock role data using RoleDefinition
-        roles = [
-            RoleDefinition.model_validate(
-                {
-                    "name": "role1",
-                    "properties": {
-                        "roleName": "Storage Reader",
-                        "type": "BuiltInRole",
-                        "permissions": [{"actions": ["Microsoft.Storage/storageAccounts/read"]}],
-                    },
-                }
-            )
-        ]
-        mock_app_cache.get_all_roles.return_value = roles
-        # Cache stores lowered operation names for O(1) lookup
+        role = RoleDefinition.model_validate(
+            {
+                "name": "role1",
+                "properties": {
+                    "roleName": "Storage Reader",
+                    "type": "BuiltInRole",
+                    "permissions": [{"actions": ["Microsoft.Storage/storageAccounts/read"]}],
+                },
+            }
+        )
+
+        # Mock the inverted index lookup
+        mock_app_cache.get_roles_for_operation.return_value = ["role1"]
+        mock_app_cache.get_role_by_id.return_value = CachedRole(
+            definition=role,
+            status=RoleStatus.ACTIVE,
+        )
         mock_app_cache.get_role_coverage.return_value = (
             {"microsoft.storage/storageaccounts/read"},
             set(),
         )
+        mock_app_cache.get_role_net_permissions.return_value = RoleNetPermissions(1, 0)
 
         result = get_roles_allowing_operation(
             "Microsoft.Storage/storageAccounts/read", False, mock_app_cache
@@ -345,30 +352,14 @@ class TestGetRolesAllowingOperationServices:
         assert result[0].role_id == "role1"
 
     def test_excludes_roles_without_operation(self):
-        """Test that roles without the operation are excluded."""
+        """Test that roles without the operation are excluded (empty index result)."""
         from azurerbac.web.services.pages import get_roles_allowing_operation
 
         mock_app_cache = MagicMock()
         mock_app_cache.get_allowing_roles.return_value = None
 
-        roles = [
-            RoleDefinition.model_validate(
-                {
-                    "name": "role1",
-                    "properties": {
-                        "roleName": "Compute Reader",
-                        "type": "BuiltInRole",
-                        "permissions": [{"actions": ["Microsoft.Compute/*/read"]}],
-                    },
-                }
-            )
-        ]
-        mock_app_cache.get_all_roles.return_value = roles
-        # Role doesn't cover Storage operations
-        mock_app_cache.get_role_coverage.return_value = (
-            {"Microsoft.Compute/virtualMachines/read"},
-            set(),
-        )
+        # Inverted index returns no roles for this operation
+        mock_app_cache.get_roles_for_operation.return_value = []
 
         result = get_roles_allowing_operation(
             "Microsoft.Storage/storageAccounts/read", False, mock_app_cache
@@ -378,36 +369,83 @@ class TestGetRolesAllowingOperationServices:
 
     def test_caches_result(self):
         """Test that results are cached."""
+        from azurerbac.cache.models import CachedRole
+        from azurerbac.core.constants import RoleStatus
+        from azurerbac.matching.models import RoleNetPermissions
         from azurerbac.web.services.pages import get_roles_allowing_operation
 
         mock_app_cache = MagicMock()
         mock_app_cache.get_allowing_roles.return_value = None
 
         # Need at least one role for caching to happen
-        roles = [
-            RoleDefinition.model_validate(
-                {
-                    "name": "role1",
-                    "properties": {
-                        "roleName": "Test Role",
-                        "type": "BuiltInRole",
-                        "permissions": [{"actions": ["*"]}],
-                    },
-                }
-            )
-        ]
-        mock_app_cache.get_all_roles.return_value = roles
+        role = RoleDefinition.model_validate(
+            {
+                "name": "role1",
+                "properties": {
+                    "roleName": "Test Role",
+                    "type": "BuiltInRole",
+                    "permissions": [{"actions": ["*"]}],
+                },
+            }
+        )
+        mock_app_cache.get_roles_for_operation.return_value = ["role1"]
+        mock_app_cache.get_role_by_id.return_value = CachedRole(
+            definition=role,
+            status=RoleStatus.ACTIVE,
+        )
         mock_app_cache.get_role_coverage.return_value = (
-            {"Microsoft.Storage/read"},
+            {"microsoft.storage/read"},
             set(),
         )
+        mock_app_cache.get_role_net_permissions.return_value = RoleNetPermissions(1, 0)
 
         get_roles_allowing_operation("Microsoft.Storage/read", False, mock_app_cache)
 
-        # Should cache the result
+        # Should cache the result using lowered operation name as key
         mock_app_cache.set_allowing_roles.assert_called_once()
         cache_key = mock_app_cache.set_allowing_roles.call_args[0][0]
-        assert "roles_allowing_op:" in cache_key
+        assert cache_key == "microsoft.storage/read"
+
+    def test_raises_on_missing_role_in_cache(self):
+        """Test that RuntimeError is raised when role in index but not in cache."""
+        from azurerbac.web.services.pages import get_roles_allowing_operation
+
+        mock_app_cache = MagicMock()
+        mock_app_cache.get_allowing_roles.return_value = None
+        mock_app_cache.get_roles_for_operation.return_value = ["role1"]
+        mock_app_cache.get_role_by_id.return_value = None  # Role not in cache
+
+        with pytest.raises(RuntimeError, match="role role1 in index but not in cache"):
+            get_roles_allowing_operation("Microsoft.Storage/read", False, mock_app_cache)
+
+    def test_raises_on_missing_net_permissions(self):
+        """Test that RuntimeError is raised when role missing net_perms."""
+        from azurerbac.cache.models import CachedRole
+        from azurerbac.core.constants import RoleStatus
+        from azurerbac.web.services.pages import get_roles_allowing_operation
+
+        mock_app_cache = MagicMock()
+        mock_app_cache.get_allowing_roles.return_value = None
+        mock_app_cache.get_roles_for_operation.return_value = ["role1"]
+
+        role = RoleDefinition.model_validate(
+            {
+                "name": "role1",
+                "properties": {
+                    "roleName": "Test Role",
+                    "type": "BuiltInRole",
+                    "permissions": [{"actions": ["*"]}],
+                },
+            }
+        )
+        mock_app_cache.get_role_by_id.return_value = CachedRole(
+            definition=role,
+            status=RoleStatus.ACTIVE,
+        )
+        mock_app_cache.get_role_net_permissions.return_value = None  # Missing net_perms
+
+        with pytest.raises(RuntimeError, match="role role1 in index but missing net_perms"):
+            get_roles_allowing_operation("Microsoft.Storage/read", False, mock_app_cache)
 
 
 class TestEnrichEventWithDiff:

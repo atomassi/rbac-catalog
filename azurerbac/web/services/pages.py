@@ -100,11 +100,6 @@ def compute_role_effective_permissions(
     return analyzer.get_effective_permissions(all_operations)
 
 
-def _operation_in_set(operation_lower: str, operation_set: set[str]) -> bool:
-    """Check if operation is in set."""
-    return operation_lower in operation_set
-
-
 def _get_cache(cache: CacheContainer | None) -> CacheContainer:
     """Get cache container."""
     if cache is not None:
@@ -119,50 +114,55 @@ def get_roles_allowing_operation(
     is_data_action: bool,
     cache: CacheContainer | None = None,
 ) -> list[RoleAllowingOperation]:
-    """Find roles allowing a specific operation."""
+    """Find roles allowing a specific operation.
+
+    Uses precomputed operation_to_roles inverted index.
+    """
     cache_resolved = _get_cache(cache)
 
-    # Check cache first
-    cache_key = f"roles_allowing_op:{operation_name.lower()}:{is_data_action}"
+    # Check cache first (key is just lowered operation name)
+    cache_key = operation_name.lower()
     if (cached := cache_resolved.get_allowing_roles(cache_key)) is not None:
+        logger.debug("allowing_roles cache hit for %s", operation_name)
         return cached
 
-    if not (all_roles := cache_resolved.get_all_roles()):
+    # lookup using precomputed inverted index
+    if not (role_ids := cache_resolved.get_roles_for_operation(cache_key)):
+        cache_resolved.set_allowing_roles(cache_key, [])
         return []
 
     logger.debug(
-        "allowing_roles cache miss for %s, scanning %d roles", operation_name, len(all_roles)
+        "allowing_roles cache miss for %s, found %d role IDs in index",
+        operation_name,
+        len(role_ids),
     )
 
     allowing_roles: list[RoleAllowingOperation] = []
-    operation_lowered = operation_name.lower()
-    all_operations = cache_resolved.get_all_operations()
 
-    for role in all_roles:
+    for role_id in role_ids:
+        if (cached_role := cache_resolved.get_role_by_id(role_id)) is None:
+            msg = f"Cache inconsistency: role {role_id} in index but not in cache"
+            raise RuntimeError(msg)
+
+        # Get precomputed net permissions (always available for indexed roles)
+        if (net_perms := cache_resolved.get_role_net_permissions(role_id)) is None:
+            msg = f"Cache inconsistency: role {role_id} in index but missing net_perms"
+            raise RuntimeError(msg)
+
+        role = cached_role.definition
+
+        # TODO: cache match_result in the index during build time
+        # to avoid analyzer call per role at query time
         analyzer = RolePermissionAnalyzer(role, cache=cache_resolved)
-
-        # Use cached coverage if available, otherwise compute on-demand
-        # This handles the case when the coverage cache is invalidated due to staleness
-        cached_coverage = analyzer.get_cached_coverage()
-        if cached_coverage:
-            control_effective, data_effective = cached_coverage
-        else:
-            control_effective, data_effective = analyzer.compute_coverage(all_operations)
-
-        operation_set = data_effective if is_data_action else control_effective
-
-        if not _operation_in_set(operation_lowered, operation_set):
-            continue
-
         match_result = analyzer.find_matching_pattern(operation_name, is_data_action=is_data_action)
 
         allowing_roles.append(
             RoleAllowingOperation.from_match(
-                role_id=analyzer.role_id,
+                role_id=role_id,
                 role_name=role.properties.role_name,
                 role_type=role.properties.type or DEFAULT_ROLE_TYPE,
-                control_count=len(control_effective),
-                data_count=len(data_effective),
+                control_count=net_perms.control_count,
+                data_count=net_perms.data_count,
                 match_result=match_result,
             )
         )

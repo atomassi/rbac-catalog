@@ -783,6 +783,34 @@ class TestPreloadCache:
 
         assert cache.get_operation_page(page_key) is None
 
+    def test_swap_clears_filtered_events(self):
+        """Test swap clears filtered_events cache."""
+        cache = CacheContainer()
+        cache.set_filtered_events("7:all", [])  # type: ignore[arg-type]
+
+        new_cache_data = CacheData()
+        cache.swap(new_cache_data)
+
+        assert cache.get_filtered_events("7:all") is None
+
+    def test_reset_clears_all_request_caches(self):
+        """Test reset clears all RequestCaches (role_pages, operation_pages, etc)."""
+        cache = CacheContainer()
+
+        # Populate all request caches
+        cache.set_role_page("roles:page:1", [{"id": "r1"}])
+        cache.set_operation_page("ops:page:1", [{"name": "op1"}])
+        cache.set_allowing_roles("key1", [])  # type: ignore[arg-type]
+        cache.set_filtered_events("7:all", [])  # type: ignore[arg-type]
+
+        cache.reset()
+
+        # All should be cleared
+        assert cache.get_role_page("roles:page:1") is None
+        assert cache.get_operation_page("ops:page:1") is None
+        assert cache.get_allowing_roles("key1") is None
+        assert cache.get_filtered_events("7:all") is None
+
 
 class TestPreloadCacheIntegration:
     """Integration tests for _preload_cache with mocked database."""

@@ -31,7 +31,6 @@ class CacheKey(StrEnum):
     INDEXES = "indexes"
     ANALYSIS = "analysis"
     COMPUTED = "computed"  # Persisted expensive caches
-    REQUEST = "request"  # NOT persisted (rebuilt lazily)
     CONTENT = "content"
     # Source fields
     ROLES_BY_ID = "roles_by_id"
@@ -188,10 +187,6 @@ class FileCacheBackend(CacheBackend):
             # Prepare computed caches for msgpack (handles tuple/enum keys)
             # These are persisted to disk (expensive to recompute)
             data_dict[CacheKey.COMPUTED] = prepare_for_msgpack(data_dict[CacheKey.COMPUTED])
-
-            # Skip request caches entirely - they contain LRUCache instances
-            # and are rebuilt lazily on requests (cheap to recompute)
-            del data_dict[CacheKey.REQUEST]
 
             content = data_dict[CacheKey.CONTENT]
             if data.analytics is not None:

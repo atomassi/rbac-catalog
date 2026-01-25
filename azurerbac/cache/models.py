@@ -374,8 +374,10 @@ class CacheData:
         ├── indexes         # Lookup indexes (ops_by_name, ops_by_prefix)
         ├── analysis        # Precomputed (role_coverage, operation_to_roles)
         ├── computed        # Expensive caches, SAVED to disk
-        ├── request         # Cheap caches, NOT saved to disk
         └── content         # Pre-rendered (analytics, sitemap)
+
+    Note: RequestCaches (role_pages, operation_pages, etc.) live on CacheContainer,
+    not here, since they're mutable LRU caches that get cleared on swap.
     """
 
     # Metadata (for versioning and invalidation)
@@ -386,7 +388,6 @@ class CacheData:
     indexes: Indexes = field(default_factory=Indexes)  # Built from source
     analysis: RoleAnalysis = field(default_factory=RoleAnalysis)  # Built from source + indexes
     computed: ComputedCaches = field(default_factory=ComputedCaches)  # Persisted to disk
-    request: RequestCaches = field(default_factory=RequestCaches)  # NOT persisted
     content: PrerenderedContent = field(default_factory=PrerenderedContent)  # Pre-built responses
 
     # =========================================================================

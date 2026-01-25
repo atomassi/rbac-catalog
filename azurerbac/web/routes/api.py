@@ -179,11 +179,9 @@ async def ai_recommend_endpoint(
     except EngineNotAvailableError as e:
         logger.warning("Engine not available: mode=%s missing=%s", e.mode, e.missing_components)
         track_ai_recommendation(
-            query=query,
-            requested_mode=requested_mode,
-            actual_mode=e.mode or "unknown",
+            mode=requested_mode,
             result_count=0,
-            error=f"engine_unavailable: {e.missing_components}",
+            is_error=True,
         )
         return ai_error_response(
             ErrorMessages.engine_unavailable((e.mode or "Selected").upper()),
@@ -192,21 +190,17 @@ async def ai_recommend_endpoint(
     except ColBERTInitializationError:
         logger.warning("ColBERT initialization failed")
         track_ai_recommendation(
-            query=query,
-            requested_mode=requested_mode,
-            actual_mode="colbert",
+            mode=requested_mode,
             result_count=0,
-            error="colbert_init_failed",
+            is_error=True,
         )
         return ai_error_response(ErrorMessages.engine_unavailable("COLBERT"), mode="colbert")
-    except Exception as e:
+    except Exception:
         logger.exception("AI recommendation failed")
         track_ai_recommendation(
-            query=query,
-            requested_mode=requested_mode,
-            actual_mode=requested_mode,
+            mode=requested_mode,
             result_count=0,
-            error=str(e)[:100],
+            is_error=True,
         )
         return ai_error_response(ErrorMessages.GENERIC_ERROR)
 
@@ -219,11 +213,8 @@ async def ai_recommend_endpoint(
     )
 
     track_ai_recommendation(
-        query=query,
-        requested_mode=requested_mode,
-        actual_mode=actual_mode,
+        mode=actual_mode,
         result_count=len(recommendations),
-        fallback=actual_mode != requested_mode,
     )
 
     return AIRecommendResponse(

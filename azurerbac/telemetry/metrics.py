@@ -141,15 +141,13 @@ def track_db_fallback(fallback_type: str, reason: str, key: str | None = None) -
         key: Optional identifier (e.g., role_id) for debugging
     """
     key_str = f" key={key}" if key else ""
-    logger.warning("DB fallback: type=%s reason=%s%s", fallback_type, reason, key_str)
+    logger.info("DB fallback: type=%s reason=%s%s", fallback_type, reason, key_str)
 
     if not _metrics_enabled():
         return
 
     try:
         props: dict[str, Any] = {"type": fallback_type, "reason": reason}
-        if key:
-            props["key"] = key[:100]
         track_event("db_fallback", props)
     except Exception as e:
         logger.exception("Failed to track db fallback: %s", e)
@@ -176,40 +174,27 @@ def track_cache_call(
 
     try:
         props: dict[str, Any] = {"method": method}
-        if result_count is not None:
-            props["result_count"] = result_count
-        if key:
-            props["key"] = key[:100]
         track_event("cache_call", props)
     except Exception as e:
         logger.exception("Failed to track cache call: %s", e)
 
 
 def track_ai_recommendation(
-    query: str,
-    requested_mode: str,
-    actual_mode: str,
+    mode: str,
     result_count: int,
-    duration_seconds: float | None = None,
-    fallback: bool = False,
-    error: str | None = None,
+    is_error: bool = False,
 ) -> None:
     """Track AI recommendation requests for dashboard analytics.
 
     Args:
-        query: The user's natural language query (truncated)
-        requested_mode: Mode requested by user (tfidf, semantic, colbert, llm, etc.)
-        actual_mode: Mode actually used (may differ if fallback occurred)
+        mode: Recommender mode used (tfidf, semantic, colbert, llm, etc.)
         result_count: Number of recommendations returned
-        duration_seconds: Optional execution time
-        fallback: Whether a fallback to different mode occurred
-        error: Optional error message if request failed
+        is_error: Whether the request failed
     """
-    status = "error" if error else "success"
+    status = "error" if is_error else "success"
     logger.info(
-        "AI recommendation: mode=%s->%s results=%d status=%s",
-        requested_mode,
-        actual_mode,
+        "AI recommendation: mode=%s results=%d status=%s",
+        mode,
         result_count,
         status,
     )
@@ -219,19 +204,10 @@ def track_ai_recommendation(
 
     try:
         props: dict[str, Any] = {
-            "requested_mode": requested_mode,
-            "actual_mode": actual_mode,
-            "result_count": result_count,
-            "fallback": fallback,
+            "mode": mode,
             "status": status,
         }
-        if query:
-            props["query_preview"] = query[:50]
-        if error:
-            props["error"] = error[:100]
         track_event("ai_recommendation", props)
-        if duration_seconds is not None:
-            track_duration("ai_recommendation_duration_seconds", duration_seconds, props)
     except Exception as e:
         logger.exception("Failed to track AI recommendation: %s", e)
 
@@ -261,11 +237,7 @@ def track_role_recommendation(
         return
 
     try:
-        props: dict[str, Any] = {
-            "operations_count": operations_count,
-            "expanded_count": expanded_count,
-            "result_count": result_count,
-        }
+        props: dict[str, Any] = {}
         track_event("role_recommendation", props)
         if duration_seconds is not None:
             track_duration("role_recommendation_duration_seconds", duration_seconds, props)
@@ -400,9 +372,6 @@ def track_worker_result(
         error_message: Optional error message if result is "failure"
     """
     props = {"operation": operation_name, "result": result}
-    if error_message:
-        # Truncate error message to avoid huge dimensions
-        props["error"] = error_message[:200]
 
     parts = [f"Worker op={operation_name} result={result}"]
     if duration_seconds:
@@ -437,29 +406,26 @@ def track_worker_result(
 
 def track_db_query(
     query_name: str,
-    duration_ms: float,
+    duration_seconds: float,
     rows_affected: int | None = None,
 ) -> None:
     """Track database query metrics.
 
     Args:
         query_name: Name of the query (e.g., "fetch_roles", "fetch_operations")
-        duration_ms: Time taken to execute the query in milliseconds
+        duration_seconds: Time taken to execute the query in seconds
         rows_affected: Optional number of rows returned/affected
     """
-    props: dict[str, Any] = {"query": query_name, "duration_ms": duration_ms}
-    if rows_affected is not None:
-        props["rows"] = rows_affected
+    props: dict[str, Any] = {"query": query_name}
 
     rows_str = f" rows={rows_affected}" if rows_affected is not None else ""
-    logger.debug("DB query: %s (%.2fms)%s", query_name, duration_ms, rows_str)
+    logger.debug("DB query: %s (%.3fs)%s", query_name, duration_seconds, rows_str)
 
     if not _metrics_enabled():
-        logger.debug("Skipping track_db_query: metrics disabled")
         return
 
     try:
-        track_duration("db_query_duration_ms", duration_ms, props)
+        track_duration("db_query_duration_seconds", duration_seconds, props)
         track_event("db_query_event", props)
     except Exception as e:
         logger.exception("Failed to track db query: %s", e)
@@ -487,8 +453,6 @@ def track_cache_hit(
 
     try:
         props: dict[str, Any] = {"cache_type": cache_type, "hit": hit}
-        if key:
-            props["key"] = key[:100]  # Truncate long keys
         track_event("cache_access", props)
     except Exception as e:
         logger.exception("Failed to track cache hit: %s", e)

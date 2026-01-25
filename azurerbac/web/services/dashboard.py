@@ -396,14 +396,14 @@ async def search_roles(
     cached_roles = deps.app_cache.cache.roles_by_id
 
     cache_hit = bool(cached_roles)
-    track_cache_hit("search_roles", cache_hit, q)
+    track_cache_hit("search_roles", cache_hit)
 
     if cache_hit:
         return search_roles_in_cache(
             cached_roles, q, status_filter, sort, order, page, page_size, exact_match
         )
 
-    track_db_fallback("search_roles", "cache_empty", q)
+    track_db_fallback("search_roles", "cache_empty")  # No user query in telemetry
     return await search_roles_in_db(
         session,
         deps,

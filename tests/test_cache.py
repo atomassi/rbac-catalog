@@ -52,35 +52,59 @@ def make_cached_roles_by_id(roles: list[RoleDefinition]) -> dict[str, CachedRole
 class TestGetMatchingOperations:
     """Tests for get_matching_operations function."""
 
-    def test_matches_wildcard_read_pattern(self, operation_names: set[str]):
-        """Test matching */read pattern."""
+    @pytest.mark.parametrize(
+        ("pattern", "expected_in", "expected_not_in"),
+        [
+            pytest.param(
+                "*/read",
+                [
+                    "microsoft.storage/storageaccounts/read",
+                    "microsoft.compute/virtualmachines/read",
+                    "microsoft.keyvault/vaults/read",
+                    "microsoft.keyvault/vaults/secrets/read",
+                ],
+                ["microsoft.storage/storageaccounts/write"],
+                id="wildcard_read",
+            ),
+            pytest.param(
+                "Microsoft.Storage/*",
+                [
+                    "microsoft.storage/storageaccounts/read",
+                    "microsoft.storage/storageaccounts/write",
+                    "microsoft.storage/storageaccounts/delete",
+                ],
+                ["microsoft.compute/virtualmachines/read"],
+                id="provider_wildcard",
+            ),
+            pytest.param(
+                "Microsoft.NonExistent/*",
+                [],
+                ["microsoft.storage/storageaccounts/read"],
+                id="no_matches",
+            ),
+        ],
+    )
+    def test_pattern_matching(
+        self,
+        operation_names: set[str],
+        pattern: str,
+        expected_in: list[str],
+        expected_not_in: list[str],
+    ):
+        """Test pattern matching with various wildcard patterns."""
         cache: dict[PatternCacheKey, set[str]] = {}
-        result = get_matching_operations("*/read", operation_names, False, cache)
+        result = get_matching_operations(pattern, operation_names, Plane.CONTROL, cache)
 
-        # Result contains lowered operation names
-        assert "microsoft.storage/storageaccounts/read" in result
-        assert "microsoft.compute/virtualmachines/read" in result
-        assert "microsoft.keyvault/vaults/read" in result
-        assert "microsoft.keyvault/vaults/secrets/read" in result
-        assert "microsoft.storage/storageaccounts/write" not in result
-
-    def test_matches_provider_wildcard(self, operation_names: set[str]):
-        """Test matching Microsoft.Storage/* pattern."""
-        cache: dict[PatternCacheKey, set[str]] = {}
-        result = get_matching_operations("Microsoft.Storage/*", operation_names, False, cache)
-
-        # Result contains lowered operation names
-        assert "microsoft.storage/storageaccounts/read" in result
-        assert "microsoft.storage/storageaccounts/write" in result
-        assert "microsoft.storage/storageaccounts/delete" in result
-        assert "microsoft.compute/virtualmachines/read" not in result
+        for op in expected_in:
+            assert op in result
+        for op in expected_not_in:
+            assert op not in result
 
     def test_matches_star_pattern(self, operation_names: set[str]):
         """Test matching * pattern (matches all)."""
         cache: dict[PatternCacheKey, set[str]] = {}
-        result = get_matching_operations("*", operation_names, False, cache)
+        result = get_matching_operations("*", operation_names, Plane.CONTROL, cache)
 
-        # Result is lowered version of all operation names
         expected = {op.lower() for op in operation_names}
         assert result == expected
 
@@ -88,17 +112,12 @@ class TestGetMatchingOperations:
         """Test that results are cached and reused."""
         cache: dict[PatternCacheKey, set[str]] = {}
 
-        # First call populates cache
-        result1 = get_matching_operations("*/read", operation_names, False, cache)
+        result1 = get_matching_operations("*/read", operation_names, Plane.CONTROL, cache)
+        assert PatternCacheKey("*/read", Plane.CONTROL) in cache
 
-        # Verify cache is populated
-        assert PatternCacheKey("*/read", False) in cache
-
-        # Second call should return same result from cache
-        result2 = get_matching_operations("*/read", operation_names, False, cache)
-
+        result2 = get_matching_operations("*/read", operation_names, Plane.CONTROL, cache)
         assert result1 == result2
-        assert result1 is cache[PatternCacheKey("*/read", False)]
+        assert result1 is cache[PatternCacheKey("*/read", Plane.CONTROL)]
 
     def test_case_insensitive_pattern(self, operation_names: set[str]):
         """Test that pattern matching is case-insensitive for cache key."""
@@ -107,7 +126,6 @@ class TestGetMatchingOperations:
         result1 = get_matching_operations("*/READ", operation_names, Plane.DATA, cache)
         result2 = get_matching_operations("*/read", operation_names, Plane.DATA, cache)
 
-        # Both should use the same cache key (lowered)
         assert PatternCacheKey("*/read", Plane.DATA) in cache
         assert PatternCacheKey("*/READ", Plane.DATA) not in cache
         assert result1 == result2
@@ -121,23 +139,12 @@ class TestGetMatchingOperations:
 
         assert PatternCacheKey("*/read", Plane.CONTROL) in cache
         assert PatternCacheKey("*/read", Plane.DATA) in cache
-        # Results should be equal but stored separately
         assert result1 == result2
 
     def test_empty_operations_set(self):
         """Test with empty operations set."""
         cache: dict[PatternCacheKey, set[str]] = {}
         result = get_matching_operations("*/read", set(), Plane.DATA, cache)
-
-        assert result == set()
-
-    def test_no_matches(self, operation_names: set[str]):
-        """Test pattern that matches nothing."""
-        cache: dict[PatternCacheKey, set[str]] = {}
-        result = get_matching_operations(
-            "Microsoft.NonExistent/*", operation_names, Plane.DATA, cache
-        )
-
         assert result == set()
 
 
@@ -388,8 +395,8 @@ class TestBuildOperationsPrefixIndex:
 
     def test_builds_correct_index(self, operation_names: set[str]):
         """Test that index groups operations by provider prefix."""
-        cache: dict[int, dict[str, set[str]]] = {}
-        result = build_operations_prefix_index(operation_names, 1, cache)
+        cache: dict[Plane, dict[str, set[str]]] = {}
+        result = build_operations_prefix_index(operation_names, Plane.CONTROL, cache)
 
         assert "microsoft.storage/" in result
         assert "microsoft.compute/" in result
@@ -402,51 +409,44 @@ class TestBuildOperationsPrefixIndex:
         assert len(storage_ops) == 4  # read, write, delete, listKeys
 
     def test_caches_results(self, operation_names: set[str]):
-        """Test that results are cached."""
-        cache: dict[int, dict[str, set[str]]] = {}
+        """Test that results are cached with separate keys per plane."""
+        cache: dict[Plane, dict[str, set[str]]] = {}
 
-        result1 = build_operations_prefix_index(operation_names, 1, cache)
-        assert 1 in cache
+        result1 = build_operations_prefix_index(operation_names, Plane.CONTROL, cache)
+        assert Plane.CONTROL in cache
 
-        result2 = build_operations_prefix_index(operation_names, 1, cache)
+        result2 = build_operations_prefix_index(operation_names, Plane.CONTROL, cache)
         assert result1 is result2
 
-    def test_different_cache_keys(self, operation_names: set[str]):
-        """Test different cache keys store separate indexes."""
-        cache: dict[int, dict[str, set[str]]] = {}
+        # Different plane creates separate cache entry
+        build_operations_prefix_index(operation_names, Plane.DATA, cache)
+        assert Plane.DATA in cache
 
-        build_operations_prefix_index(operation_names, 1, cache)
-        build_operations_prefix_index(operation_names, 2, cache)
-
-        assert 1 in cache
-        assert 2 in cache
-
-    def test_empty_operations_set(self):
-        """Test with empty operations set."""
-        cache: dict[int, dict[str, set[str]]] = {}
-        result = build_operations_prefix_index(set(), 1, cache)
-
-        assert result == {}
+    @pytest.mark.parametrize(
+        ("ops", "expected_result"),
+        [
+            pytest.param(set(), {}, id="empty_set"),
+            pytest.param(
+                {"SimpleOperation", "Microsoft.Storage/read"},
+                {"microsoft.storage/": {"Microsoft.Storage/read"}},
+                id="ignores_no_slash_ops",
+            ),
+        ],
+    )
+    def test_edge_cases(self, ops: set[str], expected_result: dict[str, set[str]]):
+        """Test edge cases: empty set and operations without slash."""
+        cache: dict[Plane, dict[str, set[str]]] = {}
+        result = build_operations_prefix_index(ops, Plane.CONTROL, cache)
+        assert result == expected_result
 
     def test_lowered_prefix_keys(self, operation_names: set[str]):
         """Test that prefix keys are lowered."""
-        cache: dict[int, dict[str, set[str]]] = {}
-        result = build_operations_prefix_index(operation_names, 1, cache)
+        cache: dict[Plane, dict[str, set[str]]] = {}
+        result = build_operations_prefix_index(operation_names, Plane.CONTROL, cache)
 
         for key in result:
             assert key == key.lower()
             assert key.endswith("/")
-
-    def test_operations_without_slash_ignored(self):
-        """Test that operations without slash are ignored."""
-        ops = {"SimpleOperation", "Microsoft.Storage/read"}
-        cache: dict[int, dict[str, set[str]]] = {}
-        result = build_operations_prefix_index(ops, 1, cache)
-
-        assert "microsoft.storage/" in result
-        assert "simpleoperation" not in result
-        # Only one prefix should exist
-        assert len(result) == 1
 
 
 # =============================================================================
@@ -579,44 +579,32 @@ class TestPreloadCache:
         assert "role-2" in cache.cache.roles_by_id
         assert cache.cache.roles_by_id["role-1"].role_name == "Reader"
 
-    def test_populate_operations_preserves_other_data(
-        self, sample_operations, sample_roles_db_format
-    ):
-        """Test populate_cache_with_operations doesn't overwrite other cache data."""
+    def test_populate_preserves_other_data(self, sample_operations, sample_roles_db_format):
+        """Test populating operations/roles doesn't overwrite each other."""
         from tests.helpers import populate_cache_with_operations, populate_cache_with_roles
 
         cache = CacheService()
         populate_cache_with_roles(cache, sample_roles_db_format)
         populate_cache_with_operations(cache, sample_operations)
 
-        # Roles should still be there
+        # Both should be present
         assert len(cache.cache.roles_by_id) == 2
-        # Operations should also be there
         assert len(cache.cache.all_operations) == len(sample_operations)
 
-    def test_populate_roles_preserves_other_data(self, sample_operations, sample_roles_db_format):
-        """Test populate_cache_with_roles doesn't overwrite other cache data."""
-        from tests.helpers import populate_cache_with_operations, populate_cache_with_roles
+        # Test reverse order too
+        cache2 = CacheService()
+        populate_cache_with_operations(cache2, sample_operations)
+        populate_cache_with_roles(cache2, sample_roles_db_format)
 
-        cache = CacheService()
-        populate_cache_with_operations(cache, sample_operations)
-        populate_cache_with_roles(cache, sample_roles_db_format)
-
-        # Operations should still be there
-        assert len(cache.cache.all_operations) == len(sample_operations)
-        # Roles should also be there
-        assert len(cache.cache.roles_by_id) == 2
+        assert len(cache2.cache.all_operations) == len(sample_operations)
+        assert len(cache2.cache.roles_by_id) == 2
 
     def test_set_metadata(self):
         """Test set_metadata updates metadata fields."""
         cache = CacheService()
-
         providers = ["Microsoft.Storage", "Microsoft.Compute"]
 
-        cache.set_metadata(
-            unique_providers=providers,
-        )
-
+        cache.set_metadata(unique_providers=providers)
         assert cache.cache.unique_providers == providers
 
     def test_populate_cache_with_events(self):
@@ -624,7 +612,6 @@ class TestPreloadCache:
         from tests.helpers import populate_cache_with_events
 
         cache = CacheService()
-
         events = [
             CachedChangeEvent(
                 id=1, role_id="role-1", role_name="Role 1", event_type=EventType.CREATED
@@ -638,7 +625,7 @@ class TestPreloadCache:
         assert cache.cache.all_change_events == events
 
     def test_get_role_by_id(self, sample_roles_db_format):
-        """Test get_role_by_id returns correct CachedRole."""
+        """Test get_role_by_id returns correct CachedRole or None."""
         from tests.helpers import populate_cache_with_roles
 
         cache = CacheService()
@@ -661,7 +648,6 @@ class TestPreloadCache:
 
         roles = cache.get_all_roles()
         assert len(roles) == 2
-        # Check they are RoleDefinition objects with properties
         assert all(r.properties is not None for r in roles)
 
     def test_get_change_events(self):
@@ -700,93 +686,78 @@ class TestPreloadCache:
         assert len(role1_events) == 2
         assert all(e.role_id == "role-1" for e in role1_events)
 
-    def test_role_pages_cache(self):
-        """Test role pages caching."""
+    @pytest.mark.parametrize(
+        ("cache_type", "set_method", "get_method", "key", "value"),
+        [
+            pytest.param(
+                "role_pages",
+                "set_role_page",
+                "get_role_page",
+                "roles:active::name:asc:1:50",
+                [{"role_id": "role-1"}],
+                id="role_pages",
+            ),
+            pytest.param(
+                "role_pages_count",
+                "set_role_page",
+                "get_role_page",
+                "roles_count:active",
+                500,
+                id="role_pages_count",
+            ),
+            pytest.param(
+                "operation_pages",
+                "set_operation_page",
+                "get_operation_page",
+                "ops:all:name:asc:1:25",
+                [{"name": "Microsoft.Storage/read"}],
+                id="operation_pages",
+            ),
+            pytest.param(
+                "operation_pages_count",
+                "set_operation_page",
+                "get_operation_page",
+                "ops_count:all",
+                21000,
+                id="operation_pages_count",
+            ),
+            pytest.param(
+                "allowing_roles",
+                "set_allowing_roles",
+                "get_allowing_roles",
+                "my_key",
+                [],
+                id="allowing_roles",
+            ),
+        ],
+    )
+    def test_request_caches(
+        self, cache_type: str, set_method: str, get_method: str, key: str, value
+    ):
+        """Test LRU request caches (role_pages, operation_pages, allowing_roles)."""
         cache = CacheService()
 
-        page_key = "roles:active::name:asc:1:50"
-        roles = [{"role_id": "role-1"}]
+        getattr(cache, set_method)(key, value)
+        assert getattr(cache, get_method)(key) == value
+        assert getattr(cache, get_method)("nonexistent") is None
 
-        cache.set_role_page(page_key, roles)
-        assert cache.get_role_page(page_key) == roles
-        assert cache.get_role_page("nonexistent") is None
-
-    def test_allowing_roles_cache(self):
-        """Test allowing_roles key-value cache."""
+    @pytest.mark.parametrize(
+        ("set_method", "get_method", "key"),
+        [
+            pytest.param("set_role_page", "get_role_page", "roles:page:1", id="role_pages"),
+            pytest.param("set_operation_page", "get_operation_page", "ops:page:1", id="op_pages"),
+            pytest.param("set_allowing_roles", "get_allowing_roles", "key1", id="allowing_roles"),
+            pytest.param("set_filtered_events", "get_filtered_events", "7:all", id="filtered"),
+        ],
+    )
+    def test_swap_clears_request_caches(self, set_method: str, get_method: str, key: str):
+        """Test swap clears all request caches."""
         cache = CacheService()
+        getattr(cache, set_method)(key, [])
 
-        cache.set_allowing_roles("my_key", [])  # type: ignore[arg-type]
-        assert cache.get_allowing_roles("my_key") == []
-        assert cache.get_allowing_roles("missing") is None
+        cache.swap(CacheData())
 
-    def test_swap_clears_allowing_roles_cache(self):
-        """Test swap clears allowing_roles_cache."""
-        cache = CacheService()
-        cache.set_allowing_roles("my_key", [])  # type: ignore[arg-type]
-
-        new_cache_data = CacheData()
-        cache.swap(new_cache_data)
-
-        assert cache.get_allowing_roles("my_key") is None
-
-    def test_swap_clears_role_pages(self):
-        """Test swap clears role_pages cache."""
-        cache = CacheService()
-        page_key = "roles:active::name:asc:1:50"
-        cache.set_role_page(page_key, [{"role_id": "role-1"}])
-
-        new_cache_data = CacheData()
-        cache.swap(new_cache_data)
-
-        assert cache.get_role_page(page_key) is None
-
-    def test_role_pages_cache_count(self):
-        """Test role pages caching for count values."""
-        cache = CacheService()
-
-        count_key = "roles_count:active"
-        cache.set_role_page(count_key, 500)
-        assert cache.get_role_page(count_key) == 500
-
-    def test_operation_pages_cache(self):
-        """Test operation pages caching."""
-        cache = CacheService()
-
-        page_key = "ops:all:name:asc:1:25"
-        operations = [{"name": "Microsoft.Storage/read"}]
-
-        cache.set_operation_page(page_key, operations)
-        assert cache.get_operation_page(page_key) == operations
-        assert cache.get_operation_page("nonexistent") is None
-
-    def test_operation_pages_cache_count(self):
-        """Test operation pages caching for count values."""
-        cache = CacheService()
-
-        count_key = "ops_count:all"
-        cache.set_operation_page(count_key, 21000)
-        assert cache.get_operation_page(count_key) == 21000
-
-    def test_swap_clears_operation_pages(self):
-        """Test swap clears operation_pages cache."""
-        cache = CacheService()
-        page_key = "ops:all:name:asc:1:25"
-        cache.set_operation_page(page_key, [{"name": "op1"}])
-
-        new_cache_data = CacheData()
-        cache.swap(new_cache_data)
-
-        assert cache.get_operation_page(page_key) is None
-
-    def test_swap_clears_filtered_events(self):
-        """Test swap clears filtered_events cache."""
-        cache = CacheService()
-        cache.set_filtered_events("7:all", [])  # type: ignore[arg-type]
-
-        new_cache_data = CacheData()
-        cache.swap(new_cache_data)
-
-        assert cache.get_filtered_events("7:all") is None
+        assert getattr(cache, get_method)(key) is None
 
     def test_reset_clears_all_request_caches(self):
         """Test reset clears all RequestCaches (role_pages, operation_pages, etc)."""
@@ -1223,3 +1194,167 @@ class TestCachedRoleFromDict:
         assert restored.role_id == cached.role_id
         assert restored.role_name == cached.role_name
         assert restored.status == cached.status
+
+
+# =============================================================================
+# Integration Tests (consolidated from test_cache_e2e.py)
+# =============================================================================
+
+
+class TestThreadSafety:
+    """Tests for thread safety and race condition handling."""
+
+    def test_readers_see_consistent_data_during_swap(self, sample_roles, sample_operations):
+        """Readers always see consistent data even during cache swap."""
+        import threading
+
+        from azurerbac.cache import precompute_all
+        from tests.helpers import populate_cache_with_operations
+
+        populate_cache_with_operations(get_cache_service(), sample_operations)
+        roles_by_id = make_cached_roles_by_id(sample_roles)
+        get_cache_service()._cache = CacheData.create(
+            all_operations=sample_operations,
+            roles_by_id=roles_by_id,
+            ops_by_name_lower=get_cache_service().cache.ops_by_name_lower,
+            ops_by_prefix=get_cache_service().cache.ops_by_prefix,
+        )
+        get_cache_service().swap_in_memory(precompute_all(sample_roles, sample_operations))
+
+        read_results: list[tuple[int, int, int]] = []
+        errors: list[tuple[int, str]] = []
+
+        def reader(reader_id: int) -> None:
+            try:
+                for _ in range(100):
+                    cache = get_cache_service().cache
+                    ops_count = len(cache.all_operations)
+                    roles_count = len(cache.roles_by_id)
+                    read_results.append((reader_id, ops_count, roles_count))
+            except Exception as e:
+                errors.append((reader_id, str(e)))
+
+        def writer() -> None:
+            for _ in range(50):
+                new_cache = CacheData.create(
+                    all_operations=sample_operations,
+                    roles_by_id=roles_by_id,
+                )
+                get_cache_service().swap(new_cache)
+
+        threads = [threading.Thread(target=reader, args=(i,)) for i in range(3)]
+        threads.append(threading.Thread(target=writer))
+
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert len(errors) == 0
+        for _, ops_count, roles_count in read_results:
+            assert ops_count == len(sample_operations) or ops_count == 0
+            assert roles_count == len(sample_roles) or roles_count == 0
+
+
+class TestDataConsistency:
+    """Tests for data consistency across cache operations."""
+
+    def test_role_coverage_matches_role_data(self, sample_roles, sample_operations):
+        """Role coverage is computed for all roles in cache."""
+        from azurerbac.cache import precompute_all
+
+        roles_by_id = make_cached_roles_by_id(sample_roles)
+        cache_data = precompute_all(sample_roles, sample_operations, roles_by_id=roles_by_id)
+        for role_id in cache_data.roles_by_id:
+            assert role_id in cache_data.role_coverage
+
+    def test_role_net_permissions_matches_role_data(self, sample_roles, sample_operations):
+        """Role net permissions is computed for all roles in cache."""
+        from azurerbac.cache import precompute_all
+
+        roles_by_id = make_cached_roles_by_id(sample_roles)
+        cache_data = precompute_all(sample_roles, sample_operations, roles_by_id=roles_by_id)
+        for role_id in cache_data.roles_by_id:
+            assert role_id in cache_data.role_net_permissions
+
+    def test_unique_providers_extracted_correctly(self, sample_roles, sample_operations):
+        """unique_providers contains all providers from operations."""
+        from azurerbac.cache import precompute_all
+
+        roles_by_id = make_cached_roles_by_id(sample_roles)
+        cache_data = precompute_all(sample_roles, sample_operations, roles_by_id=roles_by_id)
+        expected_providers = {
+            op.provider_display_name for op in sample_operations if op.provider_display_name
+        }
+        assert set(cache_data.unique_providers) == expected_providers
+
+
+class TestCacheLifecycle:
+    """Tests for cache lifecycle and refresh flows."""
+
+    def test_periodic_refresh_recomputes_caches(self, sample_roles, sample_operations):
+        """Verify periodic refresh recomputes all caches."""
+        from azurerbac.cache import precompute_all
+        from tests.helpers import populate_cache_with_operations
+
+        populate_cache_with_operations(get_cache_service(), sample_operations)
+        roles_by_id = make_cached_roles_by_id(sample_roles)
+        get_cache_service()._cache = CacheData.create(
+            all_operations=sample_operations,
+            roles_by_id=roles_by_id,
+            ops_by_name_lower=get_cache_service().cache.ops_by_name_lower,
+            ops_by_prefix=get_cache_service().cache.ops_by_prefix,
+        )
+
+        get_cache_service().swap_in_memory(precompute_all(sample_roles, sample_operations))
+        first_coverage = get_cache_service().get_role_coverage("reader-role-id")
+        assert first_coverage is not None
+
+        get_cache_service().swap_in_memory(precompute_all(sample_roles, sample_operations))
+        second_coverage = get_cache_service().get_role_coverage("reader-role-id")
+
+        assert second_coverage is not None
+        assert first_coverage[0] == second_coverage[0]
+        assert first_coverage[1] == second_coverage[1]
+
+    def test_data_consistency_across_multiple_refreshes(self, sample_roles, sample_operations):
+        """Verify data remains consistent across multiple refreshes."""
+        from azurerbac.cache import precompute_all
+        from tests.helpers import populate_cache_with_operations
+
+        populate_cache_with_operations(get_cache_service(), sample_operations)
+        roles_by_id = make_cached_roles_by_id(sample_roles)
+        get_cache_service()._cache = CacheData.create(
+            all_operations=sample_operations,
+            roles_by_id=roles_by_id,
+            ops_by_name_lower=get_cache_service().cache.ops_by_name_lower,
+            ops_by_prefix=get_cache_service().cache.ops_by_prefix,
+        )
+
+        results = []
+        for _ in range(5):
+            get_cache_service().swap_in_memory(precompute_all(sample_roles, sample_operations))
+            coverage = get_cache_service().get_role_coverage("reader-role-id")
+            assert coverage is not None
+            results.append((len(coverage[0]), len(coverage[1])))
+
+        assert len(set(results)) == 1
+
+    @pytest.mark.asyncio
+    async def test_invalidate_all_clears_memory_cache(self, sample_roles, sample_operations):
+        """invalidate_all clears all in-memory caches."""
+        from azurerbac.cache import precompute_all
+
+        roles_by_id = make_cached_roles_by_id(sample_roles)
+        cache_data = precompute_all(sample_roles, sample_operations, roles_by_id=roles_by_id)
+        get_cache_service().swap(cache_data)
+        get_cache_service().set_role_page("page1", [{"test": True}])
+        get_cache_service().set_allowing_roles("key1", [])
+
+        assert len(get_cache_service().cache.all_operations) > 0
+        assert get_cache_service().get_role_page("page1") is not None
+
+        await get_cache_service().invalidate_all()
+
+        assert len(get_cache_service().cache.all_operations) == 0
+        assert get_cache_service().get_role_page("page1") is None

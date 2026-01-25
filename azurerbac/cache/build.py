@@ -461,7 +461,7 @@ async def build_from_db(session: AsyncSession) -> CacheData:
         role_net_permissions=cache_data.role_net_permissions,
     )
 
-    from azurerbac.web.constants import SITE_URL
+    from azurerbac.core.constants import SITE_URL
 
     sitemap = Sitemap.build(roles_by_id, all_operations, SITE_URL)
 

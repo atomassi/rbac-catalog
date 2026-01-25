@@ -5,7 +5,16 @@ from __future__ import annotations
 import contextlib
 import datetime as dt
 import hashlib
+import re
 import uuid
+from typing import Final
+
+_SLUG_PATTERN: Final = re.compile(r"[^a-z0-9]+")
+
+
+def slugify(text: str) -> str:
+    """Create URL-friendly slug from text."""
+    return _SLUG_PATTERN.sub("-", text.lower()).strip("-") if text else ""
 
 
 def content_hash(content: str) -> str:

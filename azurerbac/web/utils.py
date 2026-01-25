@@ -3,16 +3,8 @@
 from __future__ import annotations
 
 import json
-import re
-from typing import Any, Final
+from typing import Any
 from urllib.parse import quote
-
-_SLUG_PATTERN: Final = re.compile(r"[^a-z0-9]+")
-
-
-def slugify(text: str) -> str:
-    """Create URL-friendly slug from text."""
-    return _SLUG_PATTERN.sub("-", text.lower()).strip("-") if text else ""
 
 
 def urlencode_path(text: str) -> str:

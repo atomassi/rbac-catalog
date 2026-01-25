@@ -3,6 +3,10 @@
 from enum import StrEnum
 from typing import Final
 
+# Site URL - used for sitemap generation and canonical URLs
+SITE_DOMAIN: Final[str] = "rbac-catalog.dev"
+SITE_URL: Final[str] = f"https://{SITE_DOMAIN}"
+
 
 class EventType(StrEnum):
     """Role change event types."""

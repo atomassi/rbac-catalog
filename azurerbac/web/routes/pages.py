@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from azurerbac.core.enums import SortOrder
+from azurerbac.core.utils import slugify
 from azurerbac.web.constants import (
     DEFAULT_DAYS,
     DEFAULT_LIMIT,
@@ -39,7 +40,7 @@ from azurerbac.web.services.pages import (
     get_roles_allowing_operation,
     sort_operations,
 )
-from azurerbac.web.utils import role_json_pretty, slugify
+from azurerbac.web.utils import role_json_pretty
 
 logger = logging.getLogger(__name__)
 

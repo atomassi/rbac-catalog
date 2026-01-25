@@ -165,7 +165,7 @@ class Sitemap:
         Returns:
             Sitemap instance with pre-built XML content.
         """
-        from azurerbac.web.utils import slugify
+        from azurerbac.core.utils import slugify
 
         active_roles_count = sum(1 for r in roles_by_id.values() if r.status == RoleStatus.ACTIVE)
         logger.debug(

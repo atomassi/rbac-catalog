@@ -4,6 +4,7 @@ from typing import Final
 
 NEW_DOMAIN: Final = "rbac-catalog.dev"
 SITE_URL: Final = f"https://{NEW_DOMAIN}"
+
 OLD_DOMAINS: Final = frozenset(
     {
         "azurerbac-builtinroles.azurewebsites.net",

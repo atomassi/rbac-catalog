@@ -2,13 +2,14 @@
 
 import pytest
 
+from azurerbac.core.utils import slugify
 from azurerbac.web.filters import (
     diff_lines,
     format_date,
     format_datetime,
     full_json_diff,
 )
-from azurerbac.web.utils import clamp, role_json_pretty, slugify, urlencode_path
+from azurerbac.web.utils import clamp, role_json_pretty, urlencode_path
 
 
 class TestDiffLines:
@@ -267,13 +268,13 @@ class TestSlugifyEdgeCases:
     )
     def test_slugify_patterns(self, input_str: str, expected: str):
         """Test slugify with various input patterns."""
-        from azurerbac.web.utils import slugify
+        from azurerbac.core.utils import slugify
 
         assert slugify(input_str) == expected
 
     def test_leading_trailing_dashes(self):
         """Test that leading/trailing dashes are stripped."""
-        from azurerbac.web.utils import slugify
+        from azurerbac.core.utils import slugify
 
         result = slugify("  hello  ")
         assert not result.startswith("-")
@@ -281,7 +282,7 @@ class TestSlugifyEdgeCases:
 
     def test_parentheses_removed(self):
         """Test that parentheses are removed."""
-        from azurerbac.web.utils import slugify
+        from azurerbac.core.utils import slugify
 
         result = slugify("Role (Preview)")
         assert "(" not in result

@@ -656,16 +656,23 @@ class TestRoleCoverageRaceCondition:
 
         role_definition = RoleDefinition.model_validate(mock_role_json)
 
-        # CORRECT order: precompute FIRST, then set data.roles_by_id
-        get_cache_service().swap_in_memory(precompute_all([role_definition], sample_operations))
+        # CORRECT order: precompute FIRST with the role included in both caches
+        precomputed = precompute_all([role_definition], sample_operations)
 
-        # Set data.roles_by_id (no TTL) - source of truth for cache.get_role_definitions()
-        get_cache_service().container.cache.roles_by_id = {
-            "test-reader-role": CachedRole(
-                definition=role_definition,
-                status=RoleStatus.ACTIVE,
-            )
-        }
+        # Create CacheData with both the precomputed coverage AND the roles_by_id
+        from dataclasses import replace as dc_replace
+
+        new_source = dc_replace(
+            precomputed.source,
+            roles_by_id={
+                "test-reader-role": CachedRole(
+                    definition=role_definition,
+                    status=RoleStatus.ACTIVE,
+                )
+            },
+        )
+        full_cache = dc_replace(precomputed, source=new_source)
+        get_cache_service().swap_in_memory(full_cache)
 
         # Now call get_roles_allowing_operation with the global app_cache
         result = get_roles_allowing_operation(
@@ -712,7 +719,7 @@ class TestRoleCoverageRaceCondition:
             from azurerbac.azure.models import OperationData
 
             precomputed_coverage = {"role-1": ({"op1"}, {"op2"})}
-            cached_data = CacheData(
+            cached_data = CacheData.create(
                 metadata=CacheMetadata(roles_count=1, operations_count=1),
                 all_operations=[OperationData(name="Microsoft.Test/read", isDataAction=False)],
                 roles_by_id={
@@ -772,18 +779,24 @@ class TestRoleCoverageRaceCondition:
 
         role_definition = RoleDefinition.model_validate(mock_role_json)
 
-        # Precompute coverage cache
-        get_cache_service().swap_in_memory(precompute_all([role_definition], sample_operations))
+        # Precompute coverage cache with roles_by_id included
+        precomputed = precompute_all([role_definition], sample_operations)
 
-        # Set up data.roles_by_id directly (source of truth)
-        get_cache_service().container.cache.roles_by_id = {
-            "test-reader-role": CachedRole(
-                definition=role_definition,
-                status=RoleStatus.ACTIVE,
-            )
-        }
+        from dataclasses import replace as dc_replace
 
-        # Verify cache.get_role_definitions() derives from data.roles_by_id
+        new_source = dc_replace(
+            precomputed.source,
+            roles_by_id={
+                "test-reader-role": CachedRole(
+                    definition=role_definition,
+                    status=RoleStatus.ACTIVE,
+                )
+            },
+        )
+        full_cache = dc_replace(precomputed, source=new_source)
+        get_cache_service().swap_in_memory(full_cache)
+
+        # Verify cache.get_role_definitions() derives from source.roles_by_id
         role_definitions = get_cache_service().container.cache.get_role_definitions()
         assert len(role_definitions) == 1
 

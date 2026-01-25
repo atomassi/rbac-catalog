@@ -10,7 +10,7 @@ import msgpack
 
 from azurerbac.core.types import JsonDict
 
-__all__ = ["deserialize_from_bytes", "serialize_to_bytes"]
+__all__ = ["deserialize_from_bytes", "prepare_for_msgpack", "serialize_to_bytes"]
 
 TAG_SET: Final[int] = 1
 TAG_TUPLE: Final[int] = 2
@@ -29,7 +29,7 @@ TUPLE_KEY_FIELDS: Final[frozenset[str]] = frozenset(
 
 ENUM_KEY_FIELDS: Final[frozenset[str]] = frozenset(
     {
-        "operations_by_prefix_computed",
+        "ops_by_prefix_by_plane",
     }
 )
 

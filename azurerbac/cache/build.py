@@ -15,8 +15,13 @@ from azurerbac.cache.models import (
     CachedChangeEvent,
     CachedRole,
     CacheMetadata,
+    Indexes,
     PatternCacheKey,
+    PrerenderedContent,
+    RoleAnalysis,
+    RuntimeCaches,
     Sitemap,
+    SourceData,
     build_indexes,
     compute_operations_hash,
     compute_roles_hash,
@@ -25,12 +30,10 @@ from azurerbac.core.constants import RoleStatus
 from azurerbac.core.patterns import is_wildcard_pattern, matches_pattern
 from azurerbac.core.utils import truncate_microseconds
 from azurerbac.matching.models import (
-    CacheOpsCount,
     CoverageResult,
     PartialCoverageCacheKey,
     Plane,
     RoleCoverage,
-    RoleNetPermissions,
 )
 
 if TYPE_CHECKING:
@@ -239,7 +242,6 @@ def precompute_all(
     wildcard_count: dict[PatternCacheKey, int] = {}
     operations_by_prefix_computed: dict[Plane, dict[str, set[str]]] = {}
     role_coverage: dict[str, RoleCoverage] = {}
-    role_net_permissions: dict[str, RoleNetPermissions] = {}
     partial_coverage: dict[PartialCoverageCacheKey, CoverageResult] = {}
 
     # Separate control and data plane operations
@@ -251,8 +253,6 @@ def precompute_all(
     # Build lowered lookup sets for case-insensitive matching
     control_ops_lower_to_orig = {op.lower(): op for op in all_control_ops}
     data_ops_lower_to_orig = {op.lower(): op for op in all_data_ops}
-
-    cache_ops_count = CacheOpsCount(len(all_control_ops), len(all_data_ops))
 
     # Build prefix indexes
     logger.debug("Building prefix indexes...")
@@ -288,9 +288,6 @@ def precompute_all(
             data_ops_lower_to_orig,
         )
         role_coverage[role.role_id] = coverage
-        role_net_permissions[role.role_id] = RoleNetPermissions(
-            len(coverage.control), len(coverage.data)
-        )
 
     logger.debug("Computed coverage for %d built-in roles", builtin_count)
 
@@ -301,26 +298,34 @@ def precompute_all(
     logger.debug("Building operation indexes...")
     ops_by_name_lower, ops_by_prefix = build_indexes(all_operations)
 
-    # Create complete cache with source data + computed fields
+    # Create complete cache with nested groups
     new_cache = CacheData(
         metadata=metadata or CacheMetadata(),
-        all_operations=all_operations,
-        roles_by_id=roles_by_id or {},
-        all_change_events=all_change_events or [],
-        unique_providers=unique_providers,
-        last_scan=last_scan,
-        first_scan=first_scan,
-        ops_by_name_lower=ops_by_name_lower,
-        ops_by_prefix=ops_by_prefix,
-        role_coverage=role_coverage,
-        role_net_permissions=role_net_permissions,
-        operation_to_roles=operation_to_roles,
-        pattern_match=pattern_match,
-        partial_coverage=partial_coverage,
-        wildcard_count=wildcard_count,
-        operations_by_prefix_computed=operations_by_prefix_computed,
-        cache_ops_count=cache_ops_count,
-        analytics=analytics,
+        source=SourceData(
+            all_operations=all_operations,
+            roles_by_id=roles_by_id or {},
+            all_change_events=all_change_events or [],
+            unique_providers=unique_providers,
+            last_scan=last_scan,
+            first_scan=first_scan,
+        ),
+        indexes=Indexes(
+            ops_by_name_lower=ops_by_name_lower,
+            ops_by_prefix=ops_by_prefix,
+            ops_by_prefix_by_plane=operations_by_prefix_computed,
+        ),
+        analysis=RoleAnalysis(
+            role_coverage=role_coverage,
+            operation_to_roles=operation_to_roles,
+        ),
+        runtime=RuntimeCaches(
+            pattern_match=pattern_match,
+            partial_coverage=partial_coverage,
+            wildcard_count=wildcard_count,
+        ),
+        content=PrerenderedContent(
+            analytics=analytics,
+        ),
     )
 
     elapsed = time.time() - start
@@ -457,11 +462,11 @@ async def build_from_db(session: AsyncSession) -> CacheData:
         roles_by_id=roles_by_id,
         role_net_permissions=cache_data.role_net_permissions,
     )
-    cache_data.analytics = analytics_data
+    cache_data.content.analytics = analytics_data
 
     from azurerbac.web.constants import SITE_URL
 
-    cache_data.sitemap = Sitemap.build(roles_by_id, all_operations, SITE_URL)
+    cache_data.content.sitemap = Sitemap.build(roles_by_id, all_operations, SITE_URL)
 
     logger.info(
         f"Cache built: {len(active_roles)} roles, {len(all_operations)} operations, "

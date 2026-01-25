@@ -7,6 +7,7 @@ import concurrent.futures
 import logging
 import os
 from collections.abc import Callable
+from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
@@ -22,6 +23,31 @@ logger = logging.getLogger(__name__)
 CACHE_FILENAME: Final[str] = "app_cache.msgpack"
 
 
+class CacheKey(StrEnum):
+    """Keys for CacheData serialization (ensures consistency between save/load)."""
+
+    METADATA = "metadata"
+    SOURCE = "source"
+    INDEXES = "indexes"
+    ANALYSIS = "analysis"
+    RUNTIME = "runtime"
+    CONTENT = "content"
+    # Source fields
+    ROLES_BY_ID = "roles_by_id"
+    ALL_OPERATIONS = "all_operations"
+    ALL_CHANGE_EVENTS = "all_change_events"
+    # Index fields
+    OPS_BY_NAME_LOWER = "ops_by_name_lower"
+    OPS_BY_PREFIX = "ops_by_prefix"
+    # Analysis fields
+    ROLE_COVERAGE = "role_coverage"
+    # Runtime fields
+    PARTIAL_COVERAGE = "partial_coverage"
+    # Content fields
+    ANALYTICS = "analytics"
+    SITEMAP = "sitemap"
+
+
 class FileCacheBackend(CacheBackend):
     """File-based cache backend using msgpack and watchdog."""
 
@@ -32,18 +58,18 @@ class FileCacheBackend(CacheBackend):
         self._watcher_started = False
 
     @staticmethod
-    def _reconstruct_operations(data_dict: dict) -> None:
+    def _reconstruct_operations(data_dict: dict, key: CacheKey) -> None:
         """Reconstruct operation objects from raw dicts in place."""
         from azurerbac.azure.models import OperationData
 
-        if ops_raw := data_dict.get("all_operations"):
-            data_dict["all_operations"] = [OperationData.model_validate(op) for op in ops_raw]
-        if ops_by_name_raw := data_dict.get("ops_by_name_lower"):
-            data_dict["ops_by_name_lower"] = {
+        if key == CacheKey.ALL_OPERATIONS and (ops_raw := data_dict.get(key)):
+            data_dict[key] = [OperationData.model_validate(op) for op in ops_raw]
+        elif key == CacheKey.OPS_BY_NAME_LOWER and (ops_by_name_raw := data_dict.get(key)):
+            data_dict[key] = {
                 k: OperationData.model_validate(v) for k, v in ops_by_name_raw.items()
             }
-        if ops_by_prefix_raw := data_dict.get("ops_by_prefix"):
-            data_dict["ops_by_prefix"] = {
+        elif key == CacheKey.OPS_BY_PREFIX and (ops_by_prefix_raw := data_dict.get(key)):
+            data_dict[key] = {
                 k: [OperationData.model_validate(op) for op in v]
                 for k, v in ops_by_prefix_raw.items()
             }
@@ -52,32 +78,23 @@ class FileCacheBackend(CacheBackend):
     def _reconstruct_coverage_data(data_dict: dict) -> None:
         """Reconstruct coverage-related NamedTuples from raw data in place."""
         from azurerbac.matching.models import (
-            CacheOpsCount,
             CoverageResult,
             RoleCoverage,
-            RoleNetPermissions,
         )
 
-        if role_coverage := data_dict.get("role_coverage"):
-            data_dict["role_coverage"] = {
+        if role_coverage := data_dict.get(CacheKey.ROLE_COVERAGE):
+            data_dict[CacheKey.ROLE_COVERAGE] = {
                 k: RoleCoverage(
                     control=set(v[0]) if isinstance(v[0], list) else v[0],
                     data=set(v[1]) if isinstance(v[1], list) else v[1],
                 )
                 for k, v in role_coverage.items()
             }
-        if role_net_perms := data_dict.get("role_net_permissions"):
-            data_dict["role_net_permissions"] = {
-                k: RoleNetPermissions(v[0], v[1]) for k, v in role_net_perms.items()
-            }
-        if partial_cov := data_dict.get("partial_coverage"):
-            data_dict["partial_coverage"] = {
+
+        if partial_cov := data_dict.get(CacheKey.PARTIAL_COVERAGE):
+            data_dict[CacheKey.PARTIAL_COVERAGE] = {
                 k: CoverageResult(v[0], v[1], v[2], v[3]) for k, v in partial_cov.items()
             }
-        # Reconstruct CacheOpsCount from tuple/list
-        ops_count = data_dict.get("cache_ops_count")
-        if isinstance(ops_count, (tuple, list)) and len(ops_count) == 2:
-            data_dict["cache_ops_count"] = CacheOpsCount(ops_count[0], ops_count[1])
 
     @property
     def cache_dir(self) -> Path:
@@ -134,38 +151,47 @@ class FileCacheBackend(CacheBackend):
         try:
             from dataclasses import asdict
 
-            from azurerbac.cache.serialization import serialize_to_bytes
+            from azurerbac.cache.serialization import prepare_for_msgpack, serialize_to_bytes
 
             cache_file = self._get_cache_file()
             temp_file = cache_file.with_suffix(".tmp")
 
             data_dict = asdict(data)
 
-            # Convert nested dataclasses/models to dicts
+            # Convert nested dataclasses/models to serializable dicts
+            source = data_dict[CacheKey.SOURCE]
             if data.roles_by_id:
-                data_dict["roles_by_id"] = {
+                source[CacheKey.ROLES_BY_ID] = {
                     role_id: role.to_dict() for role_id, role in data.roles_by_id.items()
                 }
             if data.all_operations:
-                data_dict["all_operations"] = [op.to_dict() for op in data.all_operations]
+                source[CacheKey.ALL_OPERATIONS] = [op.to_dict() for op in data.all_operations]
+            if data.all_change_events:
+                source[CacheKey.ALL_CHANGE_EVENTS] = [ev.to_dict() for ev in data.all_change_events]
+
+            indexes = data_dict[CacheKey.INDEXES]
             if data.ops_by_name_lower:
-                data_dict["ops_by_name_lower"] = {
+                indexes[CacheKey.OPS_BY_NAME_LOWER] = {
                     k: v.to_dict() for k, v in data.ops_by_name_lower.items()
                 }
             if data.ops_by_prefix:
-                data_dict["ops_by_prefix"] = {
+                indexes[CacheKey.OPS_BY_PREFIX] = {
                     k: [op.to_dict() for op in v] for k, v in data.ops_by_prefix.items()
                 }
-            if data.all_change_events:
-                data_dict["all_change_events"] = [ev.to_dict() for ev in data.all_change_events]
+            # Prepare indexes for msgpack (handles enum keys in ops_by_prefix_by_plane)
+            data_dict[CacheKey.INDEXES] = prepare_for_msgpack(indexes)
 
-            # Convert analytics data to dict
+            # Prepare analysis for msgpack (handles coverage data)
+            data_dict[CacheKey.ANALYSIS] = prepare_for_msgpack(data_dict[CacheKey.ANALYSIS])
+
+            # Prepare runtime caches for msgpack (handles tuple/enum keys)
+            data_dict[CacheKey.RUNTIME] = prepare_for_msgpack(data_dict[CacheKey.RUNTIME])
+
+            content = data_dict[CacheKey.CONTENT]
             if data.analytics is not None:
-                data_dict["analytics"] = data.analytics.to_dict()
-
-            # Convert sitemap to dict
+                content[CacheKey.ANALYTICS] = data.analytics.to_dict()
             if data.sitemap is not None:
-                data_dict["sitemap"] = data.sitemap.to_dict()
+                content[CacheKey.SITEMAP] = data.sitemap.to_dict()
 
             packed = serialize_to_bytes(data_dict)
 
@@ -193,6 +219,12 @@ class FileCacheBackend(CacheBackend):
                 CachedChangeEvent,
                 CachedRole,
                 CacheMetadata,
+                Indexes,
+                PrerenderedContent,
+                RoleAnalysis,
+                RuntimeCaches,
+                Sitemap,
+                SourceData,
             )
             from azurerbac.cache.serialization import deserialize_from_bytes
 
@@ -201,37 +233,56 @@ class FileCacheBackend(CacheBackend):
 
             data_dict = deserialize_from_bytes(packed)
 
-            metadata = CacheMetadata(**data_dict.pop("metadata", {}))
+            metadata = CacheMetadata(**data_dict.pop(CacheKey.METADATA, {}))
 
-            # Reconstruct typed objects from dicts
-            if roles_raw := data_dict.get("roles_by_id"):
-                data_dict["roles_by_id"] = {
+            # Reconstruct source data
+            source_dict = data_dict.get(CacheKey.SOURCE, {})
+            if roles_raw := source_dict.get(CacheKey.ROLES_BY_ID):
+                source_dict[CacheKey.ROLES_BY_ID] = {
                     role_id: CachedRole.from_dict(role_data)
                     for role_id, role_data in roles_raw.items()
                 }
-
-            self._reconstruct_operations(data_dict)
-
-            if events_raw := data_dict.get("all_change_events"):
-                data_dict["all_change_events"] = [
+            self._reconstruct_operations(source_dict, CacheKey.ALL_OPERATIONS)
+            if events_raw := source_dict.get(CacheKey.ALL_CHANGE_EVENTS):
+                source_dict[CacheKey.ALL_CHANGE_EVENTS] = [
                     CachedChangeEvent.from_dict(ev) for ev in events_raw
                 ]
+            source = SourceData(**source_dict)
 
-            self._reconstruct_coverage_data(data_dict)
+            # Reconstruct indexes
+            indexes_dict = data_dict.get(CacheKey.INDEXES, {})
+            self._reconstruct_operations(indexes_dict, CacheKey.OPS_BY_NAME_LOWER)
+            self._reconstruct_operations(indexes_dict, CacheKey.OPS_BY_PREFIX)
+            indexes = Indexes(**indexes_dict)
 
-            # Reconstruct analytics data
-            if analytics_raw := data_dict.get("analytics"):
+            # Reconstruct analysis
+            analysis_dict = data_dict.get(CacheKey.ANALYSIS, {})
+            self._reconstruct_coverage_data(analysis_dict)
+            analysis = RoleAnalysis(**analysis_dict)
+
+            # Reconstruct runtime caches
+            runtime_dict = data_dict.get(CacheKey.RUNTIME, {})
+            self._reconstruct_coverage_data(runtime_dict)
+            runtime = RuntimeCaches(**runtime_dict)
+
+            # Reconstruct content
+            content_dict = data_dict.get(CacheKey.CONTENT, {})
+            if analytics_raw := content_dict.get(CacheKey.ANALYTICS):
                 from azurerbac.analytics.models import AnalyticsData
 
-                data_dict["analytics"] = AnalyticsData.from_dict(analytics_raw)
+                content_dict[CacheKey.ANALYTICS] = AnalyticsData.from_dict(analytics_raw)
+            if sitemap_raw := content_dict.get(CacheKey.SITEMAP):
+                content_dict[CacheKey.SITEMAP] = Sitemap.from_dict(sitemap_raw)
+            content = PrerenderedContent(**content_dict)
 
-            # Reconstruct sitemap data
-            if sitemap_raw := data_dict.get("sitemap"):
-                from azurerbac.cache.models import Sitemap
-
-                data_dict["sitemap"] = Sitemap.from_dict(sitemap_raw)
-
-            data = CacheData(metadata=metadata, **data_dict)
+            data = CacheData(
+                metadata=metadata,
+                source=source,
+                indexes=indexes,
+                analysis=analysis,
+                runtime=runtime,
+                content=content,
+            )
             logger.info(
                 "Cache loaded: %d roles, %d operations",
                 len(data.roles_by_id),

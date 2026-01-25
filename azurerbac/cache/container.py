@@ -186,7 +186,7 @@ class CacheContainer:
         last_scan: datetime | None = None,
         first_scan: datetime | None = None,
     ) -> None:
-        """Set metadata fields."""
+        """Set metadata fields on the source data."""
         updates = {}
         if unique_providers is not None:
             updates["unique_providers"] = unique_providers
@@ -195,7 +195,8 @@ class CacheContainer:
         if first_scan is not None:
             updates["first_scan"] = first_scan
         if updates:
-            self._cache = replace(self._cache, **updates)
+            new_source = replace(self._cache.source, **updates)
+            self._cache = replace(self._cache, source=new_source)
 
     def search_operations(
         self, query: str, limit: int = DEFAULT_SEARCH_LIMIT, is_wildcard: bool = False

@@ -178,17 +178,17 @@ def populate_cache_with_operations(cache: CacheContainer, operations: list[Opera
     """Populate cache with operations using swap() pattern."""
     from dataclasses import replace
 
-    from azurerbac.cache.models import build_indexes
+    from azurerbac.cache.models import Indexes, build_indexes
 
     ops_by_name_lower, ops_by_prefix = build_indexes(operations)
-    cache.swap(
-        replace(
-            cache.cache,
-            all_operations=operations,
-            ops_by_name_lower=ops_by_name_lower,
-            ops_by_prefix=ops_by_prefix,
-        )
+    current = cache.cache
+    new_source = replace(current.source, all_operations=operations)
+    new_indexes = Indexes(
+        ops_by_name_lower=ops_by_name_lower,
+        ops_by_prefix=ops_by_prefix,
+        ops_by_prefix_by_plane={},
     )
+    cache.swap(replace(current, source=new_source, indexes=new_indexes))
 
 
 def populate_cache_with_roles(cache: CacheContainer, roles: list[CachedRole]) -> None:
@@ -196,14 +196,18 @@ def populate_cache_with_roles(cache: CacheContainer, roles: list[CachedRole]) ->
     from dataclasses import replace
 
     roles_by_id = {r.role_id: r for r in roles}
-    cache.swap(replace(cache.cache, roles_by_id=roles_by_id))
+    current = cache.cache
+    new_source = replace(current.source, roles_by_id=roles_by_id)
+    cache.swap(replace(current, source=new_source))
 
 
 def populate_cache_with_events(cache: CacheContainer, events: list[CachedChangeEvent]) -> None:
     """Populate cache with change events using swap() pattern."""
     from dataclasses import replace
 
-    cache.swap(replace(cache.cache, all_change_events=events))
+    current = cache.cache
+    new_source = replace(current.source, all_change_events=events)
+    cache.swap(replace(current, source=new_source))
 
 
 def clear_computed_caches(container: CacheContainer | None = None) -> None:
@@ -215,7 +219,7 @@ def clear_computed_caches(container: CacheContainer | None = None) -> None:
         container = get_cache_service().container
 
     current = container.cache
-    new_cache = CacheData(
+    new_cache = CacheData.create(
         all_operations=current.all_operations,
         roles_by_id=current.roles_by_id,
         all_change_events=current.all_change_events,

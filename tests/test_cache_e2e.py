@@ -193,7 +193,7 @@ class TestWorkerRefreshFlow:
         """Web process detects worker disk update and reloads cache."""
         # Initial state - web has old cache
         old_role_def = RoleDefinition.model_validate({"name": "old-role", "properties": {}})
-        old_cache = CacheData(
+        old_cache = CacheData.create(
             metadata=CacheMetadata(roles_count=1, operations_count=1),
             all_operations=[OperationData(name="old-op", is_data_action=False)],
             roles_by_id={"old-role": CachedRole(definition=old_role_def, status=RoleStatus.ACTIVE)},
@@ -250,7 +250,7 @@ class TestWorkerRefreshFlow:
         # Setup with computed data
         populate_cache_with_operations(get_cache_service().container, sample_operations)
         roles_by_id = build_roles_by_id(sample_roles)
-        get_cache_service().container._cache = CacheData(
+        get_cache_service().container._cache = CacheData.create(
             all_operations=sample_operations,
             roles_by_id=roles_by_id,
             ops_by_name_lower=get_cache_service().container.cache.ops_by_name_lower,
@@ -311,7 +311,7 @@ class TestPeriodicWebRefreshFlow:
         """Periodic refresh updates all pattern caches."""
         populate_cache_with_operations(get_cache_service().container, sample_operations)
         roles_by_id = build_roles_by_id(sample_roles)
-        get_cache_service().container._cache = CacheData(
+        get_cache_service().container._cache = CacheData.create(
             all_operations=sample_operations,
             roles_by_id=roles_by_id,
             ops_by_name_lower=get_cache_service().container.cache.ops_by_name_lower,
@@ -329,7 +329,7 @@ class TestPeriodicWebRefreshFlow:
         """Multiple periodic refreshes produce identical results."""
         populate_cache_with_operations(get_cache_service().container, sample_operations)
         roles_by_id = build_roles_by_id(sample_roles)
-        get_cache_service().container._cache = CacheData(
+        get_cache_service().container._cache = CacheData.create(
             all_operations=sample_operations,
             roles_by_id=roles_by_id,
             ops_by_name_lower=get_cache_service().container.cache.ops_by_name_lower,
@@ -383,7 +383,7 @@ class TestWebStartupFlow:
         # Build from "database" (simulated)
         populate_cache_with_operations(get_cache_service().container, sample_operations)
         roles_by_id = build_roles_by_id(sample_roles)
-        get_cache_service().container._cache = CacheData(
+        get_cache_service().container._cache = CacheData.create(
             all_operations=sample_operations,
             roles_by_id=roles_by_id,
             ops_by_name_lower=get_cache_service().container.cache.ops_by_name_lower,
@@ -427,7 +427,7 @@ class TestWebStartupFlow:
             operations_count=len(sample_operations),
         )
         old_metadata.version = "v1"  # Old version
-        cache_data = CacheData(
+        cache_data = CacheData.create(
             metadata=old_metadata,
             roles_by_id=cache_data.roles_by_id,
             all_operations=cache_data.all_operations,
@@ -539,7 +539,7 @@ class TestThreadSafety:
         # Setup initial cache
         populate_cache_with_operations(get_cache_service().container, sample_operations)
         roles_by_id = build_roles_by_id(sample_roles)
-        get_cache_service().container._cache = CacheData(
+        get_cache_service().container._cache = CacheData.create(
             all_operations=sample_operations,
             roles_by_id=roles_by_id,
             ops_by_name_lower=get_cache_service().container.cache.ops_by_name_lower,
@@ -565,7 +565,7 @@ class TestThreadSafety:
         def writer():
             """Swap cache multiple times."""
             for _ in range(50):
-                new_cache = CacheData(
+                new_cache = CacheData.create(
                     all_operations=sample_operations,
                     roles_by_id=roles_by_id,
                 )
@@ -776,7 +776,7 @@ class TestInvalidationFlow:
         assert container.get_allowing_roles("roles_allowing_op:test") is not None
 
         # Swap with new cache
-        new_cache = CacheData(all_operations=sample_operations)
+        new_cache = CacheData.create(all_operations=sample_operations)
         container.swap(new_cache)
 
         # allowing_roles_cache should be cleared
@@ -801,7 +801,7 @@ class TestFullLifecycleE2E:
 
         populate_cache_with_operations(get_cache_service().container, sample_operations)
         roles_by_id = build_roles_by_id(sample_roles)
-        get_cache_service().container._cache = CacheData(
+        get_cache_service().container._cache = CacheData.create(
             all_operations=sample_operations,
             roles_by_id=roles_by_id,
             all_change_events=sample_change_events,
@@ -932,7 +932,7 @@ class TestStartupCacheFlow:
         # Build source data into the singleton cache
         populate_cache_with_operations(get_cache_service().container, sample_operations)
         roles_by_id = build_roles_by_id(sample_roles)
-        get_cache_service().container._cache = CacheData(
+        get_cache_service().container._cache = CacheData.create(
             all_operations=sample_operations,
             roles_by_id=roles_by_id,
             ops_by_name_lower=get_cache_service().container.cache.ops_by_name_lower,
@@ -958,7 +958,7 @@ class TestStartupCacheFlow:
         # Set up initial data
         populate_cache_with_operations(get_cache_service().container, sample_operations)
         roles_by_id = build_roles_by_id(sample_roles)
-        get_cache_service().container._cache = CacheData(
+        get_cache_service().container._cache = CacheData.create(
             all_operations=sample_operations,
             roles_by_id=roles_by_id,
             ops_by_name_lower=get_cache_service().container.cache.ops_by_name_lower,
@@ -985,7 +985,7 @@ class TestStartupCacheFlow:
 
         # Build roles index
         roles_by_id = build_roles_by_id(sample_roles)
-        get_cache_service().container._cache = CacheData(
+        get_cache_service().container._cache = CacheData.create(
             all_operations=sample_operations,
             roles_by_id=roles_by_id,
             ops_by_name_lower=get_cache_service().container.cache.ops_by_name_lower,
@@ -1019,7 +1019,7 @@ class TestWorkerUpdateFlow:
 
         roles_by_id = build_roles_by_id(sample_roles)
 
-        data = CacheData(
+        data = CacheData.create(
             metadata=CacheMetadata(
                 roles_count=len(sample_roles),
                 operations_count=len(sample_operations),
@@ -1046,7 +1046,7 @@ class TestWorkerUpdateFlow:
 
         # Worker saves cache
         roles_by_id = build_roles_by_id(sample_roles)
-        data = CacheData(
+        data = CacheData.create(
             metadata=CacheMetadata(
                 roles_count=len(sample_roles),
                 operations_count=len(sample_operations),
@@ -1073,7 +1073,7 @@ class TestWorkerUpdateFlow:
         # Save cache to disk with precomputed data
         roles_by_id = build_roles_by_id(sample_roles)
         precomputed_role_coverage = {"reader-role-id": ({"op1"}, {"op2"})}
-        data = CacheData(
+        data = CacheData.create(
             metadata=CacheMetadata(
                 roles_count=len(sample_roles),
                 operations_count=len(sample_operations),
@@ -1101,13 +1101,13 @@ class TestWorkerUpdateFlow:
         get_cache_service().container._loaded_version = "1000.0"
 
         # Set initial data
-        get_cache_service().container._cache = CacheData(
+        get_cache_service().container._cache = CacheData.create(
             all_operations=[OperationData(name="old-op", is_data_action=False)]
         )
 
         # Save new cache to disk
         roles_by_id = build_roles_by_id(sample_roles)
-        data = CacheData(
+        data = CacheData.create(
             metadata=CacheMetadata(
                 roles_count=len(sample_roles),
                 operations_count=len(sample_operations),
@@ -1143,7 +1143,7 @@ class TestPeriodicRefreshFlow:
         # Initial setup
         populate_cache_with_operations(get_cache_service().container, sample_operations)
         roles_by_id = build_roles_by_id(sample_roles)
-        get_cache_service().container._cache = CacheData(
+        get_cache_service().container._cache = CacheData.create(
             all_operations=sample_operations,
             roles_by_id=roles_by_id,
             ops_by_name_lower=get_cache_service().container.cache.ops_by_name_lower,
@@ -1169,7 +1169,7 @@ class TestPeriodicRefreshFlow:
         # Setup with sample data
         populate_cache_with_operations(get_cache_service().container, sample_operations)
         roles_by_id = build_roles_by_id(sample_roles)
-        get_cache_service().container._cache = CacheData(
+        get_cache_service().container._cache = CacheData.create(
             all_operations=sample_operations,
             roles_by_id=roles_by_id,
             ops_by_name_lower=get_cache_service().container.cache.ops_by_name_lower,
@@ -1227,7 +1227,7 @@ class TestInvalidationAfterDataChange:
         """Verify invalidate_all clears all caches including disk."""
         # Save to disk
         roles_by_id = build_roles_by_id(sample_roles)
-        data = CacheData(
+        data = CacheData.create(
             metadata=CacheMetadata(
                 roles_count=len(sample_roles),
                 operations_count=len(sample_operations),
@@ -1262,7 +1262,7 @@ class TestInvalidationAfterDataChange:
         assert container.get_allowing_roles("roles_allowing_op:test") is not None
 
         # Atomic swap with new data
-        new_cache = CacheData(all_operations=sample_operations)
+        new_cache = CacheData.create(all_operations=sample_operations)
         container.swap(new_cache)
 
         # allowing_roles_cache should be cleared
@@ -1285,7 +1285,7 @@ class TestCacheLifecycleE2E:
         # Build from "database"
         populate_cache_with_operations(get_cache_service().container, sample_operations)
         roles_by_id = build_roles_by_id(sample_roles)
-        get_cache_service().container._cache = CacheData(
+        get_cache_service().container._cache = CacheData.create(
             all_operations=sample_operations,
             roles_by_id=roles_by_id,
             ops_by_name_lower=get_cache_service().container.cache.ops_by_name_lower,
@@ -1353,7 +1353,7 @@ class TestCacheLifecycleE2E:
         # Initial setup
         populate_cache_with_operations(get_cache_service().container, sample_operations)
         roles_by_id = build_roles_by_id(sample_roles)
-        get_cache_service().container._cache = CacheData(
+        get_cache_service().container._cache = CacheData.create(
             all_operations=sample_operations,
             roles_by_id=roles_by_id,
             ops_by_name_lower=get_cache_service().container.cache.ops_by_name_lower,
@@ -1410,7 +1410,7 @@ class TestCacheLifecycleE2E:
 
         populate_cache_with_operations(get_cache_service().container, sample_operations)
         roles_by_id = {r.role_id: {"role_id": r.role_id, "role_json": r.to_dict()} for r in roles}
-        get_cache_service().container._cache = CacheData(
+        get_cache_service().container._cache = CacheData.create(
             all_operations=sample_operations,
             roles_by_id=roles_by_id,
             ops_by_name_lower=get_cache_service().container.cache.ops_by_name_lower,
@@ -1443,7 +1443,7 @@ class TestCacheLifecycleE2E:
         # Setup initial state
         populate_cache_with_operations(get_cache_service().container, sample_operations)
         roles_by_id = build_roles_by_id(sample_roles)
-        get_cache_service().container._cache = CacheData(
+        get_cache_service().container._cache = CacheData.create(
             all_operations=sample_operations,
             roles_by_id=roles_by_id,
             ops_by_name_lower=get_cache_service().container.cache.ops_by_name_lower,

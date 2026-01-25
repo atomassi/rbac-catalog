@@ -5,30 +5,25 @@ Tests for the pure functions in azurerbac.cache.build:
 - build_operations_prefix_index
 """
 
-import datetime as dt
-import os
 import pickle
 from datetime import UTC, datetime
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
-from azurerbac.analytics.models import AnalyticsData, DailyChanges
 from azurerbac.azure.models import OperationData, RoleDefinition
 from azurerbac.cache import (
-    CacheContainer,
     CacheData,
     CachedChangeEvent,
     CachedRole,
     CacheMetadata,
+    CacheService,
     PatternCacheKey,
     Plane,
-    Sitemap,
     compute_operations_hash,
     compute_roles_hash,
     get_cache_service,
 )
-from azurerbac.cache.backends import FileCacheBackend
 from azurerbac.cache.build import (
     _build_operation_to_roles,
     build_operations_prefix_index,
@@ -322,8 +317,8 @@ class TestLowerOptimization:
 
     def test_ops_lowered_to_orig_restores_casing(self):
         """Test that ops_lowered_to_orig correctly restores original operation casing."""
+        from azurerbac.cache import CacheService
         from azurerbac.cache.build import precompute_all
-        from azurerbac.cache.container import CacheContainer
 
         operations = [
             OperationData(name="Microsoft.Storage/storageAccounts/read", is_data_action=False),
@@ -348,11 +343,11 @@ class TestLowerOptimization:
         ]
 
         cache_data = precompute_all(roles, operations)
-        container = CacheContainer()
-        container.swap(cache_data)
+        service = CacheService()
+        service.swap(cache_data)
 
         # Verify mapping exists and is correct
-        mapping = container.get_ops_lowered_to_orig()
+        mapping = service.get_ops_lowered_to_orig()
         assert (
             mapping["microsoft.storage/storageaccounts/read"]
             == "Microsoft.Storage/storageAccounts/read"
@@ -371,7 +366,7 @@ class TestLowerOptimization:
             "microsoft.storage/storageaccounts/read",
             "microsoft.compute/virtualmachines/start/action",
         ]
-        restored = container.restore_operation_casing(lowered_ops)
+        restored = service.restore_operation_casing(lowered_ops)
         assert restored == [
             "Microsoft.Storage/storageAccounts/read",
             "Microsoft.Compute/virtualMachines/start/action",
@@ -379,7 +374,7 @@ class TestLowerOptimization:
 
         # Verify unknown operations are returned as-is
         unknown_ops = ["unknown.operation/read"]
-        restored_unknown = container.restore_operation_casing(unknown_ops)
+        restored_unknown = service.restore_operation_casing(unknown_ops)
         assert restored_unknown == ["unknown.operation/read"]
 
 
@@ -564,7 +559,7 @@ class TestPreloadCache:
         """Test populate_cache_with_operations builds correct indexes."""
         from tests.helpers import populate_cache_with_operations
 
-        cache = CacheContainer()
+        cache = CacheService()
         populate_cache_with_operations(cache, sample_operations)
 
         assert cache.get_all_operations() == sample_operations
@@ -576,7 +571,7 @@ class TestPreloadCache:
         """Test populate_cache_with_roles builds correct index."""
         from tests.helpers import populate_cache_with_roles
 
-        cache = CacheContainer()
+        cache = CacheService()
         populate_cache_with_roles(cache, sample_roles_db_format)
 
         assert len(cache.cache.roles_by_id) == 2
@@ -590,7 +585,7 @@ class TestPreloadCache:
         """Test populate_cache_with_operations doesn't overwrite other cache data."""
         from tests.helpers import populate_cache_with_operations, populate_cache_with_roles
 
-        cache = CacheContainer()
+        cache = CacheService()
         populate_cache_with_roles(cache, sample_roles_db_format)
         populate_cache_with_operations(cache, sample_operations)
 
@@ -603,7 +598,7 @@ class TestPreloadCache:
         """Test populate_cache_with_roles doesn't overwrite other cache data."""
         from tests.helpers import populate_cache_with_operations, populate_cache_with_roles
 
-        cache = CacheContainer()
+        cache = CacheService()
         populate_cache_with_operations(cache, sample_operations)
         populate_cache_with_roles(cache, sample_roles_db_format)
 
@@ -614,7 +609,7 @@ class TestPreloadCache:
 
     def test_set_metadata(self):
         """Test set_metadata updates metadata fields."""
-        cache = CacheContainer()
+        cache = CacheService()
 
         providers = ["Microsoft.Storage", "Microsoft.Compute"]
 
@@ -628,7 +623,7 @@ class TestPreloadCache:
         """Test populate_cache_with_events caches events."""
         from tests.helpers import populate_cache_with_events
 
-        cache = CacheContainer()
+        cache = CacheService()
 
         events = [
             CachedChangeEvent(
@@ -646,7 +641,7 @@ class TestPreloadCache:
         """Test get_role_by_id returns correct CachedRole."""
         from tests.helpers import populate_cache_with_roles
 
-        cache = CacheContainer()
+        cache = CacheService()
         populate_cache_with_roles(cache, sample_roles_db_format)
 
         role = cache.get_role_by_id("role-1")
@@ -661,7 +656,7 @@ class TestPreloadCache:
         """Test get_all_roles returns RoleDefinition objects."""
         from tests.helpers import populate_cache_with_roles
 
-        cache = CacheContainer()
+        cache = CacheService()
         populate_cache_with_roles(cache, sample_roles_db_format)
 
         roles = cache.get_all_roles()
@@ -673,7 +668,7 @@ class TestPreloadCache:
         """Test get_change_events returns cached events."""
         from tests.helpers import populate_cache_with_events
 
-        cache = CacheContainer()
+        cache = CacheService()
         events = [
             CachedChangeEvent(
                 id=1, role_id="role-1", role_name="Role 1", event_type=EventType.CREATED
@@ -687,7 +682,7 @@ class TestPreloadCache:
         """Test get_events_for_role filters by role_id."""
         from tests.helpers import populate_cache_with_events
 
-        cache = CacheContainer()
+        cache = CacheService()
         events = [
             CachedChangeEvent(
                 id=1, role_id="role-1", role_name="Role 1", event_type=EventType.CREATED
@@ -707,7 +702,7 @@ class TestPreloadCache:
 
     def test_role_pages_cache(self):
         """Test role pages caching."""
-        cache = CacheContainer()
+        cache = CacheService()
 
         page_key = "roles:active::name:asc:1:50"
         roles = [{"role_id": "role-1"}]
@@ -718,7 +713,7 @@ class TestPreloadCache:
 
     def test_allowing_roles_cache(self):
         """Test allowing_roles key-value cache."""
-        cache = CacheContainer()
+        cache = CacheService()
 
         cache.set_allowing_roles("my_key", [])  # type: ignore[arg-type]
         assert cache.get_allowing_roles("my_key") == []
@@ -726,7 +721,7 @@ class TestPreloadCache:
 
     def test_swap_clears_allowing_roles_cache(self):
         """Test swap clears allowing_roles_cache."""
-        cache = CacheContainer()
+        cache = CacheService()
         cache.set_allowing_roles("my_key", [])  # type: ignore[arg-type]
 
         new_cache_data = CacheData()
@@ -736,7 +731,7 @@ class TestPreloadCache:
 
     def test_swap_clears_role_pages(self):
         """Test swap clears role_pages cache."""
-        cache = CacheContainer()
+        cache = CacheService()
         page_key = "roles:active::name:asc:1:50"
         cache.set_role_page(page_key, [{"role_id": "role-1"}])
 
@@ -747,7 +742,7 @@ class TestPreloadCache:
 
     def test_role_pages_cache_count(self):
         """Test role pages caching for count values."""
-        cache = CacheContainer()
+        cache = CacheService()
 
         count_key = "roles_count:active"
         cache.set_role_page(count_key, 500)
@@ -755,7 +750,7 @@ class TestPreloadCache:
 
     def test_operation_pages_cache(self):
         """Test operation pages caching."""
-        cache = CacheContainer()
+        cache = CacheService()
 
         page_key = "ops:all:name:asc:1:25"
         operations = [{"name": "Microsoft.Storage/read"}]
@@ -766,7 +761,7 @@ class TestPreloadCache:
 
     def test_operation_pages_cache_count(self):
         """Test operation pages caching for count values."""
-        cache = CacheContainer()
+        cache = CacheService()
 
         count_key = "ops_count:all"
         cache.set_operation_page(count_key, 21000)
@@ -774,7 +769,7 @@ class TestPreloadCache:
 
     def test_swap_clears_operation_pages(self):
         """Test swap clears operation_pages cache."""
-        cache = CacheContainer()
+        cache = CacheService()
         page_key = "ops:all:name:asc:1:25"
         cache.set_operation_page(page_key, [{"name": "op1"}])
 
@@ -782,6 +777,34 @@ class TestPreloadCache:
         cache.swap(new_cache_data)
 
         assert cache.get_operation_page(page_key) is None
+
+    def test_swap_clears_filtered_events(self):
+        """Test swap clears filtered_events cache."""
+        cache = CacheService()
+        cache.set_filtered_events("7:all", [])  # type: ignore[arg-type]
+
+        new_cache_data = CacheData()
+        cache.swap(new_cache_data)
+
+        assert cache.get_filtered_events("7:all") is None
+
+    def test_reset_clears_all_request_caches(self):
+        """Test reset clears all RequestCaches (role_pages, operation_pages, etc)."""
+        cache = CacheService()
+
+        # Populate all request caches
+        cache.set_role_page("roles:page:1", [{"id": "r1"}])
+        cache.set_operation_page("ops:page:1", [{"name": "op1"}])
+        cache.set_allowing_roles("key1", [])  # type: ignore[arg-type]
+        cache.set_filtered_events("7:all", [])  # type: ignore[arg-type]
+
+        cache.reset()
+
+        # All should be cleared
+        assert cache.get_role_page("roles:page:1") is None
+        assert cache.get_operation_page("ops:page:1") is None
+        assert cache.get_allowing_roles("key1") is None
+        assert cache.get_filtered_events("7:all") is None
 
 
 class TestPreloadCacheIntegration:
@@ -843,10 +866,9 @@ class TestPreloadCacheIntegration:
 
         # Create a mock cache service
         mock_service = MagicMock()
-        mock_container = MagicMock(spec=CacheContainer)
-        mock_container.cache = CacheData()
-        mock_service.container = mock_container
+        mock_service.cache = CacheData()
         mock_service.rebuild_in_memory = AsyncMock(return_value=True)
+        mock_service.set_role_page = MagicMock()
 
         # Mock database session
         mock_session = AsyncMock()
@@ -873,91 +895,11 @@ class TestPreloadCacheIntegration:
             await preload_cache(mock_session_local)
 
         mock_service.rebuild_in_memory.assert_awaited_once_with(mock_session)
-        mock_container.set_role_page.assert_called()
-
-
-class TestCacheContainerReloadLock:
-    """Tests for reload_if_needed thread safety."""
-
-    async def test_reload_lock_prevents_concurrent_calls(self) -> None:
-        """Verify reload skips if lock is held."""
-        from unittest.mock import MagicMock, patch
-
-        from azurerbac.cache import get_cache_service
-
-        get_cache_service().container.loaded_version = "1000"
-
-        # Acquire the async lock manually
-        await get_cache_service().container.reload_lock.acquire()
-
-        try:
-            # Try to reload - should return False immediately (lock held)
-            mock_backend = MagicMock()
-            mock_backend.get_version.return_value = "2000"
-            with patch("azurerbac.cache.service.CacheService.backend", return_value=mock_backend):
-                result = await get_cache_service().reload_if_needed()
-            assert result is False
-        finally:
-            get_cache_service().container.reload_lock.release()
-
-    async def test_reload_releases_lock_on_success(self) -> None:
-        """Verify lock is released after successful reload."""
-        from unittest.mock import AsyncMock, MagicMock, patch
-
-        from azurerbac.cache import CacheData, CacheMetadata
-
-        service = get_cache_service()
-        service.container.loaded_version = "1000"
-
-        mock_op = OperationData(name="op1", isDataAction=False)
-        mock_data = CacheData.create(
-            metadata=CacheMetadata(roles_count=1, operations_count=1),
-            roles_by_id=make_cached_roles_by_id(
-                [
-                    RoleDefinition.model_validate(
-                        {"name": "role1", "properties": {"roleName": "Role1"}}
-                    )
-                ]
-            ),
-            all_operations=[mock_op],
-            unique_providers=["Microsoft.Test"],
-        )
-
-        mock_backend = MagicMock()
-        mock_backend.get_version.return_value = "2000"
-        mock_backend.load = AsyncMock(return_value=mock_data)
-
-        # Patch the instance's backend
-        with patch.object(service, "_backend", mock_backend):
-            result = await service.reload_if_needed()
-
-        assert result is True
-        # Lock should be released - we can acquire it
-        assert not service.container.reload_lock.locked()
-
-    async def test_reload_releases_lock_on_failure(self) -> None:
-        """Verify lock is released if reload fails."""
-        from unittest.mock import AsyncMock, MagicMock, patch
-
-        from azurerbac.cache import get_cache_service
-
-        service = get_cache_service()
-        service.container.loaded_version = "1000"
-
-        mock_backend = MagicMock()
-        mock_backend.get_version.return_value = "2000"
-        mock_backend.load = AsyncMock(return_value=None)
-
-        with patch.object(service, "_backend", mock_backend):
-            result = await service.reload_if_needed()
-
-        assert result is False
-        # Lock should be released
-        assert not service.container.reload_lock.locked()
+        mock_service.set_role_page.assert_called()
 
 
 # =============================================================================
-# Test Fixtures for Disk Cache Tests
+# Test Fixtures for Hash Computation Tests
 # =============================================================================
 
 
@@ -1177,469 +1119,6 @@ class TestCacheData:
         assert restored.metadata.roles_count == len(sample_roles)
         assert restored.roles_by_id == roles_by_id
         assert restored.all_operations == sample_operations
-
-
-# =============================================================================
-# Tests for Cache File Operations
-# =============================================================================
-
-
-class TestCacheFileOperations:
-    """Tests for save/load/delete cache file operations."""
-
-    async def test_save_and_load_cache(
-        self, temp_cache_dir, sample_roles, sample_operations
-    ) -> None:
-        """Test saving and loading cache from disk."""
-        backend = get_cache_service().backend
-        metadata = CacheMetadata(
-            roles_count=len(sample_roles),
-            operations_count=len(sample_operations),
-        )
-        # Build CachedRole objects from RoleDefinitions
-        roles_by_id = make_cached_roles_by_id(sample_roles)
-        data = CacheData.create(
-            metadata=metadata,
-            roles_by_id=roles_by_id,
-            all_operations=sample_operations,
-        )
-
-        # Save
-        result = await backend.save(data)
-        assert result is True
-        assert (temp_cache_dir / "app_cache.msgpack").exists()
-
-        # Load
-        loaded = await backend.load()
-        assert loaded is not None
-        assert loaded.metadata.roles_count == len(sample_roles)
-        # Compare role_ids
-        assert set(loaded.roles_by_id.keys()) == set(roles_by_id.keys())
-        # Verify loaded roles are CachedRole objects
-        for role_id, cached_role in loaded.roles_by_id.items():
-            assert cached_role.role_name == roles_by_id[role_id].role_name
-
-    async def test_save_and_load_with_role_coverage(
-        self, temp_cache_dir, sample_roles, sample_operations
-    ) -> None:
-        """Test that role_coverage and derived properties work after disk roundtrip."""
-        from tests.test_cache_e2e import build_complete_cache
-
-        backend = get_cache_service().backend
-
-        # Build a complete cache with role_coverage computed
-        cache_data = build_complete_cache(sample_roles, sample_operations)
-
-        # Save
-        result = await backend.save(cache_data)
-        assert result is True
-
-        # Load
-        loaded = await backend.load()
-        assert loaded is not None
-
-        # Verify role_coverage is properly reconstructed (sets, not lists)
-        assert len(loaded.role_coverage) == len(cache_data.role_coverage)
-        for coverage in loaded.role_coverage.values():
-            assert isinstance(coverage.control, set), "control should be a set after load"
-            assert isinstance(coverage.data, set), "data should be a set after load"
-
-        # Verify derived properties work (role_net_permissions)
-        # Computed on-access from role_coverage
-        assert len(loaded.role_net_permissions) == len(loaded.role_coverage)
-        for role_id in loaded.role_coverage:
-            net_perms = loaded.role_net_permissions[role_id]
-            coverage = loaded.role_coverage[role_id]
-            assert net_perms.control_count == len(coverage.control)
-            assert net_perms.data_count == len(coverage.data)
-
-    async def test_load_nonexistent_cache(self, temp_cache_dir) -> None:
-        """Loading nonexistent cache returns None."""
-        backend = get_cache_service().backend
-        result = await backend.load()
-        assert result is None
-
-    async def test_delete_cache(self, temp_cache_dir, sample_roles) -> None:
-        """Test deleting cache file."""
-        backend = get_cache_service().backend
-        # Create a cache file with valid data (roles + operations)
-        metadata = CacheMetadata(roles_count=len(sample_roles), operations_count=1)
-        roles_by_id = make_cached_roles_by_id(sample_roles)
-        all_operations = [OperationData(name="test/op", isDataAction=False)]
-        data = CacheData.create(
-            metadata=metadata, roles_by_id=roles_by_id, all_operations=all_operations
-        )
-        await backend.save(data)
-        assert (temp_cache_dir / "app_cache.msgpack").exists()
-
-        # Delete
-        await backend.delete()
-        assert not (temp_cache_dir / "app_cache.msgpack").exists()
-
-    async def test_delete_nonexistent_cache(self, temp_cache_dir):
-        """Deleting nonexistent cache doesn't raise error."""
-        backend = get_cache_service().backend
-        # Should not raise
-        await backend.delete()
-
-    async def test_load_corrupted_cache(self, temp_cache_dir) -> None:
-        """Loading corrupted cache returns None."""
-        # Write corrupted data
-        cache_file = temp_cache_dir / "app_cache.msgpack"
-        cache_file.write_bytes(b"not valid pickle data")
-
-        backend = get_cache_service().backend
-        result = await backend.load()
-        assert result is None
-
-    async def test_save_and_load_analytics_data(
-        self, temp_cache_dir, sample_roles, sample_operations
-    ) -> None:
-        """Test that analytics data is correctly reconstructed when loading from disk."""
-        backend = get_cache_service().backend
-
-        # Create analytics data with daily changes
-        analytics = AnalyticsData(
-            daily_changes=[
-                DailyChanges(date=dt.date(2026, 1, 15), additions=5, updates=3, deletions=1),
-                DailyChanges(date=dt.date(2026, 1, 16), additions=2, updates=0, deletions=0),
-            ],
-            new_operations_30d=10,
-            total_operations=100,
-            total_providers=15,
-        )
-
-        metadata = CacheMetadata(
-            roles_count=len(sample_roles),
-            operations_count=len(sample_operations),
-        )
-        roles_by_id = make_cached_roles_by_id(sample_roles)
-        data = CacheData.create(
-            metadata=metadata,
-            roles_by_id=roles_by_id,
-            all_operations=sample_operations,
-            analytics=analytics,
-        )
-
-        # Save and load
-        await backend.save(data)
-        loaded = await backend.load()
-
-        # Verify analytics is an AnalyticsData object, not a dict
-        assert loaded is not None
-        assert loaded.analytics is not None
-        assert isinstance(loaded.analytics, AnalyticsData)
-
-        # Verify analytics data is correct
-        assert len(loaded.analytics.daily_changes) == 2
-        assert loaded.analytics.daily_changes[0].additions == 5
-        assert loaded.analytics.daily_changes[0].updates == 3
-        assert loaded.analytics.daily_changes[0].deletions == 1
-        assert loaded.analytics.new_operations_30d == 10
-        assert loaded.analytics.total_operations == 100
-        assert loaded.analytics.total_providers == 15
-
-        # Verify daily_changes items are DailyChanges objects (not dicts)
-        for dc in loaded.analytics.daily_changes:
-            assert isinstance(dc, DailyChanges)
-            assert hasattr(dc, "date")
-            assert hasattr(dc, "additions")
-
-    async def test_save_and_load_sitemap_data(
-        self, temp_cache_dir, sample_roles, sample_operations
-    ) -> None:
-        """Test that sitemap data is correctly reconstructed when loading from disk."""
-        backend = get_cache_service().backend
-
-        # Create sitemap data
-        sitemap = Sitemap(
-            content='<?xml version="1.0"?><urlset><url><loc>https://test.com/</loc></url></urlset>',
-            built_at=datetime(2026, 1, 24, 12, 0, 0, tzinfo=UTC),
-        )
-
-        metadata = CacheMetadata(
-            roles_count=len(sample_roles),
-            operations_count=len(sample_operations),
-        )
-        roles_by_id = make_cached_roles_by_id(sample_roles)
-        data = CacheData.create(
-            metadata=metadata,
-            roles_by_id=roles_by_id,
-            all_operations=sample_operations,
-            sitemap=sitemap,
-        )
-
-        # Save and load
-        await backend.save(data)
-        loaded = await backend.load()
-
-        # Verify sitemap is a Sitemap object, not a dict
-        assert loaded is not None
-        assert loaded.sitemap is not None
-        assert isinstance(loaded.sitemap, Sitemap)
-
-        # Verify sitemap data is correct
-        assert loaded.sitemap.content == sitemap.content
-        assert loaded.sitemap.built_at == sitemap.built_at
-
-
-# =============================================================================
-# Tests for Cache Directory
-# =============================================================================
-
-
-class TestCacheDirectory:
-    """Tests for cache directory selection."""
-
-    def test_local_cache_dir(self):
-        """Local development uses local .cache directory."""
-        # Reset backend's cached directory to force recomputation
-        backend = get_cache_service().backend
-        assert isinstance(backend, FileCacheBackend)
-        backend._cache_dir = None  # pyright: ignore[reportPrivateUsage]
-
-        with patch.dict(os.environ, {}, clear=True):
-            # Remove APP_ENVIRONMENT_NAME if present to simulate local
-            os.environ.pop("APP_ENVIRONMENT_NAME", None)
-            cache_dir = backend.cache_dir
-            assert ".cache" in str(cache_dir) or "cache" in str(cache_dir)
-
-    def test_azure_cache_dir(self):
-        """Azure App Service uses /home/cache directory."""
-        # Reset backend's cached directory to force recomputation
-        backend = get_cache_service().backend
-        assert isinstance(backend, FileCacheBackend)
-        backend._cache_dir = None  # pyright: ignore[reportPrivateUsage]
-
-        with (
-            patch.dict(os.environ, {"APP_ENVIRONMENT_NAME": "production"}),
-            patch("pathlib.Path.mkdir"),
-        ):
-            cache_dir = backend.cache_dir
-            assert "/home/cache" in str(cache_dir)
-
-
-# =============================================================================
-# Tests for Cache Reload Logic
-# =============================================================================
-
-
-class TestCacheReloadLogic:
-    """Tests for cache reload detection and handling edge cases."""
-
-    async def test_version_updated_on_failed_reload_incomplete_cache(self) -> None:
-        """When reload fails due to incomplete cache, version should still be updated.
-
-        This prevents retry loops when a bad cache file exists on disk.
-        """
-        from unittest.mock import AsyncMock, MagicMock, patch
-
-        from azurerbac.cache import get_cache_service
-
-        service = get_cache_service()
-        service.container.loaded_version = "1000"
-
-        # Create incomplete cache data (no operations)
-        incomplete_cache = CacheData.create(
-            roles_by_id=make_cached_roles_by_id(
-                [
-                    RoleDefinition.model_validate(
-                        {"name": "role1", "properties": {"roleName": "Role1"}}
-                    )
-                ]
-            ),
-            all_operations=[],  # Empty - will fail validation
-        )
-
-        mock_backend = MagicMock()
-        mock_backend.get_version.return_value = "2000"
-        mock_backend.load = AsyncMock(return_value=incomplete_cache)
-
-        with patch.object(service, "_backend", mock_backend):
-            # Reload should fail but update version
-            result = await service.reload_if_needed()
-            assert result is False
-            # Crucially: version should be updated to prevent retry loop
-            assert service.container.loaded_version == "2000"
-
-    async def test_version_updated_on_failed_reload_version_mismatch(self) -> None:
-        """When reload fails due to version mismatch, version should still be updated."""
-        from unittest.mock import AsyncMock, MagicMock, patch
-
-        from azurerbac.cache import get_cache_service
-
-        service = get_cache_service()
-        service.container.loaded_version = "1000"
-
-        # Create cache with wrong version
-        old_cache = CacheData.create(
-            metadata=CacheMetadata(version="old-version"),
-            roles_by_id=make_cached_roles_by_id(
-                [
-                    RoleDefinition.model_validate(
-                        {"name": "role1", "properties": {"roleName": "Role1"}}
-                    )
-                ]
-            ),
-            all_operations=[OperationData(name="op1", isDataAction=False)],
-        )
-
-        mock_backend = MagicMock()
-        mock_backend.get_version.return_value = "2000"
-        mock_backend.load = AsyncMock(return_value=old_cache)
-
-        with patch.object(service, "_backend", mock_backend):
-            result = await service.reload_if_needed()
-            assert result is False
-            # version should be updated to prevent retry loop
-            assert service.container.loaded_version == "2000"
-
-    def test_no_reload_when_version_same(self) -> None:
-        """No reload triggered when disk version equals loaded version."""
-        from unittest.mock import MagicMock, patch
-
-        from azurerbac.cache import get_cache_service
-
-        service = get_cache_service()
-        service.container.loaded_version = "1000"
-
-        mock_backend = MagicMock()
-        mock_backend.get_version.return_value = "1000"
-
-        with patch.object(service, "_backend", mock_backend):
-            result = service.needs_reload()
-            assert result is False
-
-    def test_reload_when_version_different(self) -> None:
-        """Reload triggered when disk version differs from loaded version."""
-        from unittest.mock import MagicMock, patch
-
-        from azurerbac.cache import get_cache_service
-
-        service = get_cache_service()
-        service.container.loaded_version = "1000"
-
-        mock_backend = MagicMock()
-        mock_backend.get_version.return_value = "2000"  # Different version
-
-        with patch.object(service, "_backend", mock_backend):
-            result = service.needs_reload()
-            assert result is True  # Should reload when version changes
-
-    async def test_save_incomplete_cache_rejected(self, temp_cache_dir) -> None:
-        """backend.save() should reject incomplete cache data."""
-        backend = get_cache_service().backend
-        # Empty roles
-        data = CacheData.create(
-            roles_by_id={},
-            all_operations=[OperationData(name="op1", isDataAction=False)],
-        )
-        result = await backend.save(data)
-        assert result is False
-        assert not (temp_cache_dir / "app_cache.msgpack").exists()
-
-        # Empty operations
-        data = CacheData.create(
-            roles_by_id=make_cached_roles_by_id(
-                [
-                    RoleDefinition.model_validate(
-                        {"name": "role1", "properties": {"roleName": "Role1"}}
-                    )
-                ]
-            ),
-            all_operations=[],
-        )
-        result = await backend.save(data)
-        assert result is False
-        assert not (temp_cache_dir / "app_cache.msgpack").exists()
-
-
-# =============================================================================
-# Tests for Cache Invalidation Scenarios
-# =============================================================================
-
-
-class TestCacheInvalidation:
-    """Tests for cache invalidation scenarios."""
-
-    async def test_cache_valid_after_app_restart(
-        self, temp_cache_dir, roles_for_hashing, operations_for_hashing
-    ) -> None:
-        """Cache should be valid after simulated app restart."""
-        backend = get_cache_service().backend
-        # Initial save
-        roles_hash = compute_roles_hash(roles_for_hashing)
-        ops_hash = compute_operations_hash(operations_for_hashing)
-
-        metadata = CacheMetadata(
-            roles_count=len(roles_for_hashing),
-            operations_count=len(operations_for_hashing),
-            roles_hash=roles_hash,
-            operations_hash=ops_hash,
-        )
-        roles_by_id = make_cached_roles_by_id(roles_for_hashing)
-        data = CacheData.create(
-            metadata=metadata,
-            roles_by_id=roles_by_id,
-            all_operations=operations_for_hashing,
-        )
-        await backend.save(data)
-
-        # Simulate restart - load cache and validate
-        loaded = await backend.load()
-        assert loaded is not None
-        assert loaded.metadata.is_valid_for(
-            len(roles_for_hashing),
-            len(operations_for_hashing),
-            roles_hash,
-            ops_hash,
-        )
-
-    async def test_cache_invalid_after_role_added(
-        self, temp_cache_dir, roles_for_hashing, operations_for_hashing
-    ) -> None:
-        """Cache should be invalid after a new role is added."""
-        backend = get_cache_service().backend
-        metadata = CacheMetadata(
-            roles_count=len(roles_for_hashing),
-            operations_count=len(operations_for_hashing),
-        )
-        roles_by_id = make_cached_roles_by_id(roles_for_hashing)
-        data = CacheData.create(
-            metadata=metadata,
-            roles_by_id=roles_by_id,
-            all_operations=operations_for_hashing,
-        )
-        await backend.save(data)
-
-        loaded = await backend.load()
-        assert loaded is not None
-        # Simulate a new role being added
-        new_roles_count = len(roles_for_hashing) + 1
-        assert not loaded.metadata.is_valid_for(new_roles_count, len(operations_for_hashing))
-
-    async def test_cache_invalid_after_operation_removed(
-        self, temp_cache_dir, roles_for_hashing, operations_for_hashing
-    ) -> None:
-        """Cache should be invalid after an operation is removed."""
-        backend = get_cache_service().backend
-        metadata = CacheMetadata(
-            roles_count=len(roles_for_hashing),
-            operations_count=len(operations_for_hashing),
-        )
-        roles_by_id = make_cached_roles_by_id(roles_for_hashing)
-        data = CacheData.create(
-            metadata=metadata,
-            roles_by_id=roles_by_id,
-            all_operations=operations_for_hashing,
-        )
-        await backend.save(data)
-
-        loaded = await backend.load()
-        assert loaded is not None
-        # Simulate an operation being removed
-        new_ops_count = len(operations_for_hashing) - 1
-        assert not loaded.metadata.is_valid_for(len(roles_for_hashing), new_ops_count)
 
 
 # =============================================================================

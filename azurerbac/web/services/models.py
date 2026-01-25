@@ -13,7 +13,7 @@ from azurerbac.matching.models import RoleCoverage
 
 if TYPE_CHECKING:
     from azurerbac.azure.models import OperationData, Permission, RoleDefinition
-    from azurerbac.cache import CacheContainer
+    from azurerbac.cache import CacheService
     from azurerbac.cache.models import CachedChangeEvent, CachedRole
 
 
@@ -194,7 +194,7 @@ class RolePermissionAnalyzer:
         self,
         role: RoleDefinition,
         *,
-        cache: CacheContainer | None = None,
+        cache: CacheService | None = None,
     ) -> None:
         """Initialize the analyzer."""
         self._role = role
@@ -202,13 +202,13 @@ class RolePermissionAnalyzer:
         self._raw_permissions = RawPermissions.from_permissions(role.properties.permissions)
 
     @property
-    def _cache(self) -> CacheContainer:
-        """Get cache container."""
+    def _cache(self) -> CacheService:
+        """Get cache service."""
         if self._cache_override is not None:
             return self._cache_override
         from azurerbac.cache import get_cache_service
 
-        return get_cache_service().container
+        return get_cache_service()
 
     @property
     def role_id(self) -> str:

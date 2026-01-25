@@ -163,29 +163,10 @@ def mock_session_factory(mock_async_session: AsyncMock) -> MagicMock:
 
 @pytest.fixture
 def temp_cache_dir() -> Generator[Path, None, None]:
-    """Create a temporary directory for cache testing.
-
-    Also configures the cache backend to use this directory.
-    """
-    from azurerbac.cache import get_cache_service
-    from azurerbac.cache.backends import FileCacheBackend
-
-    backend = get_cache_service().backend
-    old_cache_dir: Path | None = None
-
+    """Create a temporary directory for cache testing."""
     with tempfile.TemporaryDirectory() as tmpdir:
         temp_path = Path(tmpdir)
-
-        # Configure backend to use temp directory
-        if isinstance(backend, FileCacheBackend):
-            old_cache_dir = backend._cache_dir  # pyright: ignore[reportPrivateUsage]
-            backend.cache_dir = temp_path
-
         yield temp_path
-
-        # Restore original cache dir
-        if isinstance(backend, FileCacheBackend):
-            backend._cache_dir = old_cache_dir  # pyright: ignore[reportPrivateUsage]
 
 
 # =============================================================================

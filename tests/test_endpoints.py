@@ -59,7 +59,7 @@ async def test_client(async_session_maker):
     )
 
     test_session_maker = async_session_maker
-    cache = get_cache_service().container
+    cache = get_cache_service()
 
     # Store original session maker
     original_session = app_module.SessionLocal

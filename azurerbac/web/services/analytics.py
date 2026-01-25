@@ -15,7 +15,7 @@ def get_analytics_from_cache() -> AnalyticsData:
         HTTPException: 503 Service Unavailable if analytics data is not in cache.
             This indicates the cache was not properly initialized at startup.
     """
-    cache = get_cache_service().container.cache
+    cache = get_cache_service().cache
     if cache.analytics is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

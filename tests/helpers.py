@@ -10,7 +10,7 @@ from azurerbac.cache.models import CachedRole
 from azurerbac.core.constants import ROLE_DEFINITION_TYPE, RoleStatus
 
 if TYPE_CHECKING:
-    from azurerbac.cache.container import CacheContainer
+    from azurerbac.cache import CacheService
     from azurerbac.cache.models import CachedChangeEvent
 
 
@@ -174,7 +174,7 @@ def create_mock_ollama_client(
 # =============================================================================
 
 
-def populate_cache_with_operations(cache: CacheContainer, operations: list[OperationData]) -> None:
+def populate_cache_with_operations(cache: CacheService, operations: list[OperationData]) -> None:
     """Populate cache with operations using swap() pattern."""
     from dataclasses import replace
 
@@ -191,7 +191,7 @@ def populate_cache_with_operations(cache: CacheContainer, operations: list[Opera
     cache.swap(replace(current, source=new_source, indexes=new_indexes))
 
 
-def populate_cache_with_roles(cache: CacheContainer, roles: list[CachedRole]) -> None:
+def populate_cache_with_roles(cache: CacheService, roles: list[CachedRole]) -> None:
     """Populate cache with roles using swap() pattern."""
     from dataclasses import replace
 
@@ -201,7 +201,7 @@ def populate_cache_with_roles(cache: CacheContainer, roles: list[CachedRole]) ->
     cache.swap(replace(current, source=new_source))
 
 
-def populate_cache_with_events(cache: CacheContainer, events: list[CachedChangeEvent]) -> None:
+def populate_cache_with_events(cache: CacheService, events: list[CachedChangeEvent]) -> None:
     """Populate cache with change events using swap() pattern."""
     from dataclasses import replace
 
@@ -210,15 +210,15 @@ def populate_cache_with_events(cache: CacheContainer, events: list[CachedChangeE
     cache.swap(replace(current, source=new_source))
 
 
-def clear_computed_caches(container: CacheContainer | None = None) -> None:
+def clear_computed_caches(service: CacheService | None = None) -> None:
     """Clear computed caches by swapping to cache with empty computed fields."""
     from azurerbac.cache import get_cache_service
     from azurerbac.cache.models import CacheData
 
-    if container is None:
-        container = get_cache_service().container
+    if service is None:
+        service = get_cache_service()
 
-    current = container.cache
+    current = service.cache
     new_cache = CacheData.create(
         all_operations=current.all_operations,
         roles_by_id=current.roles_by_id,
@@ -229,4 +229,4 @@ def clear_computed_caches(container: CacheContainer | None = None) -> None:
         ops_by_name_lower=current.ops_by_name_lower,
         ops_by_prefix=current.ops_by_prefix,
     )
-    container.swap(new_cache)
+    service.swap(new_cache)

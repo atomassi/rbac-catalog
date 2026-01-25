@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from fastapi.templating import Jinja2Templates
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-    from azurerbac.cache import CacheContainer
+    from azurerbac.cache import CacheService
     from azurerbac.core.models import Operation, Role, RoleHistory, RoleScanStatus
 
 
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 class BaseDeps:
     """Common dependencies for all routes."""
 
-    app_cache: CacheContainer
+    app_cache: CacheService
     SessionLocal: async_sessionmaker[AsyncSession]
 
 

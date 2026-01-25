@@ -13,9 +13,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from azurerbac.cache import get_cache_service
-from azurerbac.cache.backends import CACHE_FILENAME
-from azurerbac.core import Role
 from azurerbac.core.constants import RoleStatus
+from azurerbac.core.models import Role
 from azurerbac.settings import Settings
 
 logger = logging.getLogger(__name__)
@@ -51,15 +50,14 @@ async def preload_cache(session_factory: async_sessionmaker[AsyncSession]) -> No
                 page_roles = roles_result.scalars().all()
                 if page_roles:
                     cache_key = f"roles:active::name:asc:{page}:50"
-                    service.container.set_role_page(cache_key, list(page_roles))
+                    service.set_role_page(cache_key, list(page_roles))
                     pages_loaded += 1
             timer.rows = pages_loaded * 50
         logger.info("Loaded %d pages (%d roles)", pages_loaded, pages_loaded * 50)
 
     elapsed = time.time() - start
-    container = service.container
-    roles_count = len(container.cache.roles_by_id)
-    operations_count = len(container.cache.all_operations)
+    roles_count = len(service.cache.roles_by_id)
+    operations_count = len(service.cache.all_operations)
     logger.info("CACHE INITIALIZATION COMPLETE in %.2fs", elapsed)
     logger.info("Roles: %d | Operations: %d", roles_count, operations_count)
 
@@ -71,14 +69,11 @@ async def preload_cache(session_factory: async_sessionmaker[AsyncSession]) -> No
 
 
 async def cache_refresh_task(session_factory: async_sessionmaker[AsyncSession]) -> None:
-    """Background task to check for cache updates and periodic recompute.
+    """Background task for periodic cache refresh from database.
 
-    The cache refresh flow:
-    1. At startup: preload_cache() builds from database
-    2. Worker detects changes: saves new cache to disk
-    3. File watcher detects change, sets pending_reload flag
-    4. This task checks the flag and reloads from disk
-    5. Every 1 hour: rebuilds from database to ensure consistency
+    Simple refresh flow:
+    - At startup: preload_cache() builds from database
+    - Every 2 hours: rebuild from database to ensure consistency
 
     Args:
         session_factory: Async session factory for database access
@@ -87,79 +82,39 @@ async def cache_refresh_task(session_factory: async_sessionmaker[AsyncSession]) 
 
     settings = Settings.get()
     service = get_cache_service()
-    # Track when we last rebuilt from database
-    last_db_rebuild = time.time()
-
-    # Subscribe to cache change notifications (file watcher for FileCacheBackend)
-    if service.backend.subscribe(service.mark_pending_reload):
-        logger.info("Background: cache change subscription active for %s", CACHE_FILENAME)
-    else:
-        logger.warning(
-            "Background: cache subscription not supported, will rely on polling fallback"
-        )
 
     try:
         while True:
-            await anyio.sleep(settings.cache_check_interval_seconds)
+            # Sleep for the configured interval (default: 2 hours)
+            await anyio.sleep(settings.db_rebuild_interval_seconds)
+
             try:
-                # Check if worker has updated the disk cache (flag set by watcher)
-                # reload_if_needed uses async lock and thread pool for I/O
+                logger.info("Background: periodic rebuild from database")
                 start_time = time.time()
-                reloaded = await service.reload_if_needed()
-                if reloaded:
-                    elapsed = time.time() - start_time
-                    logger.info("Background: cache reloaded from disk in %.2fs", elapsed)
-                    last_db_rebuild = time.time()  # Reset timer on any refresh
 
-                    # Keep AI recommender consistent with the in-memory cache
-                    try:
-                        from azurerbac.airecommender import get_ai_recommender
+                async with session_factory() as session:
+                    if await service.rebuild_in_memory(session):
+                        elapsed = time.time() - start_time
+                        logger.info("Background: periodic rebuild completed in %.2fs", elapsed)
 
-                        active_roles = service.container.get_all_roles()
-                        get_ai_recommender().initialize(active_roles)
-                    except Exception as e:
-                        logger.warning(
-                            "Background: AI recommender reload failed (non-fatal): %s", e
+                        track_cache_refresh(
+                            elapsed,
+                            "periodic",
+                            len(service.cache.roles_by_id),
+                            len(service.get_all_operations()),
                         )
+                    else:
+                        logger.warning("Background: periodic rebuild skipped or failed")
+                        track_cache_refresh_failure("periodic", "rebuild_in_memory returned False")
 
-                    container = service.container
-                    track_cache_refresh(
-                        elapsed,
-                        "worker",
-                        len(container.cache.roles_by_id),
-                        len(container.get_all_operations()),
-                    )
-                    continue
-
-                # Periodic rebuild from database every 1 hour
-                if time.time() - last_db_rebuild >= settings.db_rebuild_interval_seconds:
-                    logger.info("Background: periodic rebuild from database (1 hour elapsed)")
-                    start_time = time.time()
-                    async with session_factory() as session:
-                        if await service.rebuild_in_memory(session):
-                            elapsed = time.time() - start_time
-                            last_db_rebuild = time.time()
-                            logger.info("Background: periodic rebuild completed in %.2fs", elapsed)
-                            container = service.container
-                            track_cache_refresh(
-                                elapsed,
-                                "periodic",
-                                len(container.cache.roles_by_id),
-                                len(container.get_all_operations()),
-                            )
-                        else:
-                            logger.warning("Background: periodic rebuild skipped or failed")
-                            track_cache_refresh_failure(
-                                "periodic", "rebuild_in_memory returned False"
-                            )
             except anyio.get_cancelled_exc_class():
                 raise  # Re-raise to allow clean shutdown
             except Exception as e:
                 logger.exception("Background: cache refresh error: %s", e)
                 track_cache_refresh_failure("background_task", str(e))
+
     except anyio.get_cancelled_exc_class():
         logger.info("Background: shutting down cache refresh task")
-        service.backend.unsubscribe()
         raise  # Always re-raise CancelledError
 
 

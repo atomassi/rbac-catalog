@@ -5,14 +5,16 @@ CacheData Structure
 CacheData is the unified cache container holding all application state.
 It's designed for atomic swaps - the entire object is replaced, never mutated.
 
-    CacheData
+    CacheData (immutable snapshot)
     ├── metadata: CacheMetadata          # Versioning and invalidation
     ├── source: SourceData               # Raw DB data (immutable after load)
     ├── indexes: Indexes                 # Fast lookups (deterministic from source)
     ├── analysis: RoleAnalysis           # Expensive precomputation (built once at refresh)
     ├── computed: ComputedCaches         # Expensive caches, SAVED to disk
-    ├── request: RequestCaches           # Cheap caches, NOT saved to disk (rebuilt lazily)
     └── content: PrerenderedContent      # Pre-built responses (analytics, sitemap)
+
+    CacheContainer (mutable wrapper)
+    └── _request_caches: RequestCaches   # Cheap LRU caches, NOT saved (rebuilt lazily)
 """
 
 from __future__ import annotations
@@ -374,8 +376,10 @@ class CacheData:
         ├── indexes         # Lookup indexes (ops_by_name, ops_by_prefix)
         ├── analysis        # Precomputed (role_coverage, operation_to_roles)
         ├── computed        # Expensive caches, SAVED to disk
-        ├── request         # Cheap caches, NOT saved to disk
         └── content         # Pre-rendered (analytics, sitemap)
+
+    Note: RequestCaches (role_pages, operation_pages, etc.) live on CacheContainer,
+    not here, since they're mutable LRU caches that get cleared on swap.
     """
 
     # Metadata (for versioning and invalidation)
@@ -386,7 +390,6 @@ class CacheData:
     indexes: Indexes = field(default_factory=Indexes)  # Built from source
     analysis: RoleAnalysis = field(default_factory=RoleAnalysis)  # Built from source + indexes
     computed: ComputedCaches = field(default_factory=ComputedCaches)  # Persisted to disk
-    request: RequestCaches = field(default_factory=RequestCaches)  # NOT persisted
     content: PrerenderedContent = field(default_factory=PrerenderedContent)  # Pre-built responses
 
     # =========================================================================

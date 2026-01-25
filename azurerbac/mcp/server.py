@@ -9,7 +9,7 @@ from starlette.applications import Starlette
 
 from azurerbac.airecommender import ai_recommend_roles
 from azurerbac.airecommender.modes import RecommenderMode
-from azurerbac.cache.container import CacheContainer
+from azurerbac.cache import CacheService
 from azurerbac.cache.models import CachedRole
 from azurerbac.core.patterns import is_wildcard_pattern
 from azurerbac.matching import recommend_roles
@@ -57,7 +57,7 @@ class MCPServer:
 
     __slots__ = ("_cache", "_global_limiter", "_mcp", "_session_last_activity", "_session_limiter")
 
-    def __init__(self, cache: CacheContainer) -> None:
+    def __init__(self, cache: CacheService) -> None:
         self._cache = cache
         self._global_limiter = TokenBucketRateLimiter(
             RATE_LIMIT_GLOBAL_CAPACITY, RATE_LIMIT_GLOBAL_REFILL_RATE, max_buckets=1
@@ -528,7 +528,7 @@ class MCPServer:
             return "\n".join(lines)
 
 
-def create_mcp_server(cache: CacheContainer) -> Starlette:
+def create_mcp_server(cache: CacheService) -> Starlette:
     """Create the MCP Starlette app to mount.
 
     Returns the Starlette app from streamable_http_app().

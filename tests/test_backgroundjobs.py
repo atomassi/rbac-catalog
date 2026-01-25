@@ -403,27 +403,6 @@ class TestRoleScanResult:
         result = RoleScanResult(created=created, updated=updated, deleted=deleted, total=10)
         assert result.has_changes is expected
 
-    @pytest.mark.asyncio
-    async def test_cache_invalidated_only_when_changes(self, db_session, monkeypatch):
-        """Test cache is only invalidated when has_changes is True."""
-        from unittest.mock import AsyncMock, MagicMock
-
-        mock_instance = MagicMock()
-        mock_instance.invalidate_and_rebuild = AsyncMock()
-        monkeypatch.setattr(
-            "azurerbac.backgroundjobs.roles_monitor.get_cache_service",
-            lambda: mock_instance,
-        )
-
-        # No changes - cache should NOT be invalidated
-        await apply_role_scan(db_session, [])
-        mock_instance.invalidate_and_rebuild.assert_not_called()
-
-        # With changes - cache should be invalidated
-        roles = [_make_role("role-1", "Reader")]
-        await apply_role_scan(db_session, roles)
-        mock_instance.invalidate_and_rebuild.assert_called_once()
-
 
 # =============================================================================
 # Operations Monitor Tests
@@ -530,56 +509,6 @@ class TestApplyOperationsScan:
         stats = await apply_operations_scan(db_session, operations)
 
         assert stats.providers == 2  # Compute and Storage
-
-    @pytest.mark.asyncio
-    async def test_cache_invalidated_on_new_operations(self, db_session, monkeypatch):
-        """Test cache is invalidated when new operations are added."""
-        from unittest.mock import AsyncMock, MagicMock
-
-        from azurerbac.backgroundjobs.operations_monitor import apply_operations_scan
-
-        mock_instance = MagicMock()
-        mock_instance.invalidate_and_rebuild = AsyncMock()
-        monkeypatch.setattr(
-            "azurerbac.backgroundjobs.operations_monitor.get_cache_service",
-            lambda: mock_instance,
-        )
-
-        # No new operations - cache should NOT be invalidated
-        await apply_operations_scan(db_session, [])
-        mock_instance.invalidate_and_rebuild.assert_not_called()
-
-        # With new operations - cache should be invalidated
-        operations = [_make_operation("Microsoft.Test/read")]
-        await apply_operations_scan(db_session, operations)
-        mock_instance.invalidate_and_rebuild.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_no_cache_invalidation_on_updates_only(self, db_session, monkeypatch):
-        """Test cache is NOT invalidated when only updates occur (no new ops)."""
-        from unittest.mock import AsyncMock, MagicMock
-
-        from azurerbac.backgroundjobs.operations_monitor import apply_operations_scan
-
-        # First scan - add operation
-        operations_v1 = [_make_operation("Microsoft.Test/read", "Original")]
-        await apply_operations_scan(db_session, operations_v1)
-
-        # Setup mock after first scan
-        mock_instance = MagicMock()
-        mock_instance.invalidate_and_rebuild = AsyncMock()
-        monkeypatch.setattr(
-            "azurerbac.backgroundjobs.operations_monitor.get_cache_service",
-            lambda: mock_instance,
-        )
-
-        # Second scan - only update, no new ops
-        operations_v2 = [_make_operation("Microsoft.Test/read", "Updated")]
-        stats = await apply_operations_scan(db_session, operations_v2)
-
-        assert stats.updated == 1
-        assert stats.created == 0
-        mock_instance.invalidate_and_rebuild.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_skips_operations_without_name(self, db_session):

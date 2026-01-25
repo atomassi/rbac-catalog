@@ -37,7 +37,7 @@ def _get_cache(caches: CacheData | None = None) -> CacheData:
         return caches
     from azurerbac.cache import get_cache_service
 
-    return get_cache_service().container.cache
+    return get_cache_service().cache
 
 
 def _suffix_pattern_covers(role_pattern: str, requested_pattern: str) -> bool:

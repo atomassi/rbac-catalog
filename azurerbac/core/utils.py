@@ -7,11 +7,13 @@ import datetime as dt
 import hashlib
 import re
 import uuid
+from functools import lru_cache
 from typing import Final
 
 _SLUG_PATTERN: Final = re.compile(r"[^a-z0-9]+")
 
 
+@lru_cache(maxsize=2048)
 def slugify(text: str) -> str:
     """Create URL-friendly slug from text."""
     return _SLUG_PATTERN.sub("-", text.lower()).strip("-") if text else ""

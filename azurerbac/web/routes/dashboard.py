@@ -91,12 +91,20 @@ async def recent_changes(
 
     common = await get_common_dashboard_data(deps)
 
-    events = []
+    events: list = []
     cutoff = dt.datetime.now(dt.UTC) - dt.timedelta(days=days)
 
+    # Build cache key for filtered events (days + event_type)
+    events_cache_key = f"{days}:{event_type}"
+
     async with deps.SessionLocal() as session:
-        if cached_events := deps.app_cache.get_change_events():
+        # Try filtered events cache first
+        if cached_filtered := deps.app_cache.get_filtered_events(events_cache_key):
+            events = cached_filtered
+        elif cached_events := deps.app_cache.get_change_events():
+            # Filter from raw cache and store in filtered cache
             events = filter_cached_events(cached_events, deps, cutoff, event_type)
+            deps.app_cache.set_filtered_events(events_cache_key, events)
         else:
             events = await fetch_events_from_db(session, deps, cutoff, event_type)
 

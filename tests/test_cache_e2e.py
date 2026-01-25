@@ -748,14 +748,14 @@ class TestInvalidationFlow:
         # Setup cache
         cache_data = build_complete_cache(sample_roles, sample_operations)
         get_cache_service().container.swap(cache_data)
-        get_cache_service().container._role_pages["page1"] = [{"test": True}]
-        get_cache_service().container._allowing_roles_cache["key1"] = []  # type: ignore[assignment]
+        get_cache_service().container.set_role_page("page1", [{"test": True}])
+        get_cache_service().container.set_allowing_roles("key1", [])
         await get_cache_service().backend.save(get_cache_service().container.cache)
 
         # Verify everything exists
         assert len(get_cache_service().container.cache.all_operations) > 0
-        assert len(get_cache_service().container._role_pages) > 0
-        assert len(get_cache_service().container._allowing_roles_cache) > 0
+        assert get_cache_service().container.get_role_page("page1") is not None
+        assert get_cache_service().container.get_allowing_roles("key1") is not None
         assert (temp_cache_dir / "app_cache.msgpack").exists()
 
         # Invalidate all
@@ -764,22 +764,22 @@ class TestInvalidationFlow:
         # Everything should be cleared
         assert len(get_cache_service().container.cache.all_operations) == 0
         assert len(get_cache_service().container.cache.roles_by_id) == 0
-        assert len(get_cache_service().container._role_pages) == 0
-        assert len(get_cache_service().container._allowing_roles_cache) == 0
+        assert get_cache_service().container.get_role_page("page1") is None
+        assert get_cache_service().container.get_allowing_roles("key1") is None
         assert not (temp_cache_dir / "app_cache.msgpack").exists()
 
     def test_swap_clears_allowing_roles_cache(self, sample_operations):
         """Atomic swap clears allowing_roles_cache."""
         # Populate allowing_roles cache
         container = get_cache_service().container
-        container._allowing_roles_cache["roles_allowing_op:test"] = []  # type: ignore[assignment]
+        container.set_allowing_roles("roles_allowing_op:test", [])
         assert container.get_allowing_roles("roles_allowing_op:test") is not None
 
         # Swap with new cache
         new_cache = CacheData.create(all_operations=sample_operations)
         container.swap(new_cache)
 
-        # allowing_roles_cache should be cleared
+        # allowing_roles_cache should be cleared (new CacheData = fresh RequestCaches)
         assert get_cache_service().container.get_allowing_roles("roles_allowing_op:test") is None
 
 
@@ -1239,8 +1239,8 @@ class TestInvalidationAfterDataChange:
 
         # Populate memory cache
         populate_cache_with_operations(get_cache_service().container, sample_operations)
-        get_cache_service().container._role_pages["page1"] = [{"role_id": "test"}]
-        get_cache_service().container._allowing_roles_cache["key1"] = []  # type: ignore[assignment]
+        get_cache_service().container.set_role_page("page1", [{"role_id": "test"}])
+        get_cache_service().container.set_allowing_roles("key1", [])
 
         # Invalidate all
         await get_cache_service().invalidate_all()
@@ -1248,8 +1248,8 @@ class TestInvalidationAfterDataChange:
         # Memory cache cleared
         assert len(get_cache_service().container.cache.all_operations) == 0
         assert len(get_cache_service().container.cache.roles_by_id) == 0
-        assert len(get_cache_service().container._role_pages) == 0
-        assert len(get_cache_service().container._allowing_roles_cache) == 0
+        assert get_cache_service().container.get_role_page("page1") is None
+        assert get_cache_service().container.get_allowing_roles("key1") is None
 
         # Disk cache deleted
         assert not (temp_cache_dir / "app_cache.msgpack").exists()
@@ -1258,14 +1258,14 @@ class TestInvalidationAfterDataChange:
         """Verify atomic swap clears allowing_roles_cache."""
         # Populate allowing_roles cache
         container = get_cache_service().container
-        container._allowing_roles_cache["roles_allowing_op:test"] = []  # type: ignore[assignment]
+        container.set_allowing_roles("roles_allowing_op:test", [])
         assert container.get_allowing_roles("roles_allowing_op:test") is not None
 
         # Atomic swap with new data
         new_cache = CacheData.create(all_operations=sample_operations)
         container.swap(new_cache)
 
-        # allowing_roles_cache should be cleared
+        # allowing_roles_cache should be cleared (new CacheData = fresh RequestCaches)
         assert get_cache_service().container.get_allowing_roles("roles_allowing_op:test") is None
 
 

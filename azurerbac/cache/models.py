@@ -10,7 +10,8 @@ It's designed for atomic swaps - the entire object is replaced, never mutated.
     ├── source: SourceData               # Raw DB data (immutable after load)
     ├── indexes: Indexes                 # Fast lookups (deterministic from source)
     ├── analysis: RoleAnalysis           # Expensive precomputation (built once at refresh)
-    ├── runtime: RuntimeCaches           # Memoization (grows lazily during requests)
+    ├── computed: ComputedCaches         # Expensive caches, SAVED to disk
+    ├── request: RequestCaches           # Cheap caches, NOT saved to disk (rebuilt lazily)
     └── content: PrerenderedContent      # Pre-built responses (analytics, sitemap)
 """
 
@@ -21,8 +22,10 @@ import logging
 import time
 from dataclasses import dataclass, field
 from functools import cached_property
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING, Any, Final
 from urllib.parse import quote
+
+from cachetools import LRUCache
 
 from azurerbac.core.constants import RoleStatus
 from azurerbac.core.types import JsonDict
@@ -347,13 +350,52 @@ class RoleAnalysis:
     operation_to_roles: dict[str, list[str]] = field(default_factory=dict)
 
 
+# Maximum entries in the allowing_roles cache (roles granting each operation)
+# Estimated ~10KB per entry ≈ 50MB max memory
+_ALLOWING_ROLES_CACHE_MAX_SIZE: Final[int] = 5000
+
+# Maximum entries in the filtered events cache (by days/event_type)
+_FILTERED_EVENTS_CACHE_MAX_SIZE: Final[int] = 100
+
+
+def _create_allowing_roles_cache() -> LRUCache[str, list[Any]]:
+    """Factory for allowing_roles LRU cache."""
+    return LRUCache(maxsize=_ALLOWING_ROLES_CACHE_MAX_SIZE)
+
+
+def _create_filtered_events_cache() -> LRUCache[str, list[CachedChangeEvent]]:
+    """Factory for filtered_events LRU cache."""
+    return LRUCache(maxsize=_FILTERED_EVENTS_CACHE_MAX_SIZE)
+
+
 @dataclass
-class RuntimeCaches:
-    """Memoization caches (populated lazily during request handling)."""
+class ComputedCaches:
+    """Deterministic caches - expensive to compute, SAVED to disk.
+
+    These caches are built from source data and are expensive to recompute
+    (e.g., wildcard expansion across 20K+ operations). They are persisted
+    to disk and loaded on restart.
+    """
 
     pattern_match: dict[PatternCacheKey, set[str]] = field(default_factory=dict)
     partial_coverage: dict[PartialCoverageCacheKey, CoverageResult] = field(default_factory=dict)
     wildcard_count: dict[PatternCacheKey, int] = field(default_factory=dict)
+
+
+@dataclass
+class RequestCaches:
+    """Request-specific caches - cheap to rebuild, NOT saved to disk.
+
+    These caches vary by request parameters (page number, filters, etc.)
+    and are cheap to rebuild from in-memory data. They use LRU eviction
+    to bound memory usage.
+    """
+
+    role_pages: dict[str, list[Any]] = field(default_factory=dict)
+    allowing_roles: LRUCache[str, list[Any]] = field(default_factory=_create_allowing_roles_cache)
+    filtered_events: LRUCache[str, list[CachedChangeEvent]] = field(
+        default_factory=_create_filtered_events_cache
+    )
 
 
 @dataclass
@@ -366,7 +408,18 @@ class PrerenderedContent:
 
 @dataclass
 class CacheData:
-    """Unified cache container - all data in one atomically-swappable object."""
+    """Unified cache container - all data in one atomically-swappable object.
+
+    Structure:
+        CacheData
+        ├── metadata        # Version, hashes (for invalidation)
+        ├── source          # Raw DB data (roles, operations, events)
+        ├── indexes         # Lookup indexes (ops_by_name, ops_by_prefix)
+        ├── analysis        # Precomputed (role_coverage, operation_to_roles)
+        ├── computed        # Expensive caches, SAVED to disk
+        ├── request         # Cheap caches, NOT saved to disk
+        └── content         # Pre-rendered (analytics, sitemap)
+    """
 
     # Metadata (for versioning and invalidation)
     metadata: CacheMetadata = field(default_factory=CacheMetadata)
@@ -375,7 +428,8 @@ class CacheData:
     source: SourceData = field(default_factory=SourceData)  # From DB
     indexes: Indexes = field(default_factory=Indexes)  # Built from source
     analysis: RoleAnalysis = field(default_factory=RoleAnalysis)  # Built from source + indexes
-    runtime: RuntimeCaches = field(default_factory=RuntimeCaches)  # Populated lazily
+    computed: ComputedCaches = field(default_factory=ComputedCaches)  # Persisted to disk
+    request: RequestCaches = field(default_factory=RequestCaches)  # NOT persisted
     content: PrerenderedContent = field(default_factory=PrerenderedContent)  # Pre-built responses
 
     # =========================================================================
@@ -423,7 +477,7 @@ class CacheData:
                 role_coverage=role_coverage or {},
                 operation_to_roles=operation_to_roles or {},
             ),
-            runtime=RuntimeCaches(
+            computed=ComputedCaches(
                 pattern_match=pattern_match or {},
                 partial_coverage=partial_coverage or {},
                 wildcard_count=wildcard_count or {},
@@ -491,15 +545,15 @@ class CacheData:
 
     @property
     def pattern_match(self) -> dict[PatternCacheKey, set[str]]:
-        return self.runtime.pattern_match
+        return self.computed.pattern_match
 
     @property
     def partial_coverage(self) -> dict[PartialCoverageCacheKey, CoverageResult]:
-        return self.runtime.partial_coverage
+        return self.computed.partial_coverage
 
     @property
     def wildcard_count(self) -> dict[PatternCacheKey, int]:
-        return self.runtime.wildcard_count
+        return self.computed.wildcard_count
 
     @property
     def analytics(self) -> AnalyticsData | None:

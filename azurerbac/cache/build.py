@@ -16,11 +16,11 @@ from azurerbac.cache.models import (
     CachedChangeEvent,
     CachedRole,
     CacheMetadata,
+    ComputedCaches,
     Indexes,
     PatternCacheKey,
     PrerenderedContent,
     RoleAnalysis,
-    RuntimeCaches,
     Sitemap,
     SourceData,
     build_indexes,
@@ -316,7 +316,7 @@ def precompute_all(
             role_coverage=role_coverage,
             operation_to_roles=operation_to_roles,
         ),
-        runtime=RuntimeCaches(
+        computed=ComputedCaches(
             pattern_match=pattern_match,
             partial_coverage=partial_coverage,
             wildcard_count=wildcard_count,

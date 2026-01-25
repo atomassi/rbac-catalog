@@ -8,9 +8,7 @@ import logging
 from collections.abc import Iterable
 from dataclasses import replace
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Final
-
-from cachetools import LRUCache
+from typing import TYPE_CHECKING, Any
 
 from azurerbac.cache.models import CacheData, CachedChangeEvent, CachedRole, Sitemap
 from azurerbac.core.constants import DEFAULT_SEARCH_LIMIT
@@ -23,32 +21,26 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Maximum entries in the allowing_roles cache (roles granting each operation)
-# Estimated ~10KB per entry ≈ 50MB max memory
-_ALLOWING_ROLES_CACHE_MAX_SIZE: Final[int] = 5000
-
 # Type alias for the allowing_roles_cache value type
 RoleAllowingOperationList = list["RoleAllowingOperation"]
 
 
 class CacheContainer:
-    """Thread-safe in-memory cache."""
+    """Thread-safe in-memory cache.
+
+    Wraps CacheData and provides convenient accessors. All derived/lazy caches
+    (in CacheData.computed and CacheData.request) are replaced on swap().
+    """
 
     __slots__ = (
-        "_allowing_roles_cache",
         "_cache",
         "_loaded_version",
         "_pending_reload",
         "_reload_lock",
-        "_role_pages",
     )
 
     def __init__(self) -> None:
         self._cache: CacheData = CacheData()
-        self._role_pages: dict[str, list] = {}  # Paginated role listings
-        self._allowing_roles_cache: LRUCache[str, RoleAllowingOperationList] = LRUCache(
-            maxsize=_ALLOWING_ROLES_CACHE_MAX_SIZE
-        )
         self._loaded_version: str | None = None
         self._reload_lock = asyncio.Lock()
         self._pending_reload = False
@@ -80,11 +72,12 @@ class CacheContainer:
         return self._cache
 
     def swap(self, new_cache: CacheData) -> None:
-        """Atomically swap the entire cache."""
+        """Atomically swap the entire cache.
+
+        All caches (source, computed, request) are replaced atomically.
+        """
         self._cache = new_cache
-        self._role_pages.clear()
-        self._allowing_roles_cache.clear()
-        logger.debug("Cache swapped, role_pages and allowing_roles_cache cleared")
+        logger.debug("Cache swapped (source + computed + request caches replaced)")
 
     def get_role_by_id(self, role_id: str) -> CachedRole | None:
         """Get cached role by ID."""
@@ -104,6 +97,16 @@ class CacheContainer:
 
     def get_change_events(self) -> list[CachedChangeEvent]:
         return self._cache.all_change_events
+
+    def get_filtered_events(self, cache_key: str) -> list[CachedChangeEvent] | None:
+        """Get cached filtered events by key (days:event_type)."""
+        result = self._cache.request.filtered_events.get(cache_key)
+        track_cache_hit("filtered_events", result is not None, cache_key)
+        return result
+
+    def set_filtered_events(self, cache_key: str, events: list[CachedChangeEvent]) -> None:
+        """Cache filtered events by key."""
+        self._cache.request.filtered_events[cache_key] = events
 
     def get_sitemap(self) -> Sitemap | None:
         """Get pre-built sitemap or None if cache not loaded."""
@@ -154,24 +157,24 @@ class CacheContainer:
 
     def get_role_page(self, page_key: str) -> Any:
         """Get a cached role page or count value."""
-        result = self._role_pages.get(page_key)
+        result = self._cache.request.role_pages.get(page_key)
         track_cache_hit("role_page", result is not None, page_key)
         return result
 
     def set_role_page(self, page_key: str, roles: Any) -> None:
         """Cache a role page or count value."""
-        self._role_pages[page_key] = roles
+        self._cache.request.role_pages[page_key] = roles
 
     def get_role_pages_count(self) -> int:
-        return len(self._role_pages)
+        return len(self._cache.request.role_pages)
 
     def get_allowing_roles(self, key: str) -> RoleAllowingOperationList | None:
-        result = self._allowing_roles_cache.get(key)
+        result = self._cache.request.allowing_roles.get(key)
         track_cache_hit("allowing_roles", result is not None, key)
         return result
 
     def set_allowing_roles(self, key: str, value: RoleAllowingOperationList) -> None:
-        self._allowing_roles_cache[key] = value
+        self._cache.request.allowing_roles[key] = value
 
     def set_metadata(
         self,
@@ -244,7 +247,5 @@ class CacheContainer:
     def reset(self) -> None:
         """Reset in-memory cache to empty state."""
         self._cache = CacheData()
-        self._role_pages.clear()
-        self._allowing_roles_cache.clear()
         self._loaded_version = None
         self._pending_reload = False

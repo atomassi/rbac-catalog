@@ -30,7 +30,8 @@ class CacheKey(StrEnum):
     SOURCE = "source"
     INDEXES = "indexes"
     ANALYSIS = "analysis"
-    RUNTIME = "runtime"
+    COMPUTED = "computed"  # Persisted expensive caches
+    REQUEST = "request"  # NOT persisted (rebuilt lazily)
     CONTENT = "content"
     # Source fields
     ROLES_BY_ID = "roles_by_id"
@@ -41,7 +42,7 @@ class CacheKey(StrEnum):
     OPS_BY_PREFIX = "ops_by_prefix"
     # Analysis fields
     ROLE_COVERAGE = "role_coverage"
-    # Runtime fields
+    # Computed cache fields
     PARTIAL_COVERAGE = "partial_coverage"
     # Content fields
     ANALYTICS = "analytics"
@@ -184,8 +185,13 @@ class FileCacheBackend(CacheBackend):
             # Prepare analysis for msgpack (handles coverage data)
             data_dict[CacheKey.ANALYSIS] = prepare_for_msgpack(data_dict[CacheKey.ANALYSIS])
 
-            # Prepare runtime caches for msgpack (handles tuple/enum keys)
-            data_dict[CacheKey.RUNTIME] = prepare_for_msgpack(data_dict[CacheKey.RUNTIME])
+            # Prepare computed caches for msgpack (handles tuple/enum keys)
+            # These are persisted to disk (expensive to recompute)
+            data_dict[CacheKey.COMPUTED] = prepare_for_msgpack(data_dict[CacheKey.COMPUTED])
+
+            # Skip request caches entirely - they contain LRUCache instances
+            # and are rebuilt lazily on requests (cheap to recompute)
+            del data_dict[CacheKey.REQUEST]
 
             content = data_dict[CacheKey.CONTENT]
             if data.analytics is not None:
@@ -219,10 +225,10 @@ class FileCacheBackend(CacheBackend):
                 CachedChangeEvent,
                 CachedRole,
                 CacheMetadata,
+                ComputedCaches,
                 Indexes,
                 PrerenderedContent,
                 RoleAnalysis,
-                RuntimeCaches,
                 Sitemap,
                 SourceData,
             )
@@ -260,10 +266,13 @@ class FileCacheBackend(CacheBackend):
             self._reconstruct_coverage_data(analysis_dict)
             analysis = RoleAnalysis(**analysis_dict)
 
-            # Reconstruct runtime caches
-            runtime_dict = data_dict.get(CacheKey.RUNTIME, {})
-            self._reconstruct_coverage_data(runtime_dict)
-            runtime = RuntimeCaches(**runtime_dict)
+            # Reconstruct computed caches (persisted to disk)
+            computed_dict = data_dict.get(CacheKey.COMPUTED, {})
+            self._reconstruct_coverage_data(computed_dict)
+            computed = ComputedCaches(**computed_dict)
+
+            # Note: RequestCaches are NOT loaded from disk - they're rebuilt lazily
+            # CacheData() creates a fresh RequestCaches instance automatically
 
             # Reconstruct content
             content_dict = data_dict.get(CacheKey.CONTENT, {})
@@ -280,7 +289,7 @@ class FileCacheBackend(CacheBackend):
                 source=source,
                 indexes=indexes,
                 analysis=analysis,
-                runtime=runtime,
+                computed=computed,
                 content=content,
             )
             logger.info(

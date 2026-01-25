@@ -204,6 +204,42 @@ class TestTrackFunctions:
         metrics_module.track_db_fallback("role_detail", "cache_miss", "test-role-id")
         metrics_module.track_db_fallback("role_history", "not_in_cache")
 
+    def test_track_ai_recommendation_logs_correctly(self, local_env):
+        """track_ai_recommendation should log and handle parameters."""
+        metrics_module = local_env
+        # Should not raise (no-op when local)
+        metrics_module.track_ai_recommendation("tfidf", 5)
+        metrics_module.track_ai_recommendation("semantic", 0, is_error=True)
+        metrics_module.track_ai_recommendation("colbert", 10)
+
+    def test_track_role_recommendation_logs_correctly(self, local_env):
+        """track_role_recommendation should log and handle parameters."""
+        metrics_module = local_env
+        # Should not raise (no-op when local)
+        metrics_module.track_role_recommendation(3, 10, 5)
+        metrics_module.track_role_recommendation(1, 1, 0, duration_seconds=0.5)
+
+    def test_track_cache_call_logs_correctly(self, local_env):
+        """track_cache_call should log and handle parameters."""
+        metrics_module = local_env
+        # Should not raise (no-op when local)
+        metrics_module.track_cache_call("get_role_by_id")
+        metrics_module.track_cache_call("search_operations")
+
+    def test_track_db_query_logs_correctly(self, local_env):
+        """track_db_query should log and handle parameters."""
+        metrics_module = local_env
+        # Should not raise (no-op when local)
+        metrics_module.track_db_query("fetch_roles", 0.05, rows_affected=100)
+        metrics_module.track_db_query("count_operations", 0.01)
+
+    def test_track_cache_hit_logs_correctly(self, local_env):
+        """track_cache_hit should log and handle parameters."""
+        metrics_module = local_env
+        # Should not raise (no-op when local)
+        metrics_module.track_cache_hit("role", True, "test-role-id")
+        metrics_module.track_cache_hit("operation", False)
+
 
 # =============================================================================
 # Dimensions and Properties

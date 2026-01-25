@@ -89,17 +89,17 @@ class CacheContainer:
     def get_role_by_id(self, role_id: str) -> CachedRole | None:
         """Get cached role by ID."""
         result = self._cache.roles_by_id.get(role_id)
-        track_cache_call("get_role_by_id", 1 if result else 0, role_id)
+        track_cache_call("get_role_by_id")
         return result
 
     def get_all_roles(self) -> list[RoleDefinition]:
         result = self._cache.get_role_definitions()
-        track_cache_call("get_all_roles", len(result))
+        track_cache_call("get_all_roles")
         return result
 
     def get_all_operations(self) -> list[OperationData]:
         result = self._cache.all_operations
-        track_cache_call("get_all_operations", len(result))
+        track_cache_call("get_all_operations")
         return result
 
     def get_change_events(self) -> list[CachedChangeEvent]:
@@ -120,7 +120,7 @@ class CacheContainer:
         that the role grants, after applying notActions/notDataActions exclusions.
         """
         result = self._cache.role_coverage.get(role_id)
-        track_cache_call("get_role_coverage", 1 if result else 0, role_id)
+        track_cache_call("get_role_coverage")
         return result
 
     def get_ops_lowered_to_orig(self) -> dict[str, str]:
@@ -155,7 +155,7 @@ class CacheContainer:
         Uses the pre-computed operation_to_roles inverted index.
         """
         result = self._cache.operation_to_roles.get(operation_name.lower(), [])
-        track_cache_call("get_roles_for_operation", len(result), operation_name)
+        track_cache_call("get_roles_for_operation")
         return result
 
     def get_role_page(self, page_key: str) -> Any:
@@ -203,7 +203,7 @@ class CacheContainer:
         """Search operations using pre-built indexes."""
         cache = self._cache
         if not cache.ops_by_name_lower:
-            track_cache_call("search_operations", 0, query)
+            track_cache_call("search_operations")
             return []
 
         q_lower = query.lower()
@@ -220,7 +220,7 @@ class CacheContainer:
 
         matching.sort(key=lambda x: x.name)
         result = matching[:limit]
-        track_cache_call("search_operations", len(result), query)
+        track_cache_call("search_operations")
         return result
 
     def count_wildcard_matches(self, pattern: str, is_data_action: bool = False) -> int:

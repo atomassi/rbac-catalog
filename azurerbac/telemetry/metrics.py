@@ -138,10 +138,10 @@ def track_db_fallback(fallback_type: str, reason: str, key: str | None = None) -
     Args:
         fallback_type: Type of data being fetched (e.g., "role_detail", "role_history")
         reason: Reason for fallback (e.g., "cache_miss", "not_in_cache")
-        key: Optional identifier (e.g., role_id) for debugging
+        key: Optional identifier (e.g., role_id) for local debugging only
     """
     key_str = f" key={key}" if key else ""
-    logger.info("DB fallback: type=%s reason=%s%s", fallback_type, reason, key_str)
+    logger.debug("DB fallback: type=%s reason=%s%s", fallback_type, reason, key_str)
 
     if not _metrics_enabled():
         return
@@ -153,21 +153,13 @@ def track_db_fallback(fallback_type: str, reason: str, key: str | None = None) -
         logger.exception("Failed to track db fallback: %s", e)
 
 
-def track_cache_call(
-    method: str,
-    result_count: int | None = None,
-    key: str | None = None,
-) -> None:
+def track_cache_call(method: str) -> None:
     """Track cache method calls for dashboard analytics.
 
     Args:
         method: Cache method name (e.g., "get_role_by_id", "search_operations")
-        result_count: Number of results returned (for list methods)
-        key: Optional lookup key (e.g., role_id, search query)
     """
-    count_str = f" count={result_count}" if result_count is not None else ""
-    key_str = f" key={key}" if key else ""
-    logger.debug("Cache call: %s%s%s", method, count_str, key_str)
+    logger.debug("Cache call: %s", method)
 
     if not _metrics_enabled():
         return
@@ -206,6 +198,7 @@ def track_ai_recommendation(
         props: dict[str, Any] = {
             "mode": mode,
             "status": status,
+            "result_count": result_count,
         }
         track_event("ai_recommendation", props)
     except Exception as e:
@@ -237,7 +230,11 @@ def track_role_recommendation(
         return
 
     try:
-        props: dict[str, Any] = {}
+        props: dict[str, Any] = {
+            "operations_count": operations_count,
+            "expanded_count": expanded_count,
+            "result_count": result_count,
+        }
         track_event("role_recommendation", props)
         if duration_seconds is not None:
             track_duration("role_recommendation_duration_seconds", duration_seconds, props)
@@ -417,6 +414,8 @@ def track_db_query(
         rows_affected: Optional number of rows returned/affected
     """
     props: dict[str, Any] = {"query": query_name}
+    if rows_affected is not None:
+        props["rows"] = rows_affected
 
     rows_str = f" rows={rows_affected}" if rows_affected is not None else ""
     logger.debug("DB query: %s (%.3fs)%s", query_name, duration_seconds, rows_str)

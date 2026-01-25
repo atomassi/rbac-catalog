@@ -89,7 +89,7 @@ class CacheContainer:
     def get_role_by_id(self, role_id: str) -> CachedRole | None:
         """Get cached role by ID."""
         result = self._cache.roles_by_id.get(role_id)
-        track_cache_call("get_role_by_id")
+        track_cache_call("get_role_by_id", role_id=role_id)
         return result
 
     def get_all_roles(self) -> list[RoleDefinition]:
@@ -120,7 +120,7 @@ class CacheContainer:
         that the role grants, after applying notActions/notDataActions exclusions.
         """
         result = self._cache.role_coverage.get(role_id)
-        track_cache_call("get_role_coverage")
+        track_cache_call("get_role_coverage", role_id=role_id)
         return result
 
     def get_ops_lowered_to_orig(self) -> dict[str, str]:
@@ -155,7 +155,7 @@ class CacheContainer:
         Uses the pre-computed operation_to_roles inverted index.
         """
         result = self._cache.operation_to_roles.get(operation_name.lower(), [])
-        track_cache_call("get_roles_for_operation")
+        track_cache_call("get_roles_for_operation", operation=operation_name)
         return result
 
     def get_role_page(self, page_key: str) -> Any:
@@ -204,7 +204,7 @@ class CacheContainer:
         """Search operations using pre-built indexes."""
         cache = self._cache
         if not cache.ops_by_name_lower:
-            track_cache_call("search_operations")
+            track_cache_call("search_operations", query=query, results=0)
             return []
 
         q_lower = query.lower()
@@ -221,7 +221,7 @@ class CacheContainer:
 
         matching.sort(key=lambda x: x.name)
         result = matching[:limit]
-        track_cache_call("search_operations")
+        track_cache_call("search_operations", query=query, results=len(result))
         return result
 
     def count_wildcard_matches(self, pattern: str, is_data_action: bool = False) -> int:

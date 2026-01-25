@@ -153,13 +153,18 @@ def track_db_fallback(fallback_type: str, reason: str, key: str | None = None) -
         logger.exception("Failed to track db fallback: %s", e)
 
 
-def track_cache_call(method: str) -> None:
+def track_cache_call(method: str, **kwargs: Any) -> None:
     """Track cache method calls for dashboard analytics.
 
     Args:
         method: Cache method name (e.g., "get_role_by_id", "search_operations")
+        **kwargs: Additional context (e.g., role_id, query)
     """
-    logger.debug("Cache call: %s", method)
+    if kwargs:
+        details = ", ".join(f"{k}={v!r}" for k, v in kwargs.items())
+        logger.debug("Cache call: %s (%s)", method, details)
+    else:
+        logger.debug("Cache call: %s", method)
 
     if not _metrics_enabled():
         return

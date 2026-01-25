@@ -122,10 +122,11 @@ async def favicon_png_192() -> Response:
 
 
 @router.get("/apple-touch-icon.png")
+@router.get("/apple-touch-icon-precomposed.png")
 async def apple_touch_icon() -> Response:
-    """Serve Apple touch icon (192x192)."""
+    """Serve Apple touch icon (180x180)."""
     return _static_response(
-        (_get_static_images_path() / "favicon-192.png").read_bytes(),
+        (_get_static_images_path() / "apple-touch-icon.png").read_bytes(),
         "image/png",
     )
 

@@ -35,7 +35,7 @@ torch==2.10.0; sys_platform == "darwin"
 torch==2.10.0+cpu; sys_platform == "linux"
 
 # Sentence embeddings for semantic search
-sentence-transformers==5.2.0
+sentence-transformers==5.2.1
 transformers==4.57.6
 
 # ColBERT for token-level late interaction

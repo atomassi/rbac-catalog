@@ -21,11 +21,11 @@ aiohttp==3.13.3
 pytest==8.4.2
 pytest-asyncio==0.26.0
 pytest-cov==6.3.0
-azure-monitor-opentelemetry==1.8.3
+azure-monitor-opentelemetry==1.8.4
 opentelemetry-instrumentation-fastapi==0.60b0
 opentelemetry-instrumentation-logging==0.60b0
-opentelemetry-api==1.39.0
-opentelemetry-sdk==1.39.0
+opentelemetry-api==1.39.1
+opentelemetry-sdk==1.39.1
 opentelemetry-semantic-conventions==0.60b0
 typing_extensions>=4.0.0
 

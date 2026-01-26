@@ -13,9 +13,7 @@ that need to call them without fixtures.
 from __future__ import annotations
 
 import os
-import tempfile
 from collections.abc import AsyncGenerator, Generator
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 # Clear Application Insights connection string to prevent OpenTelemetry
@@ -154,19 +152,6 @@ def mock_session_factory(mock_async_session: AsyncMock) -> MagicMock:
     factory = MagicMock()
     factory.return_value = mock_async_session
     return factory
-
-
-# =============================================================================
-# Utility Fixtures
-# =============================================================================
-
-
-@pytest.fixture
-def temp_cache_dir() -> Generator[Path, None, None]:
-    """Create a temporary directory for cache testing."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        temp_path = Path(tmpdir)
-        yield temp_path
 
 
 # =============================================================================

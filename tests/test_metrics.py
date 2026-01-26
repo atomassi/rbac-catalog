@@ -502,7 +502,7 @@ class TestTimedDbQuery:
 
         from azurerbac.telemetry.timers import TimedDbQuery
 
-        with patch("azurerbac.telemetry.metrics.track_db_query") as mock_track:
+        with patch("azurerbac.telemetry.timers.track_db_query") as mock_track:
             with TimedDbQuery("test_query") as timer:
                 timer.rows = 10
 
@@ -518,7 +518,7 @@ class TestTimedDbQuery:
 
         from azurerbac.telemetry.timers import TimedDbQuery
 
-        with patch("azurerbac.telemetry.metrics.track_db_query") as mock_track:
+        with patch("azurerbac.telemetry.timers.track_db_query") as mock_track:
             with TimedDbQuery("no_rows_query"):
                 pass
 
@@ -534,7 +534,7 @@ class TestTimedDbQuery:
 
         from azurerbac.telemetry.timers import TimedDbQuery
 
-        with patch("azurerbac.telemetry.metrics.track_db_query") as mock_track:
+        with patch("azurerbac.telemetry.timers.track_db_query") as mock_track:
             async with TimedDbQuery("async_test_query") as timer:
                 timer.rows = 25
 
@@ -559,7 +559,7 @@ class TestTimedDbQuery:
 
         from azurerbac.telemetry.timers import TimedDbQuery
 
-        with patch("azurerbac.telemetry.metrics.track_db_query") as mock_track:
+        with patch("azurerbac.telemetry.timers.track_db_query") as mock_track:
             with TimedDbQuery(query_name) as timer:
                 timer.rows = row_count
 

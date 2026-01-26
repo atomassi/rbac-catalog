@@ -21,7 +21,7 @@ from azurerbac.core.utils import (
     truncate_microseconds,
 )
 from azurerbac.matching.models import RoleNetPermissions
-from azurerbac.telemetry import TimedDbQuery, track_db_fallback
+from azurerbac.telemetry import TimedDbQuery
 from azurerbac.web.services.models import (
     DashboardSummary,
     PaginatedResult,
@@ -242,7 +242,7 @@ async def fetch_events_from_db(
         for et in event_types
     ]
 
-    async with TimedDbQuery("fetch_recent_changes"):
+    async with TimedDbQuery("fetch_recent_changes", fallback_type="recent_changes"):
         result = await session.execute(
             select(deps.RoleHistory)
             .join(
@@ -263,15 +263,49 @@ async def _execute_paginated_role_query(
     params: PaginationParams,
     needs_python_sort: bool,
 ) -> list[RoleWithCounts]:
-    """Execute role query with sorting and pagination."""
-    if needs_python_sort:
+    """Execute role query with sorting and pagination.
+
+    For actions/data_actions sort: requires Python sort (values from cache).
+    For updated sort: uses SQL subquery (efficient, no N+1).
+    For name/id sort: uses simple DB column sort.
+    """
+    sort_field = params.sort_field
+
+    # actions/data_actions need Python sort (values come from cache)
+    if sort_field in (SortField.ACTIONS, SortField.DATA_ACTIONS):
         stmt = stmt.order_by(deps.Role.role_name.asc())
-        async with TimedDbQuery("fetch_roles_paginated_all"):
+        async with TimedDbQuery("fetch_roles_paginated_all", fallback_type="dashboard_roles"):
             all_roles = (await session.execute(stmt)).scalars().all()
         enriched_roles = [enrich_role_with_counts(r) for r in all_roles]
         _sort_enriched_roles(enriched_roles, sort=params.sort, order=params.order)
         return enriched_roles[params.offset : params.offset + params.page_size]
 
+    # updated sort: use subquery to get max(azure_updated_on) per role
+    if sort_field == SortField.UPDATED:
+        # Subquery: get latest azure_updated_on per role_id
+        latest_update = (
+            select(
+                deps.RoleHistory.role_id,
+                func.max(deps.RoleHistory.azure_updated_on).label("latest_updated"),
+            )
+            .group_by(deps.RoleHistory.role_id)
+            .subquery()
+        )
+
+        # Join roles with the subquery and sort by latest_updated
+        stmt = stmt.outerjoin(latest_update, deps.Role.role_id == latest_update.c.role_id)
+        sort_col = latest_update.c.latest_updated
+        if params.order == SortOrder.DESC:
+            stmt = stmt.order_by(sort_col.desc().nulls_last())
+        else:
+            stmt = stmt.order_by(sort_col.asc().nulls_last())
+
+        stmt = stmt.offset(params.offset).limit(params.page_size)
+        async with TimedDbQuery("fetch_roles_paginated_updated", fallback_type="dashboard_roles"):
+            db_roles = (await session.execute(stmt)).scalars().all()
+        return [enrich_role_with_counts(r) for r in db_roles]
+
+    # name/id sort: simple column sort
     sort_column = _get_sort_column(deps.Role, params.sort)
     if params.order == SortOrder.DESC:
         stmt = stmt.order_by(sort_column.desc())
@@ -279,7 +313,7 @@ async def _execute_paginated_role_query(
         stmt = stmt.order_by(sort_column.asc())
 
     stmt = stmt.offset(params.offset).limit(params.page_size)
-    async with TimedDbQuery("fetch_roles_paginated"):
+    async with TimedDbQuery("fetch_roles_paginated", fallback_type="dashboard_roles"):
         db_roles = (await session.execute(stmt)).scalars().all()
     return [enrich_role_with_counts(r) for r in db_roles]
 
@@ -302,8 +336,7 @@ async def ensure_scan_metadata(
 ) -> ScanMetadata:
     """Ensure scan timestamps are populated from DB if not cached."""
     if last_scan is None:
-        track_db_fallback("scan_metadata", "cache_miss", "last_scan")
-        async with TimedDbQuery("fetch_last_scan"):
+        async with TimedDbQuery("fetch_last_scan", fallback_type="scan_metadata"):
             last_scan = await session.scalar(
                 select(deps.RoleScanStatus.scan_timestamp)
                 .order_by(deps.RoleScanStatus.scan_timestamp.desc())
@@ -313,8 +346,7 @@ async def ensure_scan_metadata(
         deps.app_cache.set_metadata(last_scan=last_scan)
 
     if first_scan is None:
-        track_db_fallback("scan_metadata", "cache_miss", "first_scan")
-        async with TimedDbQuery("fetch_first_scan"):
+        async with TimedDbQuery("fetch_first_scan", fallback_type="scan_metadata"):
             first_scan = await session.scalar(select(func.min(deps.RoleScanStatus.scan_timestamp)))
         first_scan = truncate_microseconds(first_scan)
         deps.app_cache.set_metadata(first_scan=first_scan)
@@ -339,20 +371,21 @@ async def fetch_roles_paginated(
     cached_roles = deps.app_cache.get_role_page(cache_key)
     cached_count = deps.app_cache.get_role_page(count_cache_key)
 
-    cache_hit = cached_roles is not None and cached_count is not None
-
-    if cache_hit:
+    # Full cache hit - return immediately
+    if cached_roles is not None and cached_count is not None:
         total_pages = _calculate_total_pages(int(cached_count), page_size)
         return PaginatedResult(cached_roles, int(cached_count), total_pages)
 
-    track_db_fallback("dashboard_roles", "cache_miss", cache_key)
-
     stmt = _build_status_filter(deps.Role, status_filter)
 
-    count_stmt = select(func.count()).select_from(stmt.subquery())
-    async with TimedDbQuery("fetch_roles_count"):
-        total_filtered_roles = await session.scalar(count_stmt) or 0
-    deps.app_cache.set_role_page(count_cache_key, total_filtered_roles)
+    # Use cached count if available, otherwise fetch from DB
+    if cached_count is not None:
+        total_filtered_roles = int(cached_count)
+    else:
+        count_stmt = select(func.count()).select_from(stmt.subquery())
+        async with TimedDbQuery("fetch_roles_count", fallback_type="dashboard_roles"):
+            total_filtered_roles = await session.scalar(count_stmt) or 0
+        deps.app_cache.set_role_page(count_cache_key, total_filtered_roles)
 
     total_pages = _calculate_total_pages(total_filtered_roles, page_size)
 
@@ -399,7 +432,7 @@ async def search_roles(
             cached_roles, q, status_filter, sort, order, page, page_size, exact_match
         )
 
-    track_db_fallback("search_roles", "cache_empty")
+    # Cache empty - fallback tracked via TimedDbQuery
     return await search_roles_in_db(
         session,
         deps,
@@ -477,7 +510,7 @@ async def search_roles_in_db(
     stmt = stmt.where(or_(*conditions))
 
     count_stmt = select(func.count()).select_from(stmt.subquery())
-    async with TimedDbQuery("search_roles_count"):
+    async with TimedDbQuery("search_roles_count", fallback_type="search_roles"):
         total_filtered_roles = await session.scalar(count_stmt) or 0
     total_pages = _calculate_total_pages(total_filtered_roles, page_size)
 

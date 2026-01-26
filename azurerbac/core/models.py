@@ -183,6 +183,14 @@ class Role(Base):
         return lkv.role_definition if lkv else None
 
 
+# Composite index for dashboard queries: WHERE status = X ORDER BY role_name
+Index(
+    "ix_roles_status_name",
+    Role.status,
+    Role.role_name,
+)
+
+
 class RoleHistory(Base):
     """Stores each historical version/event of a role definition.
 
@@ -256,6 +264,13 @@ Index(
     "ix_role_history_type_scan",
     RoleHistory.event_type,
     RoleHistory.scan_id.desc(),
+)
+
+# Index for sorting roles by updated_on (subquery approach)
+Index(
+    "ix_role_history_role_updated",
+    RoleHistory.role_id,
+    RoleHistory.azure_updated_on.desc(),
 )
 
 

@@ -26,7 +26,6 @@ class EnvVars:
     RUN_OPERATIONS_SCAN_ON_STARTUP: Final = "RUN_OPERATIONS_SCAN_ON_STARTUP"
     DB_CONNECTION_STRING: Final = "DB_CONNECTION_STRING"
     USE_MANAGED_IDENTITY: Final = "USE_MANAGED_IDENTITY"
-    MSI_CONNECTION_STRING: Final = "MSI_CONNECTION_STRING"
     MSI_DB_HOST: Final = "MSI_DB_HOST"
     MSI_DB_PORT: Final = "MSI_DB_PORT"
     MSI_DB_NAME: Final = "MSI_DB_NAME"
@@ -34,8 +33,6 @@ class EnvVars:
     OLLAMA_BASE_URL: Final = "OLLAMA_BASE_URL"
     OLLAMA_MODEL: Final = "OLLAMA_MODEL"
     LOG_LEVEL: Final = "LOG_LEVEL"
-    CACHE_BACKEND: Final = "CACHE_BACKEND"
-    CACHE_CHECK_INTERVAL_SECONDS: Final = "CACHE_CHECK_INTERVAL_SECONDS"
     DB_REBUILD_INTERVAL_SECONDS: Final = "DB_REBUILD_INTERVAL_SECONDS"
     AZURERBAC_ENABLE_EMBEDDINGS_IN_TESTS: Final = "AZURERBAC_ENABLE_EMBEDDINGS_IN_TESTS"
     APPLICATIONINSIGHTS_CONNECTION_STRING: Final = "APPLICATIONINSIGHTS_CONNECTION_STRING"
@@ -88,8 +85,6 @@ class Settings(BaseModel):
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "qwen-rbac-v5"
     log_level: str = "INFO"
-    cache_backend: str = "file"
-    cache_check_interval_seconds: int = Field(default=900, gt=0)
     db_rebuild_interval_seconds: int = Field(default=21600, gt=0)
     enable_embeddings_in_tests: bool = False
     app_insights_connection_string: str = ""
@@ -137,7 +132,6 @@ def _load_settings() -> Settings:
         ollama_base_url=os.getenv(EnvVars.OLLAMA_BASE_URL, "http://localhost:11434"),
         ollama_model=os.getenv(EnvVars.OLLAMA_MODEL, "qwen-rbac-v5"),
         log_level=os.getenv(EnvVars.LOG_LEVEL, "INFO").upper(),
-        cache_check_interval_seconds=_get_int(EnvVars.CACHE_CHECK_INTERVAL_SECONDS, 900),
         db_rebuild_interval_seconds=_get_int(EnvVars.DB_REBUILD_INTERVAL_SECONDS, 21600),
         enable_embeddings_in_tests=_get_bool(EnvVars.AZURERBAC_ENABLE_EMBEDDINGS_IN_TESTS, False),
         app_insights_connection_string=app_insights,

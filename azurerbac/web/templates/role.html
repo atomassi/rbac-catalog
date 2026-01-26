@@ -138,7 +138,7 @@
                 "name": "What permissions does {{ role.role_name }} have?",
                 "acceptedAnswer": {
                     "@type": "Answer",
-                    "text": "The {{ role.role_name }} role (ID: {{ role.role_id }}) grants {% if effective_perms and effective_perms.control_plane_actions %}{{ effective_perms.control_plane_actions | length }} control plane action(s){% endif %}{% if effective_perms and effective_perms.data_plane_actions %} and {{ effective_perms.data_plane_actions | length }} data plane action(s){% endif %}. View the full permissions list on this page."
+                    "text": "The {{ role.role_name }} role (ID: {{ role.role_id }}) grants {{ effective_perms.control_plane_actions | length if effective_perms and effective_perms.control_plane_actions else 0 }} control plane action(s) and {{ effective_perms.data_plane_actions | length if effective_perms and effective_perms.data_plane_actions else 0 }} data plane action(s). View the full permissions list on this page."
                 }
             },
             {

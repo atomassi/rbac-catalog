@@ -131,18 +131,10 @@ updates:
     commit-message:
       prefix: "chore(deps)"
     groups:
-      # Group dev dependencies together
-      npm-dev:
+      # Group all npm dependencies together
+      npm:
         patterns:
           - "*"
-        dependency-type: "development"
-        update-types:
-          - "minor"
-          - "patch"
-      npm-prod:
-        patterns:
-          - "*"
-        dependency-type: "production"
         update-types:
           - "minor"
           - "patch"

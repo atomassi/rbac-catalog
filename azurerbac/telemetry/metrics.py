@@ -19,6 +19,7 @@ __all__ = [
     "track_cache_refresh_failure",
     "track_db_fallback",
     "track_db_query",
+    "track_db_query_error",
     "track_duration",
     "track_event",
     "track_gauge",
@@ -433,6 +434,32 @@ def track_db_query(
         track_event("db_query_event", props)
     except Exception as e:
         logger.exception("Failed to track db query: %s", e)
+
+
+def track_db_query_error(
+    query_name: str,
+    duration_seconds: float,
+    error_type: str,
+) -> None:
+    """Track failed database query metrics.
+
+    Args:
+        query_name: Name of the query that failed
+        duration_seconds: Time taken before failure
+        error_type: Type/class name of the exception
+    """
+    props: dict[str, Any] = {"query": query_name, "error_type": error_type}
+
+    logger.warning("DB query failed: %s (%.3fs) error=%s", query_name, duration_seconds, error_type)
+
+    if not _metrics_enabled():
+        return
+
+    try:
+        track_duration("db_query_error_duration_seconds", duration_seconds, props)
+        track_event("db_query_error_event", props)
+    except Exception as e:
+        logger.exception("Failed to track db query error: %s", e)
 
 
 def track_cache_hit(

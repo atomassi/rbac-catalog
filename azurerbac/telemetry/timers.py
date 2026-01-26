@@ -8,6 +8,12 @@ from abc import ABC, abstractmethod
 from types import TracebackType
 from typing import Self
 
+from azurerbac.telemetry.metrics import (
+    track_db_fallback,
+    track_db_query,
+    track_db_query_error,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -49,19 +55,29 @@ class BaseTimer(ABC):
 
 
 class TimedDbQuery(BaseTimer):
-    """Timer for database queries with metrics tracking."""
+    """Timer for database queries with metrics tracking.
 
-    __slots__ = ("query_name", "rows")
+    Args:
+        query_name: Name of the query for metrics.
+        fallback_type: If set, also tracks this as a cache miss fallback.
+    """
 
-    def __init__(self, query_name: str) -> None:
+    __slots__ = ("fallback_type", "query_name", "rows")
+
+    def __init__(self, query_name: str, *, fallback_type: str | None = None) -> None:
         super().__init__()
         self.query_name = query_name
         self.rows: int | None = None
+        self.fallback_type = fallback_type
 
     def _on_exit(self, elapsed: float, exc_type: type[BaseException] | None) -> None:
-        from azurerbac.telemetry.metrics import track_db_query
+        if exc_type is not None:
+            track_db_query_error(self.query_name, elapsed, exc_type.__name__)
+            return
 
         track_db_query(self.query_name, elapsed, self.rows)
+        if self.fallback_type:
+            track_db_fallback(self.fallback_type, "cache_miss", self.query_name)
 
 
 class TimedOperation(BaseTimer):

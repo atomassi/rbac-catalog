@@ -150,14 +150,11 @@ async def roles_list(
         "Dashboard /roles: q='%s' page=%d sort=%s status=%s", q or "", page, sort, status_filter
     )
     common = await get_common_dashboard_data(deps)
-    # Only actions/data_actions need Python sort (values from cache)
-    # updated now uses SQL subquery, name/id use simple column sort
-    needs_python_sort = sort in ("actions", "data_actions")
 
     async with deps.SessionLocal() as session:
         if not q:
             result = await fetch_roles_paginated(
-                session, deps, status_filter, sort, order, page, limit, needs_python_sort
+                session, deps, status_filter, sort, order, page, limit
             )
         else:
             result = await search_roles(
@@ -169,7 +166,6 @@ async def roles_list(
                 order,
                 page,
                 limit,
-                needs_python_sort,
                 exact_match,
             )
 

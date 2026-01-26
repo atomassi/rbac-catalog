@@ -261,7 +261,6 @@ async def _execute_paginated_role_query(
     deps: DashboardDeps,
     stmt: Select[tuple[Role]],
     params: PaginationParams,
-    needs_python_sort: bool,
 ) -> list[RoleWithCounts]:
     """Execute role query with sorting and pagination.
 
@@ -362,7 +361,6 @@ async def fetch_roles_paginated(
     order: str | SortOrder,
     page: int,
     page_size: int,
-    needs_python_sort: bool,
 ) -> PaginatedResult[RoleWithCounts]:
     """Fetch paginated roles with caching."""
     cache_key = f"roles:{status_filter}::{sort}:{order}:{page}:{page_size}"
@@ -390,7 +388,7 @@ async def fetch_roles_paginated(
     total_pages = _calculate_total_pages(total_filtered_roles, page_size)
 
     params = PaginationParams(page=page, page_size=page_size, sort=sort, order=order)
-    roles = await _execute_paginated_role_query(session, deps, stmt, params, needs_python_sort)
+    roles = await _execute_paginated_role_query(session, deps, stmt, params)
 
     deps.app_cache.set_role_page(cache_key, roles)
     return PaginatedResult(roles, total_filtered_roles, total_pages)
@@ -421,7 +419,6 @@ async def search_roles(
     order: str | SortOrder,
     page: int,
     page_size: int,
-    needs_python_sort: bool,
     exact_match: str | None,
 ) -> PaginatedResult[RoleWithCounts]:
     """Search roles using cache first, fallback to DB."""
@@ -442,7 +439,6 @@ async def search_roles(
         order,
         page,
         page_size,
-        needs_python_sort,
         exact_match,
     )
 
@@ -485,7 +481,6 @@ async def search_roles_in_db(
     order: str | SortOrder,
     page: int,
     page_size: int,
-    needs_python_sort: bool,
     exact_match: str | None,
 ) -> PaginatedResult[RoleWithCounts]:
     """Search roles in database (fallback when cache is empty)."""
@@ -515,6 +510,6 @@ async def search_roles_in_db(
     total_pages = _calculate_total_pages(total_filtered_roles, page_size)
 
     params = PaginationParams(page=page, page_size=page_size, sort=sort, order=order)
-    roles = await _execute_paginated_role_query(session, deps, stmt, params, needs_python_sort)
+    roles = await _execute_paginated_role_query(session, deps, stmt, params)
 
     return PaginatedResult(roles, total_filtered_roles, total_pages)

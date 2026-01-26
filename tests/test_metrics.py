@@ -567,6 +567,183 @@ class TestTimedDbQuery:
             assert args[0] == query_name
             assert args[2] == row_count
 
+    def test_sync_tracks_error_on_exception(self):
+        """Test that sync context manager tracks error when exception occurs."""
+        from unittest.mock import patch
+
+        from azurerbac.telemetry.timers import TimedDbQuery
+
+        with (
+            patch("azurerbac.telemetry.timers.track_db_query") as mock_success,
+            patch("azurerbac.telemetry.timers.track_db_query_error") as mock_error,
+            patch("azurerbac.telemetry.timers.track_db_fallback") as mock_fallback,
+            pytest.raises(ValueError),
+            TimedDbQuery("failing_query", fallback_type="test_fallback"),
+        ):
+            raise ValueError("Test error")
+
+        # Error tracking should be called
+        mock_error.assert_called_once()
+        args = mock_error.call_args[0]
+        assert args[0] == "failing_query"
+        assert isinstance(args[1], float)  # elapsed time
+        assert args[2] == "ValueError"  # exception type name
+
+        # Success tracking should NOT be called (early return)
+        mock_success.assert_not_called()
+        mock_fallback.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_async_tracks_error_on_exception(self):
+        """Test that async context manager tracks error when exception occurs."""
+        from unittest.mock import patch
+
+        from azurerbac.telemetry.timers import TimedDbQuery
+
+        with (
+            patch("azurerbac.telemetry.timers.track_db_query") as mock_success,
+            patch("azurerbac.telemetry.timers.track_db_query_error") as mock_error,
+            patch("azurerbac.telemetry.timers.track_db_fallback") as mock_fallback,
+            pytest.raises(RuntimeError),
+        ):
+            async with TimedDbQuery("async_failing_query", fallback_type="test_fallback"):
+                raise RuntimeError("Async test error")
+
+        # Error tracking should be called
+        mock_error.assert_called_once()
+        args = mock_error.call_args[0]
+        assert args[0] == "async_failing_query"
+        assert isinstance(args[1], float)
+        assert args[2] == "RuntimeError"
+
+        # Success tracking should NOT be called
+        mock_success.assert_not_called()
+        mock_fallback.assert_not_called()
+
+    def test_fallback_type_tracks_cache_miss_on_success(self):
+        """Test that fallback_type triggers track_db_fallback on successful query."""
+        from unittest.mock import patch
+
+        from azurerbac.telemetry.timers import TimedDbQuery
+
+        with (
+            patch("azurerbac.telemetry.timers.track_db_query") as mock_query,
+            patch("azurerbac.telemetry.timers.track_db_fallback") as mock_fallback,
+        ):
+            with TimedDbQuery("test_query", fallback_type="dashboard_roles") as timer:
+                timer.rows = 5
+
+            # Both query and fallback should be tracked
+            mock_query.assert_called_once()
+            mock_fallback.assert_called_once_with("dashboard_roles", "cache_miss", "test_query")
+
+    def test_fallback_type_none_does_not_track_fallback(self):
+        """Test that fallback_type=None does not trigger track_db_fallback."""
+        from unittest.mock import patch
+
+        from azurerbac.telemetry.timers import TimedDbQuery
+
+        with (
+            patch("azurerbac.telemetry.timers.track_db_query") as mock_query,
+            patch("azurerbac.telemetry.timers.track_db_fallback") as mock_fallback,
+        ):
+            with TimedDbQuery("test_query"):
+                pass
+
+            mock_query.assert_called_once()
+            mock_fallback.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_async_fallback_type_tracks_cache_miss_on_success(self):
+        """Test async fallback_type triggers track_db_fallback on successful query."""
+        from unittest.mock import patch
+
+        from azurerbac.telemetry.timers import TimedDbQuery
+
+        with (
+            patch("azurerbac.telemetry.timers.track_db_query") as mock_query,
+            patch("azurerbac.telemetry.timers.track_db_fallback") as mock_fallback,
+        ):
+            async with TimedDbQuery("async_test", fallback_type="search_roles") as timer:
+                timer.rows = 10
+
+            mock_query.assert_called_once()
+            mock_fallback.assert_called_once_with("search_roles", "cache_miss", "async_test")
+
+
+class TestTrackDbQueryError:
+    """Tests for track_db_query_error function."""
+
+    def test_logs_warning_with_correct_format(self, caplog):
+        """Test that error is logged at WARNING level with expected format."""
+        import logging
+
+        from azurerbac.telemetry.metrics import track_db_query_error
+
+        with caplog.at_level(logging.WARNING, logger="azurerbac.telemetry.metrics"):
+            track_db_query_error("test_query", 1.234, "ValueError")
+
+        assert "DB query failed: test_query (1.234s) error=ValueError" in caplog.text
+        assert caplog.records[0].levelno == logging.WARNING
+
+    def test_tracks_metrics_when_enabled(self, local_env):
+        """Test proper metric tracking when metrics are enabled."""
+        metrics_module = local_env
+
+        with (
+            patch.object(metrics_module, "_metrics_enabled", return_value=True),
+            patch.object(metrics_module, "track_duration") as mock_duration,
+            patch.object(metrics_module, "track_event") as mock_event,
+        ):
+            metrics_module.track_db_query_error("failed_query", 2.5, "RuntimeError")
+
+            mock_duration.assert_called_once_with(
+                "db_query_error_duration_seconds",
+                2.5,
+                {"query": "failed_query", "error_type": "RuntimeError"},
+            )
+            mock_event.assert_called_once_with(
+                "db_query_error_event",
+                {"query": "failed_query", "error_type": "RuntimeError"},
+            )
+
+    def test_does_not_track_metrics_when_disabled(self, local_env, caplog):
+        """Test behavior when metrics are disabled (local env)."""
+        import logging
+
+        metrics_module = local_env
+
+        with (
+            patch.object(metrics_module, "track_duration") as mock_duration,
+            patch.object(metrics_module, "track_event") as mock_event,
+        ):
+            with caplog.at_level(logging.WARNING, logger="azurerbac.telemetry.metrics"):
+                metrics_module.track_db_query_error("query", 1.0, "Error")
+
+            # Logging still happens
+            assert "DB query failed" in caplog.text
+            # But metrics are not tracked
+            mock_duration.assert_not_called()
+            mock_event.assert_not_called()
+
+    def test_handles_metric_tracking_failure_gracefully(self, local_env, caplog):
+        """Test exception handling when metric tracking fails."""
+        import logging
+
+        metrics_module = local_env
+
+        with (
+            patch.object(metrics_module, "_metrics_enabled", return_value=True),
+            patch.object(
+                metrics_module, "track_duration", side_effect=Exception("Tracking failed")
+            ),
+            caplog.at_level(logging.WARNING, logger="azurerbac.telemetry.metrics"),
+        ):
+            # Should not raise
+            metrics_module.track_db_query_error("query", 1.0, "Error")
+
+            assert "Failed to track db query error" in caplog.text
+
 
 # =============================================================================
 # Tracing Context Tests

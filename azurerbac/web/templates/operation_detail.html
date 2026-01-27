@@ -277,18 +277,6 @@
                             </button>
                         </dd>
                     </div>
-                    {% if operation.display_name %}
-                    <div class="px-6 py-4 sm:grid sm:grid-cols-3 sm:gap-4">
-                        <dt class="text-sm font-medium text-slate-500">Display Name</dt>
-                        <dd class="mt-1 text-sm text-slate-900 sm:mt-0 sm:col-span-2">{{ operation.display_name }}</dd>
-                    </div>
-                    {% endif %}
-                    {% if operation.description %}
-                    <div class="px-6 py-4 sm:grid sm:grid-cols-3 sm:gap-4">
-                        <dt class="text-sm font-medium text-slate-500">Description</dt>
-                        <dd class="mt-1 text-sm text-slate-900 sm:mt-0 sm:col-span-2">{{ operation.description }}</dd>
-                    </div>
-                    {% endif %}
                     <div class="px-6 py-4 sm:grid sm:grid-cols-3 sm:gap-4">
                         <dt class="text-sm font-medium text-slate-500">Operation Type</dt>
                         <dd class="mt-1 text-sm text-slate-900 sm:mt-0 sm:col-span-2">
@@ -303,6 +291,18 @@
                             {% endif %}
                         </dd>
                     </div>
+                    {% if operation.description %}
+                    <div class="px-6 py-4 sm:grid sm:grid-cols-3 sm:gap-4">
+                        <dt class="text-sm font-medium text-slate-500">Description</dt>
+                        <dd class="mt-1 text-sm text-slate-900 sm:mt-0 sm:col-span-2">{{ operation.description }}</dd>
+                    </div>
+                    {% endif %}
+                    {% if operation.display_name %}
+                    <div class="px-6 py-4 sm:grid sm:grid-cols-3 sm:gap-4">
+                        <dt class="text-sm font-medium text-slate-500">Display Name</dt>
+                        <dd class="mt-1 text-sm text-slate-900 sm:mt-0 sm:col-span-2">{{ operation.display_name }}</dd>
+                    </div>
+                    {% endif %}
                     {% if operation.provider_display_name %}
                     <div class="px-6 py-4 sm:grid sm:grid-cols-3 sm:gap-4">
                         <dt class="text-sm font-medium text-slate-500">Provider</dt>

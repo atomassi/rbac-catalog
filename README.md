@@ -13,12 +13,14 @@ A comprehensive catalog and monitoring tool for [Azure built-in RBAC roles](http
 ## Features
 
 - **Role Catalog** — Browse all 800+ Azure built-in roles with full permission details
-- **Operation Explorer** — Search 20,000+ resource provider operations
-- **Change Tracking** — Monitor when Microsoft adds, modifies, or deprecates roles
-- **AI Role Recommender** — Describe what you need in natural language, get least-privilege role suggestions
+- **Operation Explorer** — Search 20,000+ resource provider operations and see which roles grant each one
+- **Least-Privilege Calculator** — Input operations you need, get roles ranked by fewest excess permissions
+- **Reverse Lookup** — "Which roles grant this operation?" answered instantly
+- **Change Tracking** — Daily scans detect when Microsoft adds, modifies, or deprecates roles
 - **Diff Viewer** — See exactly what changed between role versions
-- **8 AI Recommendation Modes** — From fast keyword matching to LLM-powered semantic understanding
-- **MCP Server** — Integrate with AI agents via Model Context Protocol for automated role discovery
+- **Analytics** — Visualize permission distribution, role changes over time, and provider stats
+- **AI Role Recommender** — Describe what you need in natural language, get least-privilege suggestions (experimental)
+- **MCP Server** — Integrate with AI agents (Copilot, Claude) via Model Context Protocol
 - **RSS/Atom Feeds** — Subscribe to role changes in your favorite feed reader
 
 ## Tech Stack
@@ -28,9 +30,11 @@ A comprehensive catalog and monitoring tool for [Azure built-in RBAC roles](http
 | **Backend** | Python 3.12+, FastAPI, SQLAlchemy, Pydantic |
 | **Frontend** | Jinja2 templates, Tailwind CSS, Alpine.js |
 | **Database** | PostgreSQL |
-| **AI/ML** | Ollama, sentence-transformers, ColBERT, Qwen (fine-tuned) |
+| **AI/ML** | PyTorch, Ollama, sentence-transformers, ColBERT, Qwen (fine-tuned) |
 | **Hosting** | Azure App Service, Cloudflare CDN |
 | **CI/CD** | GitHub Actions, Azure Container Registry, Docker |
+| **Testing** | pytest, Playwright |
+| **Ops Automation** | Azure Automation |
 
 ## Infrastructure & Costs
 
@@ -89,15 +93,16 @@ flowchart TD
 | App Service | ~$45 |
 | PostgreSQL | ~$13 |
 | Container Registry | ~$5 |
-| App Insights | ~$5 |
+| App Insights + Log Analytics | ~$5 |
+| Automation Account | < $1 |
 | Ollama VM (inference) | ~$32 |
-| GPU VM (training/finetuning) | on-demand (~1$/hour) |
+| GPU VM (training/finetuning) | on-demand (~$1/hour) |
 | **Total** | **~$100** |
 
 ## AI Recommendation Modes
 
 > [!NOTE]
-> This project was created for my personal learning and for experimenting with different recommendation modes. The recommendation modes are experimental and may produce inaccurate results. I plan to continue improving and fine-tuning them.
+> The AI modes are experimental—built for learning and experimenting with different recommendation approaches. Results should be verified. Access via `?ai=1` query parameter.
 
 The AI Role Recommender supports **8 different modes**, each with different speed/accuracy trade-offs:
 

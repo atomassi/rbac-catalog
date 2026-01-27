@@ -301,7 +301,7 @@
                 </div>
                 <div class="divide-y divide-slate-100">
                     <div class="px-6 py-4 sm:grid sm:grid-cols-3 sm:gap-4">
-                        <dt class="text-sm font-medium text-slate-500">Role ID</dt>
+                        <dt class="text-sm font-medium text-slate-500 self-center">Role ID</dt>
                         <dd class="mt-1 sm:mt-0 sm:col-span-2 flex items-center gap-2">
                             <code class="text-sm font-mono text-slate-700 bg-slate-100 px-3 py-1.5 rounded-lg">{{ role.role_id }}</code>
                             <button 
@@ -327,7 +327,7 @@
                         </dd>
                     </div>
                     <div class="px-6 py-4 sm:grid sm:grid-cols-3 sm:gap-4">
-                        <dt class="text-sm font-medium text-slate-500">Role Type</dt>
+                        <dt class="text-sm font-medium text-slate-500 self-center">Role Type</dt>
                         <dd class="mt-1 text-sm text-slate-900 sm:mt-0 sm:col-span-2">
                             <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-azure-100 text-azure-700">
                                 {{ role.role_type or 'BuiltInRole' }}
@@ -335,7 +335,7 @@
                         </dd>
                     </div>
                     <div class="px-6 py-4 sm:grid sm:grid-cols-3 sm:gap-4">
-                        <dt class="text-sm font-medium text-slate-500">Assignable Scope</dt>
+                        <dt class="text-sm font-medium text-slate-500 self-center">Assignable Scope</dt>
                         <dd class="mt-1 text-sm text-slate-900 sm:mt-0 sm:col-span-2">
                             {%- set scopes = role.definition.properties.assignable_scopes if role.definition and role.definition.properties else [] -%}
                             {%- if scopes -%}
@@ -346,7 +346,7 @@
                         </dd>
                     </div>
                     <div class="px-6 py-4 sm:grid sm:grid-cols-3 sm:gap-4">
-                        <dt class="text-sm font-medium text-slate-500">Description</dt>
+                        <dt class="text-sm font-medium text-slate-500 self-center">Description</dt>
                         <dd class="mt-1 text-sm text-slate-900 sm:mt-0 sm:col-span-2">
                             {%- if role.description -%}
                                 {{ role.description }}
@@ -356,7 +356,7 @@
                         </dd>
                     </div>
                     <div class="px-6 py-4 sm:grid sm:grid-cols-3 sm:gap-4">
-                        <dt class="text-sm font-medium text-slate-500">Created (Azure)</dt>
+                        <dt class="text-sm font-medium text-slate-500 self-center">Created (Azure)</dt>
                         <dd class="mt-1 text-sm font-mono tabular-nums text-slate-500 sm:mt-0 sm:col-span-2">
                             {%- if role.created_on -%}
                                 {{ role.created_on | format_date }}
@@ -368,7 +368,7 @@
                         </dd>
                     </div>
                     <div class="px-6 py-4 sm:grid sm:grid-cols-3 sm:gap-4">
-                        <dt class="text-sm font-medium text-slate-500">
+                        <dt class="text-sm font-medium text-slate-500 self-center">
                             {%- if role.status == 'deleted' -%}Deleted{%- else -%}Last Updated (Azure){%- endif -%}
                         </dt>
                         <dd class="mt-1 text-sm font-mono tabular-nums text-slate-500 sm:mt-0 sm:col-span-2">

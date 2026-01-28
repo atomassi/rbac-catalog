@@ -378,3 +378,10 @@ class TestRoleJsonPretty:
     def test_empty_dict(self) -> None:
         """Test formatting of empty dict."""
         assert role_json_pretty({}) == "{}"
+
+    def test_preserves_unicode_characters(self) -> None:
+        """Test that Unicode characters are not escaped (ensure_ascii=False)."""
+        role = {"description": "Full control of the agent—manage chats"}
+        result = role_json_pretty(role)
+        assert "—" in result  # Em dash preserved
+        assert "\\u2014" not in result  # Not escaped

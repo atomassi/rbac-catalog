@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import json
-from typing import Any
 from urllib.parse import quote
+
+from azurerbac.core.types import JsonDict
 
 
 def urlencode_path(text: str) -> str:
@@ -17,6 +18,6 @@ def clamp(value: int, min_val: int, max_val: int) -> int:
     return max(min_val, min(value, max_val))
 
 
-def role_json_pretty(role: dict[str, Any]) -> str:
+def role_json_pretty(role: JsonDict) -> str:
     """Pretty-print role JSON."""
-    return json.dumps(role, indent=2, default=str)
+    return json.dumps(role, indent=2, default=str, ensure_ascii=False)

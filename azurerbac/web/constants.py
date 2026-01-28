@@ -57,6 +57,7 @@ CSP_HEADER: Final = (
     "font-src 'self' fonts.gstatic.com; "
     "img-src 'self' data:; "
     "connect-src 'self' cdn.jsdelivr.net cloudflareinsights.com; "
+    "frame-src 'none'; "
     "frame-ancestors 'none'; "
     "base-uri 'self'; "
     "form-action 'self'; "

@@ -139,8 +139,9 @@ async def apple_touch_icon() -> Response:
     )
 
 
-@router.get(
+@router.api_route(
     "/sitemap.xml",
+    methods=["GET", "HEAD"],
     response_class=Response,
     responses={200: {"content": {"application/xml": {}}}},
 )

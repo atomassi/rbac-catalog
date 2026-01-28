@@ -1147,6 +1147,21 @@ test.describe('API Endpoints', () => {
     expect((await request.head('/healthz')).status()).toBe(200);
   });
 
+  test('should support HEAD requests on main pages (for crawlers)', async ({ request }) => {
+    // Search engines send HEAD requests before GET to check availability
+    const pages = ['/', '/roles', '/operations', '/recommend', '/about', '/analytics'];
+    for (const page of pages) {
+      const response = await request.head(page);
+      expect(response.status(), `HEAD ${page} should return 200`).toBe(200);
+    }
+  });
+
+  test('should support HEAD requests on sitemap and feeds', async ({ request }) => {
+    expect((await request.head('/sitemap.xml')).status()).toBe(200);
+    expect((await request.head('/feeds/changelog.atom')).status()).toBe(200);
+    expect((await request.head('/feeds/changelog.rss')).status()).toBe(200);
+  });
+
   test('should return version info', async ({ request }) => {
     const response = await request.get('/version');
     expect(response.status()).toBe(200);

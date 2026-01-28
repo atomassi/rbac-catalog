@@ -47,13 +47,15 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["pages"])
 
 
-@router.get(
+@router.api_route(
     "/roles/{role_id}",
+    methods=["GET", "HEAD"],
     response_class=HTMLResponse,
     name="role_detail",
 )
-@router.get(
+@router.api_route(
     "/roles/{role_id}/{slug}",
+    methods=["GET", "HEAD"],
     response_class=HTMLResponse,
     name="role_detail_slug",
 )
@@ -131,7 +133,7 @@ async def role_detail(
     )
 
 
-@router.get("/operations", response_class=HTMLResponse)
+@router.api_route("/operations", methods=["GET", "HEAD"], response_class=HTMLResponse)
 async def operations_list(
     request: Request,
     deps: Annotated[PagesDeps, Depends(get_pages_deps)],
@@ -226,8 +228,9 @@ async def operations_list(
     )
 
 
-@router.get(
+@router.api_route(
     "/operations/{operation_name:path}",
+    methods=["GET", "HEAD"],
     response_class=HTMLResponse,
     name="operation_detail",
 )
@@ -273,7 +276,7 @@ async def operation_detail(
     )
 
 
-@router.get("/recommend", response_class=HTMLResponse)
+@router.api_route("/recommend", methods=["GET", "HEAD"], response_class=HTMLResponse)
 async def recommend_page(
     request: Request,
     deps: Annotated[PagesDeps, Depends(get_pages_deps)],
@@ -293,7 +296,7 @@ async def recommend_page(
     )
 
 
-@router.get("/about", response_class=HTMLResponse)
+@router.api_route("/about", methods=["GET", "HEAD"], response_class=HTMLResponse)
 async def about_page(
     request: Request,
     deps: Annotated[PagesDeps, Depends(get_pages_deps)],

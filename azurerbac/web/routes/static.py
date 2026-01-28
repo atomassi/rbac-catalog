@@ -170,9 +170,3 @@ async def sitemap_xml(request: Request) -> Response:
             "Last-Modified": last_modified,
         },
     )
-
-
-@router.head("/")
-async def head_root() -> Response:
-    """Handle HEAD requests for Azure Front Door health probes."""
-    return Response(status_code=200)

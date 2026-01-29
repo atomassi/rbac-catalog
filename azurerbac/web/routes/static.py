@@ -139,8 +139,9 @@ async def apple_touch_icon() -> Response:
     )
 
 
-@router.get(
+@router.api_route(
     "/sitemap.xml",
+    methods=["GET", "HEAD"],
     response_class=Response,
     responses={200: {"content": {"application/xml": {}}}},
 )
@@ -169,9 +170,3 @@ async def sitemap_xml(request: Request) -> Response:
             "Last-Modified": last_modified,
         },
     )
-
-
-@router.head("/")
-async def head_root() -> Response:
-    """Handle HEAD requests for Azure Front Door health probes."""
-    return Response(status_code=200)

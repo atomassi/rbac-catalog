@@ -64,8 +64,8 @@ class DashboardContext:
     first_scan: dt.datetime | None = None
 
 
-@router.get("/recent", response_class=HTMLResponse)
-@router.get("/", response_class=HTMLResponse)
+@router.api_route("/recent", methods=["GET", "HEAD"], response_class=HTMLResponse)
+@router.api_route("/", methods=["GET", "HEAD"], response_class=HTMLResponse)
 async def recent_changes(
     request: Request,
     deps: Annotated[DashboardDeps, Depends(get_dashboard_deps)],
@@ -132,7 +132,7 @@ async def recent_changes(
     return deps.templates.TemplateResponse(request, "index.html", asdict(ctx))
 
 
-@router.get("/roles", response_class=HTMLResponse)
+@router.api_route("/roles", methods=["GET", "HEAD"], response_class=HTMLResponse)
 async def roles_list(
     request: Request,
     deps: Annotated[DashboardDeps, Depends(get_dashboard_deps)],

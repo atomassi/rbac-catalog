@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["analytics"])
 
 
-@router.get("/analytics", response_class=HTMLResponse)
+@router.api_route("/analytics", methods=["GET", "HEAD"], response_class=HTMLResponse)
 async def analytics_dashboard(
     request: Request,
     deps: Annotated[DashboardDeps, Depends(get_dashboard_deps)],

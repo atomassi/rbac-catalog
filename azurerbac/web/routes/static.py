@@ -38,6 +38,7 @@ async def robots_txt() -> Response:
             "User-agent: SiteAuditBot",
             "User-agent: SplitSignalBot",
             "User-agent: RyteBot",
+            "User-agent: MJ12bot",
             "Disallow: /",
             "",
             f"Sitemap: {SITE_URL}/sitemap.xml",

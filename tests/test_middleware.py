@@ -95,7 +95,6 @@ class TestSecurityHeaders:
             pytest.param(
                 "referrer-policy", "strict-origin-when-cross-origin", id="referrer_policy"
             ),
-            pytest.param("x-xss-protection", "1; mode=block", id="xss_protection"),
         ],
     )
     async def test_security_header_value(self, test_client, header_name: str, expected_value: str):

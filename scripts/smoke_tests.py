@@ -158,11 +158,15 @@ ROLE_RECOMMEND_TESTS: Final = [
     ),
 ]
 
-# Security headers that should be present
-# Note: X-Content-Type-Options and HSTS are handled by Cloudflare CDN
+# Security headers that should be present (set by our app)
+# Note: Strict-Transport-Security (HSTS) is added by Cloudflare, not tested here
 REQUIRED_SECURITY_HEADERS: Final = [
     ("Content-Security-Policy", "default-src"),
     ("X-Frame-Options", "DENY"),
+    ("X-Content-Type-Options", "nosniff"),
+    ("Referrer-Policy", "strict-origin-when-cross-origin"),
+    ("Cross-Origin-Opener-Policy", "same-origin"),
+    ("Permissions-Policy", "accelerometer=()"),
 ]
 
 # RSS/Atom feed endpoints - (name, path, expected_content_type, xml_root_element)

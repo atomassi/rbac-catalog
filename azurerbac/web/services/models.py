@@ -98,35 +98,41 @@ class PaginationParams:
 
 
 class RawPermissions:
-    """Raw permission patterns from a role."""
+    """Raw permission patterns from a role with effective computation.
 
-    __slots__ = ("actions", "data_actions", "not_actions", "not_data_actions")
+    Stores original permission blocks to correctly compute effective permissions
+    using Azure RBAC semantics: union of (actions - notActions) per block.
+    """
 
-    def __init__(
-        self,
-        actions: list[str],
-        not_actions: list[str],
-        data_actions: list[str],
-        not_data_actions: list[str],
-    ) -> None:
-        self.actions = actions
-        self.not_actions = not_actions
-        self.data_actions = data_actions
-        self.not_data_actions = not_data_actions
+    __slots__ = ("_permissions",)
+
+    def __init__(self, permissions: list[Permission]) -> None:
+        self._permissions = permissions
 
     @classmethod
     def from_permissions(cls, permissions: list[Permission]) -> RawPermissions:
-        """Extract raw permission patterns from role permissions."""
-        actions: list[str] = []
-        not_actions: list[str] = []
-        data_actions: list[str] = []
-        not_data_actions: list[str] = []
-        for perm in permissions:
-            actions.extend(perm.actions)
-            not_actions.extend(perm.not_actions)
-            data_actions.extend(perm.data_actions)
-            not_data_actions.extend(perm.not_data_actions)
-        return cls(actions, not_actions, data_actions, not_data_actions)
+        """Create from a list of Permission objects."""
+        return cls(permissions)
+
+    @property
+    def actions(self) -> list[str]:
+        """Get all actions across all permission blocks (for display)."""
+        return [a for p in self._permissions for a in p.actions]
+
+    @property
+    def not_actions(self) -> list[str]:
+        """Get all notActions across all permission blocks (for display)."""
+        return [a for p in self._permissions for a in p.not_actions]
+
+    @property
+    def data_actions(self) -> list[str]:
+        """Get all dataActions across all permission blocks (for display)."""
+        return [a for p in self._permissions for a in p.data_actions]
+
+    @property
+    def not_data_actions(self) -> list[str]:
+        """Get all notDataActions across all permission blocks (for display)."""
+        return [a for p in self._permissions for a in p.not_data_actions]
 
     @property
     def all_patterns(self) -> list[str]:
@@ -146,18 +152,52 @@ class RawPermissions:
         return bool(self.actions or self.data_actions)
 
     def compute_effective(self, control_ops: set[str], data_ops: set[str]) -> RoleCoverage:
-        """Compute effective permissions after applying exclusions."""
+        """Compute effective permissions using correct Azure RBAC semantics.
+
+        Azure RBAC computes effective permissions as:
+            union of (block.actions - block.notActions) for each permission block
+
+        NOT as: (union of all actions) - (union of all notActions)
+
+        This matters when one block excludes an action that another block grants.
+        """
         from azurerbac.core.patterns import expand_patterns_to_operations
 
-        control_granted = expand_patterns_to_operations(self.actions, control_ops)
-        control_excluded = expand_patterns_to_operations(self.not_actions, control_ops)
-        control_effective = control_granted - control_excluded
+        control_effective: set[str] = set()
+        data_effective: set[str] = set()
 
-        data_granted = expand_patterns_to_operations(self.data_actions, data_ops)
-        data_excluded = expand_patterns_to_operations(self.not_data_actions, data_ops)
-        data_effective = data_granted - data_excluded
+        for perm in self._permissions:
+            # Control plane: actions - notActions for this block
+            block_control = expand_patterns_to_operations(perm.actions, control_ops)
+            block_control -= expand_patterns_to_operations(perm.not_actions, control_ops)
+            control_effective |= block_control
+
+            # Data plane: dataActions - notDataActions for this block
+            block_data = expand_patterns_to_operations(perm.data_actions, data_ops)
+            block_data -= expand_patterns_to_operations(perm.not_data_actions, data_ops)
+            data_effective |= block_data
 
         return RoleCoverage(control_effective, data_effective)
+
+    @property
+    def permission_block_count(self) -> int:
+        """Get number of permission blocks."""
+        return len(self._permissions)
+
+    def _build_permission_blocks(self) -> list[PermissionBlockView]:
+        """Build permission block views for UI display."""
+        return [
+            PermissionBlockView(
+                block_number=i + 1,
+                actions=perm.actions,
+                not_actions=perm.not_actions,
+                data_actions=perm.data_actions,
+                not_data_actions=perm.not_data_actions,
+                has_condition=perm.has_condition,
+                condition_text=perm.condition if perm.has_condition else None,
+            )
+            for i, perm in enumerate(self._permissions)
+        ]
 
     def to_effective_permissions(
         self,
@@ -182,13 +222,14 @@ class RawPermissions:
             raw_not_actions=self.not_actions,
             raw_data_actions=self.data_actions,
             raw_not_data_actions=self.not_data_actions,
+            permission_blocks=self._build_permission_blocks(),
         )
 
 
 class RolePermissionAnalyzer:
     """Analyzes role permissions using cache-backed operation data."""
 
-    __slots__ = ("_cache_override", "_raw_permissions", "_role")
+    __slots__ = ("_cache", "_raw_permissions", "_role")
 
     def __init__(
         self,
@@ -197,18 +238,11 @@ class RolePermissionAnalyzer:
         cache: CacheService | None = None,
     ) -> None:
         """Initialize the analyzer."""
-        self._role = role
-        self._cache_override = cache
-        self._raw_permissions = RawPermissions.from_permissions(role.properties.permissions)
-
-    @property
-    def _cache(self) -> CacheService:
-        """Get cache service."""
-        if self._cache_override is not None:
-            return self._cache_override
         from azurerbac.cache import get_cache_service
 
-        return get_cache_service()
+        self._role = role
+        self._cache = cache if cache is not None else get_cache_service()
+        self._raw_permissions = RawPermissions.from_permissions(role.properties.permissions)
 
     @property
     def role_id(self) -> str:
@@ -332,6 +366,33 @@ class ScanMetadata:
 
 
 @dataclass(slots=True)
+class PermissionBlockView:
+    """Single permission block for UI display."""
+
+    block_number: int
+    actions: list[str]
+    not_actions: list[str]
+    data_actions: list[str]
+    not_data_actions: list[str]
+    has_condition: bool
+    condition_text: str | None
+
+    @property
+    def has_control_plane(self) -> bool:
+        """Check if block has control plane permissions."""
+        return bool(self.actions or self.not_actions)
+
+    @property
+    def has_data_plane(self) -> bool:
+        """Check if block has data plane permissions."""
+        return bool(self.data_actions or self.not_data_actions)
+
+    def to_dict(self) -> JsonDict:
+        """Convert to dict for template rendering."""
+        return asdict(self)
+
+
+@dataclass(slots=True)
 class RoleEffectivePermissions:
     """Effective permissions after applying notActions."""
 
@@ -346,10 +407,18 @@ class RoleEffectivePermissions:
     raw_not_actions: list[str]
     raw_data_actions: list[str]
     raw_not_data_actions: list[str]
+    permission_blocks: list[PermissionBlockView]
+
+    @property
+    def has_multiple_permission_blocks(self) -> bool:
+        """Check if role has multiple permission blocks."""
+        return len(self.permission_blocks) > 1
 
     def to_dict(self) -> JsonDict:
         """Convert to dict for template rendering."""
-        return asdict(self)
+        result = asdict(self)
+        result["permission_blocks"] = [b.to_dict() for b in self.permission_blocks]
+        return result
 
 
 @dataclass(slots=True)

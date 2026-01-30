@@ -134,15 +134,20 @@ def _compute_role_coverage(
     control_ops_lower_to_orig: dict[str, str],
     data_ops_lower_to_orig: dict[str, str],
 ) -> RoleCoverage:
-    """Compute effective operations (granted - excluded) for a role."""
-    control_granted: set[str] = set()
-    data_granted: set[str] = set()
-    control_excluded: set[str] = set()
-    data_excluded: set[str] = set()
+    """Compute effective operations (granted - excluded) for a role.
+
+    Uses correct Azure RBAC semantics: union of (actions - notActions) per block.
+    Each permission block's exclusions only apply to that block's grants.
+    """
+    control_effective: set[str] = set()
+    data_effective: set[str] = set()
 
     for perm in role.properties.permissions:
+        # Control plane: compute this block's effective ops
+        block_control_granted: set[str] = set()
+        block_control_excluded: set[str] = set()
         _add_operations_for_patterns(
-            control_granted,
+            block_control_granted,
             perm.actions,
             all_ops=all_control_ops,
             plane=Plane.CONTROL,
@@ -150,15 +155,20 @@ def _compute_role_coverage(
             ops_lower_to_orig=control_ops_lower_to_orig,
         )
         _add_operations_for_patterns(
-            control_excluded,
+            block_control_excluded,
             perm.not_actions,
             all_ops=all_control_ops,
             plane=Plane.CONTROL,
             pattern_match=pattern_match,
             ops_lower_to_orig=control_ops_lower_to_orig,
         )
+        control_effective |= block_control_granted - block_control_excluded
+
+        # Data plane: compute this block's effective ops
+        block_data_granted: set[str] = set()
+        block_data_excluded: set[str] = set()
         _add_operations_for_patterns(
-            data_granted,
+            block_data_granted,
             perm.data_actions,
             all_ops=all_data_ops,
             plane=Plane.DATA,
@@ -166,15 +176,16 @@ def _compute_role_coverage(
             ops_lower_to_orig=data_ops_lower_to_orig,
         )
         _add_operations_for_patterns(
-            data_excluded,
+            block_data_excluded,
             perm.not_data_actions,
             all_ops=all_data_ops,
             plane=Plane.DATA,
             pattern_match=pattern_match,
             ops_lower_to_orig=data_ops_lower_to_orig,
         )
+        data_effective |= block_data_granted - block_data_excluded
 
-    return RoleCoverage(control_granted - control_excluded, data_granted - data_excluded)
+    return RoleCoverage(control_effective, data_effective)
 
 
 def _build_operation_to_roles(

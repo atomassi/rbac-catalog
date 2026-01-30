@@ -597,23 +597,14 @@ class RoleRecommendationService:
     ) -> int:
         """Count covered operations using correct per-block semantics.
 
-        Azure RBAC: union of (actions - notActions) for each permission block.
+        Delegates to `_compute_per_block_covered_ops` and returns the count.
         """
-        covered: set[str] = set()
-        for perm in permissions:
-            if plane == Plane.CONTROL:
-                actions, not_actions = perm.actions, perm.not_actions
-            else:
-                actions, not_actions = perm.data_actions, perm.not_data_actions
-
-            # Compute this block's coverage within pattern_ops
-            block_granted = {op for op in pattern_ops if operation_matches_any_pattern(op, actions)}
-            block_excluded = {
-                op for op in block_granted if operation_matches_any_pattern(op, not_actions)
-            }
-            covered |= block_granted - block_excluded
-
-        return len(covered)
+        covered_ops = self._compute_per_block_covered_ops(
+            permissions=permissions,
+            pattern_ops=pattern_ops,
+            plane=plane,
+        )
+        return len(covered_ops)
 
     def calculate_permissions_count(
         self,

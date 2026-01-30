@@ -2,6 +2,22 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Condition formatter colors - light mode */
+:root {
+  --cond-blue: #2563eb;
+  --cond-green: #059669;
+  --cond-red: #dc2626;
+  --cond-gray: #64748b;
+}
+
+/* Condition formatter colors - dark mode */
+.dark {
+  --cond-blue: #60a5fa;
+  --cond-green: #34d399;
+  --cond-red: #f87171;
+  --cond-gray: #94a3b8;
+}
+
 /* Custom styles */
 body {
   font-family: 'Inter', sans-serif;

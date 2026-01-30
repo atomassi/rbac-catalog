@@ -248,6 +248,13 @@ const NavState = {
     }
 };
 
-// Make available globally
-// @ts-ignore - Extending window for global access
-window.NavState = NavState;
+// Make available globally (browser)
+if (typeof window !== 'undefined') {
+    // @ts-ignore - Extending window for global access
+    window.NavState = NavState;
+}
+
+// Export for testing (Node.js/Vitest)
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { NavState };
+}

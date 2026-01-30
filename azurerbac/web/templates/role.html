@@ -801,13 +801,13 @@
                                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
                                     <!-- Control Plane -->
                                     {% if block.has_control_plane %}
-                                    <div>
+                                    <div class="min-w-0">
                                         {% if block.actions %}
                                         <div class="mb-2">
                                             <span class="text-xs font-medium text-emerald-700 dark:text-emerald-400">Actions</span>
                                             <div class="space-y-1 mt-1 max-h-28 overflow-y-auto">
                                                 {% for action in block.actions %}
-                                                <code class="block text-xs font-mono text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-900/30 px-2 py-1 rounded">{{ action }}</code>
+                                                <code class="block text-xs font-mono text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-900/30 px-2 py-1 rounded break-all">{{ action }}</code>
                                                 {% endfor %}
                                             </div>
                                         </div>
@@ -817,7 +817,7 @@
                                             <span class="text-xs font-medium text-red-700 dark:text-red-400">NotActions (excluded from this block)</span>
                                             <div class="space-y-1 mt-1 max-h-24 overflow-y-auto">
                                                 {% for action in block.not_actions %}
-                                                <code class="block text-xs font-mono text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/30 px-2 py-1 rounded">{{ action }}</code>
+                                                <code class="block text-xs font-mono text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/30 px-2 py-1 rounded break-all">{{ action }}</code>
                                                 {% endfor %}
                                             </div>
                                         </div>
@@ -827,13 +827,13 @@
                                     
                                     <!-- Data Plane -->
                                     {% if block.has_data_plane %}
-                                    <div>
+                                    <div class="min-w-0">
                                         {% if block.data_actions %}
                                         <div class="mb-2">
                                             <span class="text-xs font-medium text-blue-700 dark:text-blue-400">Data Actions</span>
                                             <div class="space-y-1 mt-1 max-h-28 overflow-y-auto">
                                                 {% for action in block.data_actions %}
-                                                <code class="block text-xs font-mono text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 px-2 py-1 rounded">{{ action }}</code>
+                                                <code class="block text-xs font-mono text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 px-2 py-1 rounded break-all">{{ action }}</code>
                                                 {% endfor %}
                                             </div>
                                         </div>
@@ -843,7 +843,7 @@
                                             <span class="text-xs font-medium text-red-700 dark:text-red-400">NotDataActions (excluded from this block)</span>
                                             <div class="space-y-1 mt-1 max-h-24 overflow-y-auto">
                                                 {% for action in block.not_data_actions %}
-                                                <code class="block text-xs font-mono text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/30 px-2 py-1 rounded">{{ action }}</code>
+                                                <code class="block text-xs font-mono text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/30 px-2 py-1 rounded break-all">{{ action }}</code>
                                                 {% endfor %}
                                             </div>
                                         </div>
@@ -856,7 +856,7 @@
                                 <div class="mt-3 pt-3 border-t border-slate-200 dark:border-slate-600">
                                     <span class="text-xs font-medium text-amber-700 dark:text-amber-400">Condition:</span>
                                     <div class="overflow-x-auto mt-1">
-                                        <code class="block text-xs font-mono text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded whitespace-pre-wrap break-all">{{ block.condition_text }}</code>
+                                        <code class="block text-xs font-mono text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded whitespace-pre-wrap break-all">{{ block.condition_text }}</code>
                                     </div>
                                 </div>
                                 {% endif %}
@@ -949,12 +949,12 @@
                                 </template>
                                 <template x-for="action in filteredControl" :key="action">
                                     <div class="px-3 py-2 border-b border-slate-100 last:border-b-0 hover:bg-slate-100 transition-colors">
-                                        <div class="flex items-center gap-2">
+                                        <div class="flex items-center gap-2 min-w-0">
                                             <span class="flex-shrink-0 w-12 text-center inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[10px] font-medium"
                                                   :class="getOperationTypeClass(action)">
                                                 <span x-text="getOperationType(action)"></span>
                                             </span>
-                                            <a :href="'/operations/' + encodeURIComponent(action)" @click="NavState.setBackContext('role', { from_role_id: '{{ role.role_id }}', from_role_name: '{{ role.role_name }}', from_role_slug: '{{ role.role_name | slugify }}' })" class="text-xs font-mono text-slate-700 truncate hover:text-azure-600 hover:underline" x-text="action" :title="action"></a>
+                                            <a :href="'/operations/' + encodeURIComponent(action)" @click="NavState.setBackContext('role', { from_role_id: '{{ role.role_id }}', from_role_name: '{{ role.role_name }}', from_role_slug: '{{ role.role_name | slugify }}' })" class="text-xs font-mono text-slate-700 break-all hover:text-azure-600 hover:underline" x-text="action" :title="action"></a>
                                         </div>
                                     </div>
                                 </template>
@@ -1005,12 +1005,12 @@
                                 </template>
                                 <template x-for="action in filteredData" :key="action">
                                     <div class="px-3 py-2 border-b border-slate-100 last:border-b-0 hover:bg-slate-100 transition-colors">
-                                        <div class="flex items-center gap-2">
+                                        <div class="flex items-center gap-2 min-w-0">
                                             <span class="flex-shrink-0 w-12 text-center inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[10px] font-medium"
                                                   :class="getOperationTypeClass(action)">
                                                 <span x-text="getOperationType(action)"></span>
                                             </span>
-                                            <a :href="'/operations/' + encodeURIComponent(action)" @click="NavState.setBackContext('role', { from_role_id: '{{ role.role_id }}', from_role_name: '{{ role.role_name }}', from_role_slug: '{{ role.role_name | slugify }}' })" class="text-xs font-mono text-slate-700 truncate hover:text-azure-600 hover:underline" x-text="action" :title="action"></a>
+                                            <a :href="'/operations/' + encodeURIComponent(action)" @click="NavState.setBackContext('role', { from_role_id: '{{ role.role_id }}', from_role_name: '{{ role.role_name }}', from_role_slug: '{{ role.role_name | slugify }}' })" class="text-xs font-mono text-slate-700 break-all hover:text-azure-600 hover:underline" x-text="action" :title="action"></a>
                                         </div>
                                     </div>
                                 </template>

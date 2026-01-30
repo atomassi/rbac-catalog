@@ -34,6 +34,9 @@ typing_extensions>=4.0.0
 torch==2.10.0; sys_platform == "darwin"
 torch==2.10.0+cpu; sys_platform == "linux"
 
+# Scientific computing for sparse matrices
+scipy==1.17.0
+
 # Sentence embeddings for semantic search
 sentence-transformers==5.2.1
 transformers==4.57.6

@@ -2383,3 +2383,208 @@ class TestAIRecommenderExceptions:
         assert issubclass(OllamaClientNotAvailableError, AIRecommenderError)
         assert issubclass(EmbeddingModelNotAvailableError, AIRecommenderError)
         assert issubclass(KnowledgeBaseNotInitializedError, AIRecommenderError)
+
+
+# =============================================================================
+# Tests for TFIDFWeights and WeightPair validation
+# =============================================================================
+
+
+class TestTFIDFWeights:
+    """Tests for TFIDFWeights dataclass validation."""
+
+    @pytest.mark.parametrize(
+        ("bm25", "pattern", "name_match", "fuzzy"),
+        [
+            pytest.param(0.25, 0.35, 0.25, 0.15, id="custom-valid"),
+            pytest.param(0.30, 0.45, 0.15, 0.10, id="defaults"),
+            pytest.param(0.10, 0.10, 0.10, 0.70, id="heavy-fuzzy"),
+            pytest.param(1.0, 0.0, 0.0, 0.0, id="all-bm25"),
+        ],
+    )
+    def test_valid_weights_accepted(
+        self, bm25: float, pattern: float, name_match: float, fuzzy: float
+    ):
+        """Test that weights summing to 1.0 are accepted."""
+        from azurerbac.airecommender.engines.config import TFIDFWeights
+
+        weights = TFIDFWeights(bm25=bm25, pattern=pattern, name_match=name_match, fuzzy=fuzzy)
+        assert weights.bm25 == bm25
+        assert weights.pattern == pattern
+
+    def test_default_weights_sum_to_one(self):
+        """Test that default weights sum to 1.0."""
+        from azurerbac.airecommender.engines.config import TFIDFWeights
+
+        weights = TFIDFWeights()
+        total = weights.bm25 + weights.pattern + weights.name_match + weights.fuzzy
+        assert abs(total - 1.0) < 1e-9
+
+    @pytest.mark.parametrize(
+        ("bm25", "pattern", "name_match", "fuzzy", "expected_sum"),
+        [
+            pytest.param(0.5, 0.5, 0.5, 0.5, 2.0, id="sum-2.0"),
+            pytest.param(0.30, 0.45, 0.15, 0.11, 1.01, id="sum-1.01"),
+            pytest.param(0.1, 0.1, 0.1, 0.1, 0.4, id="sum-0.4"),
+            pytest.param(0.0, 0.0, 0.0, 0.0, 0.0, id="all-zeros"),
+        ],
+    )
+    def test_invalid_weights_raise_value_error(
+        self, bm25: float, pattern: float, name_match: float, fuzzy: float, expected_sum: float
+    ):
+        """Test that weights not summing to 1.0 raise ValueError."""
+        from azurerbac.airecommender.engines.config import TFIDFWeights
+
+        with pytest.raises(ValueError, match=r"must sum to 1\.0"):
+            TFIDFWeights(bm25=bm25, pattern=pattern, name_match=name_match, fuzzy=fuzzy)
+
+
+class TestWeightPair:
+    """Tests for WeightPair dataclass validation."""
+
+    @pytest.mark.parametrize(
+        ("primary", "secondary"),
+        [
+            pytest.param(0.7, 0.3, id="70-30"),
+            pytest.param(0.5, 0.5, id="equal"),
+            pytest.param(1.0, 0.0, id="all-primary"),
+            pytest.param(0.0, 1.0, id="all-secondary"),
+            pytest.param(0.99, 0.01, id="almost-all-primary"),
+        ],
+    )
+    def test_valid_weight_pair_accepted(self, primary: float, secondary: float):
+        """Test that weight pairs summing to 1.0 are accepted."""
+        from azurerbac.airecommender.engines.config import WeightPair
+
+        pair = WeightPair(primary=primary, secondary=secondary)
+        assert pair.primary == primary
+        assert pair.secondary == secondary
+
+    @pytest.mark.parametrize(
+        ("primary", "secondary"),
+        [
+            pytest.param(0.8, 0.3, id="sum-1.1"),
+            pytest.param(0.5, 0.0, id="sum-0.5"),
+            pytest.param(0.0, 0.0, id="both-zero"),
+            pytest.param(0.6, 0.6, id="sum-1.2"),
+        ],
+    )
+    def test_invalid_weight_pair_raise_value_error(self, primary: float, secondary: float):
+        """Test that weight pairs not summing to 1.0 raise ValueError."""
+        from azurerbac.airecommender.engines.config import WeightPair
+
+        with pytest.raises(ValueError, match=r"must sum to 1\.0"):
+            WeightPair(primary=primary, secondary=secondary)
+
+
+# =============================================================================
+# Tests for ScoreNormalizer
+# =============================================================================
+
+
+class TestScoreNormalizer:
+    """Tests for ScoreNormalizer class."""
+
+    def test_min_max_empty_dict(self):
+        """Test min_max handles empty dict correctly."""
+        from azurerbac.airecommender.engines.common import ScoreNormalizer
+
+        result = ScoreNormalizer.min_max({})
+        assert result == {}
+
+    @pytest.mark.parametrize(
+        ("scores", "floor", "ceiling", "expected_min", "expected_max"),
+        [
+            pytest.param({"a": 10.0, "c": 100.0}, 0.0, 1.0, 0.0, 1.0, id="0-1-range"),
+            pytest.param({"a": 0.0, "c": 100.0}, 0.6, 0.95, 0.6, 0.95, id="default-range"),
+            pytest.param({"a": 50.0, "c": 150.0}, 0.5, 0.9, 0.5, 0.9, id="custom-range"),
+        ],
+    )
+    def test_min_max_normalizes_to_range(
+        self,
+        scores: dict[str, float],
+        floor: float,
+        ceiling: float,
+        expected_min: float,
+        expected_max: float,
+    ):
+        """Test min_max normalizes to [floor, ceiling] range."""
+        from azurerbac.airecommender.engines.common import ScoreNormalizer
+
+        result = ScoreNormalizer.min_max(scores, floor=floor, ceiling=ceiling)
+        min_key = min(scores, key=scores.get)  # type: ignore[arg-type]
+        max_key = max(scores, key=scores.get)  # type: ignore[arg-type]
+
+        assert abs(result[min_key] - expected_min) < 1e-9
+        assert abs(result[max_key] - expected_max) < 1e-9
+
+    def test_min_max_single_score(self):
+        """Test min_max handles single score (no range)."""
+        from azurerbac.airecommender.engines.common import ScoreNormalizer
+
+        scores = {"only": 42.0}
+        result = ScoreNormalizer.min_max(scores, floor=0.6, ceiling=0.95)
+
+        # With no range, all scores map to floor (since (val - min) / 1.0 = 0)
+        assert result["only"] == 0.6
+
+    def test_normalize_candidates_empty_list(self):
+        """Test normalize_candidates handles empty list correctly."""
+        from azurerbac.airecommender.engines.common import ScoreNormalizer
+
+        result = ScoreNormalizer.normalize_candidates([])
+        assert result == []
+
+    def test_normalize_candidates_mutates_in_place(self):
+        """Test normalize_candidates mutates candidates in-place."""
+        from azurerbac.airecommender.engines.base import RankedRole
+        from azurerbac.airecommender.engines.common import ScoreNormalizer
+
+        candidates = [
+            RankedRole(role_id="a", role_name="A", description="Test A", final_score=10.0),
+            RankedRole(role_id="b", role_name="B", description="Test B", final_score=90.0),
+        ]
+        original_refs = candidates.copy()
+
+        result = ScoreNormalizer.normalize_candidates(candidates, floor=0.0, ceiling=1.0)
+
+        # Returns same list for chaining
+        assert result is candidates
+        # Same objects mutated
+        assert candidates[0] is original_refs[0]
+        assert candidates[1] is original_refs[1]
+        # Scores normalized
+        assert candidates[0].final_score == 0.0
+        assert candidates[1].final_score == 1.0
+
+    def test_sigmoid_normalize_empty_list(self):
+        """Test sigmoid_normalize handles empty list correctly."""
+        from azurerbac.airecommender.engines.common import ScoreNormalizer
+        from azurerbac.airecommender.engines.config import SigmoidParams
+
+        params = SigmoidParams(midpoint=0.5, steepness=10.0)
+        result = ScoreNormalizer.sigmoid_normalize([], params)
+        assert result == []
+
+    def test_sigmoid_normalize_applies_transform(self):
+        """Test sigmoid_normalize applies sigmoid transform correctly."""
+        from azurerbac.airecommender.engines.base import RankedRole
+        from azurerbac.airecommender.engines.common import ScoreNormalizer
+        from azurerbac.airecommender.engines.config import SigmoidParams
+
+        params = SigmoidParams(midpoint=0.5, steepness=10.0, output_min=0.0, output_max=1.0)
+        candidates = [
+            RankedRole(role_id="low", role_name="Low", description="Low", final_score=0.0),
+            RankedRole(role_id="mid", role_name="Mid", description="Mid", final_score=0.5),
+            RankedRole(role_id="high", role_name="High", description="High", final_score=1.0),
+        ]
+
+        result = ScoreNormalizer.sigmoid_normalize(candidates, params)
+
+        assert result is candidates  # Returns for chaining
+        # Midpoint maps to ~0.5 (sigmoid(0) = 0.5)
+        assert abs(candidates[1].final_score - 0.5) < 0.01
+        # Low score < midpoint
+        assert candidates[0].final_score < 0.5
+        # High score > midpoint
+        assert candidates[2].final_score > 0.5

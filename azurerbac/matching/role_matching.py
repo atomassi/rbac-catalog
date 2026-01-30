@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Set as AbstractSet
+from functools import lru_cache
 from itertools import islice
 from typing import TYPE_CHECKING, Final
 
@@ -92,8 +93,13 @@ def _segment_pattern_covers(role_pattern: str, requested_pattern: str) -> bool:
     return True
 
 
+@lru_cache(maxsize=50000)
 def pattern_covers_pattern(role_pattern: str, requested_pattern: str) -> bool:
-    """Check if a role's action pattern covers a requested wildcard pattern."""
+    """Check if a role's action pattern covers a requested wildcard pattern.
+
+    Memoized with LRU cache since pattern-to-pattern relationships are
+    immutable and frequently recomputed during role matching.
+    """
     if role_pattern in ("*", requested_pattern):
         return True
 

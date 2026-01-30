@@ -33,8 +33,6 @@ from azurerbac.cache.utils import create_lru_cache, sitemap_url
 from azurerbac.core.constants import RoleStatus
 from azurerbac.core.types import JsonDict
 from azurerbac.core.utils import format_datetime, parse_datetime
-
-logger = logging.getLogger(__name__)
 from azurerbac.matching.models import (
     CoverageResult,
     PartialCoverageCacheKey,
@@ -47,6 +45,8 @@ from azurerbac.matching.models import (
 if TYPE_CHECKING:
     from azurerbac.analytics.models import AnalyticsData
     from azurerbac.azure.models import OperationData, RoleDefinition
+
+logger = logging.getLogger(__name__)
 
 CACHE_VERSION: Final[str] = "v9"
 
@@ -275,7 +275,7 @@ class CacheMetadata:
         )
 
 
-@dataclass
+@dataclass(slots=True)
 class SourceData:
     """Raw data loaded from database (immutable after load)."""
 
@@ -287,7 +287,7 @@ class SourceData:
     first_scan: dt.datetime | None = None
 
 
-@dataclass
+@dataclass(slots=True)
 class Indexes:
     """Fast lookup structures (deterministic, built from source)."""
 
@@ -296,7 +296,7 @@ class Indexes:
     ops_by_prefix_by_plane: dict[Plane, dict[str, set[str]]] = field(default_factory=dict)
 
 
-@dataclass
+@dataclass(slots=True)
 class RoleAnalysis:
     """Precomputed role permission analysis (built once at refresh, expensive)."""
 

@@ -8,7 +8,7 @@ targeting 90%+ accuracy through:
 4. Query expansion with Azure-specific synonyms
 5. Custom term weighting for role names and Azure services
 
-Performance: Uses numpy-vectorized BM25 scoring for ~5x speedup on search.
+Performance: Uses scipy sparse matrices for memory-efficient BM25 scoring.
 """
 
 import logging
@@ -17,7 +17,9 @@ from collections import Counter
 from typing import Final
 
 import numpy as np
+from scipy.sparse import csr_matrix
 
+from azurerbac.airecommender.engines.config import DEFAULT_TFIDF_WEIGHTS
 from azurerbac.airecommender.knowledge import (
     ABBREVIATIONS,
     AZURE_SERVICE_SYNONYMS,
@@ -44,7 +46,7 @@ def _action_to_keywords(action: str) -> str:
 
 
 class BM25Index:
-    """BM25 ranking algorithm - better than TF-IDF for short queries."""
+    """BM25 ranking algorithm using sparse matrices for memory efficiency."""
 
     def __init__(self, k1: float = 1.5, b: float = 0.75) -> None:
         self.k1 = k1
@@ -54,7 +56,7 @@ class BM25Index:
         self.doc_ids: list[str] = []
         self.term_to_idx: dict[str, int] = {}  # term -> column index
         self.idf_values: np.ndarray | None = None  # shape: (n_terms,)
-        self.tf_matrix: np.ndarray | None = None  # shape: (n_docs, n_terms)
+        self.tf_matrix: csr_matrix | None = None  # sparse (n_docs, n_terms)
         self.norm_factors: np.ndarray | None = None  # shape: (n_docs,) precomputed denominators
 
     def _tokenize(self, text: str) -> list[str]:
@@ -63,7 +65,7 @@ class BM25Index:
         return [t for t in tokens if len(t) >= 2]
 
     def index(self, documents: list[Document]) -> None:
-        """Build the BM25 index with numpy arrays for fast search."""
+        """Build the BM25 index with sparse CSR matrix for memory efficiency."""
         self.doc_count = len(documents)
         if self.doc_count == 0:
             return
@@ -97,23 +99,45 @@ class BM25Index:
             idx = self.term_to_idx[term]
             self.idf_values[idx] = np.log((self.doc_count - df + 0.5) / (df + 0.5) + 1)
 
-        # Build term frequency matrix (sparse-ish but dense for simplicity with 800 docs)
-        self.tf_matrix = np.zeros((self.doc_count, n_terms), dtype=np.float32)
+        # Build sparse CSR term frequency matrix
+        # Collect COO format data for efficient CSR construction
+        rows: list[int] = []
+        cols: list[int] = []
+        data: list[float] = []
         for doc_idx, term_freqs in enumerate(doc_term_freqs):
             for term, freq in term_freqs.items():
-                term_idx = self.term_to_idx[term]
-                self.tf_matrix[doc_idx, term_idx] = freq
+                rows.append(doc_idx)
+                cols.append(self.term_to_idx[term])
+                data.append(float(freq))
+
+        self.tf_matrix = csr_matrix(
+            (data, (rows, cols)),
+            shape=(self.doc_count, n_terms),
+            dtype=np.float32,
+        )
 
         # Precompute normalization factors: 1 - b + b * (doc_len / avg_doc_len)
         doc_lens_arr = np.array(doc_lens, dtype=np.float32)
         self.norm_factors = 1 - self.b + self.b * (doc_lens_arr / self.avg_doc_len)
 
+        # Log memory savings
+        dense_size = self.doc_count * n_terms * 4  # float32 = 4 bytes
+        sparse_size = (
+            self.tf_matrix.data.nbytes
+            + self.tf_matrix.indices.nbytes
+            + self.tf_matrix.indptr.nbytes
+        )
+        savings_pct = (1 - sparse_size / dense_size) * 100 if dense_size > 0 else 0
+
         logger.info(
-            "Built BM25 index: %d docs, %d terms (numpy-optimized)", self.doc_count, n_terms
+            "Built BM25 index: %d docs, %d terms (sparse CSR, %.1f%% memory saved)",
+            self.doc_count,
+            n_terms,
+            savings_pct,
         )
 
     def search(self, query: str, top_k: int = 10) -> list[SearchResult]:
-        """Search the index using numpy-vectorized BM25 scoring."""
+        """Search the index using sparse matrix BM25 scoring."""
         query_tokens = self._tokenize(query)
         if (
             not query_tokens
@@ -130,8 +154,9 @@ class BM25Index:
         if not query_term_indices:
             return []
 
-        # Extract columns for query terms: shape (n_docs, n_query_terms)
-        tf_subset = self.tf_matrix[:, query_term_indices]
+        # Extract columns for query terms from sparse matrix -> dense for small subset
+        # CSR column slicing returns sparse, convert to dense for vectorized ops
+        tf_subset = self.tf_matrix[:, query_term_indices].toarray()  # (n_docs, n_query_terms)
         idf_subset = self.idf_values[query_term_indices]  # shape: (n_query_terms,)
 
         # BM25 formula vectorized:
@@ -169,13 +194,6 @@ class BM25Index:
                 results.append((self.doc_ids[idx], float(score)))
 
         return results[:top_k]
-
-
-# Scoring weight constants
-_WEIGHT_BM25: Final[float] = 0.30
-_WEIGHT_PATTERN: Final[float] = 0.45  # Patterns are curated and precise
-_WEIGHT_NAME_MATCH: Final[float] = 0.15
-_WEIGHT_FUZZY: Final[float] = 0.10
 
 
 class EnhancedTFIDFRecommender:
@@ -379,12 +397,13 @@ class EnhancedTFIDFRecommender:
             name_score = name_scores.get(role_name, 0)
             fuzzy_score = fuzzy_scores.get(role_name, 0)
 
-            # Weighted combination
+            # Weighted combination using centralized config
+            weights = DEFAULT_TFIDF_WEIGHTS
             final_score = (
-                _WEIGHT_BM25 * bm25_score
-                + _WEIGHT_PATTERN * pattern_score
-                + _WEIGHT_NAME_MATCH * name_score
-                + _WEIGHT_FUZZY * fuzzy_score
+                weights.bm25 * bm25_score
+                + weights.pattern * pattern_score
+                + weights.name_match * name_score
+                + weights.fuzzy * fuzzy_score
             )
 
             # Boost if multiple signals agree

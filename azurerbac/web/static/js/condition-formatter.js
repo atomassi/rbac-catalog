@@ -309,9 +309,9 @@ function conditionFormatter(rawCondition) {
             );
 
             // 7. Strings in single quotes (action names like 'Microsoft.Authorization/...') - red
-            // Note: quotes are escaped to &#39; by escapeHtml, so match that
+            // Note: quotes are escaped to &#39; by escapeHtml, so match that (non-greedy between quotes)
             result = result.replace(
-                /&#39;([^&]+)&#39;/g,
+                /&#39;(.*?)&#39;/g,
                 `&#39;<span style="${red}">$1</span>&#39;`
             );
 

@@ -393,27 +393,28 @@ class RoleRecommendationService:
         control_plane: PlaneContext,
         data_plane: PlaneContext,
     ) -> None:
-        """Evaluate a permission's coverage for both planes.
-
-        Uses a unified loop over plane contexts to eliminate control/data duplication.
-        """
+        """Evaluate a permission's coverage for both planes."""
         has_condition = perm.has_condition
 
-        # Define plane-specific data in a tuple for unified iteration
-        plane_configs = (
-            (control_plane, classified.control, perm.actions, perm.not_actions),
-            (data_plane, classified.data, perm.data_actions, perm.not_data_actions),
+        # Control plane
+        self._evaluate_permission_for_plane(
+            ctx=ctx,
+            plane=control_plane,
+            explicit_ops=classified.control,
+            actions=perm.actions,
+            not_actions=perm.not_actions,
+            has_condition=has_condition,
         )
 
-        for plane, explicit_ops, actions, not_actions in plane_configs:
-            self._evaluate_permission_for_plane(
-                ctx=ctx,
-                plane=plane,
-                explicit_ops=explicit_ops,
-                actions=actions,
-                not_actions=not_actions,
-                has_condition=has_condition,
-            )
+        # Data plane
+        self._evaluate_permission_for_plane(
+            ctx=ctx,
+            plane=data_plane,
+            explicit_ops=classified.data,
+            actions=perm.data_actions,
+            not_actions=perm.not_data_actions,
+            has_condition=has_condition,
+        )
 
     def _evaluate_permission_for_plane(
         self,

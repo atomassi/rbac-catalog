@@ -147,7 +147,8 @@ class HybridEngine(BaseRecommenderEngine):
         # Combine scores: TF-IDF weighted higher (curated patterns are more reliable)
         for c in candidates:
             c.final_score = (
-                HYBRID_WEIGHTS.primary * c.tfidf_score + HYBRID_WEIGHTS.secondary * c.embedding_score
+                HYBRID_WEIGHTS.primary * c.tfidf_score
+                + HYBRID_WEIGHTS.secondary * c.embedding_score
             )
 
         candidates.sort(key=lambda r: r.final_score, reverse=True)

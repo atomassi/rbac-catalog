@@ -434,57 +434,34 @@ class TestAIRecommenderQueryEdgeCases:
         recommender.initialize(roles)
         return recommender
 
-    def test_empty_query_returns_results(self, query_test_recommender):
-        """Empty query string still returns results (TF-IDF handles it)."""
-        # TF-IDF mode should handle empty queries gracefully
+    @pytest.mark.parametrize(
+        ("query", "test_id"),
+        [
+            pytest.param("", "empty_query"),
+            pytest.param("   ", "whitespace_only"),
+            pytest.param("read storage " * 500, "very_long_query"),
+            pytest.param("read <script>alert('xss')</script>; DROP TABLE;--", "special_chars"),
+            pytest.param("读取存储 Lesen Speicher читать", "unicode_chars"),
+        ],
+    )
+    def test_edge_case_queries_handled_gracefully(self, query_test_recommender, query, test_id):
+        """Edge case queries don't crash and return a list."""
         recommendations, _mode = query_test_recommender.recommend(
-            query="", top_k=5, requested_mode="tfidf"
-        )
-        # Empty query may return empty or all results depending on implementation
-        assert isinstance(recommendations, list)
-
-    def test_whitespace_only_query(self, query_test_recommender):
-        """Whitespace-only query handled gracefully."""
-        recommendations, _mode = query_test_recommender.recommend(
-            query="   ", top_k=5, requested_mode="tfidf"
-        )
-        assert isinstance(recommendations, list)
-
-    def test_very_long_query(self, query_test_recommender):
-        """Very long query doesn't cause issues."""
-        long_query = "read storage " * 500  # ~6000 characters
-        recommendations, _mode = query_test_recommender.recommend(
-            query=long_query, top_k=5, requested_mode="tfidf"
+            query=query, top_k=5, requested_mode="tfidf"
         )
         assert isinstance(recommendations, list)
 
-    def test_special_characters_in_query(self, query_test_recommender):
-        """Query with special characters handled."""
-        special_query = "read <script>alert('xss')</script> data; DROP TABLE roles;--"
+    @pytest.mark.parametrize(
+        ("top_k", "description"),
+        [
+            pytest.param(0, "zero", id="zero"),
+            pytest.param(-1, "negative", id="negative"),
+        ],
+    )
+    def test_invalid_top_k_returns_empty(self, query_test_recommender, top_k, description):
+        """top_k <= 0 returns empty list."""
         recommendations, _mode = query_test_recommender.recommend(
-            query=special_query, top_k=5, requested_mode="tfidf"
-        )
-        assert isinstance(recommendations, list)
-
-    def test_unicode_in_query(self, query_test_recommender):
-        """Query with unicode characters handled."""
-        unicode_query = "读取存储 Lesen Speicher читать хранилище"
-        recommendations, _mode = query_test_recommender.recommend(
-            query=unicode_query, top_k=5, requested_mode="tfidf"
-        )
-        assert isinstance(recommendations, list)
-
-    def test_top_k_zero_returns_empty(self, query_test_recommender):
-        """top_k=0 returns empty list."""
-        recommendations, _mode = query_test_recommender.recommend(
-            query="read storage", top_k=0, requested_mode="tfidf"
-        )
-        assert recommendations == []
-
-    def test_top_k_negative_returns_empty(self, query_test_recommender):
-        """top_k=-1 returns empty list (treated as 0)."""
-        recommendations, _mode = query_test_recommender.recommend(
-            query="read storage", top_k=-1, requested_mode="tfidf"
+            query="read storage", top_k=top_k, requested_mode="tfidf"
         )
         assert recommendations == []
 

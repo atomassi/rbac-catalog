@@ -1,14 +1,4 @@
-"""Pytest configuration and shared fixtures.
-
-This module provides the test infrastructure for azurerbac:
-- Database fixtures with session-scoped engine for performance
-- Mock fixtures for AI/ML components
-- Shared test data fixtures (operations, roles)
-- Async session management
-
-Factory functions are in tests.helpers - import them directly in tests
-that need to call them without fixtures.
-"""
+"""Pytest configuration and shared fixtures."""
 
 from __future__ import annotations
 
@@ -53,7 +43,7 @@ from tests.helpers import (
 
 @pytest.fixture(autouse=True)
 def reset_settings_singleton() -> Generator[None, None, None]:
-    """Reset settings singleton before each test to ensure fresh environment reads."""
+    """Reset settings singleton before/after each test."""
     from azurerbac.settings import Settings
 
     Settings.reset()
@@ -71,14 +61,7 @@ def reset_settings_singleton() -> Generator[None, None, None]:
 
 @pytest_asyncio.fixture
 async def async_engine() -> AsyncGenerator[AsyncEngine, None]:
-    """Create an async engine for testing with in-memory SQLite.
-
-    Function-scoped for test isolation. Each test gets a fresh database.
-    Schema is created once per engine via Base.metadata.create_all.
-
-    Yields:
-        AsyncEngine: Configured SQLAlchemy async engine with schema initialized.
-    """
+    """Create in-memory SQLite engine for test isolation."""
     engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
 
     async with engine.begin() as conn:
@@ -92,14 +75,7 @@ async def async_engine() -> AsyncGenerator[AsyncEngine, None]:
 async def async_session_maker(
     async_engine: AsyncEngine,
 ) -> async_sessionmaker[AsyncSession]:
-    """Create an async sessionmaker bound to the test engine.
-
-    Args:
-        async_engine: The test database engine.
-
-    Returns:
-        Configured sessionmaker that creates sessions for the test engine.
-    """
+    """Create sessionmaker bound to the test engine."""
     return async_sessionmaker(async_engine, expire_on_commit=False)
 
 
@@ -107,16 +83,7 @@ async def async_session_maker(
 async def db_session(
     async_session_maker: async_sessionmaker[AsyncSession],
 ) -> AsyncGenerator[AsyncSession, None]:
-    """Create an async database session for testing.
-
-    Provides a clean session that auto-closes after the test.
-
-    Args:
-        async_session_maker: Factory for creating sessions.
-
-    Yields:
-        AsyncSession: Ready-to-use database session.
-    """
+    """Create database session for testing."""
     async with async_session_maker() as session:
         yield session
 
@@ -128,11 +95,7 @@ async def db_session(
 
 @pytest.fixture
 def mock_async_session() -> AsyncMock:
-    """Create a mock async database session with context manager support.
-
-    Returns:
-        AsyncMock configured as an async context manager.
-    """
+    """Create mock async session with context manager support."""
     session = AsyncMock()
     session.__aenter__ = AsyncMock(return_value=session)
     session.__aexit__ = AsyncMock(return_value=None)
@@ -141,14 +104,7 @@ def mock_async_session() -> AsyncMock:
 
 @pytest.fixture
 def mock_session_factory(mock_async_session: AsyncMock) -> MagicMock:
-    """Create a mock SessionLocal factory that returns the mock session.
-
-    Args:
-        mock_async_session: The mock session to return.
-
-    Returns:
-        MagicMock that returns the mock session when called.
-    """
+    """Create mock SessionLocal factory."""
     factory = MagicMock()
     factory.return_value = mock_async_session
     return factory
@@ -164,46 +120,25 @@ def mock_session_factory(mock_async_session: AsyncMock) -> MagicMock:
 
 @pytest.fixture
 def mock_embedding_model() -> MagicMock:
-    """Create a mock embedding model with standard test embeddings.
-
-    Provides 3 roles with different similarity profiles:
-    - role-1: High similarity (identical vector)
-    - role-2: Medium similarity
-    - role-3: Low similarity (opposite vector)
-
-    Returns:
-        Configured MagicMock embedding model.
-    """
+    """Mock embedding model with test embeddings (role-1: high, role-2: med, role-3: low)."""
     return create_mock_embedding_model()
 
 
 @pytest.fixture
 def mock_knowledge_base() -> MagicMock:
-    """Create a mock knowledge base with standard test roles.
-
-    Returns:
-        Configured MagicMock knowledge base.
-    """
+    """Mock knowledge base with test roles."""
     return create_mock_knowledge_base()
 
 
 @pytest.fixture
 def mock_ollama_client() -> MagicMock:
-    """Create a mock Ollama client.
-
-    Returns:
-        Configured MagicMock Ollama client.
-    """
+    """Mock Ollama client."""
     return create_mock_ollama_client()
 
 
 @pytest.fixture
 def mock_tfidf_recommender() -> MagicMock:
-    """Create a mock TF-IDF recommender returning 4-tuple format.
-
-    Returns:
-        MagicMock with recommend() returning (role_id, role_name, score, metadata).
-    """
+    """Mock TF-IDF recommender returning 4-tuple format."""
     recommender = MagicMock()
     recommender.recommend = MagicMock(
         return_value=[
@@ -215,20 +150,13 @@ def mock_tfidf_recommender() -> MagicMock:
 
 
 # =============================================================================
-# Shared Test Data Fixtures - Single Source of Truth
-#
-# These fixtures provide consistent test data across all test files.
-# Use these instead of defining local fixtures in individual test files.
+# Shared Test Data Fixtures
 # =============================================================================
 
 
 @pytest.fixture
 def operation_names() -> set[str]:
-    """Sample operation names as a set for simple pattern matching tests.
-
-    Returns:
-        Set of Azure resource operation strings.
-    """
+    """Sample operation names for pattern matching tests."""
     return {
         "Microsoft.Storage/storageAccounts/read",
         "Microsoft.Storage/storageAccounts/write",
@@ -244,15 +172,7 @@ def operation_names() -> set[str]:
 
 @pytest.fixture
 def sample_operations() -> list[OperationData]:
-    """Comprehensive sample operations for role matching and cache tests.
-
-    Includes control plane and data plane operations with full metadata.
-    This is the standard fixture for most tests - use this unless you
-    need a simpler format.
-
-    Returns:
-        List of OperationData models with name, is_data_action, and display fields.
-    """
+    """Sample operations with control plane and data plane for cache tests."""
     return [
         # Control plane - Storage
         make_operation(
@@ -360,11 +280,7 @@ def sample_operations() -> list[OperationData]:
 
 @pytest.fixture
 def populated_cache(sample_operations: list[OperationData]) -> Generator[None, None, None]:
-    """Populate the global cache with sample_operations for role recommender tests.
-
-    This fixture must be used by tests that call recommend_roles() or
-    RoleRecommendationService without explicitly providing a cache.
-    """
+    """Populate global cache with sample_operations for role recommender tests."""
     from azurerbac.cache import get_cache_service
     from azurerbac.cache.build import precompute_all
     from azurerbac.cache.models import CacheData
@@ -379,14 +295,7 @@ def populated_cache(sample_operations: list[OperationData]) -> Generator[None, N
 
 @pytest.fixture
 def large_operations() -> list[OperationData]:
-    """Large set of operations to simulate production data volume.
-
-    Generates ~500 control plane operations and ~75 data plane operations
-    across 10 providers, useful for cache and performance testing.
-
-    Returns:
-        List of OperationData objects with name and is_data_action fields.
-    """
+    """Large set (~575) of operations for cache/performance testing."""
     ops: list[OperationData] = []
     providers = [
         "Microsoft.Storage",
@@ -438,19 +347,7 @@ def large_operations() -> list[OperationData]:
 
 @pytest.fixture
 def sample_roles() -> list[RoleDefinition]:
-    """Sample Azure RBAC role definitions for testing.
-
-    Provides a comprehensive set of roles with varying permission patterns:
-    - Reader: Wildcard read-only (*/read)
-    - Storage Data Reader: Provider-scoped with data plane
-    - Contributor: Broad permissions with exclusions (notActions)
-    - Owner: Full access
-    - Storage Specific: Explicit operations (no wildcards)
-    - Conditional Access: Permissions with conditions
-
-    Returns:
-        List of RoleDefinition objects matching Azure API structure.
-    """
+    """Sample roles with varying permission patterns (wildcards, notActions, conditions)."""
     role_dicts = [
         {
             "name": "reader-role-id",
@@ -561,11 +458,7 @@ def sample_roles() -> list[RoleDefinition]:
 
 @pytest.fixture
 def sample_roles_db_format() -> list[CachedRole]:
-    """Sample roles in CachedRole format for cache testing.
-
-    Returns:
-        List of CachedRole objects as used in the cache.
-    """
+    """Sample roles in CachedRole format for cache testing."""
     role1_def = RoleDefinition.model_validate(
         {
             "name": "role-1",

@@ -63,38 +63,16 @@ def make_role_with_multiple_permissions(
     *,
     description: str | None = None,
 ) -> RoleDefinition:
-    """Create a RoleDefinition with multiple permission blocks.
-
-    Args:
-        role_name: Display name of the role.
-        role_id: GUID of the role.
-        permission_blocks: List of permission dicts, each with keys:
-            - actions: list[str]
-            - notActions: list[str] (optional)
-            - dataActions: list[str] (optional)
-            - notDataActions: list[str] (optional)
-        description: Role description.
-
-    Example:
-        make_role_with_multiple_permissions(
-            "Test Role", "test-guid",
-            permission_blocks=[
-                {"actions": ["Microsoft.Storage/*"], "notActions": ["Microsoft.Storage/*/write"]},
-                {"actions": ["Microsoft.Storage/storageAccounts/write"]},
-            ]
-        )
-    """
-    # Normalize permission blocks to ensure all keys exist
-    normalized_blocks = []
-    for block in permission_blocks:
-        normalized_blocks.append(
-            {
-                "actions": block.get("actions", []),
-                "notActions": block.get("notActions", []),
-                "dataActions": block.get("dataActions", []),
-                "notDataActions": block.get("notDataActions", []),
-            }
-        )
+    """Create a RoleDefinition with multiple permission blocks."""
+    normalized_blocks = [
+        {
+            "actions": block.get("actions", []),
+            "notActions": block.get("notActions", []),
+            "dataActions": block.get("dataActions", []),
+            "notDataActions": block.get("notDataActions", []),
+        }
+        for block in permission_blocks
+    ]
 
     return RoleDefinition.model_validate(
         {

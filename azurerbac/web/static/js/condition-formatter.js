@@ -3,12 +3,19 @@
  * Condition formatter for ABAC (Attribute-Based Access Control) conditions
  * Parses and formats Azure RBAC conditions with syntax highlighting
  *
- * Supported condition patterns:
+ * Based on Azure ABAC condition format documentation:
+ * https://learn.microsoft.com/en-us/azure/role-based-access-control/conditions-format
+ *
+ * NOTE: This is a best-effort pattern tokenizer, not a formal lexer with grammar rules.
+ * It recognizes common ABAC patterns for highlighting and human-readable explanations.
+ * Unknown or malformed input is handled gracefully (displayed as plain text).
+ *
+ * Recognized patterns:
  * - ActionMatches{'action/name'} and !ActionMatches{'action/name'}
  * - ForAnyOfAnyValues:GuidEquals{guid1, guid2, ...}
  * - ForAnyOfAllValues:GuidEquals/GuidNotEquals, ForAllOfAnyValues, ForAllOfAllValues
  * - forallofanyvalues:stringlikeignorecase, stringequalsignorecase
- * - @Request[attribute] and @Resource[attribute]
+ * - @Request[attribute], @Resource[attribute], @Principal[attribute], @Environment[attribute]
  * - boolequals true/false
  * - AND/OR and &&/|| operators
  * - Negation with !(...)
@@ -51,12 +58,14 @@ function matchesWordAt(text, pos, word) {
 }
 
 /**
- * Tokenize a condition expression using a character-by-character lexer.
- * Returns structured tokens for syntax highlighting and semantic analysis.
- * @param {string} text - Text to tokenize
+ * Scan a condition expression for known patterns and extract tokens.
+ * This is an ad-hoc pattern scanner (not a formal lexer with grammar rules).
+ * It recognizes Azure ABAC syntax patterns for highlighting and analysis.
+ * Unknown content is accumulated as plain 'text' tokens - no errors thrown.
+ * @param {string} text - Text to scan
  * @returns {HighlightToken[]} Array of tokens with type and value
  */
-function lexTokens(text) {
+function scanTokens(text) {
     /** @type {HighlightToken[]} */
     const tokens = [];
     let i = 0;
@@ -525,8 +534,8 @@ function conditionFormatter(rawCondition) {
                 return `<span style="${gray}">${text}</span>`;
             }
 
-            // Use the shared lexer
-            const tokens = lexTokens(text);
+            // Use the shared pattern scanner
+            const tokens = scanTokens(text);
 
             // Build HTML from tokens
             let result = '';
@@ -559,7 +568,7 @@ function conditionFormatter(rawCondition) {
                     case 'function':
                         result += `<span style="${blue}">${this.escapeHtml(token.value)}</span>`;
                         break;
-                    case 'boolean':
+                    case 'boolean': // Intentional fall-through: booleans share styling with attribute keywords
                     case 'attribute-kw':
                         result += `<span style="${green}">${this.escapeHtml(token.value)}</span>`;
                         break;
@@ -581,6 +590,8 @@ function conditionFormatter(rawCondition) {
 function normalizeGuid(guid) {
     const clean = guid.replace(/[-\s]/g, '').toLowerCase();
     if (clean.length !== 32) return guid.toLowerCase();
+    // Validate all characters are valid hex digits
+    if (!/^[0-9a-f]{32}$/.test(clean)) return guid.toLowerCase();
     return `${clean.slice(0, 8)}-${clean.slice(8, 12)}-${clean.slice(12, 16)}-${clean.slice(16, 20)}-${clean.slice(20)}`;
 }
 
@@ -617,6 +628,53 @@ function friendlyAttributeName(path) {
 }
 
 /**
+ * Escape HTML special characters for safe insertion into HTML
+ * @param {string} str - String to escape
+ * @returns {string} Escaped string
+ */
+function escapeForHtml(str) {
+    return str.replace(/[&<>"']/g, c => ESCAPE_MAP[c] || c);
+}
+
+/**
+ * Wrap a value in bold tags for display in explanation details
+ * @param {string} value - Value to make bold
+ * @returns {string} HTML with bold tags
+ */
+function bold(value) {
+    return `<strong>${escapeForHtml(value)}</strong>`;
+}
+
+/**
+ * Join multiple values with bold formatting
+ * @param {string[]} values - Values to join
+ * @param {string} [separator=', '] - Separator between values
+ * @returns {string} HTML with bold tags around each value
+ */
+function boldList(values, separator = ', ') {
+    return values.map(v => bold(v)).join(separator);
+}
+
+/**
+ * Wrap a value in code tags for technical identifiers (GUIDs, IDs)
+ * @param {string} value - Value to format as code
+ * @returns {string} HTML with code styling
+ */
+function code(value) {
+    return `<code class="text-xs bg-blue-100 dark:bg-blue-800 px-1 py-0.5 rounded">${escapeForHtml(value)}</code>`;
+}
+
+/**
+ * Join multiple values with code formatting
+ * @param {string[]} values - Values to join
+ * @param {string} [separator=', '] - Separator between values
+ * @returns {string} HTML with code styling around each value
+ */
+function codeList(values, separator = ', ') {
+    return values.map(v => code(v)).join(separator);
+}
+
+/**
  * Parse a condition expression and generate a human-readable explanation
  * Based on Azure ABAC condition format: https://learn.microsoft.com/en-us/azure/role-based-access-control/conditions-format
  * 
@@ -633,8 +691,8 @@ function explainCondition(condition) {
     /** @type {string[]} */
     const summaryParts = [];
 
-    // Tokenize the condition using the shared lexer
-    const tokens = lexTokens(condition);
+    // Tokenize the condition using the pattern scanner
+    const tokens = scanTokens(condition);
 
     // Extract semantic information from tokens
     /** @type {Array<{attr: string, bracket: string}>} */
@@ -712,8 +770,9 @@ function explainCondition(condition) {
     }
 
     // Detect operator types using a helper
-    /** @param {string} pattern */
-    const hasFunction = (pattern) => functions.some(f => f.includes(pattern));
+    // Use endsWith to avoid 'guidnotequals' matching 'guidequals' pattern
+    /** @param {string} suffix */
+    const hasFunction = (suffix) => functions.some(f => f.endsWith(suffix));
     const hasGuidEquals = hasFunction('guidequals') && !hasFunction('guidnotequals');
     const hasGuidNotEquals = hasFunction('guidnotequals');
     const hasStringEquals = hasFunction('stringequals');
@@ -746,9 +805,9 @@ function explainCondition(condition) {
             return parts.length > 3 ? `.../${parts.slice(-2).join('/')}` : a;
         });
         if (actions.length === 1) {
-            details.push(`Applies only when performing action: ${actionList[0]}`);
+            details.push(`Applies only when performing action: ${bold(actionList[0])}`);
         } else {
-            details.push(`Applies only when performing actions: ${actionList.join(', ')}`);
+            details.push(`Applies only when performing actions: ${boldList(actionList)}`);
         }
         summaryParts.push('action-specific restriction');
     }
@@ -763,7 +822,7 @@ function explainCondition(condition) {
         const containerNames = strings.filter(s => !s.includes('/') && !s.includes('*'));
         if (containerNames.length > 0) {
             const verb = hasStringLike ? 'match pattern' : 'be';
-            details.push(`Container name must ${verb}: ${containerNames.join(' or ')}`);
+            details.push(`Container name must ${verb}: ${boldList(containerNames, ' or ')}`);
             summaryParts.push('restricts container access');
         }
     }
@@ -773,7 +832,7 @@ function explainCondition(condition) {
     if (blobPathAttr && strings.length > 0) {
         const pathPatterns = strings.filter(s => s.includes('/') || s.includes('*'));
         if (pathPatterns.length > 0) {
-            details.push(`Blob path must match: ${pathPatterns.join(' or ')}`);
+            details.push(`Blob path must match: ${boldList(pathPatterns, ' or ')}`);
             summaryParts.push('restricts blob paths');
         }
     }
@@ -785,14 +844,14 @@ function explainCondition(condition) {
         if (strings.length > 0) {
             const tagValues = strings.slice(0, 3);
             const verb = hasStringLike ? 'match pattern' : 'equal';
-            details.push(`${tagName} must ${verb}: ${tagValues.join(' or ')}${strings.length > 3 ? '...' : ''}`);
+            details.push(`${bold(tagName)} must ${verb}: ${boldList(tagValues, ' or ')}${strings.length > 3 ? '...' : ''}`);
             summaryParts.push('restricts by blob tags');
         }
     }
 
     // Encryption scope
     if (findAttr(resourceAttrs, 'encryptionscopes:name') && strings.length > 0) {
-        details.push(`Encryption scope must be: ${strings.join(' or ')}`);
+        details.push(`Encryption scope must be: ${boldList(strings, ' or ')}`);
         summaryParts.push('restricts encryption scope');
     }
 
@@ -817,13 +876,13 @@ function explainCondition(condition) {
 
     // Private endpoint restriction
     if (findAttr(environmentAttrs, 'privateendpoints') && strings.length > 0) {
-        details.push(`Access restricted to private endpoint(s): ${strings.join(', ')}`);
+        details.push(`Access restricted to private endpoint(s): ${boldList(strings)}`);
         summaryParts.push('restricts by private endpoint');
     }
 
     // Subnet restriction
     if (findAttr(environmentAttrs, 'subnets') && strings.length > 0) {
-        details.push(`Access restricted to subnet(s): ${strings.join(', ')}`);
+        details.push(`Access restricted to subnet(s): ${boldList(strings)}`);
         summaryParts.push('restricts by network');
     }
 
@@ -863,7 +922,7 @@ function explainCondition(condition) {
 
     // Role definition restrictions
     if (guids.length > 0 && (requestHasRoleDefId || resourceHasRoleDefId)) {
-        const guidDisplay = guids.join(', ');
+        const guidDisplay = codeList(guids);
         
         if (requestHasRoleDefId) {
             const verb = hasGuidNotEquals ? 'Cannot assign' : 'Can only assign';
@@ -893,7 +952,7 @@ function explainCondition(condition) {
             ['serviceprincipal', 'user', 'group', 'foreigngroup'].includes(s.toLowerCase())
         );
         if (principalTypes.length > 0) {
-            details.push(`Principal type must be: ${principalTypes.join(' or ')}`);
+            details.push(`Principal type must be: ${boldList(principalTypes, ' or ')}`);
             summaryParts.push('restricts principal type');
         }
     }
@@ -917,30 +976,30 @@ function explainCondition(condition) {
         
         // Describe what attribute sources are used
         if (requestAttrs.length > 0) {
-            details.push('• Evaluates attributes of the incoming request (e.g., requested tags, properties)');
+            details.push('Evaluates attributes of the incoming request (e.g., requested tags, properties)');
         }
         if (resourceAttrs.length > 0) {
-            details.push('• Evaluates attributes of the target resource (e.g., existing tags, container name)');
+            details.push('Evaluates attributes of the target resource (e.g., existing tags, container name)');
         }
         if (principalAttrs.length > 0) {
-            details.push('• Evaluates custom security attributes of the requesting principal');
+            details.push('Evaluates custom security attributes of the requesting principal');
         }
         if (environmentAttrs.length > 0) {
-            details.push('• Evaluates environment conditions (e.g., network, time)');
+            details.push('Evaluates environment conditions (e.g., network, time)');
         }
         if (hasActionMatches) {
-            details.push('• Applies only to specific actions');
+            details.push('Applies only to specific actions');
         }
         if (hasSubOperationMatches) {
-            details.push('• Distinguishes between sub-operations (e.g., read vs list)');
+            details.push('Distinguishes between sub-operations (e.g., read vs list)');
         }
         if (guids.length > 0) {
-            details.push(`• References ${guids.length} GUID value(s)`);
+            details.push(`References ${guids.length} GUID value(s)`);
         }
         if (strings.length > 0 && strings.length <= 5) {
-            details.push(`• Compares against values: ${strings.join(', ')}`);
+            details.push(`Compares against values: ${strings.join(', ')}`);
         } else if (strings.length > 5) {
-            details.push(`• Compares against ${strings.length} string values`);
+            details.push(`Compares against ${strings.length} string values`);
         }
     }
 
@@ -950,5 +1009,5 @@ function explainCondition(condition) {
 // Export for testing (Node.js/Vitest) while keeping browser compatibility
 // @ts-ignore - CommonJS export for Node.js test environment (module is Node-specific)
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { conditionFormatter, explainCondition, normalizeGuid, friendlyAttributeName, lexTokens, matchesWordAt, ESCAPE_MAP };
+    module.exports = { conditionFormatter, explainCondition, normalizeGuid, friendlyAttributeName, scanTokens, matchesWordAt, ESCAPE_MAP };
 }

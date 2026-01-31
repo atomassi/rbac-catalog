@@ -438,6 +438,13 @@ describe('explainCondition', () => {
             const result = explainCondition(condition);
             expect(result.details.some(d => d.toLowerCase().includes('principal'))).toBe(true);
         });
+
+        it('should correctly distinguish GuidNotEquals from GuidEquals', () => {
+            const condition = `@Request[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidNotEquals {acdd72a7-3385-48ef-bd42-f606fba81ae7}`;
+            const result = explainCondition(condition);
+            // Should indicate restriction/exclusion, not allowance
+            expect(result.details.some(d => d.toLowerCase().includes('cannot') || d.toLowerCase().includes('not'))).toBe(true);
+        });
     });
 
     describe('storage conditions', () => {
@@ -524,6 +531,12 @@ describe('normalizeGuid', () => {
 
     it('should return original for invalid GUIDs', () => {
         expect(normalizeGuid('not-a-guid')).toBe('not-a-guid');
+    });
+
+    it('should return original for non-hex characters', () => {
+        // 32 characters but not valid hex
+        expect(normalizeGuid('xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx')).toBe('xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx');
+        expect(normalizeGuid('ghij72a7338548efbd42f606fba81ae7')).toBe('ghij72a7338548efbd42f606fba81ae7');
     });
 });
 

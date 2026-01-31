@@ -16,15 +16,15 @@
     })();
     </script>
     <title>{{ role.role_name }} ({{ role.role_id }}) - Azure Built-in Role | RBAC Permissions</title>
-    <meta name="description" content="{{ role.role_name }} role definition ID {{ role.role_id }}. {{ role.description[:130] if role.description else 'Azure built-in RBAC role' }}. Complete permissions list with actions, dataActions, and JSON.">
-    <meta name="keywords" content="{{ role.role_id }}, {{ role.role_id | replace('-', '') }}, {{ role.role_name }}, {{ role.role_name }} role, {{ role.role_name }} permissions, Azure RBAC, role definition id, Azure IAM">
+    <meta name="description" content="{{ role.role_name }} role definition ID {{ role.role_id }}. {{ role.description[:130] if role.description else 'Azure built-in RBAC role' }}. Complete permissions list with actions, dataActions, and JSON.{% if effective_perms and effective_perms.has_conditions %} Includes human-readable ABAC condition explanations.{% endif %}">
+    <meta name="keywords" content="{{ role.role_id }}, {{ role.role_id | replace('-', '') }}, {{ role.role_name }}, {{ role.role_name }} role, {{ role.role_name }} permissions, Azure RBAC, role definition id, Azure IAM{% if effective_perms and effective_perms.has_conditions %}, ABAC, attribute-based access control, condition explanation{% endif %}">
     <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
     <meta name="author" content="Azure RBAC Catalog">
     <link rel="canonical" href="{{ site_url }}/roles/{{ role.role_id }}/{{ role.role_name | slugify }}">
     
     <!-- Open Graph / Facebook -->
     <meta property="og:title" content="{{ role.role_name }} - Azure Built-in Role ({{ role.role_id[:8] }}...)">
-    <meta property="og:description" content="{{ role.description[:200] if role.description else 'Azure built-in RBAC role ' ~ role.role_name ~ '. View permissions, actions, and JSON definition.' }}">
+    <meta property="og:description" content="{{ role.description[:200] if role.description else 'Azure built-in RBAC role ' ~ role.role_name ~ '. View permissions, actions, and JSON definition.' }}{% if effective_perms and effective_perms.has_conditions %} With ABAC condition explanations.{% endif %}">
     <meta property="og:type" content="article">
     <meta property="og:url" content="{{ site_url }}/roles/{{ role.role_id }}/{{ role.role_name | slugify }}">
     <meta property="og:site_name" content="Azure RBAC Catalog">
@@ -39,7 +39,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="{{ role.role_name }} - Azure Built-in Role">
-    <meta name="twitter:description" content="{{ role.description[:200] if role.description else 'Azure built-in RBAC role ' ~ role.role_name ~ '. View permissions and JSON definition.' }}">
+    <meta name="twitter:description" content="{{ role.description[:200] if role.description else 'Azure built-in RBAC role ' ~ role.role_name ~ '. View permissions and JSON definition.' }}{% if effective_perms and effective_perms.has_conditions %} With ABAC condition explanations.{% endif %}">
     <meta name="twitter:image" content="{{ site_url }}/static/images/og-image.png">
     <meta name="twitter:image:alt" content="Azure RBAC Catalog - Azure built-in role details">
     
@@ -49,9 +49,9 @@
         "@context": "https://schema.org",
         "@type": "TechArticle",
         "headline": "{{ role.role_name }} - Azure Built-in Role Definition",
-        "description": "{{ role.description | default('Detailed definition and permissions for the Azure built-in role ' ~ role.role_name ~ '.', true) | replace('"', '\\"') }}",
+        "description": "{{ role.description | default('Detailed definition and permissions for the Azure built-in role ' ~ role.role_name ~ '.', true) | replace('"', '\\"') }}{% if effective_perms and effective_perms.has_conditions %} Includes ABAC condition explanations.{% endif %}",
         "articleSection": "Azure RBAC Roles",
-        "keywords": "Azure, RBAC, {{ role.role_name }}, Security, IAM, {{ role.role_id }}, {{ role.role_id | replace('-', '') }}",
+        "keywords": "Azure, RBAC, {{ role.role_name }}, Security, IAM, {{ role.role_id }}, {{ role.role_id | replace('-', '') }}{% if effective_perms and effective_perms.has_conditions %}, ABAC, attribute-based access control, condition explanation{% endif %}",
         "datePublished": "{{ (role.created_on or role.first_seen_at or role.last_seen_at or role.updated_on).isoformat() if (role.created_on or role.first_seen_at or role.last_seen_at or role.updated_on) else '' }}",
         "dateModified": "{{ (role.updated_on or role.last_seen_at).isoformat() if (role.updated_on or role.last_seen_at) else '' }}",
         "author": {
@@ -857,10 +857,31 @@
                                 <div class="mt-3 pt-3 border-t border-slate-200 dark:border-slate-600" x-data="conditionFormatter({{ block.condition_text | tojson | forceescape }})">
                                     <div class="flex items-center justify-between mb-2">
                                         <span class="text-xs font-medium text-amber-700 dark:text-amber-400">Condition:</span>
-                                        <button @click="formatted = !formatted" class="text-xs text-azure-600 dark:text-azure-400 hover:underline">
-                                            <span x-text="formatted ? 'Show raw' : 'Format'"></span>
-                                        </button>
+                                        <div class="flex items-center gap-3">
+                                            <button @click="toggleExplanation()" aria-label="Explain condition" class="text-xs text-azure-600 dark:text-azure-400 hover:underline flex items-center gap-1">
+                                                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                </svg>
+                                                <span x-text="showExplanation ? 'Hide explanation' : 'Explain'"></span>
+                                            </button>
+                                            <button @click="formatted = !formatted" class="text-xs text-azure-600 dark:text-azure-400 hover:underline">
+                                                <span x-text="formatted ? 'Show raw' : 'Format'"></span>
+                                            </button>
+                                        </div>
                                     </div>
+                                    
+                                    <!-- Explanation panel -->
+                                    <template x-if="showExplanation">
+                                        <div class="mb-3 p-3 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-lg" aria-live="polite">
+                                            <p class="text-sm font-medium text-blue-800 dark:text-blue-200 mb-2" x-text="getExplanation().summary"></p>
+                                            <ul class="list-disc list-inside space-y-1">
+                                                <template x-for="(detail, idx) in getExplanation().details" :key="idx">
+                                                    <li class="text-xs text-blue-700 dark:text-blue-300" x-html="detail"></li>
+                                                </template>
+                                            </ul>
+                                        </div>
+                                    </template>
+                                    
                                     <div class="overflow-x-auto">
                                         <!-- Raw view -->
                                         <template x-if="!formatted">

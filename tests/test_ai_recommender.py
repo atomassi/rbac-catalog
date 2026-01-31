@@ -435,16 +435,19 @@ class TestAIRecommenderQueryEdgeCases:
         return recommender
 
     @pytest.mark.parametrize(
-        ("query", "test_id"),
+        "query",
         [
-            pytest.param("", "empty_query"),
-            pytest.param("   ", "whitespace_only"),
-            pytest.param("read storage " * 500, "very_long_query"),
-            pytest.param("read <script>alert('xss')</script>; DROP TABLE;--", "special_chars"),
-            pytest.param("读取存储 Lesen Speicher читать", "unicode_chars"),
+            pytest.param("", id="empty_query"),
+            pytest.param("   ", id="whitespace_only"),
+            pytest.param("read storage " * 500, id="very_long_query"),
+            pytest.param(
+                "read <script>alert('xss')</script>; DROP TABLE;--",
+                id="special_chars",
+            ),
+            pytest.param("读取存储 Lesen Speicher читать", id="unicode_chars"),
         ],
     )
-    def test_edge_case_queries_handled_gracefully(self, query_test_recommender, query, test_id):
+    def test_edge_case_queries_handled_gracefully(self, query_test_recommender, query):
         """Edge case queries don't crash and return a list."""
         recommendations, _mode = query_test_recommender.recommend(
             query=query, top_k=5, requested_mode="tfidf"
@@ -452,13 +455,13 @@ class TestAIRecommenderQueryEdgeCases:
         assert isinstance(recommendations, list)
 
     @pytest.mark.parametrize(
-        ("top_k", "description"),
+        "top_k",
         [
-            pytest.param(0, "zero", id="zero"),
-            pytest.param(-1, "negative", id="negative"),
+            pytest.param(0, id="zero"),
+            pytest.param(-1, id="negative"),
         ],
     )
-    def test_invalid_top_k_returns_empty(self, query_test_recommender, top_k, description):
+    def test_invalid_top_k_returns_empty(self, query_test_recommender, top_k):
         """top_k <= 0 returns empty list."""
         recommendations, _mode = query_test_recommender.recommend(
             query="read storage", top_k=top_k, requested_mode="tfidf"

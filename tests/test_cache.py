@@ -1,9 +1,4 @@
-"""Unit tests for cache utility functions.
-
-Tests for the pure functions in azurerbac.cache.build:
-- get_matching_operations
-- build_operations_prefix_index
-"""
+"""Tests for cache utility functions."""
 
 import pickle
 from datetime import UTC, datetime

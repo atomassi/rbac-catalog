@@ -1,16 +1,4 @@
-"""Tests for recommendation engines.
-
-These tests verify:
-1. RankedRole dataclass functionality
-2. Cosine similarity calculation
-3. TFIDFEngine functionality
-4. LLMEngine functionality
-5. RAGEngine pipeline stages
-6. HybridEngine multi-stage pipeline
-7. SemanticEngine pure embedding search
-8. Graceful fallback when components are unavailable
-9. EngineRegistry decorator-based registration
-"""
+"""Tests for recommendation engines."""
 
 from unittest.mock import MagicMock
 
@@ -209,6 +197,86 @@ class TestComputeDocumentsHash:
         assert (hash1 == hash2) == should_equal
 
 
+# =============================================================================
+# Cross-Engine Fallback Tests (Consolidated)
+# =============================================================================
+
+
+class TestEngineEmbeddingNotLoadedFallback:
+    """Consolidated tests: engines return empty when embedding model not loaded."""
+
+    @pytest.mark.parametrize(
+        "engine_class_path",
+        [
+            pytest.param("azurerbac.airecommender.engines.rag.RAGEngine", id="RAG"),
+            pytest.param("azurerbac.airecommender.engines.semantic.SemanticEngine", id="Semantic"),
+            pytest.param(
+                "azurerbac.airecommender.engines.crossencoder.CrossEncoderEngine", id="CrossEncoder"
+            ),
+            pytest.param("azurerbac.airecommender.engines.hyde.HyDEEngine", id="HyDE"),
+        ],
+    )
+    def test_returns_empty_when_embedding_not_loaded(
+        self, engine_class_path, mock_ollama_client, mock_knowledge_base
+    ):
+        """All embedding-based engines return empty when embedding model not loaded."""
+        import importlib
+
+        module_path, class_name = engine_class_path.rsplit(".", 1)
+        module = importlib.import_module(module_path)
+        engine_class = getattr(module, class_name)
+
+        unloaded_model = MagicMock()
+        unloaded_model.is_loaded = False
+
+        # Build engine kwargs based on class requirements
+        kwargs = {"embedding_model": unloaded_model, "knowledge_base": mock_knowledge_base}
+        if class_name in ("RAGEngine", "HyDEEngine"):
+            kwargs["ollama_client"] = mock_ollama_client
+
+        engine = engine_class(**kwargs)
+        results = engine.recommend("read blobs", top_k=5)
+
+        assert results == []
+
+
+class TestEngineNoEmbeddingsFallback:
+    """Consolidated tests: engines return empty when embedding model has no embeddings."""
+
+    @pytest.mark.parametrize(
+        "engine_class_path",
+        [
+            pytest.param(
+                "azurerbac.airecommender.engines.crossencoder.CrossEncoderEngine", id="CrossEncoder"
+            ),
+            pytest.param("azurerbac.airecommender.engines.hyde.HyDEEngine", id="HyDE"),
+        ],
+    )
+    def test_returns_empty_when_no_embeddings(
+        self, engine_class_path, mock_ollama_client, mock_knowledge_base
+    ):
+        """Engines return empty when embedding model has no embeddings dict."""
+        import importlib
+
+        module_path, class_name = engine_class_path.rsplit(".", 1)
+        module = importlib.import_module(module_path)
+        engine_class = getattr(module, class_name)
+
+        empty_model = MagicMock()
+        empty_model.is_loaded = True
+        empty_model.encode_single_cached = MagicMock(return_value=(0.1, 0.2, 0.3, 0.4))
+        empty_model.embeddings = {}
+
+        kwargs = {"embedding_model": empty_model, "knowledge_base": mock_knowledge_base}
+        if class_name == "HyDEEngine":
+            kwargs["ollama_client"] = mock_ollama_client
+
+        engine = engine_class(**kwargs)
+        results = engine.recommend("read blobs", top_k=5)
+
+        assert results == []
+
+
 class TestRAGEngine:
     """Tests for RAGEngine class."""
 
@@ -246,7 +314,7 @@ class TestRAGEngine:
     def test_rag_includes_owner_when_requested(
         self, mock_embedding_model, mock_ollama_client, mock_knowledge_base
     ):
-        """Test RAG includes Owner role when exclude_owner=False."""
+        """Test RAG doesn't filter Owner when exclude_owner=False."""
         engine = RAGEngine(
             embedding_model=mock_embedding_model,
             ollama_client=mock_ollama_client,
@@ -254,23 +322,10 @@ class TestRAGEngine:
         )
         results = engine.recommend("full access", top_k=5, exclude_owner=False)
 
-        # Owner should now be included (if similarity is high enough)
-        # This depends on embedding similarity, so just verify no exclusion error
-        assert isinstance(results, list)
-
-    def test_rag_fallback_when_embedding_not_loaded(self, mock_ollama_client, mock_knowledge_base):
-        """Test RAG returns empty when embedding model not loaded."""
-        unloaded_model = MagicMock()
-        unloaded_model.is_loaded = False
-
-        engine = RAGEngine(
-            embedding_model=unloaded_model,
-            ollama_client=mock_ollama_client,
-            knowledge_base=mock_knowledge_base,
-        )
-        results = engine.recommend("read blobs", top_k=5)
-
-        assert results == []
+        # Should return results without filtering Owner
+        assert len(results) > 0
+        # Owner is not filtered - if it had high enough similarity it would be included
+        assert all(r.role_name is not None for r in results)
 
     def test_rag_works_without_llm(self, mock_embedding_model, mock_knowledge_base):
         """Test RAG works with embedding only (no LLM)."""
@@ -402,28 +457,17 @@ class TestSemanticEngine:
     def test_semantic_includes_owner_when_requested(
         self, mock_embedding_model, mock_knowledge_base
     ):
-        """Test Semantic includes Owner role when exclude_owner=False."""
+        """Test Semantic doesn't filter Owner when exclude_owner=False."""
         engine = SemanticEngine(
             embedding_model=mock_embedding_model,
             knowledge_base=mock_knowledge_base,
         )
         results = engine.recommend("full access", top_k=5, exclude_owner=False)
 
-        # Owner should now be included (if similarity is high enough)
-        assert isinstance(results, list)
-
-    def test_semantic_fallback_when_embedding_not_loaded(self, mock_knowledge_base):
-        """Test Semantic returns empty when embedding model not loaded."""
-        unloaded_model = MagicMock()
-        unloaded_model.is_loaded = False
-
-        engine = SemanticEngine(
-            embedding_model=unloaded_model,
-            knowledge_base=mock_knowledge_base,
-        )
-        results = engine.recommend("read blobs", top_k=5)
-
-        assert results == []
+        # Should return results without filtering Owner
+        assert len(results) > 0
+        # Owner is not filtered - if it had high enough similarity it would be included
+        assert all(r.role_name is not None for r in results)
 
     def test_semantic_embedding_similarity_ranking(self, mock_embedding_model, mock_knowledge_base):
         """Test Semantic ranks by embedding similarity correctly."""
@@ -818,8 +862,15 @@ class TestBM25Index:
         assert "azure" in index.term_to_idx
         assert index.avg_doc_len > 0
 
-    def test_bm25_search_basic(self):
-        """Test basic search functionality."""
+    @pytest.mark.parametrize(
+        ("query", "expected_first"),
+        [
+            pytest.param("storage blob", "doc1", id="storage_query"),
+            pytest.param("virtual machine", "doc2", id="vm_query"),
+        ],
+    )
+    def test_bm25_search_ranking(self, query: str, expected_first: str):
+        """Test BM25 search returns correct top result for query."""
         index = BM25Index()
         documents = [
             ("doc1", "Azure Storage Blob Reader"),
@@ -828,41 +879,22 @@ class TestBM25Index:
         ]
         index.index(documents)
 
-        results = index.search("storage blob")
+        results = index.search(query)
         assert len(results) > 0
-        assert results[0][0] == "doc1"  # Storage Blob Reader should be first
+        assert results[0][0] == expected_first
 
-    def test_bm25_search_virtual_machine(self):
-        """Test search for virtual machine."""
+    @pytest.mark.parametrize(
+        ("query", "expected_results"),
+        [
+            pytest.param("", [], id="empty_query"),
+            pytest.param("kubernetes container", [], id="no_match"),
+        ],
+    )
+    def test_bm25_search_empty_results(self, query: str, expected_results: list):
+        """Test BM25 search returns empty for non-matching queries."""
         index = BM25Index()
-        documents = [
-            ("doc1", "Azure Storage Blob Reader"),
-            ("doc2", "Azure Virtual Machine Contributor"),
-            ("doc3", "Azure SQL Database Admin"),
-        ]
-        index.index(documents)
-
-        results = index.search("virtual machine")
-        assert len(results) > 0
-        assert results[0][0] == "doc2"
-
-    def test_bm25_search_empty_query(self):
-        """Test search with empty query."""
-        index = BM25Index()
-        documents = [("doc1", "Test document")]
-        index.index(documents)
-
-        results = index.search("")
-        assert results == []
-
-    def test_bm25_search_no_match(self):
-        """Test search with no matching terms."""
-        index = BM25Index()
-        documents = [("doc1", "Azure Storage Blob")]
-        index.index(documents)
-
-        results = index.search("kubernetes container")
-        assert results == []
+        index.index([("doc1", "Azure Storage Blob")])
+        assert index.search(query) == expected_results
 
     def test_bm25_search_top_k(self):
         """Test search returns limited results."""
@@ -889,6 +921,100 @@ class TestBM25Index:
         azure_idx = index.term_to_idx["azure"]
         storage_idx = index.term_to_idx["storage"]
         assert index.idf_values[storage_idx] > index.idf_values[azure_idx]
+
+
+class TestTFIDFEngine:
+    """Tests for TFIDFEngine class."""
+
+    @pytest.fixture
+    def mock_tfidf_recommender(self):
+        """Create a mock TF-IDF recommender."""
+        recommender = MagicMock()
+        recommender.recommend.return_value = [
+            ("role-1", "Storage Blob Reader", 0.85, ["storage", "read"]),
+            ("role-2", "VM Contributor", 0.65, ["vm"]),
+        ]
+        return recommender
+
+    @pytest.fixture
+    def mock_knowledge_base(self):
+        """Create a mock knowledge base for TF-IDF tests."""
+        kb = MagicMock()
+        kb.get_role_document.side_effect = lambda rid: {
+            "role-1": {
+                "role_id": "role-1",
+                "role_name": "Storage Blob Reader",
+                "description": "Read blobs",
+            },
+            "role-2": {
+                "role_id": "role-2",
+                "role_name": "VM Contributor",
+                "description": "Manage VMs",
+            },
+        }.get(rid)
+        return kb
+
+    def test_tfidf_engine_properties(self, mock_tfidf_recommender, mock_knowledge_base):
+        """Test TFIDFEngine has correct properties."""
+        from azurerbac.airecommender.engines.tfidf import TFIDFEngine
+
+        engine = TFIDFEngine(
+            tfidf_recommender=mock_tfidf_recommender,
+            knowledge_base=mock_knowledge_base,
+        )
+        assert engine.name == "Enhanced TF-IDF + BM25"
+        assert engine.requires_llm is False
+        assert engine.requires_embeddings is False
+
+    def test_tfidf_recommend_returns_ranked_roles(
+        self, mock_tfidf_recommender, mock_knowledge_base
+    ):
+        """Test TFIDFEngine recommend returns RankedRole objects."""
+        from azurerbac.airecommender.engines.tfidf import TFIDFEngine
+
+        engine = TFIDFEngine(
+            tfidf_recommender=mock_tfidf_recommender,
+            knowledge_base=mock_knowledge_base,
+        )
+        results = engine.recommend("read storage blobs", top_k=2)
+
+        assert len(results) >= 1
+        assert isinstance(results[0], RankedRole)
+        assert results[0].tfidf_score > 0
+
+    def test_tfidf_returns_empty_when_not_initialized(self, mock_knowledge_base):
+        """Test TFIDFEngine returns empty list when recommender is None."""
+        from azurerbac.airecommender.engines.tfidf import TFIDFEngine
+
+        engine = TFIDFEngine(
+            tfidf_recommender=None,
+            knowledge_base=mock_knowledge_base,
+        )
+        results = engine.recommend("test", top_k=3)
+
+        assert results == []
+
+    def test_tfidf_excludes_owner_by_default(self, mock_tfidf_recommender, mock_knowledge_base):
+        """Test TFIDFEngine excludes Owner role by default."""
+        from azurerbac.airecommender.engines.tfidf import TFIDFEngine
+
+        mock_tfidf_recommender.recommend.return_value = [
+            ("owner-id", "Owner", 0.95, ["owner"]),
+        ]
+        mock_knowledge_base.get_role_document.return_value = {
+            "role_id": "owner-id",
+            "role_name": "Owner",
+            "description": "Full access",
+        }
+
+        engine = TFIDFEngine(
+            tfidf_recommender=mock_tfidf_recommender,
+            knowledge_base=mock_knowledge_base,
+        )
+        results = engine.recommend("full access", top_k=3)
+
+        role_names = [r.role_name for r in results]
+        assert "Owner" not in role_names
 
 
 class TestEnhancedTFIDFRecommender:
@@ -1315,33 +1441,6 @@ class TestEmbeddingModelEdgeCases:
         # Clean up
         model.encode_single_cached.cache_clear()
 
-    def test_cosine_similarity_zero_vectors(self):
-        """Test cosine similarity with zero vectors."""
-        from azurerbac.airecommender.engines.common import cosine_similarity
-
-        zero_vec = [0.0] * 10
-        normal_vec = [1.0] * 10
-
-        assert cosine_similarity(zero_vec, normal_vec) == 0.0
-        assert cosine_similarity(zero_vec, zero_vec) == 0.0
-
-    def test_cosine_similarity_identical_vectors(self):
-        """Test cosine similarity with identical vectors."""
-        from azurerbac.airecommender.engines.common import cosine_similarity
-
-        vec = [1.0, 2.0, 3.0]
-        sim = cosine_similarity(vec, vec)
-        assert abs(sim - 1.0) < 0.0001  # Should be ~1.0
-
-    def test_cosine_similarity_orthogonal_vectors(self):
-        """Test cosine similarity with orthogonal vectors."""
-        from azurerbac.airecommender.engines.common import cosine_similarity
-
-        vec1 = [1.0, 0.0]
-        vec2 = [0.0, 1.0]
-        sim = cosine_similarity(vec1, vec2)
-        assert abs(sim) < 0.0001  # Should be ~0.0
-
 
 # =============================================================================
 # CrossEncoderEngine Tests
@@ -1359,38 +1458,8 @@ class TestCrossEncoderEngine:
         ce.predict = MagicMock(return_value=[2.5, 1.2, -0.5])
         return ce
 
-    def test_crossencoder_engine_name(self, mock_embedding_model, mock_knowledge_base):
-        """Test CrossEncoderEngine name property."""
-        from azurerbac.airecommender.engines.crossencoder import CrossEncoderEngine
-
-        engine = CrossEncoderEngine(
-            embedding_model=mock_embedding_model,
-            knowledge_base=mock_knowledge_base,
-        )
-        assert engine.name == "Cross-Encoder Reranking"
-
-    def test_crossencoder_requires_embeddings(self, mock_embedding_model, mock_knowledge_base):
-        """Test CrossEncoderEngine requires embeddings."""
-        from azurerbac.airecommender.engines.crossencoder import CrossEncoderEngine
-
-        engine = CrossEncoderEngine(
-            embedding_model=mock_embedding_model,
-            knowledge_base=mock_knowledge_base,
-        )
-        assert engine.requires_embeddings is True
-
-    def test_crossencoder_does_not_require_llm(self, mock_embedding_model, mock_knowledge_base):
-        """Test CrossEncoderEngine does not require LLM."""
-        from azurerbac.airecommender.engines.crossencoder import CrossEncoderEngine
-
-        engine = CrossEncoderEngine(
-            embedding_model=mock_embedding_model,
-            knowledge_base=mock_knowledge_base,
-        )
-        assert engine.requires_llm is False
-
     def test_crossencoder_initialization(self, mock_embedding_model, mock_knowledge_base):
-        """Test CrossEncoderEngine initializes correctly."""
+        """Test CrossEncoderEngine initializes correctly with required properties."""
         from azurerbac.airecommender.engines.crossencoder import CrossEncoderEngine
 
         engine = CrossEncoderEngine(
@@ -1399,6 +1468,9 @@ class TestCrossEncoderEngine:
         )
         assert engine.embedding_model == mock_embedding_model
         assert engine.knowledge_base == mock_knowledge_base
+        assert engine.name == "Cross-Encoder Reranking"
+        assert engine.requires_embeddings is True
+        assert engine.requires_llm is False
 
     def test_crossencoder_returns_ranked_roles(
         self, mock_embedding_model, mock_knowledge_base, monkeypatch
@@ -1453,7 +1525,7 @@ class TestCrossEncoderEngine:
     def test_crossencoder_includes_owner_when_requested(
         self, mock_embedding_model, mock_knowledge_base, monkeypatch
     ):
-        """Test CrossEncoder includes Owner role when exclude_owner=False."""
+        """Test CrossEncoder doesn't filter Owner when exclude_owner=False."""
         from azurerbac.airecommender.engines.crossencoder import CrossEncoderEngine
 
         mock_ce = MagicMock()
@@ -1469,40 +1541,10 @@ class TestCrossEncoderEngine:
         )
         results = engine.recommend("full access", top_k=5, exclude_owner=False)
 
-        # Owner should be included if it scores high enough
-        assert isinstance(results, list)
-
-    def test_crossencoder_returns_empty_when_embedding_not_loaded(self, mock_knowledge_base):
-        """Test CrossEncoder returns empty when embedding model not loaded."""
-        from azurerbac.airecommender.engines.crossencoder import CrossEncoderEngine
-
-        unloaded_model = MagicMock()
-        unloaded_model.is_loaded = False
-
-        engine = CrossEncoderEngine(
-            embedding_model=unloaded_model,
-            knowledge_base=mock_knowledge_base,
-        )
-        results = engine.recommend("read blobs", top_k=5)
-
-        assert results == []
-
-    def test_crossencoder_returns_empty_when_no_embeddings(self, mock_knowledge_base, monkeypatch):
-        """Test CrossEncoder returns empty when embedding model has no embeddings."""
-        from azurerbac.airecommender.engines.crossencoder import CrossEncoderEngine
-
-        empty_model = MagicMock()
-        empty_model.is_loaded = True
-        empty_model.encode_single_cached = MagicMock(return_value=(0.1, 0.2, 0.3, 0.4))
-        empty_model.embeddings = {}  # No embeddings
-
-        engine = CrossEncoderEngine(
-            embedding_model=empty_model,
-            knowledge_base=mock_knowledge_base,
-        )
-        results = engine.recommend("read blobs", top_k=5)
-
-        assert results == []
+        # Should return results without filtering Owner
+        assert len(results) > 0
+        # Owner is not filtered - if it had high enough similarity it would be included
+        assert all(r.role_name is not None for r in results)
 
     def test_crossencoder_raises_when_ce_unavailable(
         self, mock_embedding_model, mock_knowledge_base, monkeypatch
@@ -1697,45 +1739,10 @@ class TestHyDEEngine:
         )
         return client
 
-    def test_hyde_engine_name(self, mock_embedding_model, mock_ollama_client, mock_knowledge_base):
-        """Test HyDEEngine name property."""
-        from azurerbac.airecommender.engines.hyde import HyDEEngine
-
-        engine = HyDEEngine(
-            embedding_model=mock_embedding_model,
-            ollama_client=mock_ollama_client,
-            knowledge_base=mock_knowledge_base,
-        )
-        assert engine.name == "HyDE: Hypothetical Document Embeddings"
-
-    def test_hyde_requires_embeddings(
-        self, mock_embedding_model, mock_ollama_client, mock_knowledge_base
-    ):
-        """Test HyDEEngine requires embeddings."""
-        from azurerbac.airecommender.engines.hyde import HyDEEngine
-
-        engine = HyDEEngine(
-            embedding_model=mock_embedding_model,
-            ollama_client=mock_ollama_client,
-            knowledge_base=mock_knowledge_base,
-        )
-        assert engine.requires_embeddings is True
-
-    def test_hyde_requires_llm(self, mock_embedding_model, mock_ollama_client, mock_knowledge_base):
-        """Test HyDEEngine requires LLM."""
-        from azurerbac.airecommender.engines.hyde import HyDEEngine
-
-        engine = HyDEEngine(
-            embedding_model=mock_embedding_model,
-            ollama_client=mock_ollama_client,
-            knowledge_base=mock_knowledge_base,
-        )
-        assert engine.requires_llm is True
-
     def test_hyde_initialization(
         self, mock_embedding_model, mock_ollama_client, mock_knowledge_base
     ):
-        """Test HyDEEngine initializes correctly."""
+        """Test HyDEEngine initializes correctly with required properties."""
         from azurerbac.airecommender.engines.hyde import HyDEEngine
 
         engine = HyDEEngine(
@@ -1746,6 +1753,9 @@ class TestHyDEEngine:
         assert engine.embedding_model == mock_embedding_model
         assert engine.ollama_client == mock_ollama_client
         assert engine.knowledge_base == mock_knowledge_base
+        assert engine.name == "HyDE: Hypothetical Document Embeddings"
+        assert engine.requires_embeddings is True
+        assert engine.requires_llm is True
 
     def test_hyde_returns_ranked_roles(
         self, mock_embedding_model, mock_ollama_client, mock_knowledge_base
@@ -1785,7 +1795,7 @@ class TestHyDEEngine:
     def test_hyde_includes_owner_when_requested(
         self, mock_embedding_model, mock_ollama_client, mock_knowledge_base
     ):
-        """Test HyDE includes Owner role when exclude_owner=False."""
+        """Test HyDE doesn't filter Owner when exclude_owner=False."""
         from azurerbac.airecommender.engines.hyde import HyDEEngine
 
         engine = HyDEEngine(
@@ -1795,26 +1805,10 @@ class TestHyDEEngine:
         )
         results = engine.recommend("full access", top_k=5, exclude_owner=False)
 
-        # Owner should be included if it scores high enough
-        assert isinstance(results, list)
-
-    def test_hyde_returns_empty_when_embedding_not_loaded(
-        self, mock_ollama_client, mock_knowledge_base
-    ):
-        """Test HyDE returns empty when embedding model not loaded."""
-        from azurerbac.airecommender.engines.hyde import HyDEEngine
-
-        unloaded_model = MagicMock()
-        unloaded_model.is_loaded = False
-
-        engine = HyDEEngine(
-            embedding_model=unloaded_model,
-            ollama_client=mock_ollama_client,
-            knowledge_base=mock_knowledge_base,
-        )
-        results = engine.recommend("manage VMs", top_k=5)
-
-        assert results == []
+        # Should return results without filtering Owner
+        assert len(results) > 0
+        # Owner is not filtered - if it had high enough similarity it would be included
+        assert all(r.role_name is not None for r in results)
 
     def test_hyde_returns_empty_when_ollama_not_connected(
         self, mock_embedding_model, mock_knowledge_base
@@ -1940,24 +1934,6 @@ class TestHyDEEngine:
         call_args = mock_embedding_model.encode_single_cached.call_args
         embedded_text = call_args[0][0]
         assert not embedded_text.startswith("Virtual Machine Contributor:")
-
-    def test_hyde_returns_empty_when_no_embeddings(self, mock_ollama_client, mock_knowledge_base):
-        """Test HyDE returns empty when embedding model has no embeddings."""
-        from azurerbac.airecommender.engines.hyde import HyDEEngine
-
-        empty_model = MagicMock()
-        empty_model.is_loaded = True
-        empty_model.encode_single_cached = MagicMock(return_value=(0.1, 0.2, 0.3, 0.4))
-        empty_model.embeddings = {}  # No embeddings
-
-        engine = HyDEEngine(
-            embedding_model=empty_model,
-            ollama_client=mock_ollama_client,
-            knowledge_base=mock_knowledge_base,
-        )
-        results = engine.recommend("manage VMs", top_k=5)
-
-        assert results == []
 
     def test_hyde_uses_cached_embedding_for_hypothetical_doc(
         self, mock_embedding_model, mock_ollama_client, mock_knowledge_base
@@ -2108,8 +2084,8 @@ class TestLLMEngine:
         with pytest.raises(OllamaClientNotAvailableError):
             engine._query_llm("test query", 5)
 
-    def test_llm_engine_name(self, mock_ollama_client, mock_knowledge_base):
-        """Test LLMEngine name property."""
+    def test_llm_engine_properties(self, mock_ollama_client, mock_knowledge_base):
+        """Test LLMEngine has correct properties."""
         from azurerbac.airecommender.engines.llm import LLMEngine
 
         engine = LLMEngine(
@@ -2117,16 +2093,79 @@ class TestLLMEngine:
             knowledge_base=mock_knowledge_base,
         )
         assert "LLM" in engine.name
+        assert engine.requires_llm is True
+        assert engine.requires_embeddings is False
 
-    def test_llm_engine_requires_llm(self, mock_ollama_client, mock_knowledge_base):
-        """Test LLMEngine requires LLM."""
+    def test_llm_recommend_returns_ranked_roles(self, mock_ollama_client, mock_knowledge_base):
+        """Test LLMEngine recommend returns RankedRole objects."""
         from azurerbac.airecommender.engines.llm import LLMEngine
 
         engine = LLMEngine(
             ollama_client=mock_ollama_client,
             knowledge_base=mock_knowledge_base,
         )
-        assert engine.requires_llm is True
+        results = engine.recommend("I need to manage virtual machines", top_k=3)
+
+        assert len(results) >= 1
+        assert isinstance(results[0], RankedRole)
+        assert results[0].role_name == "Virtual Machine Contributor"
+        assert results[0].llm_score == pytest.approx(0.95)
+
+    def test_llm_returns_empty_when_ollama_not_connected(self, mock_knowledge_base):
+        """Test LLMEngine returns empty list when Ollama is not connected."""
+        from azurerbac.airecommender.engines.llm import LLMEngine
+
+        disconnected_client = MagicMock()
+        disconnected_client.is_connected = False
+
+        engine = LLMEngine(
+            ollama_client=disconnected_client,
+            knowledge_base=mock_knowledge_base,
+        )
+        results = engine.recommend("manage VMs", top_k=3)
+
+        assert results == []
+
+    def test_llm_filters_hallucinated_roles(self, mock_ollama_client, mock_knowledge_base):
+        """Test LLMEngine filters out hallucinated role names."""
+        from azurerbac.airecommender.engines.llm import LLMEngine
+
+        mock_ollama_client.recommend_roles.return_value = [
+            ("Fake Role That Doesnt Exist", 0.9, "hallucinated", ["fake"]),
+        ]
+        mock_knowledge_base.find_role_id_by_name.return_value = None
+
+        engine = LLMEngine(
+            ollama_client=mock_ollama_client,
+            knowledge_base=mock_knowledge_base,
+        )
+        results = engine.recommend("test", top_k=3)
+
+        assert results == []
+
+    def test_llm_excludes_owner_by_default(self, mock_ollama_client, mock_knowledge_base):
+        """Test LLMEngine excludes Owner role by default."""
+        from azurerbac.airecommender.engines.llm import LLMEngine
+
+        mock_ollama_client.recommend_roles.return_value = [
+            ("Owner", 0.95, "Full access", ["owner"]),
+        ]
+        mock_knowledge_base.find_role_id_by_name.return_value = "owner-id"
+        mock_knowledge_base.get_role_document.return_value = {
+            "role_id": "owner-id",
+            "role_name": "Owner",
+            "description": "Full access",
+        }
+
+        engine = LLMEngine(
+            ollama_client=mock_ollama_client,
+            knowledge_base=mock_knowledge_base,
+        )
+        results = engine.recommend("full access", top_k=3)
+
+        # Owner should be excluded due to least privilege
+        role_names = [r.role_name for r in results]
+        assert "Owner" not in role_names
 
 
 class TestEngineAvailability:

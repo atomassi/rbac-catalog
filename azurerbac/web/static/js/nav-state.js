@@ -255,6 +255,7 @@ if (typeof window !== 'undefined') {
 }
 
 // Export for testing (Node.js/Vitest)
+// @ts-ignore - CommonJS export for Node.js test environment (module is Node-specific)
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = { NavState };
 }

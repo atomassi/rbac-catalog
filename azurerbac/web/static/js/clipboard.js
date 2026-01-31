@@ -237,6 +237,7 @@
 
     // Node.js/Vitest: export internals for testing
     if (typeof module !== 'undefined' && module.exports) {
+        // @ts-ignore - CommonJS export for Node.js test environment (module is Node-specific)
         module.exports = {
             clipboardUtils,
             // Export internals for unit testing

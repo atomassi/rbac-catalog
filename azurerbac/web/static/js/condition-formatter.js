@@ -517,6 +517,7 @@ function conditionFormatter(rawCondition) {
 }
 
 // Export for testing (Node.js/Vitest) while keeping browser compatibility
+// @ts-ignore - CommonJS export for Node.js test environment (module is Node-specific)
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = { conditionFormatter, ESCAPE_MAP };
 }

@@ -395,3 +395,162 @@ describe('conditionFormatter', () => {
         });
     });
 });
+
+// Import explainCondition for testing
+const { explainCondition, normalizeGuid, friendlyAttributeName } = require('../../azurerbac/web/static/js/condition-formatter.js');
+
+describe('explainCondition', () => {
+    describe('role assignment conditions', () => {
+        it('should explain @Request RoleDefinitionId with GuidEquals as role assignment creation restriction', () => {
+            const condition = `(
+                !(ActionMatches{'Microsoft.Authorization/roleAssignments/write'})
+                OR
+                @Request[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {acdd72a7-3385-48ef-bd42-f606fba81ae7}
+            )`;
+            const result = explainCondition(condition);
+            expect(result.summary.toLowerCase()).toContain('role');
+            expect(result.details.some(d => d.toLowerCase().includes('assign'))).toBe(true);
+        });
+
+        it('should explain @Resource RoleDefinitionId with GuidEquals as role assignment deletion restriction', () => {
+            const condition = `(
+                !(ActionMatches{'Microsoft.Authorization/roleAssignments/delete'})
+                OR
+                @Resource[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {acdd72a7-3385-48ef-bd42-f606fba81ae7}
+            )`;
+            const result = explainCondition(condition);
+            expect(result.summary.toLowerCase()).toContain('role');
+            expect(result.details.some(d => d.toLowerCase().includes('delete') || d.toLowerCase().includes('remove'))).toBe(true);
+        });
+
+        it('should explain constrained delegation (both Request and Resource RoleDefinitionId)', () => {
+            const condition = `(
+                @Request[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {acdd72a7-3385-48ef-bd42-f606fba81ae7}
+                AND
+                @Resource[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {acdd72a7-3385-48ef-bd42-f606fba81ae7}
+            )`;
+            const result = explainCondition(condition);
+            expect(result.details.length).toBeGreaterThan(0);
+        });
+
+        it('should explain principal type restriction', () => {
+            const condition = `@Request[Microsoft.Authorization/roleAssignments:PrincipalType] StringEqualsIgnoreCase 'ServicePrincipal'`;
+            const result = explainCondition(condition);
+            expect(result.details.some(d => d.toLowerCase().includes('principal'))).toBe(true);
+        });
+    });
+
+    describe('storage conditions', () => {
+        it('should explain container name restriction', () => {
+            const condition = `(
+                !(ActionMatches{'Microsoft.Storage/storageAccounts/blobServices/containers/blobs/read'})
+                OR
+                @Resource[Microsoft.Storage/storageAccounts/blobServices/containers:name] StringEquals 'blobs-example-container'
+            )`;
+            const result = explainCondition(condition);
+            expect(result.summary.toLowerCase()).toContain('container');
+            expect(result.details.some(d => d.toLowerCase().includes('container'))).toBe(true);
+        });
+
+        it('should explain blob path restriction', () => {
+            const condition = `@Resource[Microsoft.Storage/storageAccounts/blobServices/containers/blobs:path] StringLike 'readonly/*'`;
+            const result = explainCondition(condition);
+            expect(result.details.some(d => d.toLowerCase().includes('blob') || d.toLowerCase().includes('path'))).toBe(true);
+        });
+
+        it('should explain blob tag restriction', () => {
+            const condition = `@Resource[Microsoft.Storage/storageAccounts/blobServices/containers/blobs/tags:Project<$key_case_sensitive$>] StringEquals 'Cascade'`;
+            const result = explainCondition(condition);
+            expect(result.details.some(d => d.toLowerCase().includes('tag'))).toBe(true);
+        });
+    });
+
+    describe('environment conditions', () => {
+        it('should explain private link requirement', () => {
+            const condition = `@Environment[isPrivateLink] BoolEquals true`;
+            const result = explainCondition(condition);
+            expect(result.summary.toLowerCase()).toContain('private');
+            expect(result.details.some(d => d.toLowerCase().includes('private link'))).toBe(true);
+        });
+
+        it('should handle UTC now time-based conditions', () => {
+            const condition = `@Environment[UtcNow] DateTimeGreaterThan '2024-01-01T00:00:00Z'`;
+            const result = explainCondition(condition);
+            expect(result.details.some(d => d.toLowerCase().includes('time') || d.toLowerCase().includes('date'))).toBe(true);
+        });
+    });
+
+    describe('action restrictions', () => {
+        it('should explain ActionMatches restrictions', () => {
+            const condition = `!(ActionMatches{'Microsoft.Storage/storageAccounts/blobServices/containers/blobs/read'})`;
+            const result = explainCondition(condition);
+            expect(result.details.some(d => d.toLowerCase().includes('action'))).toBe(true);
+        });
+    });
+
+    describe('cross-product operators', () => {
+        it('should explain ForAnyOfAnyValues', () => {
+            const condition = `@Resource[name] ForAnyOfAnyValues:StringEquals {'value1', 'value2'}`;
+            const result = explainCondition(condition);
+            expect(result.details.some(d => d.includes('ForAnyOfAnyValues'))).toBe(true);
+        });
+
+        it('should explain ForAllOfAnyValues', () => {
+            const condition = `@Request[tags] ForAllOfAnyValues:StringEquals {'tag1', 'tag2'}`;
+            const result = explainCondition(condition);
+            expect(result.details.some(d => d.includes('ForAllOfAnyValues'))).toBe(true);
+        });
+    });
+
+    describe('fallback behavior', () => {
+        it('should provide generic explanation for unknown patterns', () => {
+            const condition = `@Custom[SomeAttribute] SomeOperator 'value'`;
+            const result = explainCondition(condition);
+            expect(result.summary).toBe('ABAC condition');
+            expect(result.details.length).toBeGreaterThan(0);
+        });
+
+        it('should handle empty condition', () => {
+            const result = explainCondition('');
+            expect(result.summary).toBeDefined();
+            expect(result.details).toBeDefined();
+        });
+    });
+});
+
+describe('normalizeGuid', () => {
+    it('should normalize GUID without hyphens', () => {
+        expect(normalizeGuid('acdd72a7338548efbd42f606fba81ae7'))
+            .toBe('acdd72a7-3385-48ef-bd42-f606fba81ae7');
+    });
+
+    it('should keep already-normalized GUIDs unchanged', () => {
+        expect(normalizeGuid('acdd72a7-3385-48ef-bd42-f606fba81ae7'))
+            .toBe('acdd72a7-3385-48ef-bd42-f606fba81ae7');
+    });
+
+    it('should convert to lowercase', () => {
+        expect(normalizeGuid('ACDD72A7-3385-48EF-BD42-F606FBA81AE7'))
+            .toBe('acdd72a7-3385-48ef-bd42-f606fba81ae7');
+    });
+
+    it('should return original for invalid GUIDs', () => {
+        expect(normalizeGuid('not-a-guid')).toBe('not-a-guid');
+    });
+});
+
+describe('friendlyAttributeName', () => {
+    it('should extract tag name from tag attribute path', () => {
+        expect(friendlyAttributeName('tags:Project<$key_case_sensitive$>'))
+            .toBe('tag "Project"');
+    });
+
+    it('should extract resource type and property', () => {
+        expect(friendlyAttributeName('Microsoft.Storage/storageAccounts/blobServices/containers:name'))
+            .toBe('containers name');
+    });
+
+    it('should handle simple property paths', () => {
+        expect(friendlyAttributeName('isPrivateLink')).toBe('isPrivateLink');
+    });
+});

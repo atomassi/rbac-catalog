@@ -590,8 +590,45 @@ function normalizeGuid(guid) {
 }
 
 /**
+ * Extract the last segment of an attribute path for readable display
+ * e.g., "Microsoft.Storage/storageAccounts/blobServices/containers:name" -> "container name"
+ * @param {string} path - The full attribute path
+ * @returns {string} Human-readable attribute name
+ */
+function friendlyAttributeName(path) {
+    // Handle tag keys with special format like "tags:Project<$key_case_sensitive$>"
+    const tagMatch = path.match(/tags:([^<]+)/i);
+    if (tagMatch) {
+        return `tag "${tagMatch[1]}"`;
+    }
+    
+    // Extract resource type and property from paths like "Microsoft.Storage/.../containers:name"
+    const colonIdx = path.lastIndexOf(':');
+    if (colonIdx !== -1) {
+        const property = path.slice(colonIdx + 1);
+        // Try to get the resource type before the colon
+        const resourcePath = path.slice(0, colonIdx);
+        const lastSlash = resourcePath.lastIndexOf('/');
+        if (lastSlash !== -1) {
+            const resourceType = resourcePath.slice(lastSlash + 1);
+            return `${resourceType} ${property}`;
+        }
+        return property;
+    }
+    
+    // Simple path - just return the last segment
+    const lastSlash = path.lastIndexOf('/');
+    return lastSlash !== -1 ? path.slice(lastSlash + 1) : path;
+}
+
+/**
  * Parse a condition expression and generate a human-readable explanation
- * Uses the lexer tokens for structured analysis instead of regex
+ * Based on Azure ABAC condition format: https://learn.microsoft.com/en-us/azure/role-based-access-control/conditions-format
+ * 
+ * Condition format: !(ActionMatches{'action'}) OR (expression)
+ * - If action doesn't match, condition allows the operation
+ * - If action matches, the expression is evaluated to determine access
+ * 
  * @param {string} condition - The ABAC condition string
  * @returns {ConditionExplanation} Summary and detailed explanation
  */
@@ -605,7 +642,6 @@ function explainCondition(condition) {
     const tokens = lexTokens(condition);
 
     // Extract semantic information from tokens
-    // Track attribute-bracket pairs to understand context
     /** @type {Array<{attr: string, bracket: string}>} */
     const attrBracketPairs = [];
     /** @type {string[]} */
@@ -617,50 +653,60 @@ function explainCondition(condition) {
     /** @type {string[]} */
     const booleans = [];
     /** @type {string[]} */
-    const bracketContents = [];
+    const actions = [];
     let hasNot = false;
 
-    // First pass: extract all tokens and pair up @Request/@Resource with their brackets
+    // First pass: extract all tokens and build semantic structures
     let lastAttr = null;
-    for (const token of tokens) {
+    for (let i = 0; i < tokens.length; i++) {
+        const token = tokens[i];
         switch (token.type) {
             case 'function':
                 functions.push(token.value.toLowerCase());
+                // Check if this is ActionMatches followed by a string
+                if (token.value.toLowerCase() === 'actionmatches') {
+                    // Look ahead for the action string in braces
+                    for (let j = i + 1; j < tokens.length && j < i + 3; j++) {
+                        if (tokens[j].type === 'brace' && tokens[j].value.startsWith('{')) {
+                            const actionMatch = tokens[j].value.match(/'([^']+)'/);
+                            if (actionMatch) {
+                                actions.push(actionMatch[1]);
+                            }
+                            break;
+                        }
+                    }
+                }
                 break;
             case 'attribute-kw':
-                lastAttr = token.value; // @Request or @Resource
+                lastAttr = token.value; // @Request, @Resource, @Principal, @Environment
                 break;
             case 'guid-brace':
                 // Extract GUIDs from {guid1, guid2, ...}
                 const inner = token.value.slice(1, -1);
-                const guidList = inner.split(',').map(g => normalizeGuid(g.trim()));
+                const guidList = inner.split(',').map(g => normalizeGuid(g.trim())).filter(g => g.length === 36);
                 guids.push(...guidList);
                 break;
             case 'brace':
-                // Extract bracket content like [Microsoft.Authorization/roleAssignments:RoleDefinitionId]
+                // Extract bracket content like [Microsoft.Storage/.../containers:name]
                 if (token.value.startsWith('[') && token.value.endsWith(']')) {
                     const bracketContent = token.value.slice(1, -1);
-                    bracketContents.push(bracketContent);
-                    // Pair with the preceding attribute keyword
                     if (lastAttr) {
                         attrBracketPairs.push({ attr: lastAttr, bracket: bracketContent });
                         lastAttr = null;
                     }
                 }
-                // Also extract strings from brace content like {'Microsoft.Authorization/...'}
+                // Extract strings from brace content like {'value1', 'value2'}
                 if (token.value.startsWith('{') && token.value.endsWith('}')) {
                     const braceInner = token.value.slice(1, -1);
-                    // Check for quoted strings inside braces
                     const stringMatches = braceInner.match(/'([^']+)'/g);
                     if (stringMatches) {
                         for (const match of stringMatches) {
-                            strings.push(match.slice(1, -1)); // Remove quotes
+                            strings.push(match.slice(1, -1));
                         }
                     }
                 }
                 break;
             case 'string':
-                // Extract string content from 'value'
                 if (token.value.length >= 2) {
                     strings.push(token.value.slice(1, -1));
                 }
@@ -674,123 +720,273 @@ function explainCondition(condition) {
         }
     }
 
-    // Analyze patterns using attribute-bracket pairs
+    // Detect operator types
+    const hasGuidEquals = functions.some(f => f.includes('guidequals') && !f.includes('guidnotequals'));
+    const hasGuidNotEquals = functions.some(f => f.includes('guidnotequals'));
+    const hasStringEquals = functions.some(f => f.includes('stringequals'));
+    const hasStringLike = functions.some(f => f.includes('stringlike'));
+    const hasStringNotEquals = functions.some(f => f.includes('stringnotequals'));
+    const hasBoolEquals = functions.some(f => f.includes('boolequals'));
+    const hasExists = functions.some(f => f === 'exists');
+    const hasActionMatches = functions.some(f => f === 'actionmatches');
+    const hasSubOperationMatches = functions.some(f => f === 'suboperationmatches');
+
+    // Categorize attributes by source
+    const requestAttrs = attrBracketPairs.filter(p => p.attr === '@Request');
+    const resourceAttrs = attrBracketPairs.filter(p => p.attr === '@Resource');
+    const principalAttrs = attrBracketPairs.filter(p => p.attr === '@Principal');
+    const environmentAttrs = attrBracketPairs.filter(p => p.attr === '@Environment');
+
+    // =====================================================================
+    // 1. ACTION RESTRICTIONS (ActionMatches patterns)
+    // =====================================================================
+    if (hasActionMatches && actions.length > 0) {
+        const actionList = actions.map(a => {
+            // Shorten the action for display
+            const parts = a.split('/');
+            return parts.length > 3 ? `.../${parts.slice(-2).join('/')}` : a;
+        });
+        if (actions.length === 1) {
+            details.push(`Applies only when performing action: ${actionList[0]}`);
+        } else {
+            details.push(`Applies only when performing actions: ${actionList.join(', ')}`);
+        }
+        summaryParts.push('action-specific restriction');
+    }
+
+    // =====================================================================
+    // 2. STORAGE CONDITIONS (Blob/Container access)
+    // =====================================================================
     
-    // Check which attributes have RoleDefinitionId
-    const requestHasRoleDefId = attrBracketPairs.some(p => 
-        p.attr === '@Request' && p.bracket.toLowerCase().includes('roledefinitionid')
+    // Container name restriction
+    const containerNameAttr = resourceAttrs.find(p => 
+        p.bracket.toLowerCase().includes('containers:name') ||
+        p.bracket.toLowerCase().includes('containers/name')
     );
-    const resourceHasRoleDefId = attrBracketPairs.some(p => 
-        p.attr === '@Resource' && p.bracket.toLowerCase().includes('roledefinitionid')
+    if (containerNameAttr && strings.length > 0) {
+        const containerNames = strings.filter(s => !s.includes('/') && !s.includes('*'));
+        if (containerNames.length > 0) {
+            if (hasStringEquals) {
+                details.push(`Container name must be: ${containerNames.join(' or ')}`);
+                summaryParts.push('restricts container access');
+            } else if (hasStringLike) {
+                details.push(`Container name must match pattern: ${containerNames.join(' or ')}`);
+                summaryParts.push('restricts container access');
+            }
+        }
+    }
+
+    // Blob path/prefix restriction
+    const blobPathAttr = resourceAttrs.find(p => 
+        p.bracket.toLowerCase().includes('blobs:path') ||
+        p.bracket.toLowerCase().includes('blobs/path')
+    );
+    if (blobPathAttr && strings.length > 0) {
+        const pathPatterns = strings.filter(s => s.includes('/') || s.includes('*'));
+        if (pathPatterns.length > 0) {
+            details.push(`Blob path must match: ${pathPatterns.join(' or ')}`);
+            summaryParts.push('restricts blob paths');
+        }
+    }
+
+    // Blob index tags
+    const tagAttr = resourceAttrs.find(p => p.bracket.toLowerCase().includes('tags:'));
+    const requestTagAttr = requestAttrs.find(p => p.bracket.toLowerCase().includes('tags:'));
+    if (tagAttr || requestTagAttr) {
+        const tagAttrPath = (tagAttr || requestTagAttr)?.bracket || '';
+        const tagName = friendlyAttributeName(tagAttrPath);
+        if (strings.length > 0) {
+            const tagValues = strings.slice(0, 3);
+            if (hasStringEquals) {
+                details.push(`${tagName} must equal: ${tagValues.join(' or ')}${strings.length > 3 ? '...' : ''}`);
+            } else if (hasStringLike) {
+                details.push(`${tagName} must match pattern: ${tagValues.join(' or ')}`);
+            }
+            summaryParts.push('restricts by blob tags');
+        }
+    }
+
+    // Encryption scope
+    const encryptionAttr = resourceAttrs.find(p => 
+        p.bracket.toLowerCase().includes('encryptionscopes:name')
+    );
+    if (encryptionAttr && strings.length > 0) {
+        details.push(`Encryption scope must be: ${strings.join(' or ')}`);
+        summaryParts.push('restricts encryption scope');
+    }
+
+    // Hierarchical namespace (HNS) enabled
+    const hnsAttr = resourceAttrs.find(p => 
+        p.bracket.toLowerCase().includes('ishnsEnabled')
+    );
+    if (hnsAttr && booleans.length > 0) {
+        const hnsRequired = booleans.includes('true');
+        details.push(hnsRequired 
+            ? 'Storage account must have hierarchical namespace enabled (Data Lake Gen2)'
+            : 'Storage account must NOT have hierarchical namespace enabled');
+        summaryParts.push('restricts by storage account type');
+    }
+
+    // =====================================================================
+    // 3. ENVIRONMENT CONDITIONS
+    // =====================================================================
+    
+    // Private link requirement
+    const privateLinkAttr = environmentAttrs.find(p => 
+        p.bracket.toLowerCase().includes('isprivatelink')
+    );
+    if (privateLinkAttr && booleans.includes('true')) {
+        details.push('Access must be over a private link connection');
+        summaryParts.push('requires private link');
+    }
+
+    // Private endpoint restriction
+    const privateEndpointAttr = environmentAttrs.find(p => 
+        p.bracket.toLowerCase().includes('privateendpoints')
+    );
+    if (privateEndpointAttr && strings.length > 0) {
+        details.push(`Access restricted to private endpoint(s): ${strings.join(', ')}`);
+        summaryParts.push('restricts by private endpoint');
+    }
+
+    // Subnet restriction
+    const subnetAttr = environmentAttrs.find(p => 
+        p.bracket.toLowerCase().includes('subnets')
+    );
+    if (subnetAttr && strings.length > 0) {
+        details.push(`Access restricted to subnet(s): ${strings.join(', ')}`);
+        summaryParts.push('restricts by network');
+    }
+
+    // Time-based conditions (UTC now)
+    const utcAttr = environmentAttrs.find(p => 
+        p.bracket.toLowerCase().includes('utcnow')
+    );
+    if (utcAttr) {
+        details.push('Access is restricted based on current date/time');
+        summaryParts.push('time-based restriction');
+    }
+
+    // =====================================================================
+    // 4. PRINCIPAL CONDITIONS (Custom Security Attributes)
+    // =====================================================================
+    if (principalAttrs.length > 0) {
+        details.push('Evaluates custom security attributes assigned to the requesting principal (user or service principal)');
+        summaryParts.push('restricts by principal attributes');
+    }
+
+    // =====================================================================
+    // 5. ROLE ASSIGNMENT CONDITIONS (Microsoft.Authorization)
+    // =====================================================================
+    
+    // Check for role definition ID restrictions
+    const requestHasRoleDefId = requestAttrs.some(p => 
+        p.bracket.toLowerCase().includes('roledefinitionid')
+    );
+    const resourceHasRoleDefId = resourceAttrs.some(p => 
+        p.bracket.toLowerCase().includes('roledefinitionid')
     );
 
-    // 1. Check for OBO token requirement
-    const hasOboAttribute = attrBracketPairs.some(p => 
-        p.attr === '@Resource' && p.bracket.toLowerCase() === 'hasobotoken'
+    // OBO token requirement
+    const hasOboAttribute = resourceAttrs.some(p => 
+        p.bracket.toLowerCase() === 'hasobotoken'
     );
-    const hasBoolTrue = booleans.includes('true');
-    if (hasOboAttribute && hasBoolTrue) {
-        details.push('Requires an On-Behalf-Of (OBO) token — the request must be made on behalf of a signed-in user, not by a service principal alone');
+    if (hasOboAttribute && booleans.includes('true')) {
+        details.push('Requires On-Behalf-Of (OBO) token — request must be made on behalf of a signed-in user');
         summaryParts.push('requires user delegation');
     }
 
-    // 2. Detect comparison operators
-    const hasGuidEquals = functions.some(f => f.includes('guidequals') && !f.includes('guidnotequals'));
-    const hasGuidNotEquals = functions.some(f => f.includes('guidnotequals'));
-
-    // 3. Build explanations based on attribute-bracket pairs
-    if (guids.length > 0) {
-        const guidList = guids.join(', ');
+    // Role definition restrictions
+    if (guids.length > 0 && (requestHasRoleDefId || resourceHasRoleDefId)) {
+        const guidDisplay = guids.join(', ');
         
-        // @Request[...RoleDefinitionId] = role CREATION restriction
         if (requestHasRoleDefId) {
             if (hasGuidNotEquals) {
-                details.push(`When creating role assignments, CANNOT assign if the role definition is one of: ${guidList}`);
-                summaryParts.push('restricts role creation');
+                details.push(`Cannot assign role definitions: ${guidDisplay}`);
+                summaryParts.push('restricts role assignment creation');
             } else if (hasGuidEquals) {
-                details.push(`When creating role assignments, can ONLY assign if the role definition is one of: ${guidList}`);
-                summaryParts.push('restricts which roles can be assigned');
+                details.push(`Can only assign role definitions: ${guidDisplay}`);
+                summaryParts.push('restricts assignable roles');
             }
         }
         
-        // @Resource[...RoleDefinitionId] = role DELETION restriction
         if (resourceHasRoleDefId) {
             if (hasGuidNotEquals) {
-                details.push(`When deleting role assignments, CANNOT remove if the role definition is one of: ${guidList}`);
-                summaryParts.push('restricts role deletion');
+                details.push(`Cannot delete role assignments with definitions: ${guidDisplay}`);
+                summaryParts.push('restricts role assignment deletion');
             } else if (hasGuidEquals) {
-                details.push(`When deleting role assignments, can ONLY remove if the role definition is one of: ${guidList}`);
-                summaryParts.push('restricts which roles can be removed');
+                details.push(`Can only delete role assignments with definitions: ${guidDisplay}`);
+                summaryParts.push('restricts removable roles');
             }
         }
 
-        // Handle combined creation+deletion (constrained delegation)
         if (requestHasRoleDefId && resourceHasRoleDefId) {
-            summaryParts.length = 0; // Clear and use combined summary
-            summaryParts.push('restricts both role assignments creation and removal');
+            // Constrained delegation - clear duplicates
+            const uniqueSummary = [...new Set(summaryParts)];
+            summaryParts.length = 0;
+            summaryParts.push('constrained role delegation');
         }
     }
 
-    // 4. Principal type restriction
-    const hasPrincipalType = attrBracketPairs.some(p => 
+    // Principal type restriction
+    const principalTypeAttr = requestAttrs.find(p => 
+        p.bracket.toLowerCase().includes('principaltype')
+    ) || resourceAttrs.find(p => 
         p.bracket.toLowerCase().includes('principaltype')
     );
-    const hasStringEquals = functions.some(f => 
-        f.includes('stringequals') || f.includes('stringequalsignorecase')
-    );
-    if (hasPrincipalType && hasStringEquals && strings.length > 0) {
-        // Find the principal type value (e.g., 'ServicePrincipal', 'User')
-        const principalType = strings.find(s => 
+    if (principalTypeAttr && strings.length > 0) {
+        const principalTypes = strings.filter(s => 
             ['serviceprincipal', 'user', 'group', 'foreigngroup'].includes(s.toLowerCase())
         );
-        if (principalType) {
-            details.push(`Can only assign roles to principals of type: ${principalType}`);
+        if (principalTypes.length > 0) {
+            details.push(`Principal type must be: ${principalTypes.join(' or ')}`);
             summaryParts.push('restricts principal type');
         }
     }
 
-    // 5. Scope restriction
-    const hasResourceId = attrBracketPairs.some(p => 
-        p.attr === '@Resource' && p.bracket.toLowerCase() === 'id'
-    );
-    const hasStringLike = functions.some(f => f.includes('stringlike'));
-    if (hasResourceId && hasStringLike && strings.length > 0) {
-        const scopePatterns = strings.filter(s => s.includes('/'));
-        if (scopePatterns.length > 0) {
-            details.push(`Only applies to resources matching scope pattern: ${scopePatterns.join(' or ')}`);
-            summaryParts.push('restricts scope');
-        }
-    }
-
-    // Generate summary
+    // =====================================================================
+    // GENERATE SUMMARY
+    // =====================================================================
     let summary = '';
     if (summaryParts.length > 0) {
-        // Deduplicate and capitalize first
         const uniqueParts = [...new Set(summaryParts)];
         summary = uniqueParts.map((p, i) => i === 0 ? p.charAt(0).toUpperCase() + p.slice(1) : p).join(', ');
     } else {
-        summary = 'Custom ABAC condition';
+        summary = 'ABAC condition';
     }
 
-    // Fallback if no patterns matched - describe what the condition contains
+    // =====================================================================
+    // FALLBACK - Generic description if no specific patterns matched
+    // =====================================================================
     if (details.length === 0) {
-        details.push('This condition uses Azure Attribute-Based Access Control (ABAC) to restrict when this permission applies');
-
-        const hasRequestAttr = attrBracketPairs.some(p => p.attr === '@Request');
-        const hasResourceAttr = attrBracketPairs.some(p => p.attr === '@Resource');
-        const hasActionMatches = functions.some(f => f === 'actionmatches');
-
-        if (hasRequestAttr) {
-            details.push('• Evaluates attributes of the incoming request');
+        details.push('This condition uses Azure Attribute-Based Access Control (ABAC) to provide fine-grained access control');
+        
+        // Describe what attribute sources are used
+        if (requestAttrs.length > 0) {
+            details.push('• Evaluates attributes of the incoming request (e.g., requested tags, properties)');
         }
-        if (hasResourceAttr) {
-            details.push('• Evaluates attributes of the target resource');
+        if (resourceAttrs.length > 0) {
+            details.push('• Evaluates attributes of the target resource (e.g., existing tags, container name)');
+        }
+        if (principalAttrs.length > 0) {
+            details.push('• Evaluates custom security attributes of the requesting principal');
+        }
+        if (environmentAttrs.length > 0) {
+            details.push('• Evaluates environment conditions (e.g., network, time)');
         }
         if (hasActionMatches) {
-            details.push('• Checks which specific action is being performed');
+            details.push('• Applies only to specific actions');
+        }
+        if (hasSubOperationMatches) {
+            details.push('• Distinguishes between sub-operations (e.g., read vs list)');
         }
         if (guids.length > 0) {
-            details.push(`• References ${guids.length} role definition ID(s)`);
+            details.push(`• References ${guids.length} GUID value(s)`);
+        }
+        if (strings.length > 0 && strings.length <= 5) {
+            details.push(`• Compares against values: ${strings.join(', ')}`);
+        } else if (strings.length > 5) {
+            details.push(`• Compares against ${strings.length} string values`);
         }
     }
 
@@ -800,5 +996,5 @@ function explainCondition(condition) {
 // Export for testing (Node.js/Vitest) while keeping browser compatibility
 // @ts-ignore - CommonJS export for Node.js test environment (module is Node-specific)
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { conditionFormatter, explainCondition, normalizeGuid, lexTokens, matchesWordAt, ESCAPE_MAP };
+    module.exports = { conditionFormatter, explainCondition, normalizeGuid, friendlyAttributeName, lexTokens, matchesWordAt, ESCAPE_MAP };
 }

@@ -767,23 +767,23 @@
                 </div>
                 
                 <div class="p-6">
-                    <!-- Raw Patterns Summary - only show if there are wildcards (otherwise expanded = raw) -->
-                    {% if effective_perms.has_wildcards and (effective_perms.raw_actions or effective_perms.raw_data_actions) %}
+                    <!-- Raw Patterns Summary - show if there are wildcards OR conditions -->
+                    {% if effective_perms.has_wildcards or effective_perms.has_conditions %}
                     <div class="mb-6">
                         <h4 class="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">
                             Permission Patterns (from role definition)
-                            {% if effective_perms.has_multiple_permission_blocks %}
+                            {% if effective_perms.permission_blocks | length > 1 %}
                             <span class="ml-2 text-xs font-normal text-amber-600 dark:text-amber-400">
                                 {{ effective_perms.permission_blocks | length }} permission blocks
                             </span>
                             {% endif %}
                         </h4>
                         
-                        {% if effective_perms.has_multiple_permission_blocks %}
-                        <!-- Per-block view -->
+                        <!-- Per-block view (used for all roles) -->
                         <div class="space-y-4">
                             {% for block in effective_perms.permission_blocks %}
                             <div class="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-4 border border-slate-200 dark:border-slate-700">
+                                {% if effective_perms.permission_blocks | length > 1 %}
                                 <div class="flex items-center justify-between mb-3">
                                     <span class="text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
                                         Permission Block {{ block.block_number }}
@@ -797,6 +797,7 @@
                                     </span>
                                     {% endif %}
                                 </div>
+                                {% endif %}
                                 
                                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
                                     <!-- Control Plane -->
@@ -814,7 +815,7 @@
                                         {% endif %}
                                         {% if block.not_actions %}
                                         <div>
-                                            <span class="text-xs font-medium text-red-700 dark:text-red-400">NotActions (excluded from this block)</span>
+                                            <span class="text-xs font-medium text-red-700 dark:text-red-400">NotActions (excluded)</span>
                                             <div class="space-y-1 mt-1 max-h-24 overflow-y-auto">
                                                 {% for action in block.not_actions %}
                                                 <code class="block text-xs font-mono text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/30 px-2 py-1 rounded break-all">{{ action }}</code>
@@ -840,7 +841,7 @@
                                         {% endif %}
                                         {% if block.not_data_actions %}
                                         <div>
-                                            <span class="text-xs font-medium text-red-700 dark:text-red-400">NotDataActions (excluded from this block)</span>
+                                            <span class="text-xs font-medium text-red-700 dark:text-red-400">NotDataActions (excluded)</span>
                                             <div class="space-y-1 mt-1 max-h-24 overflow-y-auto">
                                                 {% for action in block.not_data_actions %}
                                                 <code class="block text-xs font-mono text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/30 px-2 py-1 rounded break-all">{{ action }}</code>
@@ -853,69 +854,32 @@
                                 </div>
                                 
                                 {% if block.condition_text %}
-                                <div class="mt-3 pt-3 border-t border-slate-200 dark:border-slate-600">
-                                    <span class="text-xs font-medium text-amber-700 dark:text-amber-400">Condition:</span>
-                                    <div class="overflow-x-auto mt-1">
-                                        <code class="block text-xs font-mono text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded whitespace-pre-wrap break-all">{{ block.condition_text }}</code>
+                                <div class="mt-3 pt-3 border-t border-slate-200 dark:border-slate-600" x-data="conditionFormatter({{ block.condition_text | tojson | forceescape }})">
+                                    <div class="flex items-center justify-between mb-2">
+                                        <span class="text-xs font-medium text-amber-700 dark:text-amber-400">Condition:</span>
+                                        <button @click="formatted = !formatted" class="text-xs text-azure-600 dark:text-azure-400 hover:underline">
+                                            <span x-text="formatted ? 'Show raw' : 'Format'"></span>
+                                        </button>
+                                    </div>
+                                    <div class="overflow-x-auto">
+                                        <!-- Raw view -->
+                                        <template x-if="!formatted">
+                                            <code class="block text-xs font-mono text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-700 px-3 py-2 rounded whitespace-pre-wrap break-all">{{ block.condition_text }}</code>
+                                        </template>
+                                        <!-- Formatted view -->
+                                        <template x-if="formatted">
+                                            <div class="text-xs font-mono text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-700 px-3 py-2 rounded overflow-x-auto max-h-96 overflow-y-auto">
+                                                <template x-for="(line, idx) in lines" :key="idx">
+                                                    <div class="whitespace-nowrap" :style="'padding-left: ' + (line.indent * 16) + 'px'" x-html="line.html"></div>
+                                                </template>
+                                            </div>
+                                        </template>
                                     </div>
                                 </div>
                                 {% endif %}
                             </div>
                             {% endfor %}
                         </div>
-                        
-                        {% else %}
-                        <!-- Single block - original aggregated view -->
-                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                            {% if effective_perms.raw_actions %}
-                            <div class="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-4 border border-slate-200 dark:border-slate-700">
-                                <div class="flex items-center justify-between mb-2">
-                                    <span class="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">Actions</span>
-                                    <span class="text-xs text-slate-500 dark:text-slate-500">{{ effective_perms.raw_actions | length }} pattern{{ 's' if effective_perms.raw_actions | length != 1 else '' }}</span>
-                                </div>
-                                <div class="space-y-1 max-h-32 overflow-y-auto">
-                                    {% for action in effective_perms.raw_actions %}
-                                    <code class="block text-xs font-mono text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-900/30 px-2 py-1 rounded">{{ action }}</code>
-                                    {% endfor %}
-                                </div>
-                                {% if effective_perms.raw_not_actions %}
-                                <div class="mt-3 pt-3 border-t border-slate-200 dark:border-slate-600">
-                                    <span class="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">NotActions (excluded)</span>
-                                    <div class="space-y-1 mt-2 max-h-24 overflow-y-auto">
-                                        {% for action in effective_perms.raw_not_actions %}
-                                        <code class="block text-xs font-mono text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/30 px-2 py-1 rounded">{{ action }}</code>
-                                        {% endfor %}
-                                    </div>
-                                </div>
-                                {% endif %}
-                            </div>
-                            {% endif %}
-                            
-                            {% if effective_perms.raw_data_actions %}
-                            <div class="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-4 border border-slate-200 dark:border-slate-700">
-                                <div class="flex items-center justify-between mb-2">
-                                    <span class="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">Data Actions</span>
-                                    <span class="text-xs text-slate-500 dark:text-slate-500">{{ effective_perms.raw_data_actions | length }} pattern{{ 's' if effective_perms.raw_data_actions | length != 1 else '' }}</span>
-                                </div>
-                                <div class="space-y-1 max-h-32 overflow-y-auto">
-                                    {% for action in effective_perms.raw_data_actions %}
-                                    <code class="block text-xs font-mono text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 px-2 py-1 rounded">{{ action }}</code>
-                                    {% endfor %}
-                                </div>
-                                {% if effective_perms.raw_not_data_actions %}
-                                <div class="mt-3 pt-3 border-t border-slate-200 dark:border-slate-600">
-                                    <span class="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">NotDataActions (excluded)</span>
-                                    <div class="space-y-1 mt-2 max-h-24 overflow-y-auto">
-                                        {% for action in effective_perms.raw_not_data_actions %}
-                                        <code class="block text-xs font-mono text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/30 px-2 py-1 rounded">{{ action }}</code>
-                                        {% endfor %}
-                                    </div>
-                                </div>
-                                {% endif %}
-                            </div>
-                            {% endif %}
-                        </div>
-                        {% endif %}
                     </div>
                     {% endif %}
                     
@@ -1068,5 +1032,8 @@
     
     <!-- Dark mode handler -->
     <script src="/static/js/darkmode.js"></script>
+    
+    <!-- Condition formatter for ABAC conditions -->
+    <script src="/static/js/condition-formatter.js?v=20260130d"></script>
 </body>
 </html>

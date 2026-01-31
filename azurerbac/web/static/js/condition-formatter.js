@@ -118,25 +118,28 @@ function lexTokens(text) {
             continue;
         }
 
-        // NOT operator: ! followed by ( or A (ActionMatches)
+        // NOT operator: ! followed by non-whitespace (expression start)
         if (c === '!' && i + 1 < text.length) {
             const next = text[i + 1];
-            if (next === '(' || next === 'A' || next === 'a') {
+            // Recognize ! before (, A/a (ActionMatches), E/e (Exists), B/b (BoolEquals), F/f (For*), S/s (String*), G/g (Guid*)
+            if (next !== ' ' && next !== '\t' && next !== '\n') {
                 tokens.push({ type: 'not', value: '!' });
                 i++;
                 continue;
             }
         }
 
-        // @Request or @Resource (handle optional space before bracket)
+        // @Request, @Resource, @Principal, @Environment (handle optional space before bracket)
         if (c === '@') {
             const isReq = matchesWordAt(text, i, '@Request');
             const isRes = matchesWordAt(text, i, '@Resource');
-            if (isReq || isRes) {
-                const len = isReq ? 8 : 9;
+            const isPrin = matchesWordAt(text, i, '@Principal');
+            const isEnv = matchesWordAt(text, i, '@Environment');
+            if (isReq || isRes || isPrin || isEnv) {
+                const len = isReq ? 8 : isRes ? 9 : isPrin ? 10 : 12;
                 tokens.push({ type: 'attribute-kw', value: text.slice(i, i + len) });
                 i += len;
-                // Skip whitespace between @Request/@Resource and [ bracket
+                // Skip whitespace between attribute keyword and [ bracket
                 while (i < text.length && /\s/.test(text[i])) {
                     tokens.push({ type: 'text', value: text[i] });
                     i++;
@@ -264,7 +267,6 @@ function lexTokens(text) {
  * @typedef {Object} ConditionExplanation
  * @property {string} summary - Brief one-line summary of what the condition does
  * @property {string[]} details - Detailed bullet points explaining each part
- * @property {number} [confidence] - Confidence score from AI (0-1)
  */
 
 /**
@@ -313,11 +315,14 @@ function conditionFormatter(rawCondition) {
         },
 
         /**
-         * Get the explanation for the condition (cached or local fallback)
+         * Get the explanation for the condition (cached)
          * @returns {ConditionExplanation}
          */
         getExplanation() {
-            return this.explanation || explainCondition(rawCondition);
+            if (!this.explanation) {
+                this.explanation = explainCondition(rawCondition);
+            }
+            return /** @type {ConditionExplanation} */ (this.explanation);
         },
 
         /**
@@ -591,7 +596,7 @@ function normalizeGuid(guid) {
 
 /**
  * Extract the last segment of an attribute path for readable display
- * e.g., "Microsoft.Storage/storageAccounts/blobServices/containers:name" -> "container name"
+ * e.g., "Microsoft.Storage/storageAccounts/blobServices/containers:name" -> "containers name"
  * @param {string} path - The full attribute path
  * @returns {string} Human-readable attribute name
  */
@@ -654,7 +659,6 @@ function explainCondition(condition) {
     const booleans = [];
     /** @type {string[]} */
     const actions = [];
-    let hasNot = false;
 
     // First pass: extract all tokens and build semantic structures
     let lastAttr = null;
@@ -678,15 +682,16 @@ function explainCondition(condition) {
                 }
                 break;
             case 'attribute-kw':
-                lastAttr = token.value; // @Request, @Resource, @Principal, @Environment
+                lastAttr = token.value;
                 break;
-            case 'guid-brace':
+            case 'guid-brace': {
                 // Extract GUIDs from {guid1, guid2, ...}
                 const inner = token.value.slice(1, -1);
                 const guidList = inner.split(',').map(g => normalizeGuid(g.trim())).filter(g => g.length === 36);
                 guids.push(...guidList);
                 break;
-            case 'brace':
+            }
+            case 'brace': {
                 // Extract bracket content like [Microsoft.Storage/.../containers:name]
                 if (token.value.startsWith('[') && token.value.endsWith(']')) {
                     const bracketContent = token.value.slice(1, -1);
@@ -706,6 +711,7 @@ function explainCondition(condition) {
                     }
                 }
                 break;
+            }
             case 'string':
                 if (token.value.length >= 2) {
                     strings.push(token.value.slice(1, -1));
@@ -713,9 +719,6 @@ function explainCondition(condition) {
                 break;
             case 'boolean':
                 booleans.push(token.value.toLowerCase());
-                break;
-            case 'not':
-                hasNot = true;
                 break;
         }
     }
@@ -725,9 +728,6 @@ function explainCondition(condition) {
     const hasGuidNotEquals = functions.some(f => f.includes('guidnotequals'));
     const hasStringEquals = functions.some(f => f.includes('stringequals'));
     const hasStringLike = functions.some(f => f.includes('stringlike'));
-    const hasStringNotEquals = functions.some(f => f.includes('stringnotequals'));
-    const hasBoolEquals = functions.some(f => f.includes('boolequals'));
-    const hasExists = functions.some(f => f === 'exists');
     const hasActionMatches = functions.some(f => f === 'actionmatches');
     const hasSubOperationMatches = functions.some(f => f === 'suboperationmatches');
 
@@ -921,8 +921,7 @@ function explainCondition(condition) {
         }
 
         if (requestHasRoleDefId && resourceHasRoleDefId) {
-            // Constrained delegation - clear duplicates
-            const uniqueSummary = [...new Set(summaryParts)];
+            // Constrained delegation - replace summary parts
             summaryParts.length = 0;
             summaryParts.push('constrained role delegation');
         }

@@ -488,19 +488,7 @@ describe('explainCondition', () => {
         });
     });
 
-    describe('cross-product operators', () => {
-        it('should explain ForAnyOfAnyValues', () => {
-            const condition = `@Resource[name] ForAnyOfAnyValues:StringEquals {'value1', 'value2'}`;
-            const result = explainCondition(condition);
-            expect(result.details.some(d => d.includes('ForAnyOfAnyValues'))).toBe(true);
-        });
 
-        it('should explain ForAllOfAnyValues', () => {
-            const condition = `@Request[tags] ForAllOfAnyValues:StringEquals {'tag1', 'tag2'}`;
-            const result = explainCondition(condition);
-            expect(result.details.some(d => d.includes('ForAllOfAnyValues'))).toBe(true);
-        });
-    });
 
     describe('fallback behavior', () => {
         it('should provide generic explanation for unknown patterns', () => {

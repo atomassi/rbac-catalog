@@ -9,6 +9,7 @@ from typing import Final
 from fastapi import Request
 from fastapi.responses import RedirectResponse, Response
 
+from azurerbac.core.constants import NEW_DOMAIN
 from azurerbac.web.constants import (
     CACHE_HEADER_DETAIL_PAGE,
     CACHE_HEADER_MAIN_PAGE,
@@ -17,7 +18,6 @@ from azurerbac.web.constants import (
     COOP_HEADER,
     CSP_HEADER,
     HEALTH_PATHS,
-    NEW_DOMAIN,
     OLD_DOMAINS,
     PERMISSIONS_POLICY_HEADER,
     VARY_ENCODING,

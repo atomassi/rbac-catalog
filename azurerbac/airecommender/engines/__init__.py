@@ -3,8 +3,8 @@
 from azurerbac.airecommender.engines.base import BaseRecommenderEngine, RankedRole
 from azurerbac.airecommender.engines.colbert import ColBERTEngine, ColBERTInitializationError
 from azurerbac.airecommender.engines.common import (
+    ScoreNormalizer,
     cosine_similarity,
-    normalize_scores,
     top_k_similar,
 )
 from azurerbac.airecommender.engines.crossencoder import CrossEncoderEngine
@@ -33,9 +33,9 @@ __all__ = [
     "LLMEngine",
     "RAGEngine",
     "RankedRole",
+    "ScoreNormalizer",
     "SemanticEngine",
     "TFIDFEngine",
     "cosine_similarity",
-    "normalize_scores",
     "top_k_similar",
 ]

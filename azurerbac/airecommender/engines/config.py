@@ -148,12 +148,6 @@ class WeightPair:
 HYBRID_WEIGHTS: Final = WeightPair(primary=0.7, secondary=0.3)  # TF-IDF / Embeddings
 CROSSENCODER_WEIGHTS: Final = WeightPair(primary=0.7, secondary=0.3)  # Reranking / Bi-encoder
 
-# Backward compatibility aliases
-HYBRID_PRIMARY_WEIGHT: Final[float] = HYBRID_WEIGHTS.primary
-HYBRID_SECONDARY_WEIGHT: Final[float] = HYBRID_WEIGHTS.secondary
-CROSSENCODER_PRIMARY_WEIGHT: Final[float] = CROSSENCODER_WEIGHTS.primary
-CROSSENCODER_SECONDARY_WEIGHT: Final[float] = CROSSENCODER_WEIGHTS.secondary
-
 
 @dataclass(frozen=True, slots=True)
 class EngineConfig:

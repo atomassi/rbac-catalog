@@ -2190,18 +2190,18 @@ class TestEngineAvailability:
 
 
 class TestNormalizeScores:
-    """Tests for normalize_scores function."""
+    """Tests for ScoreNormalizer.normalize_candidates method."""
 
     def test_empty_candidates_returns_empty(self):
         """Test that empty input returns empty output."""
-        from azurerbac.airecommender.engines.common import normalize_scores
+        from azurerbac.airecommender.engines.common import ScoreNormalizer
 
-        result = normalize_scores([])
+        result = ScoreNormalizer.normalize_candidates([])
         assert result == []
 
     def test_single_candidate_gets_max_normalized(self):
         """Test single candidate gets normalized within expected range."""
-        from azurerbac.airecommender.engines.common import normalize_scores
+        from azurerbac.airecommender.engines.common import ScoreNormalizer
         from azurerbac.airecommender.engines.config import SCORE_CEILING, SCORE_FLOOR
 
         candidates = [
@@ -2212,7 +2212,7 @@ class TestNormalizeScores:
                 final_score=0.5,
             )
         ]
-        result = normalize_scores(candidates)
+        result = ScoreNormalizer.normalize_candidates(candidates)
 
         assert len(result) == 1
         # Single item: score_range=0, so normalized=1.0 -> SCORE_FLOOR + (1.0 * range)
@@ -2230,7 +2230,7 @@ class TestNormalizeScores:
         self, scores: list[float], expected_high: float, expected_low: float
     ):
         """Test min-max normalization produces expected range."""
-        from azurerbac.airecommender.engines.common import normalize_scores
+        from azurerbac.airecommender.engines.common import ScoreNormalizer
 
         candidates = [
             RankedRole(
@@ -2241,7 +2241,7 @@ class TestNormalizeScores:
             )
             for i, score in enumerate(scores)
         ]
-        result = normalize_scores(candidates)
+        result = ScoreNormalizer.normalize_candidates(candidates)
 
         result_scores = sorted([c.final_score for c in result], reverse=True)
         assert result_scores[0] == pytest.approx(expected_high, rel=0.01)
@@ -2249,29 +2249,29 @@ class TestNormalizeScores:
 
     def test_preserves_relative_order(self):
         """Test that relative ordering is preserved after normalization."""
-        from azurerbac.airecommender.engines.common import normalize_scores
+        from azurerbac.airecommender.engines.common import ScoreNormalizer
 
         candidates = [
             RankedRole(role_id="high", role_name="High", description="", final_score=0.9),
             RankedRole(role_id="med", role_name="Medium", description="", final_score=0.5),
             RankedRole(role_id="low", role_name="Low", description="", final_score=0.1),
         ]
-        result = normalize_scores(candidates)
+        result = ScoreNormalizer.normalize_candidates(candidates)
 
         scores_by_id = {c.role_id: c.final_score for c in result}
         assert scores_by_id["high"] > scores_by_id["med"] > scores_by_id["low"]
 
 
 class TestNormalizeWithSigmoid:
-    """Tests for normalize_with_sigmoid function."""
+    """Tests for ScoreNormalizer.sigmoid_normalize method."""
 
     def test_empty_candidates_returns_empty(self):
         """Test that empty input returns empty output."""
-        from azurerbac.airecommender.engines.common import normalize_with_sigmoid
+        from azurerbac.airecommender.engines.common import ScoreNormalizer
+        from azurerbac.airecommender.engines.config import SigmoidParams
 
-        result = normalize_with_sigmoid(
-            [], midpoint=0.5, steepness=10, output_min=0.6, output_max=0.95
-        )
+        params = SigmoidParams(midpoint=0.5, steepness=10, output_min=0.6, output_max=0.95)
+        result = ScoreNormalizer.sigmoid_normalize([], params)
         assert result == []
 
     @pytest.mark.parametrize(
@@ -2286,7 +2286,8 @@ class TestNormalizeWithSigmoid:
         self, raw_score: float, midpoint: float, steepness: float, expected_approx: float
     ):
         """Test sigmoid transformation for various inputs."""
-        from azurerbac.airecommender.engines.common import normalize_with_sigmoid
+        from azurerbac.airecommender.engines.common import ScoreNormalizer
+        from azurerbac.airecommender.engines.config import SigmoidParams
 
         candidates = [
             RankedRole(
@@ -2296,27 +2297,27 @@ class TestNormalizeWithSigmoid:
                 final_score=raw_score,
             )
         ]
-        result = normalize_with_sigmoid(
-            candidates,
+        params = SigmoidParams(
             midpoint=midpoint,
             steepness=steepness,
             output_min=0.60,
             output_max=0.95,
         )
+        result = ScoreNormalizer.sigmoid_normalize(candidates, params)
 
         assert result[0].final_score == pytest.approx(expected_approx, abs=0.05)
 
     def test_preserves_relative_order(self):
         """Test sigmoid preserves relative ordering."""
-        from azurerbac.airecommender.engines.common import normalize_with_sigmoid
+        from azurerbac.airecommender.engines.common import ScoreNormalizer
+        from azurerbac.airecommender.engines.config import SigmoidParams
 
         candidates = [
             RankedRole(role_id="high", role_name="High", description="", final_score=0.9),
             RankedRole(role_id="low", role_name="Low", description="", final_score=0.1),
         ]
-        result = normalize_with_sigmoid(
-            candidates, midpoint=0.5, steepness=10, output_min=0.6, output_max=0.95
-        )
+        params = SigmoidParams(midpoint=0.5, steepness=10, output_min=0.6, output_max=0.95)
+        result = ScoreNormalizer.sigmoid_normalize(candidates, params)
 
         scores_by_id = {c.role_id: c.final_score for c in result}
         assert scores_by_id["high"] > scores_by_id["low"]

@@ -169,33 +169,3 @@ def top_k_similar(
         top_indices = partition_idx[np.argsort(similarities[partition_idx])[::-1]]
 
     return [(doc_ids[i], float(similarities[i])) for i in top_indices]
-
-
-# Backward compatibility aliases
-def normalize_with_sigmoid(
-    candidates: list[RankedRole],
-    *,
-    midpoint: float,
-    steepness: float,
-    output_min: float,
-    output_max: float,
-) -> list[RankedRole]:
-    """Normalize scores using a sigmoid transform.
-
-    DEPRECATED: Use ScoreNormalizer.sigmoid_normalize() instead.
-    """
-    params = SigmoidParams(
-        midpoint=midpoint,
-        steepness=steepness,
-        output_min=output_min,
-        output_max=output_max,
-    )
-    return ScoreNormalizer.sigmoid_normalize(candidates, params)
-
-
-def normalize_scores(candidates: list[RankedRole]) -> list[RankedRole]:
-    """Min-max normalize scores to 60-95% range.
-
-    DEPRECATED: Use ScoreNormalizer.normalize_candidates() instead.
-    """
-    return ScoreNormalizer.normalize_candidates(candidates)

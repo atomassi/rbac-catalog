@@ -35,6 +35,210 @@ const COMPARISONS = ['GuidEquals', 'GuidNotEquals', 'StringEquals', 'StringEqual
 const GUID_CHARS = new Set('0123456789abcdefABCDEF ,\t-');
 
 /**
+ * Check if string at position matches a word (case-insensitive)
+ * @param {string} text - Full text
+ * @param {number} pos - Position to check
+ * @param {string} word - Word to match
+ * @returns {boolean}
+ */
+function matchesWordAt(text, pos, word) {
+    if (pos + word.length > text.length) return false;
+    const slice = text.slice(pos, pos + word.length);
+    return slice.toLowerCase() === word.toLowerCase();
+}
+
+/**
+ * Tokenize a condition expression using a character-by-character lexer.
+ * Returns structured tokens for syntax highlighting and semantic analysis.
+ * @param {string} text - Text to tokenize
+ * @returns {HighlightToken[]} Array of tokens with type and value
+ */
+function lexTokens(text) {
+    /** @type {HighlightToken[]} */
+    const tokens = [];
+    let i = 0;
+
+    while (i < text.length) {
+        const c = text[i];
+
+        // Single-quoted string: 'content'
+        if (c === "'") {
+            let str = "'";
+            i++;
+            while (i < text.length && text[i] !== "'") {
+                str += text[i];
+                i++;
+            }
+            if (i < text.length) {
+                str += "'";
+                i++;
+            }
+            tokens.push({ type: 'string', value: str });
+            continue;
+        }
+
+        // Braces with GUIDs/content: {content}
+        if (c === '{') {
+            let content = '{';
+            i++;
+            while (i < text.length && text[i] !== '}') {
+                content += text[i];
+                i++;
+            }
+            if (i < text.length) {
+                content += '}';
+                i++;
+            }
+            // Check if content looks like GUIDs (hex chars, commas, spaces, hyphens)
+            const inner = content.slice(1, -1);
+            let isGuidLike = true;
+            for (let j = 0; j < inner.length; j++) {
+                if (!GUID_CHARS.has(inner[j])) {
+                    isGuidLike = false;
+                    break;
+                }
+            }
+            tokens.push({ type: isGuidLike ? 'guid-brace' : 'brace', value: content });
+            continue;
+        }
+
+        // Brackets with attribute path: [content]
+        if (c === '[') {
+            let content = '[';
+            i++;
+            while (i < text.length && text[i] !== ']') {
+                content += text[i];
+                i++;
+            }
+            if (i < text.length) {
+                content += ']';
+                i++;
+            }
+            tokens.push({ type: 'brace', value: content });
+            continue;
+        }
+
+        // NOT operator: ! followed by ( or A (ActionMatches)
+        if (c === '!' && i + 1 < text.length) {
+            const next = text[i + 1];
+            if (next === '(' || next === 'A' || next === 'a') {
+                tokens.push({ type: 'not', value: '!' });
+                i++;
+                continue;
+            }
+        }
+
+        // @Request or @Resource (handle optional space before bracket)
+        if (c === '@') {
+            const isReq = matchesWordAt(text, i, '@Request');
+            const isRes = matchesWordAt(text, i, '@Resource');
+            if (isReq || isRes) {
+                const len = isReq ? 8 : 9;
+                tokens.push({ type: 'attribute-kw', value: text.slice(i, i + len) });
+                i += len;
+                // Skip whitespace between @Request/@Resource and [ bracket
+                while (i < text.length && /\s/.test(text[i])) {
+                    tokens.push({ type: 'text', value: text[i] });
+                    i++;
+                }
+                continue;
+            }
+        }
+
+        // Keywords: ActionMatches
+        if (matchesWordAt(text, i, 'ActionMatches')) {
+            tokens.push({ type: 'function', value: text.slice(i, i + 13) });
+            i += 13;
+            continue;
+        }
+
+        // ForAnyOfAnyValues, ForAnyOfAllValues, ForAllOfAnyValues, ForAllOfAllValues with comparison
+        let matchedFor = false;
+        for (const prefix of FOR_PREFIXES) {
+            if (matchesWordAt(text, i, prefix)) {
+                // Check for : followed by comparison operator
+                const afterPrefix = i + prefix.length;
+                if (afterPrefix < text.length && text[afterPrefix] === ':') {
+                    for (const comp of COMPARISONS) {
+                        if (matchesWordAt(text, afterPrefix + 1, comp)) {
+                            const fullLen = prefix.length + 1 + comp.length;
+                            tokens.push({ type: 'function', value: text.slice(i, i + fullLen) });
+                            i += fullLen;
+                            matchedFor = true;
+                            break;
+                        }
+                    }
+                    // If we matched prefix and colon but no comparison, still consume the prefix:colon part
+                    if (!matchedFor) {
+                        tokens.push({ type: 'function', value: text.slice(i, afterPrefix + 1) });
+                        i = afterPrefix + 1;
+                        matchedFor = true;
+                    }
+                } else {
+                    // Just the prefix without colon - consume it as function
+                    tokens.push({ type: 'function', value: text.slice(i, afterPrefix) });
+                    i = afterPrefix;
+                    matchedFor = true;
+                }
+                break;
+            }
+        }
+        if (matchedFor) continue;
+
+        // Standalone comparisons (same operators, just not prefixed with ForXxxOfXxxValues:)
+        let matchedComp = false;
+        for (const comp of COMPARISONS) {
+            if (matchesWordAt(text, i, comp)) {
+                // Check it's a word boundary (not followed by alphanumeric)
+                const afterPos = i + comp.length;
+                if (afterPos >= text.length || !/[a-zA-Z0-9]/.test(text[afterPos])) {
+                    tokens.push({ type: 'function', value: text.slice(i, i + comp.length) });
+                    i += comp.length;
+                    matchedComp = true;
+                    break;
+                }
+            }
+        }
+        if (matchedComp) continue;
+
+        // Boolean values: true, false
+        if (matchesWordAt(text, i, 'true')) {
+            const afterPos = i + 4;
+            if (afterPos >= text.length || !/[a-zA-Z0-9]/.test(text[afterPos])) {
+                tokens.push({ type: 'boolean', value: text.slice(i, i + 4) });
+                i += 4;
+                continue;
+            }
+        }
+        if (matchesWordAt(text, i, 'false')) {
+            const afterPos = i + 5;
+            if (afterPos >= text.length || !/[a-zA-Z0-9]/.test(text[afterPos])) {
+                tokens.push({ type: 'boolean', value: text.slice(i, i + 5) });
+                i += 5;
+                continue;
+            }
+        }
+
+        // Default: accumulate as plain text
+        tokens.push({ type: 'text', value: c });
+        i++;
+    }
+
+    // Merge consecutive text tokens
+    /** @type {HighlightToken[]} */
+    const merged = [];
+    for (const tok of tokens) {
+        if (tok.type === 'text' && merged.length > 0 && merged[merged.length - 1].type === 'text') {
+            merged[merged.length - 1].value += tok.value;
+        } else {
+            merged.push(tok);
+        }
+    }
+
+    return merged;
+}
+
+/**
  * @typedef {Object} FormattedLine
  * @property {number} indent - Indentation level
  * @property {string} html - HTML content with syntax highlighting
@@ -57,14 +261,24 @@ const GUID_CHARS = new Set('0123456789abcdefABCDEF ,\t-');
  */
 
 /**
+ * @typedef {Object} ConditionExplanation
+ * @property {string} summary - Brief one-line summary of what the condition does
+ * @property {string[]} details - Detailed bullet points explaining each part
+ * @property {number} [confidence] - Confidence score from AI (0-1)
+ */
+
+/**
  * @typedef {Object} ConditionFormatterComponent
  * @property {boolean} formatted - Whether to show formatted view
  * @property {FormattedLine[]} lines - Parsed and formatted lines
+ * @property {boolean} showExplanation - Whether to show explanation panel
+ * @property {ConditionExplanation | null} explanation - Cached explanation
  * @property {() => void} init - Initialize the component
+ * @property {() => void} toggleExplanation - Toggle explanation visibility
+ * @property {() => ConditionExplanation} getExplanation - Get condition explanation
  * @property {(condition: string) => FormattedLine[]} parseCondition - Parse condition into lines
  * @property {(condition: string) => Token[]} tokenize - Tokenize condition string
  * @property {(str: string) => string} escapeHtml - Escape HTML special characters
- * @property {(text: string, pos: number, word: string) => boolean} matchesWordAt - Check if word matches at position
  * @property {(text: string) => string} highlight - Apply syntax highlighting
  */
 
@@ -78,9 +292,32 @@ function conditionFormatter(rawCondition) {
         formatted: true,
         /** @type {FormattedLine[]} */
         lines: [],
+        showExplanation: false,
+        /** @type {ConditionExplanation | null} */
+        explanation: null,
 
         init() {
             this.lines = this.parseCondition(rawCondition);
+        },
+
+        /**
+         * Toggle explanation visibility and generate explanation if needed
+         */
+        toggleExplanation() {
+            this.showExplanation = !this.showExplanation;
+
+            // Generate explanation using lexer-based logic if showing and not yet generated
+            if (this.showExplanation && !this.explanation) {
+                this.explanation = explainCondition(rawCondition);
+            }
+        },
+
+        /**
+         * Get the explanation for the condition (cached or local fallback)
+         * @returns {ConditionExplanation}
+         */
+        getExplanation() {
+            return this.explanation || explainCondition(rawCondition);
         },
 
         /**
@@ -269,20 +506,7 @@ function conditionFormatter(rawCondition) {
         },
 
         /**
-         * Check if string at position matches a word (case-insensitive)
-         * @param {string} text - Full text
-         * @param {number} pos - Position to check
-         * @param {string} word - Word to match
-         * @returns {boolean}
-         */
-        matchesWordAt(text, pos, word) {
-            if (pos + word.length > text.length) return false;
-            const slice = text.slice(pos, pos + word.length);
-            return slice.toLowerCase() === word.toLowerCase();
-        },
-
-        /**
-         * Apply syntax highlighting using a character-by-character lexer.
+         * Apply syntax highlighting using the shared lexer.
          * @param {string} text - Text to highlight
          * @returns {string} HTML with inline styles
          */
@@ -304,174 +528,12 @@ function conditionFormatter(rawCondition) {
                 return `<span style="${gray}">${text}</span>`;
             }
 
-            /** @type {HighlightToken[]} */
-            const tokens = [];
-            let i = 0;
-
-            while (i < text.length) {
-                const c = text[i];
-
-                // Single-quoted string: 'content'
-                if (c === "'") {
-                    let str = "'";
-                    i++;
-                    while (i < text.length && text[i] !== "'") {
-                        str += text[i];
-                        i++;
-                    }
-                    if (i < text.length) {
-                        str += "'";
-                        i++;
-                    }
-                    tokens.push({ type: 'string', value: str });
-                    continue;
-                }
-
-                // Braces with GUIDs/content: {content}
-                if (c === '{') {
-                    let content = '{';
-                    i++;
-                    while (i < text.length && text[i] !== '}') {
-                        content += text[i];
-                        i++;
-                    }
-                    if (i < text.length) {
-                        content += '}';
-                        i++;
-                    }
-                    // Check if content looks like GUIDs (hex chars, commas, spaces, hyphens)
-                    const inner = content.slice(1, -1);
-                    let isGuidLike = true;
-                    for (let j = 0; j < inner.length; j++) {
-                        if (!GUID_CHARS.has(inner[j])) {
-                            isGuidLike = false;
-                            break;
-                        }
-                    }
-                    tokens.push({ type: isGuidLike ? 'guid-brace' : 'brace', value: content });
-                    continue;
-                }
-
-                // NOT operator: ! followed by ( or A (ActionMatches)
-                if (c === '!' && i + 1 < text.length) {
-                    const next = text[i + 1];
-                    if (next === '(' || next === 'A' || next === 'a') {
-                        tokens.push({ type: 'not', value: '!' });
-                        i++;
-                        continue;
-                    }
-                }
-
-                // @Request or @Resource (handle optional space before bracket)
-                if (c === '@') {
-                    const isReq = this.matchesWordAt(text, i, '@Request');
-                    const isRes = this.matchesWordAt(text, i, '@Resource');
-                    if (isReq || isRes) {
-                        const len = isReq ? 8 : 9;
-                        tokens.push({ type: 'attribute-kw', value: text.slice(i, i + len) });
-                        i += len;
-                        // Skip whitespace between @Request/@Resource and [ bracket
-                        while (i < text.length && /\s/.test(text[i])) {
-                            tokens.push({ type: 'text', value: text[i] });
-                            i++;
-                        }
-                        continue;
-                    }
-                }
-
-                // Keywords: ActionMatches
-                if (this.matchesWordAt(text, i, 'ActionMatches')) {
-                    tokens.push({ type: 'function', value: text.slice(i, i + 13) });
-                    i += 13;
-                    continue;
-                }
-
-                // ForAnyOfAnyValues, ForAnyOfAllValues, ForAllOfAnyValues, ForAllOfAllValues with comparison
-                let matchedFor = false;
-                for (const prefix of FOR_PREFIXES) {
-                    if (this.matchesWordAt(text, i, prefix)) {
-                        // Check for : followed by comparison operator
-                        const afterPrefix = i + prefix.length;
-                        if (afterPrefix < text.length && text[afterPrefix] === ':') {
-                            for (const comp of COMPARISONS) {
-                                if (this.matchesWordAt(text, afterPrefix + 1, comp)) {
-                                    const fullLen = prefix.length + 1 + comp.length;
-                                    tokens.push({ type: 'function', value: text.slice(i, i + fullLen) });
-                                    i += fullLen;
-                                    matchedFor = true;
-                                    break;
-                                }
-                            }
-                            // If we matched prefix and colon but no comparison, still consume the prefix:colon part
-                            if (!matchedFor) {
-                                tokens.push({ type: 'function', value: text.slice(i, afterPrefix + 1) });
-                                i = afterPrefix + 1;
-                                matchedFor = true;
-                            }
-                        } else {
-                            // Just the prefix without colon - consume it as function
-                            tokens.push({ type: 'function', value: text.slice(i, afterPrefix) });
-                            i = afterPrefix;
-                            matchedFor = true;
-                        }
-                        break;
-                    }
-                }
-                if (matchedFor) continue;
-
-                // Standalone comparisons (same operators, just not prefixed with ForXxxOfXxxValues:)
-                let matchedComp = false;
-                for (const comp of COMPARISONS) {
-                    if (this.matchesWordAt(text, i, comp)) {
-                        // Check it's a word boundary (not followed by alphanumeric)
-                        const afterPos = i + comp.length;
-                        if (afterPos >= text.length || !/[a-zA-Z0-9]/.test(text[afterPos])) {
-                            tokens.push({ type: 'function', value: text.slice(i, i + comp.length) });
-                            i += comp.length;
-                            matchedComp = true;
-                            break;
-                        }
-                    }
-                }
-                if (matchedComp) continue;
-
-                // Boolean values: true, false
-                if (this.matchesWordAt(text, i, 'true')) {
-                    const afterPos = i + 4;
-                    if (afterPos >= text.length || !/[a-zA-Z0-9]/.test(text[afterPos])) {
-                        tokens.push({ type: 'boolean', value: text.slice(i, i + 4) });
-                        i += 4;
-                        continue;
-                    }
-                }
-                if (this.matchesWordAt(text, i, 'false')) {
-                    const afterPos = i + 5;
-                    if (afterPos >= text.length || !/[a-zA-Z0-9]/.test(text[afterPos])) {
-                        tokens.push({ type: 'boolean', value: text.slice(i, i + 5) });
-                        i += 5;
-                        continue;
-                    }
-                }
-
-                // Default: accumulate as plain text
-                tokens.push({ type: 'text', value: c });
-                i++;
-            }
-
-            // Merge consecutive text tokens
-            /** @type {Array<{type: string, value: string}>} */
-            const merged = [];
-            for (const tok of tokens) {
-                if (tok.type === 'text' && merged.length > 0 && merged[merged.length - 1].type === 'text') {
-                    merged[merged.length - 1].value += tok.value;
-                } else {
-                    merged.push(tok);
-                }
-            }
+            // Use the shared lexer
+            const tokens = lexTokens(text);
 
             // Build HTML from tokens
             let result = '';
-            for (const token of merged) {
+            for (const token of tokens) {
                 switch (token.type) {
                     case 'string':
                         // 'content' -> '&#39;<span>content</span>&#39;'
@@ -516,8 +578,227 @@ function conditionFormatter(rawCondition) {
     };
 }
 
+/**
+ * Normalize a GUID to standard hyphenated format (lowercase)
+ * @param {string} guid - GUID with or without hyphens
+ * @returns {string} Normalized GUID in xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx format
+ */
+function normalizeGuid(guid) {
+    const clean = guid.replace(/[-\s]/g, '').toLowerCase();
+    if (clean.length !== 32) return guid.toLowerCase();
+    return `${clean.slice(0, 8)}-${clean.slice(8, 12)}-${clean.slice(12, 16)}-${clean.slice(16, 20)}-${clean.slice(20)}`;
+}
+
+/**
+ * Parse a condition expression and generate a human-readable explanation
+ * Uses the lexer tokens for structured analysis instead of regex
+ * @param {string} condition - The ABAC condition string
+ * @returns {ConditionExplanation} Summary and detailed explanation
+ */
+function explainCondition(condition) {
+    /** @type {string[]} */
+    const details = [];
+    /** @type {string[]} */
+    const summaryParts = [];
+
+    // Tokenize the condition using the shared lexer
+    const tokens = lexTokens(condition);
+
+    // Extract semantic information from tokens
+    // Track attribute-bracket pairs to understand context
+    /** @type {Array<{attr: string, bracket: string}>} */
+    const attrBracketPairs = [];
+    /** @type {string[]} */
+    const functions = [];
+    /** @type {string[]} */
+    const guids = [];
+    /** @type {string[]} */
+    const strings = [];
+    /** @type {string[]} */
+    const booleans = [];
+    /** @type {string[]} */
+    const bracketContents = [];
+    let hasNot = false;
+
+    // First pass: extract all tokens and pair up @Request/@Resource with their brackets
+    let lastAttr = null;
+    for (const token of tokens) {
+        switch (token.type) {
+            case 'function':
+                functions.push(token.value.toLowerCase());
+                break;
+            case 'attribute-kw':
+                lastAttr = token.value; // @Request or @Resource
+                break;
+            case 'guid-brace':
+                // Extract GUIDs from {guid1, guid2, ...}
+                const inner = token.value.slice(1, -1);
+                const guidList = inner.split(',').map(g => normalizeGuid(g.trim()));
+                guids.push(...guidList);
+                break;
+            case 'brace':
+                // Extract bracket content like [Microsoft.Authorization/roleAssignments:RoleDefinitionId]
+                if (token.value.startsWith('[') && token.value.endsWith(']')) {
+                    const bracketContent = token.value.slice(1, -1);
+                    bracketContents.push(bracketContent);
+                    // Pair with the preceding attribute keyword
+                    if (lastAttr) {
+                        attrBracketPairs.push({ attr: lastAttr, bracket: bracketContent });
+                        lastAttr = null;
+                    }
+                }
+                // Also extract strings from brace content like {'Microsoft.Authorization/...'}
+                if (token.value.startsWith('{') && token.value.endsWith('}')) {
+                    const braceInner = token.value.slice(1, -1);
+                    // Check for quoted strings inside braces
+                    const stringMatches = braceInner.match(/'([^']+)'/g);
+                    if (stringMatches) {
+                        for (const match of stringMatches) {
+                            strings.push(match.slice(1, -1)); // Remove quotes
+                        }
+                    }
+                }
+                break;
+            case 'string':
+                // Extract string content from 'value'
+                if (token.value.length >= 2) {
+                    strings.push(token.value.slice(1, -1));
+                }
+                break;
+            case 'boolean':
+                booleans.push(token.value.toLowerCase());
+                break;
+            case 'not':
+                hasNot = true;
+                break;
+        }
+    }
+
+    // Analyze patterns using attribute-bracket pairs
+    
+    // Check which attributes have RoleDefinitionId
+    const requestHasRoleDefId = attrBracketPairs.some(p => 
+        p.attr === '@Request' && p.bracket.toLowerCase().includes('roledefinitionid')
+    );
+    const resourceHasRoleDefId = attrBracketPairs.some(p => 
+        p.attr === '@Resource' && p.bracket.toLowerCase().includes('roledefinitionid')
+    );
+
+    // 1. Check for OBO token requirement
+    const hasOboAttribute = attrBracketPairs.some(p => 
+        p.attr === '@Resource' && p.bracket.toLowerCase() === 'hasobotoken'
+    );
+    const hasBoolTrue = booleans.includes('true');
+    if (hasOboAttribute && hasBoolTrue) {
+        details.push('Requires an On-Behalf-Of (OBO) token — the request must be made on behalf of a signed-in user, not by a service principal alone');
+        summaryParts.push('requires user delegation');
+    }
+
+    // 2. Detect comparison operators
+    const hasGuidEquals = functions.some(f => f.includes('guidequals') && !f.includes('guidnotequals'));
+    const hasGuidNotEquals = functions.some(f => f.includes('guidnotequals'));
+
+    // 3. Build explanations based on attribute-bracket pairs
+    if (guids.length > 0) {
+        const guidList = guids.join(', ');
+        
+        // @Request[...RoleDefinitionId] = role CREATION restriction
+        if (requestHasRoleDefId) {
+            if (hasGuidNotEquals) {
+                details.push(`When creating role assignments, CANNOT assign if the role definition is one of: ${guidList}`);
+                summaryParts.push('restricts role creation');
+            } else if (hasGuidEquals) {
+                details.push(`When creating role assignments, can ONLY assign if the role definition is one of: ${guidList}`);
+                summaryParts.push('restricts which roles can be assigned');
+            }
+        }
+        
+        // @Resource[...RoleDefinitionId] = role DELETION restriction
+        if (resourceHasRoleDefId) {
+            if (hasGuidNotEquals) {
+                details.push(`When deleting role assignments, CANNOT remove if the role definition is one of: ${guidList}`);
+                summaryParts.push('restricts role deletion');
+            } else if (hasGuidEquals) {
+                details.push(`When deleting role assignments, can ONLY remove if the role definition is one of: ${guidList}`);
+                summaryParts.push('restricts which roles can be removed');
+            }
+        }
+
+        // Handle combined creation+deletion (constrained delegation)
+        if (requestHasRoleDefId && resourceHasRoleDefId) {
+            summaryParts.length = 0; // Clear and use combined summary
+            summaryParts.push('restricts both role assignments creation and removal');
+        }
+    }
+
+    // 4. Principal type restriction
+    const hasPrincipalType = attrBracketPairs.some(p => 
+        p.bracket.toLowerCase().includes('principaltype')
+    );
+    const hasStringEquals = functions.some(f => 
+        f.includes('stringequals') || f.includes('stringequalsignorecase')
+    );
+    if (hasPrincipalType && hasStringEquals && strings.length > 0) {
+        // Find the principal type value (e.g., 'ServicePrincipal', 'User')
+        const principalType = strings.find(s => 
+            ['serviceprincipal', 'user', 'group', 'foreigngroup'].includes(s.toLowerCase())
+        );
+        if (principalType) {
+            details.push(`Can only assign roles to principals of type: ${principalType}`);
+            summaryParts.push('restricts principal type');
+        }
+    }
+
+    // 5. Scope restriction
+    const hasResourceId = attrBracketPairs.some(p => 
+        p.attr === '@Resource' && p.bracket.toLowerCase() === 'id'
+    );
+    const hasStringLike = functions.some(f => f.includes('stringlike'));
+    if (hasResourceId && hasStringLike && strings.length > 0) {
+        const scopePatterns = strings.filter(s => s.includes('/'));
+        if (scopePatterns.length > 0) {
+            details.push(`Only applies to resources matching scope pattern: ${scopePatterns.join(' or ')}`);
+            summaryParts.push('restricts scope');
+        }
+    }
+
+    // Generate summary
+    let summary = '';
+    if (summaryParts.length > 0) {
+        // Deduplicate and capitalize first
+        const uniqueParts = [...new Set(summaryParts)];
+        summary = uniqueParts.map((p, i) => i === 0 ? p.charAt(0).toUpperCase() + p.slice(1) : p).join(', ');
+    } else {
+        summary = 'Custom ABAC condition';
+    }
+
+    // Fallback if no patterns matched - describe what the condition contains
+    if (details.length === 0) {
+        details.push('This condition uses Azure Attribute-Based Access Control (ABAC) to restrict when this permission applies');
+
+        const hasRequestAttr = attrBracketPairs.some(p => p.attr === '@Request');
+        const hasResourceAttr = attrBracketPairs.some(p => p.attr === '@Resource');
+        const hasActionMatches = functions.some(f => f === 'actionmatches');
+
+        if (hasRequestAttr) {
+            details.push('• Evaluates attributes of the incoming request');
+        }
+        if (hasResourceAttr) {
+            details.push('• Evaluates attributes of the target resource');
+        }
+        if (hasActionMatches) {
+            details.push('• Checks which specific action is being performed');
+        }
+        if (guids.length > 0) {
+            details.push(`• References ${guids.length} role definition ID(s)`);
+        }
+    }
+
+    return { summary, details };
+}
+
 // Export for testing (Node.js/Vitest) while keeping browser compatibility
 // @ts-ignore - CommonJS export for Node.js test environment (module is Node-specific)
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { conditionFormatter, ESCAPE_MAP };
+    module.exports = { conditionFormatter, explainCondition, normalizeGuid, lexTokens, matchesWordAt, ESCAPE_MAP };
 }

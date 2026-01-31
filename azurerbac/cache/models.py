@@ -449,7 +449,7 @@ class CacheData:
         )
 
     # =========================================================================
-    # Convenience accessors (backward compatibility)
+    # Public API: Flat accessors for nested data
     # =========================================================================
     @property
     def all_operations(self) -> list[OperationData]:

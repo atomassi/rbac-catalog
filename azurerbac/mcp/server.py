@@ -47,7 +47,7 @@ from azurerbac.mcp.constants import (
 )
 from azurerbac.mcp.utils import InputValidator, TokenBucketRateLimiter, ToolTimer, ValidationError
 from azurerbac.telemetry import track_event
-from azurerbac.web.constants import NEW_DOMAIN, SITE_URL
+from azurerbac.core.constants import NEW_DOMAIN, SITE_URL
 
 logger = logging.getLogger(__name__)
 

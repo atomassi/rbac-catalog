@@ -25,7 +25,7 @@ warnings.filterwarnings("ignore", message=".*torch.cuda.amp.GradScaler.*", categ
 warnings.filterwarnings("ignore", message=".*CUDA is not available.*", category=UserWarning)
 
 from azurerbac.airecommender.engines.base import BaseRecommenderEngine, RankedRole
-from azurerbac.airecommender.engines.common import normalize_with_sigmoid
+from azurerbac.airecommender.engines.common import ScoreNormalizer
 from azurerbac.airecommender.engines.config import COLBERT_SIGMOID, COLBERT_THRESHOLDS
 from azurerbac.airecommender.engines.registry import EngineRegistry
 from azurerbac.airecommender.knowledge import extract_keywords
@@ -71,13 +71,7 @@ class ColBERTEngine(BaseRecommenderEngine):
 
     @staticmethod
     def _normalize_scores(candidates: list[RankedRole]) -> list[RankedRole]:
-        candidates = normalize_with_sigmoid(
-            candidates,
-            midpoint=COLBERT_SIGMOID.midpoint,
-            steepness=COLBERT_SIGMOID.steepness,
-            output_min=COLBERT_SIGMOID.output_min,
-            output_max=COLBERT_SIGMOID.output_max,
-        )
+        candidates = ScoreNormalizer.sigmoid_normalize(candidates, COLBERT_SIGMOID)
         logger.debug(
             "Normalized %d ColBERT scores: [%s]",
             len(candidates),

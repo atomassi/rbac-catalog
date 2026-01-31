@@ -2,10 +2,6 @@
 
 from typing import Final
 
-from azurerbac.core.constants import NEW_DOMAIN, SITE_URL
-
-__all__ = ["NEW_DOMAIN", "SITE_URL"]  # Backwards-compatible re-exports
-
 OLD_DOMAINS: Final = frozenset(
     {
         "azurerbac-builtinroles.azurewebsites.net",

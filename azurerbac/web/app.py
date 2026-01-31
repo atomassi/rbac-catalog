@@ -47,7 +47,8 @@ from azurerbac.core import (
 from azurerbac.core.utils import slugify
 from azurerbac.mcp import create_disabled_mcp_app, create_mcp_server
 from azurerbac.settings import Settings, is_running_in_pytest
-from azurerbac.web.constants import GZIP_MIN_SIZE, SITE_URL
+from azurerbac.core.constants import SITE_URL
+from azurerbac.web.constants import GZIP_MIN_SIZE
 from azurerbac.web.dependencies import BaseDeps, DashboardDeps, PagesDeps
 from azurerbac.web.filters import diff_lines, format_date, format_datetime, full_json_diff
 from azurerbac.web.middleware import (

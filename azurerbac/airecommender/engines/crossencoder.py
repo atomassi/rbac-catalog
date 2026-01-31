@@ -11,12 +11,8 @@ import logging
 from typing import Any, Final, override
 
 from azurerbac.airecommender.engines.base import BaseRecommenderEngine, RankedRole
-from azurerbac.airecommender.engines.common import normalize_scores
-from azurerbac.airecommender.engines.config import (
-    CROSSENCODER_PRIMARY_WEIGHT,
-    CROSSENCODER_SECONDARY_WEIGHT,
-    CROSSENCODER_THRESHOLDS,
-)
+from azurerbac.airecommender.engines.common import ScoreNormalizer
+from azurerbac.airecommender.engines.config import CROSSENCODER_THRESHOLDS, CROSSENCODER_WEIGHTS
 from azurerbac.airecommender.engines.registry import EngineRegistry
 from azurerbac.airecommender.modes import RecommenderMode
 from azurerbac.core.singleton import ThreadSafeSingleton
@@ -80,7 +76,7 @@ class CrossEncoderEngine(BaseRecommenderEngine):
         candidates = self._filter_min_confidence(
             candidates, threshold=CROSSENCODER_THRESHOLDS.min_confidence
         )
-        candidates = normalize_scores(candidates[:top_k])
+        candidates = ScoreNormalizer.normalize_candidates(candidates[:top_k])
 
         self._log_complete(candidates, show_top=6)
         return candidates
@@ -123,8 +119,8 @@ class CrossEncoderEngine(BaseRecommenderEngine):
                 # Combine bi-encoder and cross-encoder scores
                 # Weight cross-encoder higher as it's more accurate
                 candidate.final_score = (
-                    CROSSENCODER_SECONDARY_WEIGHT * candidate.embedding_score
-                    + CROSSENCODER_PRIMARY_WEIGHT * normalized
+                    CROSSENCODER_WEIGHTS.secondary * candidate.embedding_score
+                    + CROSSENCODER_WEIGHTS.primary * normalized
                 )
 
             # Sort by final score

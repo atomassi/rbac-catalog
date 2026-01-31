@@ -11,11 +11,8 @@ import logging
 from typing import Final, override
 
 from azurerbac.airecommender.engines.base import BaseRecommenderEngine, RankedRole
-from azurerbac.airecommender.engines.common import cosine_similarity, normalize_scores
-from azurerbac.airecommender.engines.config import (
-    HYBRID_PRIMARY_WEIGHT,
-    HYBRID_SECONDARY_WEIGHT,
-)
+from azurerbac.airecommender.engines.common import ScoreNormalizer, cosine_similarity
+from azurerbac.airecommender.engines.config import HYBRID_WEIGHTS
 from azurerbac.airecommender.engines.registry import EngineRegistry
 from azurerbac.airecommender.knowledge import extract_keywords
 from azurerbac.airecommender.modes import RecommenderMode
@@ -83,7 +80,7 @@ class HybridEngine(BaseRecommenderEngine):
                 c.final_score = (c.tfidf_score + c.embedding_score) / 2
             final = heapq.nlargest(top_k, embedding_candidates, key=lambda r: r.final_score)
 
-        final = normalize_scores(final)
+        final = ScoreNormalizer.normalize_candidates(final)
 
         self._log_complete(final)
         return final
@@ -150,7 +147,7 @@ class HybridEngine(BaseRecommenderEngine):
         # Combine scores: TF-IDF weighted higher (curated patterns are more reliable)
         for c in candidates:
             c.final_score = (
-                HYBRID_PRIMARY_WEIGHT * c.tfidf_score + HYBRID_SECONDARY_WEIGHT * c.embedding_score
+                HYBRID_WEIGHTS.primary * c.tfidf_score + HYBRID_WEIGHTS.secondary * c.embedding_score
             )
 
         candidates.sort(key=lambda r: r.final_score, reverse=True)

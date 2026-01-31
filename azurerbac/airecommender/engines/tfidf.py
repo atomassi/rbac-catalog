@@ -6,7 +6,7 @@ import logging
 from typing import override
 
 from azurerbac.airecommender.engines.base import BaseRecommenderEngine, RankedRole
-from azurerbac.airecommender.engines.common import normalize_scores
+from azurerbac.airecommender.engines.common import ScoreNormalizer
 from azurerbac.airecommender.engines.config import TFIDF_CONFIG
 from azurerbac.airecommender.engines.registry import EngineRegistry
 from azurerbac.airecommender.knowledge import extract_keywords
@@ -124,7 +124,7 @@ class TFIDFEngine(BaseRecommenderEngine):
         pre_str = ", ".join(f"{r.role_name}({r.final_score:.2f})" for r in results[:5])
         logger.debug("TF-IDF: Pre-normalization scores: [%s]", pre_str)
 
-        results = normalize_scores(results)
+        results = ScoreNormalizer.normalize_candidates(results)
 
         post_str = ", ".join(f"{r.role_name}({r.final_score:.0%})" for r in results[:5])
         logger.debug("TF-IDF: Post-normalization scores: [%s]", post_str)

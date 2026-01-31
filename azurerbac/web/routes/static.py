@@ -9,7 +9,7 @@ from typing import Final
 from fastapi import APIRouter, Request
 from fastapi.responses import Response
 
-from azurerbac.web.constants import SITE_URL
+from azurerbac.core.constants import SITE_URL
 
 INDEXNOW_KEY: Final = "4484caab4dbc472ca61ac1141d812336"
 

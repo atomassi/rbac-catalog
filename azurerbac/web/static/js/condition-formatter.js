@@ -137,8 +137,10 @@ function scanTokens(text) {
         // Braces {content}
         if (c === '{') {
             const [content, nextI] = scanUntil(text, i, '}');
-            const inner = content.slice(1, -1);
-            const isGuidLike = [...inner].every(ch => GUID_CHARS.has(ch));
+            // Only treat as GUID-like if properly closed and has content
+            const isClosed = content.endsWith('}');
+            const inner = isClosed ? content.slice(1, -1) : '';
+            const isGuidLike = isClosed && inner.length > 0 && [...inner].every(ch => GUID_CHARS.has(ch));
             tokens.push({ type: isGuidLike ? 'guid-brace' : 'brace', value: content });
             i = nextI;
             continue;

@@ -767,8 +767,8 @@
                 </div>
                 
                 <div class="p-6">
-                    <!-- Raw Patterns Summary - only show if there are wildcards (otherwise expanded = raw) -->
-                    {% if effective_perms.has_wildcards and (effective_perms.raw_actions or effective_perms.raw_data_actions) %}
+                    <!-- Raw Patterns Summary - show if there are wildcards OR conditions -->
+                    {% if effective_perms.has_wildcards or effective_perms.has_conditions %}
                     <div class="mb-6">
                         <h4 class="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">
                             Permission Patterns (from role definition)

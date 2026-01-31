@@ -25,6 +25,15 @@ const ESCAPE_MAP = {
     "'": '&#39;'
 };
 
+/** Quantifier prefixes for ABAC conditions (ForAnyOf*, ForAllOf*) */
+const FOR_PREFIXES = ['ForAnyOfAnyValues', 'ForAnyOfAllValues', 'ForAllOfAnyValues', 'ForAllOfAllValues'];
+
+/** Comparison operators (case-insensitive matching via matchesWordAt) */
+const COMPARISONS = ['GuidEquals', 'GuidNotEquals', 'StringEquals', 'StringEqualsIgnoreCase', 'StringLike', 'StringLikeIgnoreCase', 'BoolEquals'];
+
+/** Valid characters in GUID brace content (hex, comma, space, tab, hyphen) */
+const GUID_CHARS = new Set('0123456789abcdefABCDEF ,\t-');
+
 /**
  * @typedef {Object} FormattedLine
  * @property {number} indent - Indentation level
@@ -38,6 +47,16 @@ const ESCAPE_MAP = {
  */
 
 /**
+ * @typedef {'string' | 'guid-brace' | 'brace' | 'not' | 'function' | 'boolean' | 'attribute-kw' | 'text'} HighlightTokenType
+ */
+
+/**
+ * @typedef {Object} HighlightToken
+ * @property {HighlightTokenType} type - Semantic token type for syntax highlighting
+ * @property {string} value - Token value
+ */
+
+/**
  * @typedef {Object} ConditionFormatterComponent
  * @property {boolean} formatted - Whether to show formatted view
  * @property {FormattedLine[]} lines - Parsed and formatted lines
@@ -45,6 +64,7 @@ const ESCAPE_MAP = {
  * @property {(condition: string) => FormattedLine[]} parseCondition - Parse condition into lines
  * @property {(condition: string) => Token[]} tokenize - Tokenize condition string
  * @property {(str: string) => string} escapeHtml - Escape HTML special characters
+ * @property {(text: string, pos: number, word: string) => boolean} matchesWordAt - Check if word matches at position
  * @property {(text: string) => string} highlight - Apply syntax highlighting
  */
 
@@ -236,17 +256,33 @@ function conditionFormatter(rawCondition) {
 
         /**
          * Escape HTML special characters to prevent XSS
-         * Uses single-pass regex for efficiency with large conditions
          * @param {string} str - String to escape
          * @returns {string} Escaped string
          */
         escapeHtml(str) {
-            return str.replace(/[&<>"']/g, (m) => ESCAPE_MAP[m]);
+            let result = '';
+            for (let i = 0; i < str.length; i++) {
+                const c = str[i];
+                result += ESCAPE_MAP[c] || c;
+            }
+            return result;
         },
 
         /**
-         * Apply syntax highlighting to text using CSS custom properties
-         * Colors are defined in input.css and adapt to light/dark mode
+         * Check if string at position matches a word (case-insensitive)
+         * @param {string} text - Full text
+         * @param {number} pos - Position to check
+         * @param {string} word - Word to match
+         * @returns {boolean}
+         */
+        matchesWordAt(text, pos, word) {
+            if (pos + word.length > text.length) return false;
+            const slice = text.slice(pos, pos + word.length);
+            return slice.toLowerCase() === word.toLowerCase();
+        },
+
+        /**
+         * Apply syntax highlighting using a character-by-character lexer.
          * @param {string} text - Text to highlight
          * @returns {string} HTML with inline styles
          */
@@ -257,69 +293,223 @@ function conditionFormatter(rawCondition) {
             const red = 'color: var(--cond-red)';     // Strings, NOT operator
             const gray = 'color: var(--cond-gray)';   // Parentheses
 
-            // Check for standalone operators BEFORE escaping (since && becomes &amp;&amp;)
-            if (/^(AND|OR|&&|\|\|)$/i.test(text)) {
+            // Handle standalone operators
+            const upper = text.toUpperCase();
+            if (upper === 'AND' || upper === 'OR' || text === '&&' || text === '||') {
                 return `<span style="${blue}; font-weight: 600">${this.escapeHtml(text)}</span>`;
             }
 
-            // Standalone parentheses - gray (no escaping needed for these)
-            if (/^[()]$/.test(text)) {
+            // Standalone parentheses
+            if (text === '(' || text === ')') {
                 return `<span style="${gray}">${text}</span>`;
             }
 
-            // Escape HTML to prevent XSS (conditions come from Azure API, but defense in depth)
-            let result = this.escapeHtml(text);
+            /** @type {HighlightToken[]} */
+            const tokens = [];
+            let i = 0;
 
-            // Apply highlighting patterns in order
+            while (i < text.length) {
+                const c = text[i];
 
-            // 1. NOT operator at start (with or without parentheses) - red bold
-            result = result.replace(
-                /^(!)(ActionMatches|\()/,
-                `<span style="${red}; font-weight: 600">$1</span>$2`
-            );
+                // Single-quoted string: 'content'
+                if (c === "'") {
+                    let str = "'";
+                    i++;
+                    while (i < text.length && text[i] !== "'") {
+                        str += text[i];
+                        i++;
+                    }
+                    if (i < text.length) {
+                        str += "'";
+                        i++;
+                    }
+                    tokens.push({ type: 'string', value: str });
+                    continue;
+                }
 
-            // 2. ActionMatches function - blue
-            result = result.replace(
-                /ActionMatches/g,
-                `<span style="${blue}">ActionMatches</span>`
-            );
+                // Braces with GUIDs/content: {content}
+                if (c === '{') {
+                    let content = '{';
+                    i++;
+                    while (i < text.length && text[i] !== '}') {
+                        content += text[i];
+                        i++;
+                    }
+                    if (i < text.length) {
+                        content += '}';
+                        i++;
+                    }
+                    // Check if content looks like GUIDs (hex chars, commas, spaces, hyphens)
+                    const inner = content.slice(1, -1);
+                    let isGuidLike = true;
+                    for (let j = 0; j < inner.length; j++) {
+                        if (!GUID_CHARS.has(inner[j])) {
+                            isGuidLike = false;
+                            break;
+                        }
+                    }
+                    tokens.push({ type: isGuidLike ? 'guid-brace' : 'brace', value: content });
+                    continue;
+                }
 
-            // 3. ForAnyOf/ForAllOf comparison functions (all variants) - blue
-            result = result.replace(
-                /(ForAnyOfAnyValues|ForAnyOfAllValues|ForAllOfAnyValues|ForAllOfAllValues):(GuidEquals|GuidNotEquals|StringEquals|StringEqualsIgnoreCase|StringLike|StringLikeIgnoreCase)/gi,
-                `<span style="${blue}">$1:$2</span>`
-            );
+                // NOT operator: ! followed by ( or A (ActionMatches)
+                if (c === '!' && i + 1 < text.length) {
+                    const next = text[i + 1];
+                    if (next === '(' || next === 'A' || next === 'a') {
+                        tokens.push({ type: 'not', value: '!' });
+                        i++;
+                        continue;
+                    }
+                }
 
-            // 4. Standalone comparison operators - blue
-            result = result.replace(
-                /\b(stringequalsignorecase|stringequals|boolequals)\b/gi,
-                `<span style="${blue}">$1</span>`
-            );
+                // @Request or @Resource (handle optional space before bracket)
+                if (c === '@') {
+                    const isReq = this.matchesWordAt(text, i, '@Request');
+                    const isRes = this.matchesWordAt(text, i, '@Resource');
+                    if (isReq || isRes) {
+                        const len = isReq ? 8 : 9;
+                        tokens.push({ type: 'attribute-kw', value: text.slice(i, i + len) });
+                        i += len;
+                        // Skip whitespace between @Request/@Resource and [ bracket
+                        while (i < text.length && /\s/.test(text[i])) {
+                            tokens.push({ type: 'text', value: text[i] });
+                            i++;
+                        }
+                        continue;
+                    }
+                }
 
-            // 5. Boolean values - green
-            result = result.replace(
-                /\b(true|false)\b/gi,
-                `<span style="${green}">$1</span>`
-            );
+                // Keywords: ActionMatches
+                if (this.matchesWordAt(text, i, 'ActionMatches')) {
+                    tokens.push({ type: 'function', value: text.slice(i, i + 13) });
+                    i += 13;
+                    continue;
+                }
 
-            // 6. @Request and @Resource keywords - green (attribute in brackets stays default)
-            result = result.replace(
-                /(@(?:Request|Resource))(\[[^\]]+\])/g,
-                `<span style="${green}">$1</span>$2`
-            );
+                // ForAnyOfAnyValues, ForAnyOfAllValues, ForAllOfAnyValues, ForAllOfAllValues with comparison
+                let matchedFor = false;
+                for (const prefix of FOR_PREFIXES) {
+                    if (this.matchesWordAt(text, i, prefix)) {
+                        // Check for : followed by comparison operator
+                        const afterPrefix = i + prefix.length;
+                        if (afterPrefix < text.length && text[afterPrefix] === ':') {
+                            for (const comp of COMPARISONS) {
+                                if (this.matchesWordAt(text, afterPrefix + 1, comp)) {
+                                    const fullLen = prefix.length + 1 + comp.length;
+                                    tokens.push({ type: 'function', value: text.slice(i, i + fullLen) });
+                                    i += fullLen;
+                                    matchedFor = true;
+                                    break;
+                                }
+                            }
+                            // If we matched prefix and colon but no comparison, still consume the prefix:colon part
+                            if (!matchedFor) {
+                                tokens.push({ type: 'function', value: text.slice(i, afterPrefix + 1) });
+                                i = afterPrefix + 1;
+                                matchedFor = true;
+                            }
+                        } else {
+                            // Just the prefix without colon - consume it as function
+                            tokens.push({ type: 'function', value: text.slice(i, afterPrefix) });
+                            i = afterPrefix;
+                            matchedFor = true;
+                        }
+                        break;
+                    }
+                }
+                if (matchedFor) continue;
 
-            // 7. Strings in single quotes (action names like 'Microsoft.Authorization/...') - red
-            // Note: quotes are escaped to &#39; by escapeHtml, so match that (non-greedy between quotes)
-            result = result.replace(
-                /&#39;(.*?)&#39;/g,
-                `&#39;<span style="${red}">$1</span>&#39;`
-            );
+                // Standalone comparisons (same operators, just not prefixed with ForXxxOfXxxValues:)
+                let matchedComp = false;
+                for (const comp of COMPARISONS) {
+                    if (this.matchesWordAt(text, i, comp)) {
+                        // Check it's a word boundary (not followed by alphanumeric)
+                        const afterPos = i + comp.length;
+                        if (afterPos >= text.length || !/[a-zA-Z0-9]/.test(text[afterPos])) {
+                            tokens.push({ type: 'function', value: text.slice(i, i + comp.length) });
+                            i += comp.length;
+                            matchedComp = true;
+                            break;
+                        }
+                    }
+                }
+                if (matchedComp) continue;
 
-            // 8. GUIDs in braces - green (supports both hyphenated and non-hyphenated)
-            result = result.replace(
-                /\{([a-f0-9, -]+)\}/gi,
-                (/** @type {string} */ _, /** @type {string} */ guids) => `{<span style="${green}">${guids}</span>}`
-            );
+                // Boolean values: true, false
+                if (this.matchesWordAt(text, i, 'true')) {
+                    const afterPos = i + 4;
+                    if (afterPos >= text.length || !/[a-zA-Z0-9]/.test(text[afterPos])) {
+                        tokens.push({ type: 'boolean', value: text.slice(i, i + 4) });
+                        i += 4;
+                        continue;
+                    }
+                }
+                if (this.matchesWordAt(text, i, 'false')) {
+                    const afterPos = i + 5;
+                    if (afterPos >= text.length || !/[a-zA-Z0-9]/.test(text[afterPos])) {
+                        tokens.push({ type: 'boolean', value: text.slice(i, i + 5) });
+                        i += 5;
+                        continue;
+                    }
+                }
+
+                // Default: accumulate as plain text
+                tokens.push({ type: 'text', value: c });
+                i++;
+            }
+
+            // Merge consecutive text tokens
+            /** @type {Array<{type: string, value: string}>} */
+            const merged = [];
+            for (const tok of tokens) {
+                if (tok.type === 'text' && merged.length > 0 && merged[merged.length - 1].type === 'text') {
+                    merged[merged.length - 1].value += tok.value;
+                } else {
+                    merged.push(tok);
+                }
+            }
+
+            // Build HTML from tokens
+            let result = '';
+            for (const token of merged) {
+                switch (token.type) {
+                    case 'string':
+                        // 'content' -> '&#39;<span>content</span>&#39;'
+                        if (token.value.length >= 2 && token.value[0] === "'" && token.value[token.value.length - 1] === "'") {
+                            const inner = token.value.slice(1, -1);
+                            result += `&#39;<span style="${red}">${this.escapeHtml(inner)}</span>&#39;`;
+                        } else {
+                            result += this.escapeHtml(token.value);
+                        }
+                        break;
+                    case 'guid-brace':
+                        // {guids} -> {<span>guids</span>}
+                        if (token.value.length >= 2) {
+                            const inner = token.value.slice(1, -1);
+                            result += `{<span style="${green}">${this.escapeHtml(inner)}</span>}`;
+                        } else {
+                            result += this.escapeHtml(token.value);
+                        }
+                        break;
+                    case 'brace':
+                        result += this.escapeHtml(token.value);
+                        break;
+                    case 'not':
+                        result += `<span style="${red}; font-weight: 600">${this.escapeHtml(token.value)}</span>`;
+                        break;
+                    case 'function':
+                        result += `<span style="${blue}">${this.escapeHtml(token.value)}</span>`;
+                        break;
+                    case 'boolean':
+                        result += `<span style="${green}">${this.escapeHtml(token.value)}</span>`;
+                        break;
+                    case 'attribute-kw':
+                        result += `<span style="${green}">${this.escapeHtml(token.value)}</span>`;
+                        break;
+                    default:
+                        result += this.escapeHtml(token.value);
+                }
+            }
 
             return result;
         }

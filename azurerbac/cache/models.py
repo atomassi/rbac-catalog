@@ -551,6 +551,11 @@ class CacheData:
         """Get all active roles as RoleDefinition objects."""
         return [r.definition for r in self.roles_by_id.values() if r.status == RoleStatus.ACTIVE]
 
+    @cached_property
+    def active_roles_count(self) -> int:
+        """Count of active (non-deleted) roles."""
+        return sum(1 for r in self.roles_by_id.values() if r.status == RoleStatus.ACTIVE)
+
 
 def compute_roles_hash(roles: list[RoleDefinition]) -> str:
     """Compute hash of role data for change detection."""

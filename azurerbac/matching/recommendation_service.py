@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import heapq
 import logging
 from typing import TYPE_CHECKING
 
@@ -563,18 +564,22 @@ class RoleRecommendationService:
         all_ops: frozenset[str],
         cached_ops: set[str],
     ) -> ExpandedMissing:
-        """Get uncovered operations for a wildcard in one plane."""
+        """Get uncovered operations for a wildcard in one plane.
+
+        Uses heapq.nsmallest() instead of sorted().
+        """
         key = plane.make_key(op)
         pattern_ops = get_matching_operations(op, all_ops, plane, caches=self._caches)
 
         if key in ctx.wildcard_partial_coverage:
             covered = cached_ops & pattern_ops
             uncovered = pattern_ops - covered
-            uncovered_samples = sorted(uncovered)[:DEFAULT_SEARCH_LIMIT]
+            uncovered_samples = heapq.nsmallest(DEFAULT_SEARCH_LIMIT, uncovered)
             return ExpandedMissing(uncovered_samples, len(uncovered))
 
         if key not in ctx.fully_covered_wildcards:
-            return ExpandedMissing(sorted(pattern_ops), len(pattern_ops))
+            samples = heapq.nsmallest(DEFAULT_SEARCH_LIMIT, pattern_ops)
+            return ExpandedMissing(samples, len(pattern_ops))
 
         return ExpandedMissing([], 0)
 
@@ -587,7 +592,11 @@ class RoleRecommendationService:
     ) -> None:
         """Extend list with unique sorted values up to limit."""
         existing = set(dst)
-        for v in sorted(values)[:limit]:
+        # Only fetch the number of items we actually need
+        needed = limit - len(dst)
+        if needed <= 0:
+            return
+        for v in heapq.nsmallest(needed, values):
             if v not in existing:
                 dst.append(v)
                 existing.add(v)

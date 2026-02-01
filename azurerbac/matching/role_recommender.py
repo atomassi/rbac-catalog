@@ -7,15 +7,34 @@ The heavy lifting is delegated to RoleRecommendationService.
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 
 from azurerbac.azure.models import RoleDefinition
-from azurerbac.matching.models import RoleMatch
+from azurerbac.matching.models import (
+    RoleCoverage,
+    RoleMatch,
+    RoleNetPermissions,
+)
 from azurerbac.matching.recommendation_service import (
     RoleEvaluationContext,
     RoleRecommendationService,
 )
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(slots=True)
+class _RoleCandidate:
+    """Lightweight candidate for sorting before expensive expansion."""
+
+    ctx: RoleEvaluationContext
+    cached_coverage: RoleCoverage
+    missing_ops: set[str]
+    matched_count: int
+    perms: RoleNetPermissions
+    match_pct: float
+    is_full_match: bool
+    is_high_privilege: bool
 
 
 def recommend_roles(
@@ -62,8 +81,8 @@ def recommend_roles(
         sum(len(ops) for ops in svc.data_wildcard_ops.values()),
     )
 
-    # Evaluate each role
-    matches: list[RoleMatch] = []
+    # Phase 1: Evaluate roles and collect lightweight candidates
+    candidates: list[_RoleCandidate] = []
     roles_evaluated = roles_with_matches = 0
 
     for role in roles:
@@ -97,40 +116,60 @@ def recommend_roles(
 
         roles_with_matches += 1
 
-        # Calculate missing operations
+        # Calculate lightweight stats (no expensive expansion yet)
         missing_ops = svc.calculate_missing_ops(ctx, classified)
-
-        # Calculate statistics
         matched_count = svc.calculate_matched_ops_count(ctx, cached_coverage)
         perms = svc.calculate_permissions_count(ctx)
-        expanded = svc.expand_missing_operations(ctx, missing_ops, classified, cached_coverage)
-
-        # Calculate match percentage
         match_pct = (matched_count / total_requested * 100) if total_requested > 0 else 0.0
+        is_full = not missing_ops
+
+        candidates.append(
+            _RoleCandidate(
+                ctx=ctx,
+                cached_coverage=cached_coverage,
+                missing_ops=missing_ops,
+                matched_count=matched_count,
+                perms=perms,
+                match_pct=match_pct,
+                is_full_match=is_full,
+                is_high_privilege=svc.is_high_privilege(ctx.role_id),
+            )
+        )
+
+    # Phase 2: Sort and filter to get top candidates
+    top_candidates = _sort_and_filter_candidates(candidates, max_results)
+
+    # Phase 3: Expand missing operations ONLY for top candidates
+    matches: list[RoleMatch] = []
+    for c in top_candidates:
+        # Expensive expansion - only for results we'll return
+        expanded = svc.expand_missing_operations(
+            c.ctx, c.missing_ops, classified, c.cached_coverage
+        )
 
         # Restore original casing for display
-        matched_ops_display = svc.restore_original_casing(ctx.matched_ops)
-        missing_ops_display = svc.restore_original_casing(missing_ops)
+        matched_ops_display = svc.restore_original_casing(c.ctx.matched_ops)
+        missing_ops_display = svc.restore_original_casing(c.missing_ops)
 
-        # Build result
         matches.append(
             RoleMatch(
-                role_id=role_info.role_id,
-                role_name=role_info.role_name,
-                description=role_info.description,
+                role_id=c.ctx.role_id,
+                role_name=c.ctx.role_name,
+                description=c.ctx.description,
                 matched_operations=sorted(matched_ops_display),
                 missing_operations=sorted(missing_ops_display),
-                total_permissions=perms.control_count + perms.data_count,
-                control_plane_permissions=perms.control_count,
-                data_plane_permissions=perms.data_count,
-                is_high_privilege=svc.is_high_privilege(role_info.role_id),
-                match_percentage=match_pct,
-                has_conditions=ctx.has_conditions,
-                matched_operations_count=matched_count,
+                total_permissions=c.perms.control_count + c.perms.data_count,
+                control_plane_permissions=c.perms.control_count,
+                data_plane_permissions=c.perms.data_count,
+                is_high_privilege=c.is_high_privilege,
+                match_percentage=c.match_pct,
+                has_conditions=c.ctx.has_conditions,
+                matched_operations_count=c.matched_count,
                 requested_operations_count=total_requested,
                 missing_operations_expanded=sorted(expanded.operations),
                 missing_operations_count=expanded.total,
-                has_partial_wildcard_match=bool(ctx.wildcard_partial_coverage) or bool(missing_ops),
+                has_partial_wildcard_match=bool(c.ctx.wildcard_partial_coverage)
+                or bool(c.missing_ops),
             )
         )
 
@@ -155,32 +194,34 @@ def recommend_roles(
         stats.wildcard_count,
     )
 
-    return _sort_and_filter_results(matches, max_results)
+    return matches
 
 
-def _sort_and_filter_results(matches: list[RoleMatch], max_results: int | None) -> list[RoleMatch]:
-    """Sort and filter role matches by least privilege."""
-    full_matches = [m for m in matches if m.is_full_match]
-    partial_matches = [m for m in matches if not m.is_full_match]
+def _sort_and_filter_candidates(
+    candidates: list[_RoleCandidate], max_results: int | None
+) -> list[_RoleCandidate]:
+    """Sort and filter candidates by least privilege before expensive expansion."""
+    full = [c for c in candidates if c.is_full_match]
+    partial = [c for c in candidates if not c.is_full_match]
 
-    if full_matches:
+    if full:
         # Return only full matches, sorted by least privilege
-        full_matches.sort(
-            key=lambda m: (
-                m.is_high_privilege,
-                m.total_permissions,
+        full.sort(
+            key=lambda c: (
+                c.is_high_privilege,
+                c.perms.control_count + c.perms.data_count,
             )
         )
-        return full_matches[:max_results] if max_results else full_matches
+        return full[:max_results] if max_results else full
 
     # No full matches - return best partial matches
-    partial_matches.sort(
-        key=lambda m: (
-            -m.match_percentage,
-            m.is_high_privilege,
-            m.total_permissions,
+    partial.sort(
+        key=lambda c: (
+            -c.match_pct,
+            c.is_high_privilege,
+            c.perms.control_count + c.perms.data_count,
         )
     )
     # Limit partial matches to 10 unless explicitly requested more
     limit = max_results if max_results else 10
-    return partial_matches[:limit]
+    return partial[:limit]

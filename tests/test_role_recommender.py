@@ -861,7 +861,10 @@ class TestHighPrivilegeIntegration:
 
         # Request both operations so both roles match
         result = recommend_roles_with_cache(
-            ["Microsoft.Authorization/roleAssignments/write", "Microsoft.Storage/storageAccounts/read"],
+            [
+                "Microsoft.Authorization/roleAssignments/write",
+                "Microsoft.Storage/storageAccounts/read",
+            ],
             [high_priv_role, low_priv_role],
             operations,
         )
@@ -885,7 +888,10 @@ class TestHighPrivilegeIntegration:
         high_priv_role = make_role_definition(
             "High Priv Full Match",
             "high-priv-id",
-            ["Microsoft.Storage/storageAccounts/read", "Microsoft.Authorization/roleAssignments/write"],
+            [
+                "Microsoft.Storage/storageAccounts/read",
+                "Microsoft.Authorization/roleAssignments/write",
+            ],
         )
         low_priv_role = make_role_definition(
             "Low Priv Full Match",
@@ -1331,3 +1337,80 @@ class TestIntraRequestCacheConsistency:
 
             # First service still has v1
             assert "v1-marker" in svc1._caches.role_coverage
+
+
+# =============================================================================
+# Count Consistency Tests
+# =============================================================================
+
+
+class TestCountConsistency:
+    """Tests verifying that wildcard counts are consistent between API and recommendation results.
+
+    Regression tests for bug where UI showed "matches X operations" for a wildcard,
+    but role results showed "Matches Y of Y operations" where X != Y due to
+    count_wildcard_matches not deduplicating operations that lowercase to the same string.
+    """
+
+    def test_wildcard_count_matches_requested_operations_count(self, populated_cache):
+        """Test that count_wildcard_matches equals requested_operations_count in results.
+
+        The count-matches API (used to show "matches N operations" in UI) must return
+        the same count that role matching will report as requested_operations_count.
+        """
+        from azurerbac.cache import get_cache_service
+
+        cache = get_cache_service()
+
+        # Get count from count_wildcard_matches (used by count-matches API)
+        wildcard_count = cache.count_wildcard_matches("*/read", is_data_action=False)
+
+        # Get requested_operations_count from recommendation results
+        roles = [make_role_definition("Reader", "r1", ["*/read"])]
+        result = recommend_roles_with_cache(
+            requested_operations=["*/read"],
+            roles=roles,
+            requested_ops_data_flags={"*/read": False},  # Explicitly control plane
+        )
+
+        assert len(result) == 1
+        requested_count = result[0].requested_operations_count
+
+        assert wildcard_count == requested_count, (
+            f"count_wildcard_matches returned {wildcard_count} but "
+            f"requested_operations_count is {requested_count}. "
+            "These should be equal for consistent UI."
+        )
+
+    def test_matched_count_equals_requested_when_fully_covered(self, populated_cache):
+        """When a role fully covers a wildcard, matched should equal requested."""
+        roles = [make_role_definition("Reader", "r1", ["*/read"])]
+        result = recommend_roles_with_cache(
+            requested_operations=["*/read"],
+            roles=roles,
+            requested_ops_data_flags={"*/read": False},
+        )
+
+        assert len(result) == 1
+        assert result[0].is_full_match
+        assert result[0].matched_operations_count == result[0].requested_operations_count, (
+            f"Full match role should have matched_count ({result[0].matched_operations_count}) "
+            f"equal to requested_count ({result[0].requested_operations_count})"
+        )
+
+    def test_control_and_data_plane_counts_separate(self, populated_cache):
+        """Test that control and data plane wildcards are counted separately."""
+        from azurerbac.cache import get_cache_service
+
+        cache = get_cache_service()
+
+        control_count = cache.count_wildcard_matches("*/read", is_data_action=False)
+        data_count = cache.count_wildcard_matches("*/read", is_data_action=True)
+
+        # Both should be non-negative, and they may differ
+        assert control_count >= 0
+        assert data_count >= 0
+
+        # In the sample operations, there are more control plane */read than data plane
+        # (Storage, Compute, Auth, Network, KeyVault reads vs Storage blob read)
+        assert control_count >= data_count

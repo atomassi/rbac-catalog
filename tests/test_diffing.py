@@ -86,6 +86,7 @@ def test_metadata_only_changes_not_considered_update():
     paths = {c.path for c in d.changes}
     assert "properties.updatedOn" in paths
     assert "properties.updatedBy" in paths
+    assert "properties.createdBy" in paths
 
 
 def test_created_on_not_diffed():

@@ -78,13 +78,11 @@ def sort_operations(
     Role counts are NOT fetched here - callers should use add_role_counts()
     on the paginated subset to avoid 21k lookups when only displaying ~25 items.
     """
-    from azurerbac.cache import get_cache_service
-
-    cache_resolved = cache if cache is not None else get_cache_service()
     reverse = order == SortOrder.DESC
 
     if sort == OperationSortField.ROLES:
         # Sort by role count - need to fetch counts for sorting
+        cache_resolved = _get_cache(cache)
         return sorted(
             operations,
             key=lambda op: cache_resolved.get_operation_role_count(op.name),
@@ -101,9 +99,7 @@ def add_role_counts(
     cache: CacheService | None = None,
 ) -> list[tuple[OperationData, int]]:
     """Add role counts to operations. Call on paginated subset for efficiency."""
-    from azurerbac.cache import get_cache_service
-
-    cache_resolved = cache if cache is not None else get_cache_service()
+    cache_resolved = _get_cache(cache)
     return [(op, cache_resolved.get_operation_role_count(op.name)) for op in operations]
 
 
@@ -209,10 +205,9 @@ async def get_role_from_cache_or_db(
     """Get role data from cache or database."""
     from sqlalchemy import func, select
 
-    from azurerbac.cache import get_cache_service
     from azurerbac.telemetry import TimedDbQuery
 
-    cache_resolved = cache if cache is not None else get_cache_service()
+    cache_resolved = _get_cache(cache)
 
     cached_role = cache_resolved.get_role_by_id(role_id)
 

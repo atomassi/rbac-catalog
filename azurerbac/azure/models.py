@@ -303,12 +303,14 @@ class OperationData(BaseModel):
     resource_type: str | None = Field(default=None)
     resource_type_display_name: str | None = Field(default=None)
 
-    # Pre-computed lowercase search text (avoids 5x .lower() calls per search)
+    # Pre-computed lowercase search text for fast matching
     _search_text: str = PrivateAttr(default="")
+    _name_lower: str = PrivateAttr(default="")
 
     @model_validator(mode="after")
     def _compute_search_text(self) -> OperationData:
         """Pre-compute lowercased search text for fast matching."""
+        self._name_lower = self.name.lower()
         parts = [
             self.name,
             self.display_name or "",
@@ -354,6 +356,11 @@ class OperationData(BaseModel):
             "resource_type_display_name": self.resource_type_display_name,
             "is_data_action": self.is_data_action,
         }
+
+    @property
+    def name_lower(self) -> str:
+        """Pre-computed lowercase name for fast wildcard matching."""
+        return self._name_lower
 
     def matches_search(self, query_lower: str) -> bool:
         """Check if operation matches a text search query (case-insensitive)."""

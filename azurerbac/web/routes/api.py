@@ -67,8 +67,8 @@ async def api_search_operations(
         return empty_search_response(ErrorMessages.SEARCH_TOO_SHORT)
 
     # Perform indexed search
+    matching = deps.app_cache.search_operations(q, limit=limit)
     is_wildcard = is_wildcard_pattern(q)
-    matching = deps.app_cache.search_operations(q, limit=limit, is_wildcard=is_wildcard)
 
     logger.info(
         "Operation search: query='%s' wildcard=%s results=%d",

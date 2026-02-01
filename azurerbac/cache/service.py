@@ -18,6 +18,7 @@ from azurerbac.cache.models import (
     Sitemap,
 )
 from azurerbac.core.constants import DEFAULT_SEARCH_LIMIT, RoleStatus
+from azurerbac.core.patterns import is_wildcard_pattern
 from azurerbac.core.singleton import ThreadSafeSingleton
 from azurerbac.matching.models import RoleCoverage, RoleNetPermissions
 from azurerbac.telemetry import track_cache_call, track_cache_hit
@@ -205,7 +206,7 @@ class CacheService:
         return [ops_map.get(op, op) for op in ops]
 
     def search_operations(
-        self, query: str, limit: int = DEFAULT_SEARCH_LIMIT, is_wildcard: bool = False
+        self, query: str, limit: int = DEFAULT_SEARCH_LIMIT
     ) -> list[OperationData]:
         """Search operations using pre-built indexes."""
         cache = self._cache
@@ -215,13 +216,13 @@ class CacheService:
 
         q_lower = query.lower()
 
-        if is_wildcard:
+        if is_wildcard_pattern(query):
             if "/" in q_lower:
-                prefix = q_lower.split("/")[0]
+                prefix = q_lower.partition("/")[0]
                 source = cache.ops_by_prefix.get(prefix, list(cache.ops_by_name_lower.values()))
             else:
                 source = list(cache.ops_by_name_lower.values())
-            matching = [op for op in source if fnmatch.fnmatch(op.name.lower(), q_lower)]
+            matching = [op for op in source if fnmatch.fnmatch(op.name_lower, q_lower)]
         else:
             matching = [op for op in cache.ops_by_name_lower.values() if op.matches_search(q_lower)]
 

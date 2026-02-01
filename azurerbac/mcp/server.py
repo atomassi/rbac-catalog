@@ -12,7 +12,6 @@ from azurerbac.airecommender.modes import RecommenderMode
 from azurerbac.cache import CacheService
 from azurerbac.cache.models import CachedRole
 from azurerbac.core.constants import NEW_DOMAIN, SITE_URL
-from azurerbac.core.patterns import is_wildcard_pattern
 from azurerbac.matching import recommend_roles
 from azurerbac.mcp.constants import (
     AI_RECOMMEND_DESC,
@@ -239,7 +238,6 @@ class MCPServer:
                 results = self._cache.search_operations(
                     query,
                     limit=min(limit, MAX_OPERATIONS_LIMIT),
-                    is_wildcard=is_wildcard_pattern(query),
                 )
                 timer.result_count = len(results)
 

@@ -91,7 +91,7 @@ class EmbeddingModel:
         """Encode a single text into an embedding vector."""
         return self._require_model().encode(text, show_progress_bar=False).tolist()
 
-    @lru_cache(maxsize=512)  # noqa: B019
+    @lru_cache(maxsize=512)  # noqa: B019 - singleton class, no memory leak
     def encode_single_cached(self, text: str) -> tuple[float, ...]:
         """Encode with LRU caching. Returns tuple for hashability."""
         return tuple(self.encode_single(text))

@@ -320,7 +320,7 @@ async def _execute_paginated_role_query(
 async def get_common_dashboard_data(deps: DashboardDeps) -> DashboardSummary:
     """Get summary data for dashboard pages."""
     return DashboardSummary(
-        total_roles=len(deps.app_cache.cache.roles_by_id),
+        total_roles=deps.app_cache.cache.active_roles_count,
         total_operations=len(deps.app_cache.get_all_operations()),
         last_scan=deps.app_cache.cache.last_scan,
         first_scan=deps.app_cache.cache.first_scan,

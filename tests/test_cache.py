@@ -253,7 +253,7 @@ class TestLowerOptimization:
         assert "microsoft.storage/storageaccounts/read" in coverage.control
 
     def test_cache_consistency_with_recommend_roles(self, operation_names: set[str]):
-        """Test that cached and non-cached paths return same results."""
+        """Test that recommend_roles works correctly with cached role coverage."""
         from azurerbac.cache.build import precompute_all
         from azurerbac.matching.role_recommender import recommend_roles
         from tests.helpers import clear_computed_caches
@@ -288,34 +288,21 @@ class TestLowerOptimization:
 
         clear_computed_caches()
 
-        # Without cache
-        result_no_cache = recommend_roles(
-            ["Microsoft.Storage/storageAccounts/read"],
-            roles,
-        )
-
-        # With cache
+        # Build cache and run recommend_roles
         get_cache_service().swap_in_memory(precompute_all(roles, operations))
-        result_with_cache = recommend_roles(
+        result = recommend_roles(
             ["Microsoft.Storage/storageAccounts/read"],
             roles,
         )
 
-        # Same number of results
-        assert len(result_no_cache) == len(result_with_cache)
+        # Both roles should match
+        assert len(result) == 2
+        role_ids = {r.role_id for r in result}
+        assert role_ids == {"storage-reader", "storage-contrib"}
 
-        # Same roles matched
-        no_cache_ids = {r.role_id for r in result_no_cache}
-        with_cache_ids = {r.role_id for r in result_with_cache}
-        assert no_cache_ids == with_cache_ids
-
-        # Same matched operation counts
-        for r_no, r_with in zip(
-            sorted(result_no_cache, key=lambda x: x.role_id),
-            sorted(result_with_cache, key=lambda x: x.role_id),
-            strict=True,
-        ):
-            assert r_no.matched_operations_count == r_with.matched_operations_count
+        # Both should have matched_operations_count of 1
+        for r in result:
+            assert r.matched_operations_count == 1
 
     def test_ops_lowered_to_orig_restores_casing(self):
         """Test that ops_lowered_to_orig correctly restores original operation casing."""

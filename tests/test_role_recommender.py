@@ -6,7 +6,6 @@ Covers: pattern matching, action types, notActions, high privilege roles, sortin
 import pytest
 
 from azurerbac.core.patterns import matches_pattern, pattern_to_regex
-from azurerbac.matching import recommend_roles
 from azurerbac.matching.role_matching import (
     _prefix_pattern_covers,
     _segment_pattern_covers,
@@ -18,7 +17,7 @@ from azurerbac.matching.role_matching import (
     operation_matches_any_pattern,
     pattern_covers_pattern,
 )
-from tests.helpers import make_role_definition
+from tests.helpers import make_role_definition, recommend_roles_with_cache
 
 # =============================================================================
 # Pattern Matching Tests
@@ -445,13 +444,13 @@ class TestUserSelectionScenarios:
     def test_empty_selection_returns_empty(self, populated_cache):
         """Empty selection returns empty results."""
         roles = [make_role_definition("Reader", "r1", ["*/read"])]
-        result = recommend_roles([], roles)
+        result = recommend_roles_with_cache([], roles)
         assert result == []
 
     def test_single_operation_selection(self, populated_cache):
         """Single operation selection returns matching roles."""
         roles = [make_role_definition("Reader", "r1", ["*/read"])]
-        result = recommend_roles(["Microsoft.Storage/storageAccounts/read"], roles)
+        result = recommend_roles_with_cache(["Microsoft.Storage/storageAccounts/read"], roles)
         assert len(result) >= 1
         assert all(r.is_full_match for r in result)
 
@@ -461,7 +460,7 @@ class TestUserSelectionScenarios:
             make_role_definition("Storage Admin", "r1", ["Microsoft.Storage/*"]),
             make_role_definition("Reader", "r2", ["*/read"]),
         ]
-        result = recommend_roles(
+        result = recommend_roles_with_cache(
             ["Microsoft.Storage/storageAccounts/read", "Microsoft.Storage/storageAccounts/write"],
             roles,
         )
@@ -484,7 +483,7 @@ class TestActionTypes:
                 "Control Only", "r1", actions=["Microsoft.Storage/*"], data_actions=[]
             )
         ]
-        result = recommend_roles(["Microsoft.Storage/storageAccounts/read"], roles)
+        result = recommend_roles_with_cache(["Microsoft.Storage/storageAccounts/read"], roles)
         assert len(result) == 1
         assert result[0].is_full_match
 
@@ -498,7 +497,7 @@ class TestActionTypes:
                 data_actions=["Microsoft.Storage/storageAccounts/blobServices/*"],
             )
         ]
-        result = recommend_roles(
+        result = recommend_roles_with_cache(
             ["Microsoft.Storage/storageAccounts/blobServices/containers/blobs/read"],
             roles,
         )
@@ -512,7 +511,7 @@ class TestActionTypes:
                 "Data Only", "r1", actions=[], data_actions=["Microsoft.Storage/*"]
             )
         ]
-        result = recommend_roles(["Microsoft.Storage/storageAccounts/read"], roles)
+        result = recommend_roles_with_cache(["Microsoft.Storage/storageAccounts/read"], roles)
         assert len(result) == 0
 
     def test_mixed_control_and_data(self, populated_cache):
@@ -525,7 +524,7 @@ class TestActionTypes:
                 data_actions=["Microsoft.Storage/storageAccounts/blobServices/*/blobs/read"],
             )
         ]
-        result = recommend_roles(
+        result = recommend_roles_with_cache(
             [
                 "Microsoft.Storage/storageAccounts/read",
                 "Microsoft.Storage/storageAccounts/blobServices/containers/blobs/read",
@@ -571,7 +570,7 @@ class TestHighPrivilegeRoles:
         """Test that high privilege roles are correctly identified."""
         roles = [make_role_definition(role_name, "r1", actions, not_actions)]
         # Use an operation that will match
-        result = recommend_roles(["Microsoft.Storage/storageAccounts/read"], roles)
+        result = recommend_roles_with_cache(["Microsoft.Storage/storageAccounts/read"], roles)
         if result:
             assert result[0].is_high_privilege == expected_high_privilege
 
@@ -581,7 +580,7 @@ class TestHighPrivilegeRoles:
             make_role_definition("Owner", "r1", ["*"]),
             make_role_definition("Storage Admin", "r2", ["Microsoft.Storage/*"]),
         ]
-        result = recommend_roles(["Microsoft.Storage/storageAccounts/read"], roles)
+        result = recommend_roles_with_cache(["Microsoft.Storage/storageAccounts/read"], roles)
         full_matches = [r for r in result if r.is_full_match]
         if len(full_matches) >= 2:
             storage_idx = next(
@@ -609,7 +608,7 @@ class TestNotActionsExclusions:
                 ["Microsoft.Storage/storageAccounts/delete"],
             )
         ]
-        result = recommend_roles(["Microsoft.Storage/storageAccounts/delete"], roles)
+        result = recommend_roles_with_cache(["Microsoft.Storage/storageAccounts/delete"], roles)
         assert len(result) == 0
 
     def test_not_action_allows_other_operations(self, populated_cache):
@@ -622,7 +621,7 @@ class TestNotActionsExclusions:
                 ["Microsoft.Storage/storageAccounts/delete"],
             )
         ]
-        result = recommend_roles(
+        result = recommend_roles_with_cache(
             ["Microsoft.Storage/storageAccounts/read", "Microsoft.Storage/storageAccounts/write"],
             roles,
         )
@@ -644,7 +643,7 @@ class TestSortingAndRanking:
             make_role_definition("Partial", "r1", ["Microsoft.Storage/*/read"]),
             make_role_definition("Full", "r2", ["Microsoft.Storage/*"]),
         ]
-        result = recommend_roles(
+        result = recommend_roles_with_cache(
             ["Microsoft.Storage/storageAccounts/read", "Microsoft.Storage/storageAccounts/write"],
             roles,
         )
@@ -656,7 +655,7 @@ class TestSortingAndRanking:
     def test_no_match_returns_empty(self, populated_cache):
         """No role matches returns empty list."""
         roles = [make_role_definition("Compute Only", "r1", ["Microsoft.Compute/*"])]
-        result = recommend_roles(["Microsoft.Storage/storageAccounts/read"], roles)
+        result = recommend_roles_with_cache(["Microsoft.Storage/storageAccounts/read"], roles)
         assert len(result) == 0
 
 
@@ -795,12 +794,25 @@ class TestMaxResultsParameter:
         expected_count: int,
     ):
         """Test max_results parameter behavior."""
+        from azurerbac.matching.role_recommender import recommend_roles
+
+        # Use an operation that exists in sample_operations
         roles = [
-            make_role_definition(f"Role {i}", f"role-id-{i}", ["Microsoft.Test/resource/read"])
+            make_role_definition(
+                f"Role {i}", f"role-id-{i}", ["Microsoft.Storage/storageAccounts/read"]
+            )
             for i in range(num_roles)
         ]
+        # Build cache with these roles first
+        from azurerbac.cache import get_cache_service
+        from azurerbac.cache.build import precompute_all
+
+        cache = get_cache_service()
+        ops = list(cache.cache.all_operations)
+        cache.swap_in_memory(precompute_all(roles, ops))
+
         result = recommend_roles(
-            ["Microsoft.Test/resource/read"],
+            ["Microsoft.Storage/storageAccounts/read"],
             roles,
             max_results=max_results,
         )
@@ -823,7 +835,7 @@ class TestMissingOperationsExpanded:
         )
 
         # Request both control and data plane */read (no flags = both planes)
-        result = recommend_roles(["*/read"], [reader_role])
+        result = recommend_roles_with_cache(["*/read"], [reader_role])
 
         assert len(result) == 1
         reader = result[0]
@@ -859,7 +871,7 @@ class TestReaderRoleEdgeCases:
         """Test Reader role behavior with different plane flags."""
         reader = make_role_definition("Reader", "reader", actions=["*/read"], data_actions=[])
 
-        result = recommend_roles(
+        result = recommend_roles_with_cache(
             ["*/read"],
             [reader],
             requested_ops_data_flags={"*/read": data_flag},
@@ -878,7 +890,7 @@ class TestReaderRoleEdgeCases:
         reader = make_role_definition("Reader", "reader", actions=["*/read"], data_actions=[])
 
         # Request both planes (no flag = both)
-        result = recommend_roles(["*/read"], [reader])
+        result = recommend_roles_with_cache(["*/read"], [reader])
 
         assert len(result) == 1
         reader_result = result[0]

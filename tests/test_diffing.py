@@ -78,7 +78,6 @@ def test_metadata_only_changes_not_considered_update():
     new_dict = copy.deepcopy(old_dict)
     new_dict["properties"]["updatedOn"] = "2025-12-14T00:00:00.0000000Z"
     new_dict["properties"]["updatedBy"] = "new-user-id"
-    new_dict["properties"]["createdOn"] = "2020-01-01T00:00:00.0000000Z"
     new_dict["properties"]["createdBy"] = "another-user-id"
 
     d = diff_roles(_to_model(old_dict), _to_model(new_dict))
@@ -87,6 +86,19 @@ def test_metadata_only_changes_not_considered_update():
     paths = {c.path for c in d.changes}
     assert "properties.updatedOn" in paths
     assert "properties.updatedBy" in paths
+
+
+def test_created_on_not_diffed():
+    """createdOn is excluded from diff entirely - APIs return inconsistent values."""
+    old_dict = copy.deepcopy(READER_ROLE_DICT)
+    new_dict = copy.deepcopy(old_dict)
+    new_dict["properties"]["createdOn"] = "2020-01-01T00:00:00.0000000Z"
+
+    d = diff_roles(_to_model(old_dict), _to_model(new_dict))
+    assert d.changed is False
+    # createdOn should NOT appear in changes at all
+    paths = {c.path for c in d.changes}
+    assert "properties.createdOn" not in paths
 
 
 def test_real_change_with_metadata_is_detected():

@@ -102,7 +102,7 @@ def diff_roles(old: RoleDefinition | None, new: RoleDefinition | None) -> RoleDi
 
     add("properties.updatedOn", format_iso_z(oldp.updated_on), format_iso_z(newp.updated_on))
     add("properties.updatedBy", oldp.updated_by, newp.updated_by)
-    add("properties.createdOn", format_iso_z(oldp.created_on), format_iso_z(newp.created_on))
+    # createdOn is immutable - don't include in diff (APIs may return different values)
     add("properties.createdBy", oldp.created_by, newp.created_by)
 
     add(

@@ -19,6 +19,7 @@ from azurerbac.matching.models import (
 )
 
 if TYPE_CHECKING:
+    from azurerbac.azure.models import RoleDefinition
     from azurerbac.cache import CacheData
 
 logger = logging.getLogger(__name__)
@@ -473,3 +474,39 @@ def count_net_permissions(
             count -= 1
 
     return max(0, count)
+
+
+def is_high_privilege_role(role: RoleDefinition) -> bool:
+    """Check if a role is high-privilege based on its ID or effective permissions.
+
+    A role is high-privilege if:
+    1. It's a well-known high-privilege role (Owner, Contributor, User Access Administrator)
+    2. OR it grants Microsoft.Authorization/roleAssignments/write in any permission block
+       WITHOUT a condition that constrains roleAssignments.
+
+    Args:
+        role: RoleDefinition object to check.
+
+    Returns:
+        True if the role can assign ANY role without restriction.
+    """
+    from azurerbac.core.constants import HIGH_PRIVILEGE_OPERATION, HIGH_PRIVILEGE_ROLE_IDS
+
+    # Fast path: check well-known high-privilege role IDs
+    if role.role_id in HIGH_PRIVILEGE_ROLE_IDS:
+        return True
+
+    for perm in role.properties.permissions:
+        # Skip if condition constrains roleAssignments/write (e.g., RBAC Admin)
+        if perm.condition and HIGH_PRIVILEGE_OPERATION in perm.condition.lower():
+            continue
+
+        # Check if this block allows roleAssignments/write
+        if check_operation_allowed(
+            HIGH_PRIVILEGE_OPERATION,
+            [a.lower() for a in perm.actions],
+            [a.lower() for a in perm.not_actions],
+        ):
+            return True
+
+    return False

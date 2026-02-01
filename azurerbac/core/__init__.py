@@ -2,7 +2,7 @@
 
 from .constants import (
     DEFAULT_ROLE_TYPE,
-    HIGH_PRIVILEGE_ROLES,
+    HIGH_PRIVILEGE_OPERATION,
     ROLE_DEFINITION_TYPE,
     EventType,
     RoleStatus,
@@ -18,7 +18,7 @@ from .utils import ensure_utc, ensure_utc_or_min, format_iso_z, normalize_uuid_o
 
 __all__ = [
     "DEFAULT_ROLE_TYPE",
-    "HIGH_PRIVILEGE_ROLES",
+    "HIGH_PRIVILEGE_OPERATION",
     "ROLE_DEFINITION_TYPE",
     "Base",
     "DBEngine",

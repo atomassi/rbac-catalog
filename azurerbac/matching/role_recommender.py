@@ -10,7 +10,6 @@ import logging
 from dataclasses import dataclass
 
 from azurerbac.azure.models import RoleDefinition
-from azurerbac.core import HIGH_PRIVILEGE_ROLES
 from azurerbac.matching.models import (
     RoleCoverage,
     RoleMatch,
@@ -35,6 +34,7 @@ class _RoleCandidate:
     perms: RoleNetPermissions
     match_pct: float
     is_full_match: bool
+    is_high_privilege: bool
 
 
 def recommend_roles(
@@ -132,6 +132,7 @@ def recommend_roles(
                 perms=perms,
                 match_pct=match_pct,
                 is_full_match=is_full,
+                is_high_privilege=svc.is_high_privilege(ctx.role_id),
             )
         )
 
@@ -160,7 +161,7 @@ def recommend_roles(
                 total_permissions=c.perms.control_count + c.perms.data_count,
                 control_plane_permissions=c.perms.control_count,
                 data_plane_permissions=c.perms.data_count,
-                is_high_privilege=c.ctx.role_name in HIGH_PRIVILEGE_ROLES,
+                is_high_privilege=c.is_high_privilege,
                 match_percentage=c.match_pct,
                 has_conditions=c.ctx.has_conditions,
                 matched_operations_count=c.matched_count,
@@ -207,7 +208,7 @@ def _sort_and_filter_candidates(
         # Return only full matches, sorted by least privilege
         full.sort(
             key=lambda c: (
-                c.ctx.role_name in HIGH_PRIVILEGE_ROLES,
+                c.is_high_privilege,
                 c.perms.control_count + c.perms.data_count,
             )
         )
@@ -217,7 +218,7 @@ def _sort_and_filter_candidates(
     partial.sort(
         key=lambda c: (
             -c.match_pct,
-            c.ctx.role_name in HIGH_PRIVILEGE_ROLES,
+            c.is_high_privilege,
             c.perms.control_count + c.perms.data_count,
         )
     )

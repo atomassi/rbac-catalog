@@ -197,6 +197,46 @@ class TestCountWildcardMatches:
 
         assert count == expected_count
 
+    def test_count_wildcard_matches_deduplicates_by_lowered_name(self):
+        """Test that operations with different casings are deduplicated.
+
+        This tests the bug fix where count_wildcard_matches was counting each
+        operation separately even if they lowercase to the same string, while
+        the recommendation service uses deduplicated frozensets. The counts
+        should match.
+
+        Regression test for: UI shows "matches X operations" but role results
+        show "Matches Y of Y operations" where X != Y.
+        """
+        from azurerbac.cache import CacheService
+        from tests.helpers import make_operation
+
+        # Create operations where different casings lowercase to same string
+        operations_with_duplicates = [
+            # These three will deduplicate to one: microsoft.storage/storageaccounts/read
+            make_operation("Microsoft.Storage/storageAccounts/read"),
+            make_operation("Microsoft.Storage/storageAccounts/Read"),  # Different: 'Read'
+            make_operation("microsoft.storage/storageaccounts/read"),  # All lowercase
+            # These two will deduplicate to one: microsoft.compute/virtualmachines/read
+            make_operation("Microsoft.Compute/virtualMachines/read"),
+            make_operation("Microsoft.Compute/VirtualMachines/Read"),  # Different casing
+            # This one is unique
+            make_operation("Microsoft.Network/virtualNetworks/read"),
+        ]
+
+        cache = CacheService()
+        populate_cache_with_operations(cache, operations_with_duplicates)
+
+        # The count should be 3 (deduplicated), not 6 (raw count)
+        count = cache.count_wildcard_matches("*/read", is_data_action=False)
+
+        # Verify deduplication: 3 unique operations when lowercased
+        assert count == 3, (
+            f"Expected 3 deduplicated operations, got {count}. "
+            "Operations with different casings that lowercase to the same string "
+            "should be counted once."
+        )
+
 
 class TestMatchesPattern:
     """Tests for matches_pattern function."""

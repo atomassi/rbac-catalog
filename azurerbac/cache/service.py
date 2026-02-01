@@ -232,7 +232,11 @@ class CacheService:
         return result
 
     def count_wildcard_matches(self, pattern: str, is_data_action: bool = False) -> int:
-        """Count operations matching a wildcard pattern."""
+        """Count operations matching a wildcard pattern.
+
+        Uses the same lowered/deduplicated operation sets as the recommendation
+        service to ensure consistent counts between the UI and role matching.
+        """
         cache = self._cache
         if not cache.all_operations:
             return 0
@@ -241,18 +245,9 @@ class CacheService:
         from azurerbac.core.patterns import pattern_to_regex
 
         regex = pattern_to_regex(pattern)
-        pattern_lower = pattern.lower()
+        source = cache.data_ops_lowered if is_data_action else cache.control_ops_lowered
 
-        # Use prefix index to reduce search space for provider-scoped patterns
-        source = cache.all_operations
-        if "/" in pattern_lower:
-            prefix = pattern_lower.partition("/")[0]
-            if "*" not in prefix:
-                source = cache.ops_by_prefix.get(prefix, source)
-
-        return sum(
-            1 for op in source if op.is_data_action == is_data_action and regex.match(op.name)
-        )
+        return sum(1 for op in source if regex.match(op))
 
     # -------------------------------------------------------------------------
     # Change events

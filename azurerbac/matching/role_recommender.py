@@ -9,7 +9,6 @@ from __future__ import annotations
 import logging
 
 from azurerbac.azure.models import RoleDefinition
-from azurerbac.core import HIGH_PRIVILEGE_ROLES
 from azurerbac.matching.models import RoleMatch
 from azurerbac.matching.recommendation_service import (
     RoleEvaluationContext,
@@ -124,7 +123,7 @@ def recommend_roles(
                 total_permissions=perms.control_count + perms.data_count,
                 control_plane_permissions=perms.control_count,
                 data_plane_permissions=perms.data_count,
-                is_high_privilege=role_info.role_name in HIGH_PRIVILEGE_ROLES,
+                is_high_privilege=svc.is_high_privilege(role_info.role_id),
                 match_percentage=match_pct,
                 has_conditions=ctx.has_conditions,
                 matched_operations_count=matched_count,

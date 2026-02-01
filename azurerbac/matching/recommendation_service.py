@@ -476,6 +476,14 @@ class RoleRecommendationService:
         """Get cached coverage for a role, if available."""
         return self._caches.role_coverage.get(role_id)
 
+    def is_high_privilege(self, role_id: str) -> bool:
+        """Check if a role is high-privilege (O(1) cache lookup).
+
+        A role is high-privilege if it can assign ANY role without condition.
+        Returns False for roles not in cache (ad-hoc/test roles).
+        """
+        return role_id in self._caches.high_privilege_roles
+
     def expand_missing_operations(
         self,
         ctx: RoleEvaluationContext,

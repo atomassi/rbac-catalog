@@ -36,6 +36,7 @@ from azurerbac.matching.models import (
     Plane,
     RoleCoverage,
 )
+from azurerbac.matching.role_matching import is_high_privilege_role
 
 if TYPE_CHECKING:
     from azurerbac.analytics.models import AnalyticsData
@@ -280,9 +281,10 @@ def precompute_all(
         get_matching_operations(pattern, all_control_ops, Plane.CONTROL, pattern_match)
         get_matching_operations(pattern, all_data_ops, Plane.DATA, pattern_match)
 
-    # 3. Precompute role coverage and net permissions
-    logger.debug("Computing role coverage and net permissions...")
+    # 3. Precompute role coverage, net permissions, and high-privilege status
+    logger.debug("Computing role coverage and high-privilege status...")
     builtin_count = 0
+    high_privilege_role_ids: set[str] = set()
     for role in roles:
         if not role.is_builtin:
             continue
@@ -298,7 +300,15 @@ def precompute_all(
         )
         role_coverage[role.role_id] = coverage
 
-    logger.debug("Computed coverage for %d built-in roles", builtin_count)
+        # Check high-privilege status while we have the role loaded
+        if is_high_privilege_role(role):
+            high_privilege_role_ids.add(role.role_id)
+
+    logger.debug(
+        "Computed coverage for %d built-in roles (%d high-privilege)",
+        builtin_count,
+        len(high_privilege_role_ids),
+    )
 
     logger.debug("Building operation-to-roles inverted index...")
     operation_to_roles = _build_operation_to_roles(role_coverage)
@@ -326,6 +336,7 @@ def precompute_all(
         analysis=RoleAnalysis(
             role_coverage=role_coverage,
             operation_to_roles=operation_to_roles,
+            high_privilege_roles=frozenset(high_privilege_role_ids),
         ),
         computed=ComputedCaches(
             pattern_match=pattern_match,

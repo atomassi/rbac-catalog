@@ -64,15 +64,17 @@ def make_role_with_multiple_permissions(
     description: str | None = None,
 ) -> RoleDefinition:
     """Create a RoleDefinition with multiple permission blocks."""
-    normalized_blocks = [
-        {
+    normalized_blocks = []
+    for block in permission_blocks:
+        perm_dict: dict = {
             "actions": block.get("actions", []),
             "notActions": block.get("notActions", []),
             "dataActions": block.get("dataActions", []),
             "notDataActions": block.get("notDataActions", []),
         }
-        for block in permission_blocks
-    ]
+        if "condition" in block:
+            perm_dict["condition"] = block["condition"]
+        normalized_blocks.append(perm_dict)
 
     return RoleDefinition.model_validate(
         {

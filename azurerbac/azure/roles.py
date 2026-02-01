@@ -20,6 +20,10 @@ authorizationresources
 _RBAC_API_VERSION = "2022-05-01-preview"
 _RBAC_FILTER = "type eq 'BuiltInRole'"
 
+# Azure response headers
+_HEADER_CORRELATION_ID = "x-ms-correlation-request-id"
+_HEADER_REQUEST_ID = "x-ms-request-id"
+
 
 async def fetch_builtin_roles() -> list[RoleDefinition]:
     """Fetch all built-in role definitions using configured method.
@@ -95,6 +99,15 @@ async def fetch_builtin_roles_rbac_api() -> list[RoleDefinition]:
                     response = await client.get(next_link)
                 else:
                     response = await client.get(url, params=params)
+
+                # Log useful Azure headers for debugging
+                headers = response.headers
+                logger.info(
+                    "RBAC API: status=%d, correlationId=%s, requestId=%s",
+                    response.status_code,
+                    headers.get(_HEADER_CORRELATION_ID, "N/A"),
+                    headers.get(_HEADER_REQUEST_ID, "N/A"),
+                )
 
                 response.raise_for_status()
                 data = response.json()

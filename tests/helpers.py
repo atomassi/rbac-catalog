@@ -264,3 +264,35 @@ def clear_computed_caches(service: CacheService | None = None) -> None:
         ops_by_prefix=current.ops_by_prefix,
     )
     service.swap(new_cache)
+
+
+def recommend_roles_with_cache(
+    requested_operations: list[str],
+    roles: list[RoleDefinition],
+    operations: list[OperationData] | None = None,
+    requested_ops_data_flags: dict[str, bool] | None = None,
+) -> list:
+    """Recommend roles after building cache for the given roles.
+
+    This helper ensures role coverage cache is built before calling recommend_roles,
+    which is required since cache is now mandatory (built at startup in production).
+
+    Args:
+        requested_operations: Operations to find roles for.
+        roles: Roles to evaluate.
+        operations: Optional operations list. If None, uses current cache operations.
+        requested_ops_data_flags: Optional mapping of operation names to is_data_action flags.
+
+    Returns:
+        List of matching roles sorted by least privilege.
+    """
+    from azurerbac.cache import get_cache_service
+    from azurerbac.cache.build import precompute_all
+    from azurerbac.matching.role_recommender import recommend_roles
+
+    cache = get_cache_service()
+    ops = operations if operations is not None else list(cache.cache.all_operations)
+    cache.swap_in_memory(precompute_all(roles, ops))
+    return recommend_roles(
+        requested_operations, roles, requested_ops_data_flags=requested_ops_data_flags
+    )

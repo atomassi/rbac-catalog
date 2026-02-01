@@ -65,7 +65,6 @@ def recommend_roles(
 
     # Evaluate each role
     matches: list[RoleMatch] = []
-    has_cache = svc.has_full_cache()
     roles_evaluated = roles_with_matches = 0
 
     for role in roles:
@@ -76,6 +75,10 @@ def recommend_roles(
         role_info = svc.extract_role_info(role)
         cached_coverage = svc.get_cached_coverage(role_info.role_id)
 
+        # Cache must be available (built at startup)
+        if not cached_coverage:
+            raise RuntimeError(f"RoleCoverage cache unavailable for role {role_info.role_id}")
+
         # Create evaluation context
         ctx = RoleEvaluationContext(
             role_id=role_info.role_id,
@@ -84,11 +87,8 @@ def recommend_roles(
             permissions=role_info.permissions,
         )
 
-        # Evaluate role coverage
-        if cached_coverage and has_cache:
-            svc.evaluate_role_fast_path(ctx, classified, cached_coverage)
-        else:
-            svc.evaluate_role_slow_path(ctx, classified, cached_coverage)
+        # Evaluate role coverage using cached data
+        svc.evaluate_role_fast_path(ctx, classified, cached_coverage)
 
         # Finalize partial coverage
         svc.finalize_partial_coverage(ctx)
@@ -104,7 +104,7 @@ def recommend_roles(
         # Calculate statistics
         matched_count = svc.calculate_matched_ops_count(ctx, cached_coverage)
         perms = svc.calculate_permissions_count(ctx)
-        expanded = svc.expand_missing_operations(ctx, missing_ops, classified)
+        expanded = svc.expand_missing_operations(ctx, missing_ops, classified, cached_coverage)
 
         # Calculate match percentage
         match_pct = (matched_count / total_requested * 100) if total_requested > 0 else 0.0

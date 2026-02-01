@@ -586,13 +586,13 @@ class RoleRecommendationService:
     ) -> None:
         """Extend list with unique sorted values up to limit."""
         existing = set(dst)
-        # Use heapq.nsmallest for efficient partial sorting
-        for v in heapq.nsmallest(limit, values):
+        # Only fetch the number of items we actually need
+        if not (needed := max(0, limit - len(dst))):
+            return
+        for v in heapq.nsmallest(needed, values):
             if v not in existing:
                 dst.append(v)
                 existing.add(v)
-                if len(dst) >= limit:
-                    break
 
     def finalize_partial_coverage(self, ctx: RoleEvaluationContext) -> None:
         """Add partially covered wildcards to matched_ops for display."""

@@ -18,7 +18,7 @@ from azurerbac.matching.role_matching import (
     operation_matches_any_pattern,
     pattern_covers_pattern,
 )
-from tests.helpers import make_role_definition, recommend_roles_with_cache
+from tests.helpers import make_operation, make_role_definition, recommend_roles_with_cache
 
 # =============================================================================
 # Pattern Matching Tests
@@ -548,7 +548,7 @@ class TestIsHighPrivilegeRole:
     A role is high-privilege if:
     1. It's a well-known high-privilege role (Owner, Contributor, User Access Administrator)
     2. OR it allows Microsoft.Authorization/roleAssignments/write in any permission block
-       WITHOUT a condition.
+       without a condition that constrains or mentions roleAssignments/write.
 
     These tests directly test the is_high_privilege_role function (no cache required).
     """
@@ -784,6 +784,136 @@ class TestIsHighPrivilegeRole:
 
         role = make_role_with_multiple_permissions("Test Role", "test-role-id", blocks)
         assert is_high_privilege_role(role) is expected, f"Failed for: {description}"
+
+
+# =============================================================================
+# High Privilege Integration Tests
+# =============================================================================
+
+
+class TestHighPrivilegeIntegration:
+    """Integration tests for high-privilege role handling in precompute_all and recommend_roles.
+
+    These tests verify that:
+    1. precompute_all() correctly identifies and stores high-privilege role IDs
+    2. recommend_roles() sets the is_high_privilege flag based on cached data
+    3. Sorting prioritizes non-high-privilege roles over high-privilege ones
+    """
+
+    def test_precompute_all_populates_high_privilege_roles(self, populated_cache):
+        """Verify precompute_all correctly identifies high-privilege roles."""
+        from azurerbac.cache.build import precompute_all
+
+        # Role with unconstrained roleAssignments/write -> high privilege
+        high_priv_role = make_role_definition(
+            "High Privilege Role",
+            "high-priv-id",
+            ["Microsoft.Authorization/roleAssignments/write"],
+        )
+        # Role without roleAssignments/write -> not high privilege
+        low_priv_role = make_role_definition(
+            "Low Privilege Role",
+            "low-priv-id",
+            ["Microsoft.Storage/storageAccounts/read"],
+        )
+        # Role with constrained roleAssignments/write -> not high privilege
+        # The condition must contain the operation string to be recognized as constrained
+        constrained_role = make_role_definition(
+            "Constrained Role",
+            "constrained-id",
+            ["Microsoft.Authorization/roleAssignments/write"],
+            condition="@Request[Microsoft.Authorization/roleAssignments/write:RoleDefinitionId]",
+        )
+
+        operations = [
+            make_operation("Microsoft.Authorization/roleAssignments/write"),
+            make_operation("Microsoft.Storage/storageAccounts/read"),
+        ]
+        roles = [high_priv_role, low_priv_role, constrained_role]
+
+        cache_data = precompute_all(roles, operations)
+
+        # Verify only the unconstrained role is marked as high privilege
+        assert "high-priv-id" in cache_data.high_privilege_roles
+        assert "low-priv-id" not in cache_data.high_privilege_roles
+        assert "constrained-id" not in cache_data.high_privilege_roles
+        assert len(cache_data.high_privilege_roles) == 1
+
+    def test_recommend_roles_sets_is_high_privilege_flag(self, populated_cache):
+        """Verify recommend_roles sets is_high_privilege flag correctly from cache."""
+        # Role with unconstrained roleAssignments/write -> high privilege
+        high_priv_role = make_role_definition(
+            "High Privilege Role",
+            "high-priv-id",
+            ["Microsoft.Authorization/roleAssignments/write"],
+        )
+        # Role without roleAssignments/write -> not high privilege
+        low_priv_role = make_role_definition(
+            "Low Privilege Role",
+            "low-priv-id",
+            ["Microsoft.Storage/storageAccounts/read"],
+        )
+
+        operations = [
+            make_operation("Microsoft.Authorization/roleAssignments/write"),
+            make_operation("Microsoft.Storage/storageAccounts/read"),
+        ]
+
+        # Request both operations so both roles match
+        result = recommend_roles_with_cache(
+            ["Microsoft.Authorization/roleAssignments/write", "Microsoft.Storage/storageAccounts/read"],
+            [high_priv_role, low_priv_role],
+            operations,
+        )
+
+        # Find results by role name
+        high_result = next((r for r in result if r.role_name == "High Privilege Role"), None)
+        low_result = next((r for r in result if r.role_name == "Low Privilege Role"), None)
+
+        assert high_result is not None
+        assert low_result is not None
+        assert high_result.is_high_privilege is True
+        assert low_result.is_high_privilege is False
+
+    def test_sorting_prioritizes_non_high_privilege_full_matches(self, populated_cache):
+        """Verify non-high-privilege full matches sort before high-privilege ones.
+
+        Given two roles that both fully match the requested operations,
+        the non-high-privilege role should appear first in results.
+        """
+        # Both roles grant the same operation but one is high-privilege
+        high_priv_role = make_role_definition(
+            "High Priv Full Match",
+            "high-priv-id",
+            ["Microsoft.Storage/storageAccounts/read", "Microsoft.Authorization/roleAssignments/write"],
+        )
+        low_priv_role = make_role_definition(
+            "Low Priv Full Match",
+            "low-priv-id",
+            ["Microsoft.Storage/storageAccounts/read"],
+        )
+
+        operations = [
+            make_operation("Microsoft.Storage/storageAccounts/read"),
+            make_operation("Microsoft.Authorization/roleAssignments/write"),
+        ]
+
+        # Request only the storage read - both roles can satisfy this
+        result = recommend_roles_with_cache(
+            ["Microsoft.Storage/storageAccounts/read"],
+            [high_priv_role, low_priv_role],
+            operations,
+        )
+
+        assert len(result) == 2
+        # Both are full matches
+        assert result[0].is_full_match is True
+        assert result[1].is_full_match is True
+        # Non-high-privilege should come first
+        assert result[0].role_name == "Low Priv Full Match"
+        assert result[0].is_high_privilege is False
+        assert result[1].role_name == "High Priv Full Match"
+        assert result[1].is_high_privilege is True
 
 
 # =============================================================================

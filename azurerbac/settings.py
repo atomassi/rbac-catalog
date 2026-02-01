@@ -17,7 +17,6 @@ class EnvVars:
     """Environment variable names."""
 
     APP_ENVIRONMENT_NAME: Final = "APP_ENVIRONMENT_NAME"
-    AZURE_SUBSCRIPTION_ID: Final = "AZURE_SUBSCRIPTION_ID"
     ROLES_POLL_INTERVAL_SECONDS: Final = "ROLES_POLL_INTERVAL_SECONDS"
     OPERATIONS_POLL_INTERVAL_SECONDS: Final = "OPERATIONS_POLL_INTERVAL_SECONDS"
     ROLE_SCAN_ENABLED: Final = "ROLE_SCAN_ENABLED"
@@ -69,7 +68,6 @@ def _get_int(name: str, default: int) -> int:
 class Settings(BaseModel):
     """Application settings from environment variables."""
 
-    azure_subscription_id: str | None = None
     roles_poll_interval_seconds: int = Field(default=7200, gt=0)
     operations_poll_interval_seconds: int = Field(default=86400, gt=0)
     role_scan_enabled: bool = True
@@ -114,7 +112,6 @@ def _load_settings() -> Settings:
         else ""
     )
     return Settings(
-        azure_subscription_id=os.getenv(EnvVars.AZURE_SUBSCRIPTION_ID),
         roles_poll_interval_seconds=_get_int(EnvVars.ROLES_POLL_INTERVAL_SECONDS, 7200),
         operations_poll_interval_seconds=_get_int(EnvVars.OPERATIONS_POLL_INTERVAL_SECONDS, 86400),
         role_scan_enabled=_get_bool(EnvVars.ROLE_SCAN_ENABLED, True),

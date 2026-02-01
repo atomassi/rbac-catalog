@@ -14,6 +14,7 @@ from azurerbac.matching.role_matching import (
     check_wildcard_operation_allowed,
     count_net_permissions,
     count_wildcard_partial_coverage,
+    is_high_privilege_role,
     operation_matches_any_pattern,
     pattern_covers_pattern,
 )
@@ -541,53 +542,248 @@ class TestActionTypes:
 # =============================================================================
 
 
-class TestHighPrivilegeRoles:
-    """Tests for high privilege role identification."""
+class TestIsHighPrivilegeRole:
+    """Unit tests for is_high_privilege_role function.
+
+    A role is high-privilege if:
+    1. It's a well-known high-privilege role (Owner, Contributor, User Access Administrator)
+    2. OR it allows Microsoft.Authorization/roleAssignments/write in any permission block
+       WITHOUT a condition.
+
+    These tests directly test the is_high_privilege_role function (no cache required).
+    """
 
     @pytest.mark.parametrize(
-        "role_name,actions,not_actions,expected_high_privilege",
+        "description,role_id,expected",
         [
-            ("Owner", ["*"], [], True),
-            ("Contributor", ["*"], ["Microsoft.Authorization/*/write"], True),
-            ("User Access Administrator", ["Microsoft.Authorization/*"], [], True),
-            (
-                "Role Based Access Control Administrator",
-                ["Microsoft.Authorization/roleAssignments/*"],
-                [],
-                True,
-            ),
-            ("Storage Reader", ["Microsoft.Storage/*/read"], [], False),
+            # Well-known high-privilege role IDs
+            ("owner_by_id", "8e3af657-a8ff-443c-a75c-2fe8c4bcb635", True),
+            ("contributor_by_id", "b24988ac-6180-42a0-ab88-20f7382dd24c", True),
+            ("user_access_admin_by_id", "18d7d88d-d35e-4fb5-a5c3-7773c20a72d9", True),
+            # Unknown role ID - falls back to permission check
+            ("unknown_role_id", "00000000-0000-0000-0000-000000000000", False),
         ],
     )
-    def test_high_privilege_detection(
-        self,
-        populated_cache,
-        role_name,
-        actions,
-        not_actions,
-        expected_high_privilege,
-    ):
-        """Test that high privilege roles are correctly identified."""
-        roles = [make_role_definition(role_name, "r1", actions, not_actions)]
-        # Use an operation that will match
-        result = recommend_roles_with_cache(["Microsoft.Storage/storageAccounts/read"], roles)
-        if result:
-            assert result[0].is_high_privilege == expected_high_privilege
+    def test_well_known_role_ids(self, description: str, role_id: str, expected: bool):
+        """Test that well-known high-privilege role IDs are detected by ID."""
+        # Use minimal permissions - the ID check should short-circuit
+        role = make_role_definition("Test Role", role_id, actions=["Microsoft.Storage/*/read"])
+        assert is_high_privilege_role(role) is expected, f"Failed for: {description}"
 
-    def test_high_privilege_roles_sorted_last(self, populated_cache):
-        """Non-high-privilege roles should appear before high-privilege roles."""
-        roles = [
-            make_role_definition("Owner", "r1", ["*"]),
-            make_role_definition("Storage Admin", "r2", ["Microsoft.Storage/*"]),
-        ]
-        result = recommend_roles_with_cache(["Microsoft.Storage/storageAccounts/read"], roles)
-        full_matches = [r for r in result if r.is_full_match]
-        if len(full_matches) >= 2:
-            storage_idx = next(
-                i for i, r in enumerate(full_matches) if r.role_name == "Storage Admin"
-            )
-            owner_idx = next(i for i, r in enumerate(full_matches) if r.role_name == "Owner")
-            assert storage_idx < owner_idx
+    @pytest.mark.parametrize(
+        "description,actions,not_actions,condition,expected",
+        [
+            # === HIGH PRIVILEGE CASES (True) ===
+            # Wildcard patterns that include roleAssignments/write
+            ("wildcard_star", ["*"], [], None, True),
+            ("authorization_star", ["Microsoft.Authorization/*"], [], None, True),
+            (
+                "role_assignments_star",
+                ["Microsoft.Authorization/roleAssignments/*"],
+                [],
+                None,
+                True,
+            ),
+            # Explicit roleAssignments/write
+            (
+                "explicit_role_assignments_write",
+                ["Microsoft.Authorization/roleAssignments/write"],
+                [],
+                None,
+                True,
+            ),
+            # Case insensitive matching
+            (
+                "uppercase_role_assignments",
+                ["MICROSOFT.AUTHORIZATION/ROLEASSIGNMENTS/WRITE"],
+                [],
+                None,
+                True,
+            ),
+            (
+                "mixed_case_role_assignments",
+                ["Microsoft.AUTHORIZATION/RoleAssignments/Write"],
+                [],
+                None,
+                True,
+            ),
+            # === NOT HIGH PRIVILEGE CASES (False) ===
+            # No Authorization permissions
+            ("storage_only", ["Microsoft.Storage/*"], [], None, False),
+            ("compute_only", ["Microsoft.Compute/*"], [], None, False),
+            ("empty_actions", [], [], None, False),
+            # notActions excludes roleAssignments/write
+            (
+                "star_with_not_authorization_write",
+                ["*"],
+                ["Microsoft.Authorization/*/write"],
+                None,
+                False,
+            ),
+            (
+                "star_with_not_role_assignments_write",
+                ["*"],
+                ["Microsoft.Authorization/roleAssignments/write"],
+                None,
+                False,
+            ),
+            (
+                "authorization_star_with_not_role_assignments",
+                ["Microsoft.Authorization/*"],
+                ["Microsoft.Authorization/roleAssignments/write"],
+                None,
+                False,
+            ),
+            # Has condition that constrains roleAssignments/write specifically
+            (
+                "role_assignments_write_with_condition",
+                ["Microsoft.Authorization/roleAssignments/*"],
+                [],
+                "((!(ActionMatches{'Microsoft.Authorization/roleAssignments/write'})) "
+                "OR (@Request[...]:RoleDefinitionId ForAnyOfAnyValues:GuidEquals{...}))",
+                False,
+            ),
+            # Has condition but doesn't mention roleAssignments/write - still high privilege
+            (
+                "role_assignments_with_unrelated_condition",
+                ["Microsoft.Authorization/roleAssignments/*"],
+                [],
+                "@Request[Microsoft.Authorization/roleAssignments:RoleDefinitionId] "
+                "ForAnyOfAnyValues:GuidEquals{abc123}",
+                True,
+            ),
+            (
+                "star_with_condition",
+                ["*"],
+                [],
+                "((!(ActionMatches{'Microsoft.Authorization/roleAssignments/write'})) OR ...)",
+                False,
+            ),
+            # Authorization read-only (no write)
+            (
+                "authorization_read_only",
+                ["Microsoft.Authorization/*/read"],
+                [],
+                None,
+                False,
+            ),
+            (
+                "role_assignments_read_only",
+                ["Microsoft.Authorization/roleAssignments/read"],
+                [],
+                None,
+                False,
+            ),
+            # Role definitions (not role assignments)
+            (
+                "role_definitions_write",
+                ["Microsoft.Authorization/roleDefinitions/write"],
+                [],
+                None,
+                False,
+            ),
+        ],
+    )
+    def test_single_permission_block(
+        self,
+        description: str,
+        actions: list,
+        not_actions: list,
+        condition: str | None,
+        expected: bool,
+    ):
+        """Test is_high_privilege_role with single permission block scenarios."""
+        # Use a non-well-known role ID to test permission-based detection
+        role = make_role_definition(
+            "Test Role",
+            "test-role-id",
+            actions=actions,
+            not_actions=not_actions,
+            condition=condition,
+        )
+        assert is_high_privilege_role(role) is expected, f"Failed for: {description}"
+
+    @pytest.mark.parametrize(
+        "description,blocks,expected",
+        [
+            # Multiple blocks - one unconditioned high privilege
+            (
+                "storage_then_role_assignments",
+                [
+                    {"actions": ["Microsoft.Storage/*"]},
+                    {"actions": ["Microsoft.Authorization/roleAssignments/write"]},
+                ],
+                True,
+            ),
+            (
+                "role_assignments_then_storage",
+                [
+                    {"actions": ["Microsoft.Authorization/roleAssignments/write"]},
+                    {"actions": ["Microsoft.Storage/*"]},
+                ],
+                True,
+            ),
+            # Multiple blocks - all conditioned or no role assignments
+            (
+                "conditioned_role_assignments_and_storage",
+                [
+                    {
+                        "actions": ["Microsoft.Authorization/roleAssignments/*"],
+                        "condition": "((!(ActionMatches{'Microsoft.Authorization/"
+                        "roleAssignments/write'})) OR (@Request[...]:RoleDefinitionId "
+                        "ForAnyOfAnyValues:GuidEquals{...}))",
+                    },
+                    {"actions": ["Microsoft.Storage/*"]},
+                ],
+                False,
+            ),
+            (
+                "multiple_storage_blocks",
+                [
+                    {"actions": ["Microsoft.Storage/storageAccounts/*"]},
+                    {"actions": ["Microsoft.Storage/blobServices/*"]},
+                ],
+                False,
+            ),
+            # Service Group Administrator pattern (real Azure role)
+            (
+                "service_group_admin_pattern",
+                [
+                    # Block 1: broad permissions but excludes roleAssignments
+                    {
+                        "actions": ["Microsoft.Management/*"],
+                        "notActions": [
+                            "Microsoft.Authorization/roleAssignments/write",
+                            "Microsoft.Authorization/roleAssignments/delete",
+                        ],
+                    },
+                    # Block 2: roleAssignments with condition
+                    {
+                        "actions": [
+                            "Microsoft.Authorization/roleAssignments/write",
+                            "Microsoft.Authorization/roleAssignments/delete",
+                        ],
+                        "condition": (
+                            "((!(ActionMatches{'Microsoft.Authorization"
+                            "/roleAssignments/write'})) "
+                            "OR (@Request[...]:RoleDefinitionId "
+                            "ForAnyOfAnyValues:GuidEquals{...}))"
+                        ),
+                    },
+                ],
+                False,
+            ),
+            # Empty blocks
+            ("empty_blocks", [], False),
+            ("single_empty_block", [{"actions": []}], False),
+        ],
+    )
+    def test_multiple_permission_blocks(self, description: str, blocks: list, expected: bool):
+        """Test is_high_privilege_role with multiple permission block scenarios."""
+        from tests.helpers import make_role_with_multiple_permissions
+
+        role = make_role_with_multiple_permissions("Test Role", "test-role-id", blocks)
+        assert is_high_privilege_role(role) is expected, f"Failed for: {description}"
 
 
 # =============================================================================

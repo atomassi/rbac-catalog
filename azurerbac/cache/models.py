@@ -302,6 +302,7 @@ class RoleAnalysis:
 
     role_coverage: dict[str, RoleCoverage] = field(default_factory=dict)
     operation_to_roles: dict[str, list[str]] = field(default_factory=dict)
+    high_privilege_roles: frozenset[str] = field(default_factory=frozenset)
 
 
 # Maximum entries in the allowing_roles cache (roles granting each operation)
@@ -502,6 +503,10 @@ class CacheData:
     @property
     def operation_to_roles(self) -> dict[str, list[str]]:
         return self.analysis.operation_to_roles
+
+    @property
+    def high_privilege_roles(self) -> frozenset[str]:
+        return self.analysis.high_privilege_roles
 
     @property
     def pattern_match(self) -> dict[PatternCacheKey, set[str]]:

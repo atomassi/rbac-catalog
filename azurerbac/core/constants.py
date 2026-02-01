@@ -24,12 +24,15 @@ class RoleStatus(StrEnum):
     DELETED = "deleted"
 
 
-HIGH_PRIVILEGE_ROLES: Final[frozenset[str]] = frozenset(
+# Operation that indicates high-privilege (ability to escalate access)
+HIGH_PRIVILEGE_OPERATION: Final[str] = "microsoft.authorization/roleassignments/write"
+
+# Well-known high-privilege role IDs (always high-privilege regardless of permissions analysis)
+HIGH_PRIVILEGE_ROLE_IDS: Final[frozenset[str]] = frozenset(
     {
-        "Owner",
-        "Contributor",
-        "User Access Administrator",
-        "Role Based Access Control Administrator",
+        "8e3af657-a8ff-443c-a75c-2fe8c4bcb635",  # Owner
+        "b24988ac-6180-42a0-ab88-20f7382dd24c",  # Contributor
+        "18d7d88d-d35e-4fb5-a5c3-7773c20a72d9",  # User Access Administrator
     }
 )
 

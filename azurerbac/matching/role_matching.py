@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import heapq
 import logging
 from collections.abc import Set as AbstractSet
 from functools import lru_cache
@@ -378,7 +379,7 @@ def count_wildcard_partial_coverage(
     covered_count = len(covered_ops)
     uncovered_ops = matching_ops - covered_ops
     uncovered_count = len(uncovered_ops)
-    uncovered_samples = sorted(uncovered_ops)[:max_uncovered_sample]
+    uncovered_samples = heapq.nsmallest(max_uncovered_sample, uncovered_ops)
 
     result = CoverageResult(covered_count, total_count, uncovered_count, uncovered_samples)
     if partial_cache_key is not None:

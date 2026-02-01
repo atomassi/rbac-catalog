@@ -1,5 +1,6 @@
 """MCP server for Azure RBAC Catalog."""
 
+import heapq
 import logging
 import time
 from collections import OrderedDict
@@ -391,11 +392,13 @@ class MCPServer:
             lines = [f"# Expanded Permissions for {role_name}\n"]
             lines.append(f"**Control Plane Operations:** {len(coverage.control)}")
             if coverage.control:
-                lines.extend(self._format_action_list(sorted(coverage.control), limit=100))
+                control_sample = heapq.nsmallest(100, coverage.control)
+                lines.extend(self._format_action_list(control_sample, limit=100))
 
             if include_data_actions and coverage.data:
                 lines.append(f"\n**Data Plane Operations:** {len(coverage.data)}")
-                lines.extend(self._format_action_list(sorted(coverage.data), limit=100))
+                data_sample = heapq.nsmallest(100, coverage.data)
+                lines.extend(self._format_action_list(data_sample, limit=100))
 
             return "\n".join(lines)
 

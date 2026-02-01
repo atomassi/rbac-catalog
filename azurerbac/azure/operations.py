@@ -19,21 +19,23 @@ def _flatten_provider_operations(data: dict[str, Any]) -> list[OperationData]:
     for provider in data.get("value") or []:
         provider_name = provider.get("displayName", "")
 
-        for op in provider.get("operations") or []:
-            operations.append(OperationData.from_azure(op, provider_display_name=provider_name))
+        operations.extend(
+            OperationData.from_azure(op, provider_display_name=provider_name)
+            for op in provider.get("operations") or []
+        )
 
         for rt in provider.get("resourceTypes") or []:
             rt_name = rt.get("name", "")
             rt_display = rt.get("displayName", "")
-            for op in rt.get("operations") or []:
-                operations.append(
-                    OperationData.from_azure(
-                        op,
-                        provider_display_name=provider_name,
-                        resource_type=rt_name,
-                        resource_type_display_name=rt_display,
-                    )
+            operations.extend(
+                OperationData.from_azure(
+                    op,
+                    provider_display_name=provider_name,
+                    resource_type=rt_name,
+                    resource_type_display_name=rt_display,
                 )
+                for op in rt.get("operations") or []
+            )
     return operations
 
 

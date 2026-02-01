@@ -98,7 +98,7 @@ class TestOperationsIndex:
         cache = CacheService()
         populate_cache_with_operations(cache, sample_operations)
 
-        results = cache.search_operations("microsoft.compute/*/read", limit=10, is_wildcard=True)
+        results = cache.search_operations("microsoft.compute/*/read", limit=10)
 
         assert len(results) == 1
         assert results[0].name == "Microsoft.Compute/virtualMachines/read"

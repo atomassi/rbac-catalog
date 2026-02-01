@@ -376,7 +376,7 @@ def compute_top_providers(
     provider_counts: Counter[str] = Counter()
     for op_name in all_ops_lower:
         if "/" in op_name:
-            provider = op_name.split("/", 1)[0]
+            provider = op_name.partition("/")[0]
             provider_counts[provider] += 1
         elif op_name:
             provider_counts[op_name] += 1

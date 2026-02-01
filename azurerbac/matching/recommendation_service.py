@@ -28,7 +28,6 @@ from azurerbac.matching.role_matching import (
     count_operations_matching_pattern,
     get_matching_operations,
     has_any_wildcard_coverage,
-    operation_matches_any_pattern,
 )
 
 if TYPE_CHECKING:
@@ -572,39 +571,20 @@ class RoleRecommendationService:
     ) -> int:
         """Count coverage for a single wildcard pattern in one plane.
 
-        Uses cached operations when available. For non-cached path, computes
-        coverage per-permission-block with correct Azure RBAC semantics.
+        Requires cached operations to be available (built at startup).
         """
         key = plane.make_key(op)
         pattern_ops = get_matching_operations(op, all_ops, plane, caches=self._caches)
 
         if key in ctx.wildcard_partial_coverage:
-            if cached_ops is not None:
-                return len(cached_ops & pattern_ops)
-            # Non-cached: compute per-block coverage
-            return self._count_per_block_coverage(ctx.permissions, pattern_ops, plane)
+            if cached_ops is None:
+                raise RuntimeError(f"RoleCoverage cache unavailable for role {ctx.role_id}")
+            return len(cached_ops & pattern_ops)
 
         if key in ctx.fully_covered_wildcards:
             return count_operations_matching_pattern(op, all_ops, plane)
 
         return 0
-
-    def _count_per_block_coverage(
-        self,
-        permissions: list[Permission],
-        pattern_ops: set[str],
-        plane: Plane,
-    ) -> int:
-        """Count covered operations using correct per-block semantics.
-
-        Delegates to `_compute_per_block_covered_ops` and returns the count.
-        """
-        covered_ops = self._compute_per_block_covered_ops(
-            permissions=permissions,
-            pattern_ops=pattern_ops,
-            plane=plane,
-        )
-        return len(covered_ops)
 
     def calculate_permissions_count(
         self,
@@ -649,6 +629,7 @@ class RoleRecommendationService:
         ctx: RoleEvaluationContext,
         missing_ops: set[str],
         classified: ClassifiedOperations,
+        cached_coverage: RoleCoverage | None = None,
     ) -> ExpandedMissing:
         """Expand missing operations to show individual uncovered operations.
 
@@ -665,7 +646,7 @@ class RoleRecommendationService:
                 total_count += 1
                 continue
 
-            result = self._expand_wildcard_missing(ctx, op, classified)
+            result = self._expand_wildcard_missing(ctx, op, classified, cached_coverage)
             if result.operations:
                 # Restore original casing for expanded operations
                 restored = [self._ops_lowered_to_orig.get(op, op) for op in result.operations]
@@ -682,10 +663,11 @@ class RoleRecommendationService:
         ctx: RoleEvaluationContext,
         op: str,
         classified: ClassifiedOperations,
+        cached_coverage: RoleCoverage | None,
     ) -> ExpandedMissing:
         """Expand a wildcard pattern to its uncovered operations.
 
-        Uses correct per-permission-block semantics for computing uncovered operations.
+        Uses cached role coverage when available.
         """
         expanded: list[str] = []
         total = 0
@@ -696,8 +678,8 @@ class RoleRecommendationService:
                 ctx=ctx,
                 op=op,
                 plane=Plane.CONTROL,
-                in_plane=True,
                 all_ops=self.op_sets.all_control,
+                cached_ops=cached_coverage.control if cached_coverage else None,
             )
             expanded.extend(ctrl.operations)
             total += ctrl.total
@@ -708,8 +690,8 @@ class RoleRecommendationService:
                 ctx=ctx,
                 op=op,
                 plane=Plane.DATA,
-                in_plane=True,
                 all_ops=self.op_sets.all_data,
+                cached_ops=cached_coverage.data if cached_coverage else None,
             )
             expanded.extend(data.operations)
             total += data.total
@@ -721,54 +703,29 @@ class RoleRecommendationService:
         ctx: RoleEvaluationContext,
         op: str,
         plane: Plane,
-        in_plane: bool,
         all_ops: frozenset[str],
+        cached_ops: set[str] | None,
     ) -> ExpandedMissing:
         """Get uncovered operations for a wildcard in one plane.
 
-        Uses correct per-permission-block semantics when computing partial coverage.
+        Uses cached role coverage for set intersection.
+        Requires cache to be available (built at startup).
         """
         key = plane.make_key(op)
         pattern_ops = get_matching_operations(op, all_ops, plane, caches=self._caches)
 
         if key in ctx.wildcard_partial_coverage:
-            # Compute which operations are actually covered using per-block semantics
-            covered = self._compute_per_block_covered_ops(ctx.permissions, pattern_ops, plane)
+            if cached_ops is None:
+                raise RuntimeError(f"RoleCoverage cache unavailable for role {ctx.role_id}")
+            covered = cached_ops & pattern_ops
             uncovered = pattern_ops - covered
             uncovered_samples = sorted(uncovered)[:DEFAULT_SEARCH_LIMIT]
             return ExpandedMissing(uncovered_samples, len(uncovered))
 
-        if in_plane and key not in ctx.fully_covered_wildcards:
+        if key not in ctx.fully_covered_wildcards:
             return ExpandedMissing(sorted(pattern_ops), len(pattern_ops))
 
         return ExpandedMissing([], 0)
-
-    def _compute_per_block_covered_ops(
-        self,
-        permissions: list[Permission],
-        pattern_ops: set[str],
-        plane: Plane,
-    ) -> set[str]:
-        """Compute covered operations using correct per-block semantics.
-
-        Azure RBAC: union of (actions - notActions) for each permission block.
-        Returns the set of operations that are covered by ANY permission block.
-        """
-        covered: set[str] = set()
-        for perm in permissions:
-            if plane == Plane.CONTROL:
-                actions, not_actions = perm.actions, perm.not_actions
-            else:
-                actions, not_actions = perm.data_actions, perm.not_data_actions
-
-            # Compute this block's coverage within pattern_ops
-            block_granted = {op for op in pattern_ops if operation_matches_any_pattern(op, actions)}
-            block_excluded = {
-                op for op in block_granted if operation_matches_any_pattern(op, not_actions)
-            }
-            covered |= block_granted - block_excluded
-
-        return covered
 
     @staticmethod
     def _extend_unique_sorted(

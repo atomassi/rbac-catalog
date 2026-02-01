@@ -104,7 +104,7 @@ def recommend_roles(
         # Calculate statistics
         matched_count = svc.calculate_matched_ops_count(ctx, cached_coverage)
         perms = svc.calculate_permissions_count(ctx)
-        expanded = svc.expand_missing_operations(ctx, missing_ops, classified)
+        expanded = svc.expand_missing_operations(ctx, missing_ops, classified, cached_coverage)
 
         # Calculate match percentage
         match_pct = (matched_count / total_requested * 100) if total_requested > 0 else 0.0

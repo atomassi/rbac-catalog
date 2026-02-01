@@ -21,18 +21,15 @@ class TestSettings:
     def test_custom_values(self):
         """Test Settings accepts custom values."""
         settings = Settings(
-            azure_subscription_id="test-sub-123",
             roles_poll_interval_seconds=300,
             db_connection_string="postgresql+asyncpg://user:pass@host/db",
         )
-        assert settings.azure_subscription_id == "test-sub-123"
         assert settings.roles_poll_interval_seconds == 300
         assert settings.db_connection_string == "postgresql+asyncpg://user:pass@host/db"
 
     def test_partial_override(self):
         """Test Settings allows partial override of defaults."""
         settings = Settings(roles_poll_interval_seconds=120)
-        assert settings.azure_subscription_id is None
         assert settings.roles_poll_interval_seconds == 120
         assert settings.db_connection_string == "sqlite+aiosqlite:///./azurerbac.db"
 
@@ -50,23 +47,19 @@ class TestGetSettings:
         with patch.dict(
             os.environ,
             {
-                "AZURE_SUBSCRIPTION_ID": "env-sub-456",
                 "ROLES_POLL_INTERVAL_SECONDS": "120",
                 "DB_CONNECTION_STRING": "postgresql+asyncpg://env@host/db",
             },
             clear=True,
         ):
             settings = Settings.get()
-            assert settings.azure_subscription_id == "env-sub-456"
             assert settings.roles_poll_interval_seconds == 120
             assert settings.db_connection_string == "postgresql+asyncpg://env@host/db"
 
     def test_get_settings_uses_defaults_when_env_not_set(self):
         """Test get_settings uses model defaults when env vars are not set."""
-        with patch.dict(os.environ, {"AZURE_SUBSCRIPTION_ID": "test-sub"}, clear=True):
+        with patch.dict(os.environ, {}, clear=True):
             settings = Settings.get()
-            # Provided value is used
-            assert settings.azure_subscription_id == "test-sub"
             # Non-provided values use defaults from Settings model
             assert settings.roles_poll_interval_seconds > 0  # Has a valid default
             assert settings.db_connection_string.startswith("sqlite")  # Default is SQLite

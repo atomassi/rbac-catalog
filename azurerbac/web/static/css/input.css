@@ -18,6 +18,12 @@
   --cond-gray: #94a3b8;
 }
 
+/* Condition syntax highlighting classes (used by condition-formatter.js) */
+.cond-blue { color: var(--cond-blue); }
+.cond-green { color: var(--cond-green); }
+.cond-red { color: var(--cond-red); }
+.cond-gray { color: var(--cond-gray); }
+
 /* Custom styles */
 body {
   font-family: 'Inter', sans-serif;

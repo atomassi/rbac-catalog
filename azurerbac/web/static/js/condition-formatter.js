@@ -24,11 +24,12 @@ const COMPARISONS = ['GuidEquals', 'GuidNotEquals', 'StringEquals', 'StringEqual
 const ATTRIBUTE_KEYWORDS = ['@Request', '@Resource', '@Principal', '@Environment'];
 const GUID_CHARS = new Set('0123456789abcdefABCDEF ,\t-');
 
-const STYLES = {
-    blue: 'color: var(--cond-blue)',
-    green: 'color: var(--cond-green)',
-    red: 'color: var(--cond-red)',
-    gray: 'color: var(--cond-gray)'
+// CSS classes for syntax highlighting (compiled into /static/css/tailwind.min.css from input.css)
+const COND_CLASSES = {
+    blue: 'cond-blue',
+    green: 'cond-green',
+    red: 'cond-red',
+    gray: 'cond-gray'
 };
 
 const OPERATORS = new Set(['AND', 'OR', '&&', '||']);
@@ -250,25 +251,25 @@ function renderToken(token) {
     switch (type) {
         case 'string':
             if (value.length >= 2 && value.startsWith("'") && value.endsWith("'")) {
-                return `&#39;<span style="${STYLES.red}">${escapeHtml(value.slice(1, -1))}</span>&#39;`;
+                return `&#39;<span class="${COND_CLASSES.red}">${escapeHtml(value.slice(1, -1))}</span>&#39;`;
             }
             return escapeHtml(value);
 
         case 'guid-brace':
             if (value.length >= 2) {
-                return `{<span style="${STYLES.green}">${escapeHtml(value.slice(1, -1))}</span>}`;
+                return `{<span class="${COND_CLASSES.green}">${escapeHtml(value.slice(1, -1))}</span>}`;
             }
             return escapeHtml(value);
 
         case 'not':
-            return `<span style="${STYLES.red}; font-weight: 600">${escapeHtml(value)}</span>`;
+            return `<span class="${COND_CLASSES.red} font-semibold">${escapeHtml(value)}</span>`;
 
         case 'function':
-            return `<span style="${STYLES.blue}">${escapeHtml(value)}</span>`;
+            return `<span class="${COND_CLASSES.blue}">${escapeHtml(value)}</span>`;
 
         case 'boolean':
         case 'attribute-kw':
-            return `<span style="${STYLES.green}">${escapeHtml(value)}</span>`;
+            return `<span class="${COND_CLASSES.green}">${escapeHtml(value)}</span>`;
 
         default:
             return escapeHtml(value);
@@ -278,10 +279,10 @@ function renderToken(token) {
 /** @param {string} text */
 function highlight(text) {
     if (OPERATORS.has(text) || OPERATORS.has(text.toUpperCase())) {
-        return `<span style="${STYLES.blue}; font-weight: 600">${escapeHtml(text)}</span>`;
+        return `<span class="${COND_CLASSES.blue} font-semibold">${escapeHtml(text)}</span>`;
     }
     if (text === '(' || text === ')') {
-        return `<span style="${STYLES.gray}">${text}</span>`;
+        return `<span class="${COND_CLASSES.gray}">${text}</span>`;
     }
     return scanTokens(text).map(renderToken).join('');
 }

@@ -246,100 +246,100 @@ describe('conditionFormatter', () => {
     describe('highlight', () => {
         it('should highlight AND operator as blue bold', () => {
             const result = formatter.highlight('AND');
-            expect(result).toContain('var(--cond-blue)');
-            expect(result).toContain('font-weight: 600');
+            expect(result).toContain('cond-blue');
+            expect(result).toContain('font-semibold');
         });
 
         it('should highlight OR operator as blue bold', () => {
             const result = formatter.highlight('OR');
-            expect(result).toContain('var(--cond-blue)');
-            expect(result).toContain('font-weight: 600');
+            expect(result).toContain('cond-blue');
+            expect(result).toContain('font-semibold');
         });
 
         it('should highlight && operator as blue bold', () => {
             const result = formatter.highlight('&&');
-            expect(result).toContain('var(--cond-blue)');
-            expect(result).toContain('font-weight: 600');
+            expect(result).toContain('cond-blue');
+            expect(result).toContain('font-semibold');
             // The && should be escaped in output
             expect(result).toContain('&amp;&amp;');
         });
 
         it('should highlight || operator as blue bold', () => {
             const result = formatter.highlight('||');
-            expect(result).toContain('var(--cond-blue)');
-            expect(result).toContain('font-weight: 600');
+            expect(result).toContain('cond-blue');
+            expect(result).toContain('font-semibold');
         });
 
         it('should highlight parentheses as gray', () => {
             const open = formatter.highlight('(');
             const close = formatter.highlight(')');
-            expect(open).toContain('var(--cond-gray)');
-            expect(close).toContain('var(--cond-gray)');
+            expect(open).toContain('cond-gray');
+            expect(close).toContain('cond-gray');
         });
 
         it('should highlight ActionMatches as blue', () => {
             const result = formatter.highlight("ActionMatches{'test'}");
-            expect(result).toContain('<span style="color: var(--cond-blue)">ActionMatches</span>');
+            expect(result).toContain('<span class="cond-blue">ActionMatches</span>');
         });
 
         it('should highlight !ActionMatches with red ! and blue ActionMatches', () => {
             const result = formatter.highlight("!ActionMatches{'test'}");
-            expect(result).toContain('var(--cond-red)');
-            expect(result).toContain('var(--cond-blue)');
+            expect(result).toContain('cond-red');
+            expect(result).toContain('cond-blue');
         });
 
         it('should highlight ForAnyOfAnyValues:GuidEquals as blue', () => {
             const result = formatter.highlight('ForAnyOfAnyValues:GuidEquals{abc-123}');
-            expect(result).toContain('<span style="color: var(--cond-blue)">ForAnyOfAnyValues:GuidEquals</span>');
+            expect(result).toContain('<span class="cond-blue">ForAnyOfAnyValues:GuidEquals</span>');
         });
 
         it('should highlight ForAnyOfAllValues:GuidNotEquals as blue', () => {
             const result = formatter.highlight('ForAnyOfAllValues:GuidNotEquals{abc}');
-            expect(result).toContain('var(--cond-blue)');
+            expect(result).toContain('cond-blue');
         });
 
         it('should highlight boolequals as blue', () => {
             const result = formatter.highlight('@Request[isOwner] boolequals true');
-            expect(result).toContain('<span style="color: var(--cond-blue)">boolequals</span>');
+            expect(result).toContain('<span class="cond-blue">boolequals</span>');
         });
 
         it('should highlight stringequalsignorecase as blue', () => {
             const result = formatter.highlight('@Request[name] stringequalsignorecase test');
-            expect(result).toContain('var(--cond-blue)');
+            expect(result).toContain('cond-blue');
         });
 
         it('should highlight true/false as green', () => {
             const resultTrue = formatter.highlight('boolequals true');
             const resultFalse = formatter.highlight('boolequals false');
-            expect(resultTrue).toContain('<span style="color: var(--cond-green)">true</span>');
-            expect(resultFalse).toContain('<span style="color: var(--cond-green)">false</span>');
+            expect(resultTrue).toContain('<span class="cond-green">true</span>');
+            expect(resultFalse).toContain('<span class="cond-green">false</span>');
         });
 
         it('should highlight @Request as green', () => {
             const result = formatter.highlight('@Request[isOwner]');
-            expect(result).toContain('<span style="color: var(--cond-green)">@Request</span>');
+            expect(result).toContain('<span class="cond-green">@Request</span>');
         });
 
         it('should highlight @Resource as green', () => {
             const result = formatter.highlight('@Resource[name]');
-            expect(result).toContain('<span style="color: var(--cond-green)">@Resource</span>');
+            expect(result).toContain('<span class="cond-green">@Resource</span>');
         });
 
         it('should highlight strings in single quotes as red (escaped)', () => {
             // Quotes are escaped first, then matched
             const result = formatter.highlight("'Microsoft.Storage/read'");
-            expect(result).toContain('var(--cond-red)');
+            expect(result).toContain('cond-red');
             expect(result).toContain('Microsoft.Storage/read');
         });
 
         it('should highlight GUIDs in braces as green', () => {
             const result = formatter.highlight('{abc-123-def}');
-            expect(result).toContain('<span style="color: var(--cond-green)">abc-123-def</span>');
+            expect(result).toContain('<span class="cond-green">abc-123-def</span>');
         });
 
         it('should highlight multiple GUIDs in braces', () => {
             const result = formatter.highlight('{abc-123, def-456}');
-            expect(result).toContain('var(--cond-green)');
+            expect(result).toContain('cond-green');
         });
 
         it('should escape HTML before highlighting (XSS prevention)', () => {
@@ -361,10 +361,10 @@ describe('conditionFormatter', () => {
             // First line should be opening paren
             expect(fmt.lines[0].html).toContain('(');
             
-            // Should contain highlighted elements
+            // Should contain highlighted elements (CSS classes, not inline styles)
             const allHtml = fmt.lines.map(l => l.html).join('');
-            expect(allHtml).toContain('var(--cond-green)'); // @Resource and GUIDs
-            expect(allHtml).toContain('var(--cond-blue)');  // ForAnyOfAnyValues:GuidEquals
+            expect(allHtml).toContain('cond-green'); // @Resource and GUIDs
+            expect(allHtml).toContain('cond-blue');  // ForAnyOfAnyValues:GuidEquals
         });
 
         it('should handle condition with multiple operators', () => {

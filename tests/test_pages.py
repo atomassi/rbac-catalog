@@ -547,8 +547,8 @@ class TestEnrichEventWithDiff:
         result = enrich_event_with_diff(event)
 
         assert result.diff is not None
-        assert result.diff["changed"] is True
-        assert len(result.diff["changes"]) == 1
+        assert result.diff.changed is True
+        assert len(result.diff.changes) == 1
 
     def test_created_on_normalized_in_diff_json(self):
         """Test that createdOn is normalized to avoid showing as a diff.
@@ -594,8 +594,8 @@ class TestEnrichEventWithDiff:
         result = enrich_event_with_diff(event)
 
         # Both before and after should have the same createdOn (normalized to after's value)
-        before_created = result.diff["before_json"]["properties"]["createdOn"]
-        after_created = result.diff["after_json"]["properties"]["createdOn"]
+        before_created = result.diff.before_json["properties"]["createdOn"]
+        after_created = result.diff.after_json["properties"]["createdOn"]
         assert before_created == after_created
         # The value should be from the after_json
         assert after_created == "2025-11-17T16:01:32.566Z"
@@ -626,12 +626,12 @@ class TestEnrichEventWithDiff:
 
         result = enrich_event_with_diff(event)
 
-        # Should preserve the original structure - NOT introduce before_json/after_json
-        assert "before_json" not in result.diff
-        assert "after_json" not in result.diff
+        # Should preserve the original structure - before_json/after_json should be None
+        assert result.diff.before_json is None
+        assert result.diff.after_json is None
         # changes should still be present
-        assert result.diff["changed"] is True
-        assert len(result.diff["changes"]) == 1
+        assert result.diff.changed is True
+        assert len(result.diff.changes) == 1
 
     def test_created_on_normalized_when_after_json_is_none(self):
         """Test createdOn normalization when after_json is None.
@@ -669,10 +669,10 @@ class TestEnrichEventWithDiff:
         result = enrich_event_with_diff(event)
 
         # before_json should still have createdOn (fallback to before's value)
-        before_created = result.diff["before_json"]["properties"]["createdOn"]
+        before_created = result.diff.before_json["properties"]["createdOn"]
         assert before_created == "2025-11-18T16:10:13.262Z"
         # after_json should remain None
-        assert result.diff["after_json"] is None
+        assert result.diff.after_json is None
 
     def test_created_on_normalized_when_before_missing_properties(self):
         """Test createdOn normalization when before_json has no properties key.
@@ -713,8 +713,8 @@ class TestEnrichEventWithDiff:
         result = enrich_event_with_diff(event)
 
         # before_json should now have properties with createdOn added
-        assert "properties" in result.diff["before_json"]
-        before_created = result.diff["before_json"]["properties"]["createdOn"]
-        after_created = result.diff["after_json"]["properties"]["createdOn"]
+        assert "properties" in result.diff.before_json
+        before_created = result.diff.before_json["properties"]["createdOn"]
+        after_created = result.diff.after_json["properties"]["createdOn"]
         assert before_created == after_created
         assert after_created == "2025-11-17T16:01:32.566Z"

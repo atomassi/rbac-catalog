@@ -503,7 +503,7 @@
 <pre class="text-slate-700 whitespace-pre-wrap break-words m-0 py-0 px-4">{{ (ev.role_json_pretty or role_json_pretty) | trim }}</pre>
                                                     </div>
                                                 </div>
-                                            {% elif ev.diff and ev.diff.before_json is defined and ev.diff.after_json is defined %}
+                                            {% elif ev.diff and ev.diff.before_json is not none and ev.diff.after_json is not none %}
                                                 <div class="bg-slate-50 border border-slate-200 rounded-xl overflow-hidden">
                                                     <div class="px-4 overflow-x-auto font-mono text-xs leading-6 bg-white max-h-96 overflow-y-auto">
 {%- for line in ev.diff.before_json | full_json_diff(ev.diff.after_json) %}
@@ -617,7 +617,7 @@
 <pre class="text-slate-700 whitespace-pre-wrap break-words m-0 py-0 px-3">{{ role_json_pretty | trim }}</pre>
                                             </div>
                                         </div>
-                                    {% elif ev.diff and ev.diff.before_json is defined and ev.diff.after_json is defined %}
+                                    {% elif ev.diff and ev.diff.before_json is not none and ev.diff.after_json is not none %}
                                         <div class="bg-slate-50 border border-slate-200 rounded-lg overflow-hidden">
                                             <div class="px-3 overflow-x-auto font-mono text-xs leading-5 bg-white max-h-64 overflow-y-auto">
 {%- for line in ev.diff.before_json | full_json_diff(ev.diff.after_json) %}

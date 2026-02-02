@@ -82,7 +82,7 @@ class TestPatternMatching:
 # =============================================================================
 
 
-class TestPatternCoversPattern:
+class TestPatternCoverage:
     """Tests for pattern_covers_pattern and helper functions."""
 
     @pytest.mark.parametrize(
@@ -102,10 +102,6 @@ class TestPatternCoversPattern:
     ):
         """Test exact match and universal wildcard coverage."""
         assert pattern_covers_pattern(role_pattern, requested_pattern) == expected
-
-
-class TestSuffixPatternCovers:
-    """Tests for _suffix_pattern_covers function."""
 
     @pytest.mark.parametrize(
         "role_pattern,requested_pattern,expected",
@@ -127,10 +123,6 @@ class TestSuffixPatternCovers:
         """Test suffix pattern coverage logic."""
         assert _suffix_pattern_covers(role_pattern, requested_pattern) == expected
 
-
-class TestPrefixPatternCovers:
-    """Tests for _prefix_pattern_covers function."""
-
     @pytest.mark.parametrize(
         "role_pattern,requested_pattern,expected",
         [
@@ -149,10 +141,6 @@ class TestPrefixPatternCovers:
     def test_prefix_pattern_covers(self, role_pattern: str, requested_pattern: str, expected: bool):
         """Test prefix pattern coverage logic."""
         assert _prefix_pattern_covers(role_pattern, requested_pattern) == expected
-
-
-class TestSegmentPatternCovers:
-    """Tests for _segment_pattern_covers function - segment-by-segment matching."""
 
     @pytest.mark.parametrize(
         "role_pattern,requested_pattern,expected",
@@ -193,8 +181,8 @@ class TestSegmentPatternCovers:
 # =============================================================================
 
 
-class TestCheckWildcardOperationAllowed:
-    """Tests for check_wildcard_operation_allowed function."""
+class TestWildcardOperations:
+    """Tests for wildcard operation allowed and coverage functions."""
 
     @pytest.mark.parametrize(
         "requested_pattern,actions,not_actions,expected",
@@ -385,15 +373,6 @@ class TestCountNetPermissions:
         }
         result = count_net_permissions(["Microsoft.Storage/*"], [], all_ops)
         assert result == 2
-
-
-# =============================================================================
-# Operation Allowed Tests
-# =============================================================================
-
-
-class TestCheckOperationAllowed:
-    """Tests for check_operation_allowed function."""
 
     @pytest.mark.parametrize(
         "operation,actions,not_actions,expected",
@@ -1034,27 +1013,6 @@ class TestClassifiedOperations:
             control_wildcards=frozenset(["cw1"]),
         )
         assert len(classified) == 4
-
-
-class TestOperationSets:
-    """Tests for OperationSets value object."""
-
-    def test_from_operations_creates_correct_sets(self, sample_operations):
-        """from_operations should separate control and data plane operations (lowered)."""
-        from azurerbac.matching.models import OperationSets
-
-        op_sets = OperationSets.from_operations(sample_operations)
-
-        # Control plane operations (stored lowered)
-        assert "microsoft.storage/storageaccounts/read" in op_sets.all_control
-        assert "microsoft.compute/virtualmachines/read" in op_sets.all_control
-
-        # Data plane operations (stored lowered)
-        assert "microsoft.keyvault/vaults/secrets/read" in op_sets.all_data
-        assert (
-            "microsoft.storage/storageaccounts/blobservices/containers/blobs/read"
-            in op_sets.all_data
-        )
 
 
 class TestRecommendationService:

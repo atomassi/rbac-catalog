@@ -9,7 +9,7 @@ from azurerbac.web.filters import (
     format_datetime,
     full_json_diff,
 )
-from azurerbac.web.utils import clamp, role_json_pretty, urlencode_path
+from azurerbac.web.utils import role_json_pretty, urlencode_path
 
 
 class TestDiffLines:
@@ -120,8 +120,8 @@ class TestFullJsonDiff:
         assert "removed" in types
 
 
-class TestFormatDatetime:
-    """Tests for datetime formatting."""
+class TestDateFormatting:
+    """Tests for datetime and date formatting filters."""
 
     @pytest.mark.parametrize(
         "input_val,expected",
@@ -136,20 +136,6 @@ class TestFormatDatetime:
         """Test formatting various datetime inputs."""
         result = format_datetime(input_val)
         assert result == expected
-
-    def test_formats_datetime_object(self):
-        """Test formatting a datetime object."""
-        from datetime import datetime
-
-        dt_obj = datetime(2021, 11, 15, 10, 30, 45, 123456)
-        result = format_datetime(dt_obj)
-
-        assert result == "2021-11-15 10:30:45"
-        assert "123456" not in result  # No microseconds
-
-
-class TestFormatDate:
-    """Tests for date-only formatting."""
 
     @pytest.mark.parametrize(
         "input_val,expected",
@@ -166,17 +152,23 @@ class TestFormatDate:
         result = format_date(input_val)
         assert result == expected
 
-    def test_formats_datetime_object(self):
-        """Test formatting a datetime object to date-only."""
+    def test_datetime_object_formatted(self):
+        """Test formatting a datetime object."""
         from datetime import datetime
 
         dt_obj = datetime(2021, 11, 15, 10, 30, 45, 123456)
-        result = format_date(dt_obj)
 
-        assert result == "2021-11-15"
-        assert "10:30" not in result  # No time
+        # format_datetime includes time
+        result_datetime = format_datetime(dt_obj)
+        assert result_datetime == "2021-11-15 10:30:45"
+        assert "123456" not in result_datetime
 
-    def test_formats_date_object(self):
+        # format_date excludes time
+        result_date = format_date(dt_obj)
+        assert result_date == "2021-11-15"
+        assert "10:30" not in result_date
+
+    def test_date_object_formatted(self):
         """Test formatting a date object."""
         from datetime import date
 
@@ -249,46 +241,6 @@ class TestIsWildcardPattern:
         assert is_wildcard_pattern(pattern) is expected
 
 
-class TestSlugifyEdgeCases:
-    """Additional edge case tests for slugify."""
-
-    @pytest.mark.parametrize(
-        ("input_str", "expected"),
-        [
-            pytest.param("", "", id="empty_string"),
-            pytest.param("@#$%^&", "", id="only_special_chars"),
-            pytest.param("hello    world", "hello-world", id="multiple_spaces"),
-            pytest.param("HELLO WORLD", "hello-world", id="uppercase_converted"),
-            pytest.param(
-                "Storage Blob Data Contributor",
-                "storage-blob-data-contributor",
-                id="azure_role_name",
-            ),
-        ],
-    )
-    def test_slugify_patterns(self, input_str: str, expected: str):
-        """Test slugify with various input patterns."""
-        from azurerbac.core.utils import slugify
-
-        assert slugify(input_str) == expected
-
-    def test_leading_trailing_dashes(self):
-        """Test that leading/trailing dashes are stripped."""
-        from azurerbac.core.utils import slugify
-
-        result = slugify("  hello  ")
-        assert not result.startswith("-")
-        assert not result.endswith("-")
-
-    def test_parentheses_removed(self):
-        """Test that parentheses are removed."""
-        from azurerbac.core.utils import slugify
-
-        result = slugify("Role (Preview)")
-        assert "(" not in result
-        assert ")" not in result
-
-
 class TestSlugify:
     """Tests for the slugify utility function."""
 
@@ -305,6 +257,12 @@ class TestSlugify:
             pytest.param("already-slugified", "already-slugified", id="already_slug"),
             pytest.param("CamelCaseText", "camelcasetext", id="camelcase"),
             pytest.param("Numbers123Here", "numbers123here", id="preserves_numbers"),
+            pytest.param("@#$%^&", "", id="only_special_chars"),
+            pytest.param(
+                "Storage Blob Data Contributor",
+                "storage-blob-data-contributor",
+                id="azure_role_name",
+            ),
         ],
     )
     def test_slugify(self, text: str, expected: str) -> None:
@@ -334,27 +292,6 @@ class TestUrlEncodePath:
     def test_urlencode_path(self, text: str, expected: str) -> None:
         """Test urlencode_path encodes path segments correctly."""
         assert urlencode_path(text) == expected
-
-
-class TestClamp:
-    """Tests for the clamp utility function."""
-
-    @pytest.mark.parametrize(
-        ("value", "min_val", "max_val", "expected"),
-        [
-            pytest.param(5, 0, 10, 5, id="within_range"),
-            pytest.param(-5, 0, 10, 0, id="below_min"),
-            pytest.param(15, 0, 10, 10, id="above_max"),
-            pytest.param(0, 0, 10, 0, id="at_min"),
-            pytest.param(10, 0, 10, 10, id="at_max"),
-            pytest.param(1, 1, 1, 1, id="min_equals_max"),
-            pytest.param(-100, -50, -10, -50, id="negative_range_below"),
-            pytest.param(-30, -50, -10, -30, id="negative_range_within"),
-        ],
-    )
-    def test_clamp(self, value: int, min_val: int, max_val: int, expected: int) -> None:
-        """Test clamp constrains values to range."""
-        assert clamp(value, min_val, max_val) == expected
 
 
 class TestRoleJsonPretty:

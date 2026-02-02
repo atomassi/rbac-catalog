@@ -49,10 +49,6 @@ class TokenBucketRateLimiter:
     def refill_rate(self) -> float:
         return self._refill_rate
 
-    @property
-    def bucket_count(self) -> int:
-        return len(self._buckets)
-
     def is_allowed(self, bucket_id: str) -> RateLimitResult:
         """Check if request allowed and consume a token."""
         now = time.monotonic()
@@ -66,13 +62,6 @@ class TokenBucketRateLimiter:
         wait = float("inf") if self._refill_rate == 0 else (1.0 - tokens) / self._refill_rate
         self._store(bucket_id, tokens, now)
         return RateLimitResult(allowed=False, wait_seconds=wait, remaining=0)
-
-    def get_tokens(self, bucket_id: str) -> float:
-        """Get current token count."""
-        if bucket_id not in self._buckets:
-            return float(self._capacity)
-        tokens, last = self._buckets[bucket_id]
-        return min(self._capacity, tokens + (time.monotonic() - last) * self._refill_rate)
 
     def reset(self, bucket_id: str | None = None) -> None:
         """Reset one or all buckets."""

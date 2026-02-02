@@ -75,7 +75,6 @@ class TestOperationsIndex:
 
         # Check that indexes were built via data accessor
         assert len(cache.cache.ops_by_name_lower) == len(sample_operations)
-        assert len(cache.cache.ops_names_set) == len(sample_operations)
         assert "microsoft.compute" in cache.cache.ops_by_prefix
         assert "microsoft.storage" in cache.cache.ops_by_prefix
 

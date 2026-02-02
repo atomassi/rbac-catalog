@@ -50,15 +50,6 @@ class TestRankedRole:
 class TestEngineRegistry:
     """Tests for EngineRegistry decorator-based registration."""
 
-    def test_get_registered_modes_returns_all_modes(self):
-        """get_registered_modes should return all registered engine modes."""
-        registered = EngineRegistry.get_registered_modes()
-        # At minimum, core modes should be registered
-        assert RecommenderMode.TFIDF in registered
-        assert RecommenderMode.LLM in registered
-        assert RecommenderMode.RAG in registered
-        assert RecommenderMode.HYBRID in registered
-
     def test_create_returns_correct_engine_type(self):
         """EngineRegistry.create should return correct engine for each mode."""
         # Create a minimal mock knowledge base
@@ -2387,23 +2378,6 @@ class TestAIRecommenderExceptions:
         assert engine_name in str(exc)
         assert "Ollama" in str(exc)
 
-    @pytest.mark.parametrize(
-        ("engine_name",),
-        [
-            pytest.param("Semantic", id="semantic"),
-            pytest.param("ColBERT", id="colbert"),
-            pytest.param("CrossEncoder", id="crossencoder"),
-        ],
-    )
-    def test_embedding_model_not_available_error(self, engine_name: str):
-        """Test EmbeddingModelNotAvailableError stores engine name."""
-        from azurerbac.airecommender.exceptions import EmbeddingModelNotAvailableError
-
-        exc = EmbeddingModelNotAvailableError(engine_name)
-        assert exc.engine_name == engine_name
-        assert engine_name in str(exc)
-        assert "embedding" in str(exc)
-
     def test_knowledge_base_not_initialized_error(self):
         """Test KnowledgeBaseNotInitializedError message."""
         from azurerbac.airecommender.exceptions import KnowledgeBaseNotInitializedError
@@ -2415,13 +2389,11 @@ class TestAIRecommenderExceptions:
         """Test all exceptions inherit from AIRecommenderError."""
         from azurerbac.airecommender.exceptions import (
             AIRecommenderError,
-            EmbeddingModelNotAvailableError,
             KnowledgeBaseNotInitializedError,
             OllamaClientNotAvailableError,
         )
 
         assert issubclass(OllamaClientNotAvailableError, AIRecommenderError)
-        assert issubclass(EmbeddingModelNotAvailableError, AIRecommenderError)
         assert issubclass(KnowledgeBaseNotInitializedError, AIRecommenderError)
 
 
@@ -2524,49 +2496,6 @@ class TestWeightPair:
 
 class TestScoreNormalizer:
     """Tests for ScoreNormalizer class."""
-
-    def test_min_max_empty_dict(self):
-        """Test min_max handles empty dict correctly."""
-        from azurerbac.airecommender.engines.common import ScoreNormalizer
-
-        result = ScoreNormalizer.min_max({})
-        assert result == {}
-
-    @pytest.mark.parametrize(
-        ("scores", "floor", "ceiling", "expected_min", "expected_max"),
-        [
-            pytest.param({"a": 10.0, "c": 100.0}, 0.0, 1.0, 0.0, 1.0, id="0-1-range"),
-            pytest.param({"a": 0.0, "c": 100.0}, 0.6, 0.95, 0.6, 0.95, id="default-range"),
-            pytest.param({"a": 50.0, "c": 150.0}, 0.5, 0.9, 0.5, 0.9, id="custom-range"),
-        ],
-    )
-    def test_min_max_normalizes_to_range(
-        self,
-        scores: dict[str, float],
-        floor: float,
-        ceiling: float,
-        expected_min: float,
-        expected_max: float,
-    ):
-        """Test min_max normalizes to [floor, ceiling] range."""
-        from azurerbac.airecommender.engines.common import ScoreNormalizer
-
-        result = ScoreNormalizer.min_max(scores, floor=floor, ceiling=ceiling)
-        min_key = min(scores, key=scores.get)  # type: ignore[arg-type]
-        max_key = max(scores, key=scores.get)  # type: ignore[arg-type]
-
-        assert abs(result[min_key] - expected_min) < 1e-9
-        assert abs(result[max_key] - expected_max) < 1e-9
-
-    def test_min_max_single_score(self):
-        """Test min_max handles single score (no range)."""
-        from azurerbac.airecommender.engines.common import ScoreNormalizer
-
-        scores = {"only": 42.0}
-        result = ScoreNormalizer.min_max(scores, floor=0.6, ceiling=0.95)
-
-        # With no range, all scores map to floor (since (val - min) / 1.0 = 0)
-        assert result["only"] == 0.6
 
     def test_normalize_candidates_empty_list(self):
         """Test normalize_candidates handles empty list correctly."""

@@ -32,7 +32,6 @@ from cachetools import LRUCache
 from azurerbac.cache.utils import create_lru_cache, sitemap_url
 from azurerbac.core.constants import RoleStatus
 from azurerbac.core.types import JsonDict
-from azurerbac.core.utils import format_datetime, parse_datetime
 from azurerbac.matching.models import (
     CoverageResult,
     PartialCoverageCacheKey,
@@ -83,23 +82,6 @@ class CachedRole:
     def updated_on(self) -> dt.datetime | None:
         return self.definition.properties.updated_on
 
-    def to_dict(self) -> JsonDict:
-        return {
-            "definition": self.definition.to_dict(),
-            "status": self.status.value,
-            "last_seen_at": format_datetime(self.last_seen_at),
-        }
-
-    @classmethod
-    def from_dict(cls, data: JsonDict) -> CachedRole:
-        from azurerbac.azure.models import RoleDefinition
-
-        return cls(
-            definition=RoleDefinition.model_validate(data["definition"]),
-            status=RoleStatus(data["status"]),
-            last_seen_at=parse_datetime(data.get("last_seen_at")),
-        )
-
 
 @dataclass(slots=True)
 class CachedChangeEvent:
@@ -114,33 +96,6 @@ class CachedChangeEvent:
     summary: str | None = None
     diff_json: JsonDict | None = None
     role_json: JsonDict | None = None
-
-    def to_dict(self) -> JsonDict:
-        return {
-            "id": self.id,
-            "role_id": self.role_id,
-            "role_name": self.role_name,
-            "event_type": self.event_type,
-            "scan_timestamp": format_datetime(self.scan_timestamp),
-            "azure_updated_on": format_datetime(self.azure_updated_on),
-            "summary": self.summary,
-            "diff_json": self.diff_json,
-            "role_json": self.role_json,
-        }
-
-    @classmethod
-    def from_dict(cls, data: JsonDict) -> CachedChangeEvent:
-        return cls(
-            id=data["id"],
-            role_id=data["role_id"],
-            role_name=data["role_name"],
-            event_type=data["event_type"],
-            scan_timestamp=parse_datetime(data.get("scan_timestamp")),
-            azure_updated_on=parse_datetime(data.get("azure_updated_on")),
-            summary=data.get("summary"),
-            diff_json=data.get("diff_json"),
-            role_json=data.get("role_json"),
-        )
 
 
 @dataclass(slots=True)
@@ -220,21 +175,6 @@ class Sitemap:
 
         return cls(content=content, built_at=dt.datetime.now(dt.UTC))
 
-    def to_dict(self) -> JsonDict:
-        """Serialize to dict for cache storage."""
-        return {
-            "content": self.content,
-            "built_at": format_datetime(self.built_at),
-        }
-
-    @classmethod
-    def from_dict(cls, data: JsonDict) -> Sitemap:
-        """Deserialize from dict."""
-        return cls(
-            content=data["content"],
-            built_at=parse_datetime(data["built_at"]) or dt.datetime.now(dt.UTC),
-        )
-
 
 @dataclass(slots=True)
 class CacheMetadata:
@@ -246,33 +186,6 @@ class CacheMetadata:
     roles_hash: str = ""
     operations_hash: str = ""
     created_at: float = field(default_factory=time.time)
-
-    def _version_matches(self) -> bool:
-        return self.version == CACHE_VERSION
-
-    def _counts_match(self, roles_count: int, operations_count: int) -> bool:
-        return self.roles_count == roles_count and self.operations_count == operations_count
-
-    def _hash_matches(self, stored: str, provided: str) -> bool:
-        """Check if hashes match. Empty strings on either side are ignored."""
-        if not stored or not provided:
-            return True
-        return stored == provided
-
-    def is_valid_for(
-        self,
-        roles_count: int,
-        operations_count: int,
-        roles_hash: str = "",
-        operations_hash: str = "",
-    ) -> bool:
-        """Check if cache is still valid for given parameters."""
-        return (
-            self._version_matches()
-            and self._counts_match(roles_count, operations_count)
-            and self._hash_matches(self.roles_hash, roles_hash)
-            and self._hash_matches(self.operations_hash, operations_hash)
-        )
 
 
 @dataclass(slots=True)
@@ -531,11 +444,6 @@ class CacheData:
     # =========================================================================
     # Derived properties (computed lazily from source data)
     # =========================================================================
-
-    @cached_property
-    def ops_names_set(self) -> set[str]:
-        """Set of all operation names (original case)."""
-        return {op.name for op in self.all_operations}
 
     @cached_property
     def ops_lowered_to_orig(self) -> dict[str, str]:

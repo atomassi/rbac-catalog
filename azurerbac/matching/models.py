@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING, NamedTuple
 from azurerbac.core.types import JsonDict
 
 if TYPE_CHECKING:
-    from azurerbac.azure.models import OperationData
     from azurerbac.cache.models import CacheData
 
 from azurerbac.azure.models import Permission
@@ -51,13 +50,6 @@ class RoleNetPermissions(NamedTuple):
     data_count: int
 
 
-class CacheOpsCount(NamedTuple):
-    """Operation counts at cache build time (for staleness detection)."""
-
-    control: int
-    data: int
-
-
 class CacheStats(NamedTuple):
     """Cache entry counts for logging/debugging."""
 
@@ -65,13 +57,6 @@ class CacheStats(NamedTuple):
     partial_coverage: int
     role_coverage: int
     wildcard_count: int
-
-
-class PlaneActions(NamedTuple):
-    """Actions and exclusions for a single plane."""
-
-    actions: list[str]
-    not_actions: list[str]
 
 
 class ExpandedMissing(NamedTuple):
@@ -154,13 +139,6 @@ class OperationSets:
     all_data: frozenset[str]
 
     @classmethod
-    def from_operations(cls, operations: list[OperationData]) -> OperationSets:
-        """Build from raw operation list (slow - iterates all ops)."""
-        control = frozenset(op.name.lower() for op in operations if not op.is_data_action)
-        data = frozenset(op.name.lower() for op in operations if op.is_data_action)
-        return cls(all_control=control, all_data=data)
-
-    @classmethod
     def from_cache(cls, cache: CacheData) -> OperationSets:
         """Build from cached frozensets (fast - O(1))."""
         return cls(all_control=cache.control_ops_lowered, all_data=cache.data_ops_lowered)
@@ -175,10 +153,6 @@ class WildcardCoverage:
     covered_count: int
     total_count: int
     uncovered_samples: tuple[str, ...] = field(default_factory=tuple)
-
-    @property
-    def missing_count(self) -> int:
-        return max(0, self.total_count - self.covered_count)
 
 
 @dataclass(slots=True)

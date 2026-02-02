@@ -19,7 +19,6 @@ class TestTokenBucketRateLimiter:
         limiter = TokenBucketRateLimiter(capacity=10, refill_rate=1.0, max_buckets=100)
         assert limiter.capacity == 10
         assert limiter.refill_rate == 1.0
-        assert limiter.bucket_count == 0
 
     def test_first_request_allowed(self) -> None:
         limiter = TokenBucketRateLimiter(capacity=5, refill_rate=0.1)
@@ -83,56 +82,57 @@ class TestTokenBucketRateLimiter:
         for i in range(10):
             limiter.is_allowed(f"session-{i}")
 
-        assert limiter.bucket_count == 10
-        limiter.is_allowed("session-new")
-        assert limiter.bucket_count == 10
+        # After cleanup, new session should still be allowed
+        result = limiter.is_allowed("session-new")
+        assert result.allowed is True
 
-    def test_bucket_count(self) -> None:
+    def test_new_bucket_has_full_capacity(self) -> None:
         limiter = TokenBucketRateLimiter(capacity=5, refill_rate=1.0)
-        assert limiter.bucket_count == 0
-        limiter.is_allowed("session-1")
-        assert limiter.bucket_count == 1
-        limiter.is_allowed("session-2")
-        assert limiter.bucket_count == 2
+        # A new session should have full capacity
+        result = limiter.is_allowed("nonexistent")
+        assert result.remaining == 4  # 5 - 1 = 4
 
-    def test_get_tokens_new_bucket(self) -> None:
-        limiter = TokenBucketRateLimiter(capacity=5, refill_rate=1.0)
-        assert limiter.get_tokens("nonexistent") == 5.0
-
-    def test_get_tokens_after_usage(self) -> None:
+    def test_remaining_after_usage(self) -> None:
         limiter = TokenBucketRateLimiter(capacity=5, refill_rate=1.0)
         limiter.is_allowed("session-1")
-        limiter.is_allowed("session-1")
-        tokens = limiter.get_tokens("session-1")
-        assert 2.9 <= tokens <= 3.1
+        result = limiter.is_allowed("session-1")
+        # After 2 uses, remaining should be ~3
+        assert result.remaining == 3
 
     def test_reset_single_bucket(self) -> None:
         limiter = TokenBucketRateLimiter(capacity=5, refill_rate=1.0)
         limiter.is_allowed("session-1")
         limiter.is_allowed("session-2")
-        assert limiter.bucket_count == 2
         limiter.reset("session-1")
-        assert limiter.bucket_count == 1
-        assert limiter.get_tokens("session-1") == 5.0
+        # After reset, session-1 should have full tokens (first request allowed with remaining=4)
+        result = limiter.is_allowed("session-1")
+        assert result.allowed is True
+        assert result.remaining == 4
 
     def test_reset_all_buckets(self) -> None:
         limiter = TokenBucketRateLimiter(capacity=5, refill_rate=1.0)
         limiter.is_allowed("session-1")
         limiter.is_allowed("session-2")
         limiter.reset()
-        assert limiter.bucket_count == 0
+        # After reset, all sessions should have full tokens
+        result1 = limiter.is_allowed("session-1")
+        result2 = limiter.is_allowed("session-2")
+        assert result1.remaining == 4
+        assert result2.remaining == 4
 
     def test_reset_nonexistent(self) -> None:
         limiter = TokenBucketRateLimiter(capacity=5, refill_rate=1.0)
+        # Resetting nonexistent bucket should not raise
         limiter.reset("nonexistent")
-        assert limiter.bucket_count == 0
 
     def test_tokens_capped_at_capacity(self) -> None:
         limiter = TokenBucketRateLimiter(capacity=5, refill_rate=100.0)
         for _ in range(5):
             limiter.is_allowed("session-1")
         time.sleep(0.1)
-        assert limiter.get_tokens("session-1") == 5.0
+        # After refill, bucket should be back to full capacity
+        result = limiter.is_allowed("session-1")
+        assert result.remaining == 4  # Capped at 5, minus 1 for this request
 
 
 class TestInputValidator:

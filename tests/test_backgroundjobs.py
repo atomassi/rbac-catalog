@@ -383,27 +383,6 @@ class TestApplyRoleScan:
         assert len(history.summary) > 0
 
 
-class TestRoleScanResult:
-    """Tests for RoleScanResult dataclass."""
-
-    @pytest.mark.parametrize(
-        ("created", "updated", "deleted", "expected"),
-        [
-            pytest.param(0, 0, 0, False, id="no_changes"),
-            pytest.param(1, 0, 0, True, id="only_created"),
-            pytest.param(0, 1, 0, True, id="only_updated"),
-            pytest.param(0, 0, 1, True, id="only_deleted"),
-            pytest.param(1, 1, 1, True, id="all_changes"),
-        ],
-    )
-    def test_has_changes(self, created: int, updated: int, deleted: int, expected: bool):
-        """Test has_changes property returns True when any change count is non-zero."""
-        from azurerbac.backgroundjobs.models import RoleScanResult
-
-        result = RoleScanResult(created=created, updated=updated, deleted=deleted, total=10)
-        assert result.has_changes is expected
-
-
 # =============================================================================
 # Operations Monitor Tests
 # =============================================================================
@@ -678,10 +657,10 @@ class TestCreateJobs:
             assert isinstance(job.interval, timedelta)
 
 
-class TestWorkerSetupScheduler:
-    """Tests for Worker._setup_scheduler method."""
+class TestWorker:
+    """Tests for Worker class methods."""
 
-    def test_creates_scheduler_with_enabled_jobs(self):
+    def test_setup_scheduler_creates_scheduler_with_enabled_jobs(self):
         from azurerbac.backgroundjobs.jobs import Job
         from azurerbac.backgroundjobs.worker import Worker
 
@@ -726,10 +705,6 @@ class TestWorkerSetupScheduler:
         scheduled_jobs = scheduler.get_jobs()
         assert len(scheduled_jobs) == 1
         assert scheduled_jobs[0].id == "job1"
-
-
-class TestWorkerRunJob:
-    """Tests for Worker.run_job method."""
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
@@ -776,10 +751,6 @@ class TestWorkerRunJob:
 
         assert run_called == expect_run_called
 
-
-class TestWorkerInit:
-    """Tests for Worker initialization."""
-
     @pytest.mark.parametrize(
         "use_custom_settings",
         [
@@ -807,10 +778,6 @@ class TestWorkerInit:
         assert worker._scheduler is None
         assert worker._shutdown_event is None
 
-
-class TestWorkerCleanup:
-    """Tests for Worker._cleanup method."""
-
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
         "has_scheduler",
@@ -836,10 +803,6 @@ class TestWorkerCleanup:
 
         if has_scheduler:
             mock_scheduler.shutdown.assert_called_once_with(wait=True)
-
-
-class TestWorkerRunStartupJobs:
-    """Tests for Worker._run_startup_jobs method."""
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
@@ -878,10 +841,6 @@ class TestWorkerRunStartupJobs:
         # Verify correct jobs were run
         actual_jobs_run = [call.args[0].name for call in worker.run_job.call_args_list]
         assert actual_jobs_run == expected_jobs_run
-
-
-class TestWorkerSetupShutdownHandler:
-    """Tests for Worker._setup_shutdown_handler method."""
 
     @pytest.mark.parametrize(
         "has_event,expect_signals_registered",

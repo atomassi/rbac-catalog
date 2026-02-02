@@ -64,13 +64,6 @@ def format_iso_z(d: dt.datetime | None) -> str | None:
     return d.isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
-def parse_datetime(val: str | dt.datetime | None) -> dt.datetime | None:
-    """Parse datetime from string or passthrough."""
-    if val is None or isinstance(val, dt.datetime):
-        return val
-    return dt.datetime.fromisoformat(val)
-
-
 def format_datetime(val: dt.datetime | None) -> str | None:
     """Format datetime to ISO string."""
     return val.isoformat() if val else None

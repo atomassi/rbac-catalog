@@ -785,21 +785,3 @@ class TestPatternUtilities:
 # =============================================================================
 # Enum Tests
 # =============================================================================
-
-
-class TestSortOrder:
-    """Tests for SortOrder enum."""
-
-    @pytest.mark.parametrize(
-        ("order", "is_desc"),
-        [
-            pytest.param("asc", False, id="asc_not_descending"),
-            pytest.param("desc", True, id="desc_is_descending"),
-        ],
-    )
-    def test_is_descending_property(self, order: str, is_desc: bool):
-        """Test is_descending property returns correct value."""
-        from azurerbac.core.enums import SortOrder
-
-        sort_order = SortOrder(order)
-        assert sort_order.is_descending == is_desc

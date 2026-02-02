@@ -15,14 +15,6 @@ class OllamaClientNotAvailableError(AIRecommenderError):
         super().__init__(f"{engine_name} requires Ollama LLM client")
 
 
-class EmbeddingModelNotAvailableError(AIRecommenderError):
-    """Embedding model required but not available."""
-
-    def __init__(self, engine_name: str) -> None:
-        self.engine_name = engine_name
-        super().__init__(f"{engine_name} requires embedding model")
-
-
 class KnowledgeBaseNotInitializedError(AIRecommenderError):
     """Knowledge base not initialized."""
 

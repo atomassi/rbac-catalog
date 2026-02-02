@@ -15,8 +15,6 @@ import math
 from dataclasses import dataclass
 from typing import Final
 
-from azurerbac.airecommender.modes import RecommenderMode
-
 # Score normalization output range (60-95%)
 SCORE_FLOOR: Final[float] = 0.60
 SCORE_CEILING: Final[float] = 0.95
@@ -147,92 +145,3 @@ class WeightPair:
 # Score combination weights
 HYBRID_WEIGHTS: Final = WeightPair(primary=0.7, secondary=0.3)  # TF-IDF / Embeddings
 CROSSENCODER_WEIGHTS: Final = WeightPair(primary=0.7, secondary=0.3)  # Reranking / Bi-encoder
-
-
-@dataclass(frozen=True, slots=True)
-class EngineConfig:
-    """Centralized configuration for a recommendation engine.
-
-    Provides a single source of truth for engine-specific settings.
-    """
-
-    mode: RecommenderMode
-    """Which recommender mode this config applies to."""
-
-    retrieval_k: int
-    """Number of candidates to retrieve in initial stage."""
-
-    rerank_k: int
-    """Number of candidates to pass to reranking stage."""
-
-    min_confidence: float
-    """Minimum score threshold for results."""
-
-    weights: WeightPair | None = None
-    """Optional score combination weights."""
-
-    sigmoid: SigmoidParams | None = None
-    """Optional sigmoid normalization parameters."""
-
-
-# Centralized engine configurations
-ENGINE_CONFIGS: Final[dict[RecommenderMode, EngineConfig]] = {
-    RecommenderMode.TFIDF: EngineConfig(
-        mode=RecommenderMode.TFIDF,
-        retrieval_k=50,
-        rerank_k=10,
-        min_confidence=TFIDF_CONFIG.min_confidence,
-    ),
-    RecommenderMode.SEMANTIC: EngineConfig(
-        mode=RecommenderMode.SEMANTIC,
-        retrieval_k=20,
-        rerank_k=10,
-        min_confidence=SEMANTIC_THRESHOLDS.min_confidence,
-    ),
-    RecommenderMode.COLBERT: EngineConfig(
-        mode=RecommenderMode.COLBERT,
-        retrieval_k=20,
-        rerank_k=10,
-        min_confidence=COLBERT_THRESHOLDS.min_confidence,
-        sigmoid=COLBERT_SIGMOID,
-    ),
-    RecommenderMode.CROSSENCODER: EngineConfig(
-        mode=RecommenderMode.CROSSENCODER,
-        retrieval_k=50,
-        rerank_k=10,
-        min_confidence=CROSSENCODER_THRESHOLDS.min_confidence,
-        weights=CROSSENCODER_WEIGHTS,
-    ),
-    RecommenderMode.HYBRID: EngineConfig(
-        mode=RecommenderMode.HYBRID,
-        retrieval_k=100,
-        rerank_k=20,
-        min_confidence=0.3,
-        weights=HYBRID_WEIGHTS,
-    ),
-    RecommenderMode.LLM: EngineConfig(
-        mode=RecommenderMode.LLM,
-        retrieval_k=20,
-        rerank_k=5,
-        min_confidence=LLM_THRESHOLDS.min_confidence,
-    ),
-    RecommenderMode.RAG: EngineConfig(
-        mode=RecommenderMode.RAG,
-        retrieval_k=30,
-        rerank_k=10,
-        min_confidence=0.3,
-    ),
-    RecommenderMode.HYDE: EngineConfig(
-        mode=RecommenderMode.HYDE,
-        retrieval_k=20,
-        rerank_k=10,
-        min_confidence=HYDE_THRESHOLDS.min_confidence,
-    ),
-}
-
-
-def get_engine_config(mode: RecommenderMode) -> EngineConfig:
-    """Get configuration for a specific engine mode."""
-    if mode not in ENGINE_CONFIGS:
-        raise ValueError(f"No configuration for mode: {mode}")
-    return ENGINE_CONFIGS[mode]

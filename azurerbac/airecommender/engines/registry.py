@@ -66,7 +66,3 @@ class EngineRegistry:
             embedding_model=embedding_model,
             tfidf_recommender=tfidf_recommender,
         )
-
-    @classmethod
-    def get_registered_modes(cls) -> list[RecommenderMode]:
-        return list(cls._engines.keys())

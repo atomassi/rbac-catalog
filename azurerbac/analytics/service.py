@@ -24,7 +24,6 @@ from azurerbac.analytics.queries import (
     fetch_rolling_stats,
     fetch_volatile_roles,
 )
-from azurerbac.core.singleton import ThreadSafeSingleton
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -46,10 +45,6 @@ class AnalyticsService:
     @property
     def analytics_data(self) -> AnalyticsData:
         return self._analytics_data
-
-    @property
-    def is_computed(self) -> bool:
-        return self._analytics_data.computed_at is not None
 
     @property
     def computed_at(self) -> dt.datetime | None:
@@ -152,17 +147,3 @@ class AnalyticsService:
     def swap(self, analytics_data: AnalyticsData) -> None:
         """Swap in new analytics data atomically."""
         self._analytics_data = analytics_data
-
-
-# Thread-safe singleton
-_analytics_service_singleton = ThreadSafeSingleton(AnalyticsService)
-
-
-def get_analytics_service() -> AnalyticsService:
-    """Get or create the analytics service singleton."""
-    return _analytics_service_singleton.get()
-
-
-def reset_analytics_service() -> None:
-    """Reset the singleton (for testing only)."""
-    _analytics_service_singleton.reset()

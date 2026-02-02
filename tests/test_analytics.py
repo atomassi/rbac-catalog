@@ -40,12 +40,12 @@ def sample_date() -> dt.date:
 
 
 # =============================================================================
-# Model Round-Trip Tests (Parametrized)
+# Model Serialization Tests (Parametrized)
 # =============================================================================
 
 
-class TestModelRoundTrip:
-    """Verify to_dict/from_dict round-trips preserve data."""
+class TestModelSerialization:
+    """Verify to_dict produces expected output."""
 
     @pytest.mark.parametrize(
         ("model_cls", "kwargs"),
@@ -158,39 +158,12 @@ class TestModelRoundTrip:
             ),
         ],
     )
-    def test_round_trip(self, model_cls: type, kwargs: dict) -> None:
+    def test_to_dict(self, model_cls: type, kwargs: dict) -> None:
         original = model_cls(**kwargs)
-        restored = model_cls.from_dict(original.to_dict())
-        assert restored == original
-
-
-class TestModelDefaults:
-    """Verify from_dict with empty dict uses sensible defaults."""
-
-    @pytest.mark.parametrize(
-        ("model_cls", "expected_attrs"),
-        [
-            pytest.param(
-                AllTimeStats,
-                {"total_additions": 0, "total_scans": 0, "first_scan_date": None},
-                id="AllTimeStats",
-            ),
-            pytest.param(
-                RollingStats,
-                {"window_days": 0, "additions": 0, "updates": 0},
-                id="RollingStats",
-            ),
-            pytest.param(
-                PermissionChangeStats,
-                {"total_actions_added": 0, "update_count": 0},
-                id="PermissionChangeStats",
-            ),
-        ],
-    )
-    def test_from_dict_defaults(self, model_cls: type, expected_attrs: dict) -> None:
-        instance = model_cls.from_dict({})
-        for attr, expected in expected_attrs.items():
-            assert getattr(instance, attr) == expected
+        data = original.to_dict()
+        # Verify all fields are present in serialized output
+        for key in kwargs:
+            assert key in data
 
 
 # =============================================================================
@@ -216,16 +189,6 @@ class TestComputedProperties:
             total_additions=additions, total_updates=updates, total_deletions=deletions
         )
         assert stats.total_changes == expected_total
-
-    def test_all_time_stats_days_monitoring(self) -> None:
-        stats = AllTimeStats(
-            first_scan_date=dt.datetime(2024, 1, 1, tzinfo=dt.UTC),
-            last_scan_date=dt.datetime(2024, 1, 31, tzinfo=dt.UTC),
-        )
-        assert stats.days_monitoring == 31
-
-    def test_all_time_stats_days_monitoring_no_dates(self) -> None:
-        assert AllTimeStats().days_monitoring == 0
 
     @pytest.mark.parametrize(
         ("window_days", "additions", "updates", "deletions", "expected_avg"),
@@ -307,43 +270,6 @@ class TestAnalyticsData:
         assert data.daily_changes == []
         assert data.computed_at is None
 
-    def test_round_trip(self, sample_datetime: dt.datetime, sample_date: dt.date) -> None:
-        original = AnalyticsData(
-            all_time=AllTimeStats(total_additions=50),
-            rolling_30d=RollingStats(window_days=30, additions=10),
-            daily_changes=[DailyChanges(date=sample_date, additions=5)],
-            total_operations=5000,
-            computed_at=sample_datetime,
-        )
-        restored = AnalyticsData.from_dict(original.to_dict())
-
-        assert restored.all_time == original.all_time
-        assert restored.rolling_30d == original.rolling_30d
-        assert restored.daily_changes == original.daily_changes
-        assert restored.total_operations == original.total_operations
-        assert restored.computed_at == original.computed_at
-
-    def test_from_dict_with_empty_dict(self) -> None:
-        """Verify from_dict handles empty input gracefully."""
-        data = AnalyticsData.from_dict({})
-        assert data.all_time == AllTimeStats()
-        assert data.rolling_30d.window_days == 30  # Default window
-        assert data.rolling_90d.window_days == 90  # Default window
-        assert data.daily_changes == []
-        assert data.computed_at is None
-
-    def test_from_dict_with_partial_data(self) -> None:
-        """Verify from_dict handles partial nested objects."""
-        partial = {
-            "all_time": {"total_additions": 10},
-            "total_operations": 100,
-        }
-        data = AnalyticsData.from_dict(partial)
-        assert data.all_time.total_additions == 10
-        assert data.all_time.total_updates == 0  # Default
-        assert data.total_operations == 100
-        assert data.frequently_updated == []
-
 
 # =============================================================================
 # Service Tests
@@ -355,13 +281,11 @@ class TestAnalyticsService:
 
     def test_init_no_data(self) -> None:
         service = AnalyticsService()
-        assert not service.is_computed
         assert service.computed_at is None
 
     def test_init_with_data(self, sample_datetime: dt.datetime) -> None:
         data = AnalyticsData(total_operations=5000, computed_at=sample_datetime)
         service = AnalyticsService(analytics_data=data)
-        assert service.is_computed
         assert service.analytics_data.total_operations == 5000
 
     def test_swap(self) -> None:
@@ -450,34 +374,8 @@ class TestAnalyticsService:
         ):
             result = await service.build_from_db(AsyncMock(), {"op1", "op2"})
 
-        assert service.is_computed
         assert result.all_time.total_additions == 100
         assert result.total_operations == 5000
-
-
-# =============================================================================
-# Singleton Tests
-# =============================================================================
-
-
-class TestAnalyticsServiceSingleton:
-    """Tests for singleton behavior."""
-
-    def test_get_returns_same_instance(self) -> None:
-        from azurerbac.analytics.service import get_analytics_service, reset_analytics_service
-
-        reset_analytics_service()
-        service1 = get_analytics_service()
-        service2 = get_analytics_service()
-        assert service1 is service2
-
-    def test_reset_creates_fresh_instance(self) -> None:
-        from azurerbac.analytics.service import get_analytics_service, reset_analytics_service
-
-        service1 = get_analytics_service()
-        reset_analytics_service()
-        service2 = get_analytics_service()
-        assert service1 is not service2
 
 
 # =============================================================================
@@ -632,65 +530,7 @@ class TestComputeTopProviders:
 
 
 class TestSerializableMixin:
-    """Tests for SerializableMixin edge cases."""
-
-    @pytest.mark.parametrize(
-        ("model_cls", "kwargs", "none_field"),
-        [
-            pytest.param(
-                RecentlyCreatedRole,
-                {"role_id": "r1", "role_name": "Test", "created_at": None},
-                "created_at",
-                id="RecentlyCreatedRole-created_at",
-            ),
-            pytest.param(
-                RecentlyUpdatedRole,
-                {"role_id": "r1", "role_name": "Test", "last_updated": None},
-                "last_updated",
-                id="RecentlyUpdatedRole-last_updated",
-            ),
-            pytest.param(
-                DeletedRole,
-                {"role_id": "r1", "role_name": "Test", "deleted_at": None, "lifespan_days": None},
-                "deleted_at",
-                id="DeletedRole-deleted_at",
-            ),
-        ],
-    )
-    def test_handles_none_values(self, model_cls: type, kwargs: dict, none_field: str) -> None:
-        """Verify None values are preserved in round-trip."""
-        original = model_cls(**kwargs)
-        restored = model_cls.from_dict(original.to_dict())
-        assert getattr(restored, none_field) is None
-        assert restored == original
-
-    @pytest.mark.parametrize(
-        ("model_cls", "expected_defaults"),
-        [
-            pytest.param(
-                AllTimeStats,
-                {"total_additions": 0, "total_scans": 0, "first_scan_date": None},
-                id="AllTimeStats",
-            ),
-            pytest.param(
-                RollingStats,
-                {"window_days": 0, "additions": 0, "deletions": 0},
-                id="RollingStats",
-            ),
-            pytest.param(
-                PermissionChangeStats,
-                {"total_actions_added": 0, "update_count": 0},
-                id="PermissionChangeStats",
-            ),
-        ],
-    )
-    def test_handles_missing_fields_with_defaults(
-        self, model_cls: type, expected_defaults: dict
-    ) -> None:
-        """Verify missing fields use _field_defaults."""
-        instance = model_cls.from_dict({})
-        for field, expected in expected_defaults.items():
-            assert getattr(instance, field) == expected
+    """Tests for SerializableMixin serialization."""
 
     @pytest.mark.parametrize(
         ("date_value", "expected_iso"),

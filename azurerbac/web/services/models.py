@@ -70,10 +70,6 @@ class SortField(StrEnum):
         except ValueError:
             return cls.NAME
 
-    def requires_python_sort(self) -> bool:
-        """True if requires in-memory sorting."""
-        return self in {SortField.ACTIONS, SortField.DATA_ACTIONS}
-
 
 @dataclass(frozen=True, slots=True)
 class PaginationParams:
@@ -87,10 +83,6 @@ class PaginationParams:
     @property
     def offset(self) -> int:
         return (self.page - 1) * self.page_size
-
-    @property
-    def is_descending(self) -> bool:
-        return self.order == SortOrder.DESC
 
     @property
     def sort_field(self) -> SortField:
@@ -179,11 +171,6 @@ class RawPermissions:
 
         return RoleCoverage(control_effective, data_effective)
 
-    @property
-    def permission_block_count(self) -> int:
-        """Get number of permission blocks."""
-        return len(self._permissions)
-
     def _build_permission_blocks(self) -> list[PermissionBlockView]:
         """Build permission block views for UI display."""
         return [
@@ -219,9 +206,7 @@ class RawPermissions:
             has_wildcards=self.has_wildcards,
             has_unresolved_permissions=has_unresolved,
             raw_actions=self.actions,
-            raw_not_actions=self.not_actions,
             raw_data_actions=self.data_actions,
-            raw_not_data_actions=self.not_data_actions,
             permission_blocks=self._build_permission_blocks(),
         )
 
@@ -404,15 +389,8 @@ class RoleEffectivePermissions:
     has_wildcards: bool
     has_unresolved_permissions: bool
     raw_actions: list[str]
-    raw_not_actions: list[str]
     raw_data_actions: list[str]
-    raw_not_data_actions: list[str]
     permission_blocks: list[PermissionBlockView]
-
-    @property
-    def has_multiple_permission_blocks(self) -> bool:
-        """Check if role has multiple permission blocks."""
-        return len(self.permission_blocks) > 1
 
     def to_dict(self) -> JsonDict:
         """Convert to dict for template rendering."""

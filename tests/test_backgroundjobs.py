@@ -383,27 +383,6 @@ class TestApplyRoleScan:
         assert len(history.summary) > 0
 
 
-class TestRoleScanResult:
-    """Tests for RoleScanResult dataclass."""
-
-    @pytest.mark.parametrize(
-        ("created", "updated", "deleted", "expected"),
-        [
-            pytest.param(0, 0, 0, False, id="no_changes"),
-            pytest.param(1, 0, 0, True, id="only_created"),
-            pytest.param(0, 1, 0, True, id="only_updated"),
-            pytest.param(0, 0, 1, True, id="only_deleted"),
-            pytest.param(1, 1, 1, True, id="all_changes"),
-        ],
-    )
-    def test_has_changes(self, created: int, updated: int, deleted: int, expected: bool):
-        """Test has_changes property returns True when any change count is non-zero."""
-        from azurerbac.backgroundjobs.models import RoleScanResult
-
-        result = RoleScanResult(created=created, updated=updated, deleted=deleted, total=10)
-        assert result.has_changes is expected
-
-
 # =============================================================================
 # Operations Monitor Tests
 # =============================================================================

@@ -24,7 +24,6 @@ class ErrorMessages(StrEnum):
     """API error messages."""
 
     SEARCH_TOO_SHORT = f"Please enter at least {MIN_SEARCH_CHARS} characters to search"
-    QUERY_EMPTY = "Query cannot be empty"
     QUERY_TOO_SHORT = "Query too short. Please describe what you need."
     GENERIC_ERROR = "An error occurred while processing your request. Please try again."
 

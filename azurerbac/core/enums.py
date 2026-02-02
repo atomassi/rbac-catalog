@@ -9,10 +9,6 @@ class SortOrder(StrEnum):
     ASC = "asc"
     DESC = "desc"
 
-    @property
-    def is_descending(self) -> bool:
-        return self == SortOrder.DESC
-
 
 class StatusFilter(StrEnum):
     """Role status filter."""

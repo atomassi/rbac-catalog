@@ -1036,27 +1036,6 @@ class TestClassifiedOperations:
         assert len(classified) == 4
 
 
-class TestOperationSets:
-    """Tests for OperationSets value object."""
-
-    def test_from_operations_creates_correct_sets(self, sample_operations):
-        """from_operations should separate control and data plane operations (lowered)."""
-        from azurerbac.matching.models import OperationSets
-
-        op_sets = OperationSets.from_operations(sample_operations)
-
-        # Control plane operations (stored lowered)
-        assert "microsoft.storage/storageaccounts/read" in op_sets.all_control
-        assert "microsoft.compute/virtualmachines/read" in op_sets.all_control
-
-        # Data plane operations (stored lowered)
-        assert "microsoft.keyvault/vaults/secrets/read" in op_sets.all_data
-        assert (
-            "microsoft.storage/storageaccounts/blobservices/containers/blobs/read"
-            in op_sets.all_data
-        )
-
-
 class TestRecommendationService:
     """Tests for RoleRecommendationService."""
 

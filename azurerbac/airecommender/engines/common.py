@@ -27,42 +27,12 @@ class ScoreNormalizer:
     """Unified score normalization utilities.
 
     Provides multiple normalization strategies:
-    - min_max: Scale scores to [floor, ceiling] range
+    - normalize_candidates: Scale RankedRole scores to [floor, ceiling] range
     - sigmoid: Non-linear transform for bell-curve distributions
     - dict_min_max: Normalize a dict of scores (for BM25 etc.)
 
     All methods are stateless and can be called as class methods.
     """
-
-    @staticmethod
-    def min_max(
-        scores: dict[str, float],
-        floor: float = SCORE_FLOOR,
-        ceiling: float = SCORE_CEILING,
-    ) -> dict[str, float]:
-        """Normalize dict of scores to [floor, ceiling] range.
-
-        Args:
-            scores: Dictionary mapping keys to raw scores.
-            floor: Minimum normalized score (default 0.60).
-            ceiling: Maximum normalized score (default 0.95).
-
-        Returns:
-            New dictionary with normalized scores.
-        """
-        if not scores:
-            return {}
-
-        values = list(scores.values())
-        min_score = min(values)
-        max_score = max(values)
-        score_range = max_score - min_score if max_score > min_score else 1.0
-        output_range = ceiling - floor
-
-        return {
-            key: floor + ((val - min_score) / score_range) * output_range
-            for key, val in scores.items()
-        }
 
     @staticmethod
     def normalize_candidates(

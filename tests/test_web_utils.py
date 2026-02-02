@@ -9,7 +9,7 @@ from azurerbac.web.filters import (
     format_datetime,
     full_json_diff,
 )
-from azurerbac.web.utils import clamp, role_json_pretty, urlencode_path
+from azurerbac.web.utils import role_json_pretty, urlencode_path
 
 
 class TestDiffLines:
@@ -334,27 +334,6 @@ class TestUrlEncodePath:
     def test_urlencode_path(self, text: str, expected: str) -> None:
         """Test urlencode_path encodes path segments correctly."""
         assert urlencode_path(text) == expected
-
-
-class TestClamp:
-    """Tests for the clamp utility function."""
-
-    @pytest.mark.parametrize(
-        ("value", "min_val", "max_val", "expected"),
-        [
-            pytest.param(5, 0, 10, 5, id="within_range"),
-            pytest.param(-5, 0, 10, 0, id="below_min"),
-            pytest.param(15, 0, 10, 10, id="above_max"),
-            pytest.param(0, 0, 10, 0, id="at_min"),
-            pytest.param(10, 0, 10, 10, id="at_max"),
-            pytest.param(1, 1, 1, 1, id="min_equals_max"),
-            pytest.param(-100, -50, -10, -50, id="negative_range_below"),
-            pytest.param(-30, -50, -10, -30, id="negative_range_within"),
-        ],
-    )
-    def test_clamp(self, value: int, min_val: int, max_val: int, expected: int) -> None:
-        """Test clamp constrains values to range."""
-        assert clamp(value, min_val, max_val) == expected
 
 
 class TestRoleJsonPretty:

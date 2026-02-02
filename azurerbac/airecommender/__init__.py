@@ -18,7 +18,6 @@ from .engines import (
 )
 from .exceptions import (
     AIRecommenderError,
-    EmbeddingModelNotAvailableError,
     KnowledgeBaseNotInitializedError,
     OllamaClientNotAvailableError,
 )
@@ -29,7 +28,6 @@ __all__ = [
     "AIRecommendation",
     "AIRecommenderError",
     "BaseRecommenderEngine",
-    "EmbeddingModelNotAvailableError",
     "EngineNotAvailableError",
     "HybridEngine",
     "KnowledgeBaseNotInitializedError",

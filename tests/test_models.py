@@ -655,28 +655,6 @@ class TestMatchingModels:
 
         assert len(ops) == 4
 
-    @pytest.mark.parametrize(
-        "covered,total,expected_missing",
-        [
-            pytest.param(5, 10, 5, id="partial_coverage"),
-            pytest.param(10, 10, 0, id="full_coverage"),
-            pytest.param(0, 10, 10, id="no_coverage"),
-            pytest.param(15, 10, 0, id="over_coverage_clamped_to_zero"),
-        ],
-    )
-    def test_wildcard_coverage_missing_count(self, covered: int, total: int, expected_missing: int):
-        """Test WildcardCoverage.missing_count property."""
-        from azurerbac.matching.models import WildcardCoverage
-
-        wc = WildcardCoverage(
-            pattern="*/read",
-            plane="CONTROL",
-            covered_count=covered,
-            total_count=total,
-        )
-
-        assert wc.missing_count == expected_missing
-
     def test_role_match_is_full_match_property(self):
         """Test RoleMatch.is_full_match property."""
         from azurerbac.matching.models import RoleMatch

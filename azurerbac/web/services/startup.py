@@ -30,8 +30,8 @@ async def preload_cache(session_factory: async_sessionmaker[AsyncSession]) -> No
             raise RuntimeError("Cache initialization failed - cannot start without cache")
 
     elapsed = time.time() - start
-    roles_count = len(service.cache.roles_by_id)
-    operations_count = len(service.cache.all_operations)
+    roles_count = service.cache.metadata.roles_count
+    operations_count = service.cache.metadata.operations_count
     logger.info("CACHE INITIALIZATION COMPLETE in %.2fs", elapsed)
     logger.info("Roles: %d | Operations: %d", roles_count, operations_count)
 
@@ -74,8 +74,8 @@ async def cache_refresh_task(session_factory: async_sessionmaker[AsyncSession]) 
                         track_cache_refresh(
                             elapsed,
                             "periodic",
-                            len(service.cache.roles_by_id),
-                            len(service.get_all_operations()),
+                            service.cache.metadata.roles_count,
+                            service.cache.metadata.operations_count,
                         )
                     else:
                         logger.warning("Background: periodic rebuild skipped or failed")

@@ -370,12 +370,6 @@ class TestAnalyticsService:
         service.swap(new_data)
         assert service.analytics_data.total_operations == 5000
 
-    def test_to_dict_from_dict_round_trip(self) -> None:
-        data = AnalyticsData(total_operations=5000)
-        service = AnalyticsService(analytics_data=data)
-        restored = AnalyticsService.from_dict(service.to_dict())
-        assert restored.analytics_data.total_operations == 5000
-
     @pytest.mark.asyncio
     async def test_build_from_db(self) -> None:
         service = AnalyticsService()

@@ -786,8 +786,8 @@ class TestRoleCoverageRaceCondition:
         full_cache = dc_replace(precomputed, source=new_source)
         get_cache_service().swap_in_memory(full_cache)
 
-        # Verify cache.get_role_definitions() derives from source.roles_by_id
-        role_definitions = get_cache_service().cache.get_role_definitions()
+        # Verify cache.role_definitions derives from source.roles_by_id
+        role_definitions = get_cache_service().cache.role_definitions
         assert len(role_definitions) == 1
 
         # Now call get_roles_allowing_operation - should work!

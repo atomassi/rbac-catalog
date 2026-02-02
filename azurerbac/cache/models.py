@@ -552,14 +552,15 @@ class CacheData:
         """Frozenset of data plane operation names (lowered)."""
         return frozenset(op.name.lower() for op in self.all_operations if op.is_data_action)
 
-    def get_role_definitions(self) -> list[RoleDefinition]:
-        """Get all active roles as RoleDefinition objects."""
+    @cached_property
+    def role_definitions(self) -> list[RoleDefinition]:
+        """All active roles as RoleDefinition objects (cached)."""
         return [r.definition for r in self.roles_by_id.values() if r.status == RoleStatus.ACTIVE]
 
     @cached_property
     def active_roles_count(self) -> int:
         """Count of active (non-deleted) roles."""
-        return sum(1 for r in self.roles_by_id.values() if r.status == RoleStatus.ACTIVE)
+        return len(self.role_definitions)
 
 
 def compute_roles_hash(roles: list[RoleDefinition]) -> str:

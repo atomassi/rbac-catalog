@@ -153,13 +153,6 @@ class AnalyticsService:
         """Swap in new analytics data atomically."""
         self._analytics_data = analytics_data
 
-    def to_dict(self) -> dict:
-        return self._analytics_data.to_dict()
-
-    @classmethod
-    def from_dict(cls, data: dict) -> AnalyticsService:
-        return cls(analytics_data=AnalyticsData.from_dict(data))
-
 
 # Thread-safe singleton
 _analytics_service_singleton = ThreadSafeSingleton(AnalyticsService)

@@ -335,8 +335,8 @@ class TestLowerOptimization:
         service = CacheService()
         service.swap(cache_data)
 
-        # Verify mapping exists and is correct
-        mapping = service.get_ops_lowered_to_orig()
+        # Verify mapping exists and is correct via cache property
+        mapping = service.cache.ops_lowered_to_orig
         assert (
             mapping["microsoft.storage/storageaccounts/read"]
             == "Microsoft.Storage/storageAccounts/read"
@@ -1312,9 +1312,8 @@ class TestCacheLifecycle:
 
         assert len(set(results)) == 1
 
-    @pytest.mark.asyncio
-    async def test_invalidate_all_clears_memory_cache(self, sample_roles, sample_operations):
-        """invalidate_all clears all in-memory caches."""
+    def test_reset_clears_memory_cache(self, sample_roles, sample_operations):
+        """reset() clears all in-memory caches."""
         from azurerbac.cache import precompute_all
 
         roles_by_id = make_cached_roles_by_id(sample_roles)
@@ -1326,7 +1325,7 @@ class TestCacheLifecycle:
         assert len(get_cache_service().cache.all_operations) > 0
         assert get_cache_service().get_role_page("page1") is not None
 
-        await get_cache_service().invalidate_all()
+        get_cache_service().reset()
 
         assert len(get_cache_service().cache.all_operations) == 0
         assert get_cache_service().get_role_page("page1") is None

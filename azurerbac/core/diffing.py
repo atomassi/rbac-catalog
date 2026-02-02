@@ -19,6 +19,15 @@ class DiffChange:
     def to_dict(self) -> dict[str, Any]:
         return {"path": self.path, "from": self.from_value, "to": self.to_value}
 
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> DiffChange:
+        """Create a DiffChange from a dictionary."""
+        return cls(
+            path=data.get("path", ""),
+            from_value=data.get("from"),
+            to_value=data.get("to"),
+        )
+
 
 @dataclass(slots=True)
 class RoleDiff:
@@ -39,6 +48,21 @@ class RoleDiff:
         if self.after_json is not None:
             result["after_json"] = self.after_json
         return result
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any] | None) -> RoleDiff | None:
+        """Create a RoleDiff from a dictionary.
+
+        Returns None if data is None or empty.
+        """
+        if not data:
+            return None
+        return cls(
+            changed=data.get("changed", False),
+            changes=[DiffChange.from_dict(c) for c in data.get("changes", [])],
+            before_json=data.get("before_json"),
+            after_json=data.get("after_json"),
+        )
 
 
 METADATA_ONLY_FIELDS = frozenset(

@@ -344,30 +344,50 @@ def enrich_event_with_diff(ev: CachedChangeEvent) -> EnrichedChangeEvent:
     import json
 
     from azurerbac.azure.models import RoleDefinition
+    from azurerbac.core.diffing import RoleDiff
     from azurerbac.web.utils import role_json_pretty
 
-    def to_clean_dict(role_json: dict | None) -> dict | None:
-        """Parse role JSON through RoleDefinition model for consistent output."""
-        return RoleDefinition.model_validate(role_json).to_dict() if role_json else None
+    def parse_role(role_json: dict | None) -> RoleDefinition | None:
+        """Parse role JSON to RoleDefinition model."""
+        return RoleDefinition.model_validate(role_json) if role_json else None
 
-    diff_json = ev.diff_json
-    if diff_json:
-        if before := diff_json.get("before_json"):
-            diff_json = {**diff_json, "before_json": to_clean_dict(before)}
-        if after := diff_json.get("after_json"):
-            diff_json = {**diff_json, "after_json": to_clean_dict(after)}
+    diff: RoleDiff | None = RoleDiff.from_dict(ev.diff_json)
+
+    # Only process before_json/after_json if diff exists and at least one side is present
+    # (delete events only have "changes", not the full JSON)
+    if diff is not None and (diff.before_json is not None or diff.after_json is not None):
+        before_role = parse_role(diff.before_json)
+        after_role = parse_role(diff.after_json)
+
+        # Normalize createdOn to avoid showing it as a diff
+        created_on = next(
+            (r.properties.created_on for r in (after_role, before_role) if r),
+            None,
+        )
+
+        for role in (before_role, after_role):
+            if role and created_on:
+                role.properties.created_on = created_on
+
+        diff = RoleDiff(
+            changed=diff.changed,
+            changes=diff.changes,
+            before_json=before_role.to_dict() if before_role else None,
+            after_json=after_role.to_dict() if after_role else None,
+        )
 
     # Process role_json for created/initial_scan events
     role_json_pretty_str = ""
-    if (role_json := ev.role_json) and (display_json := to_clean_dict(role_json)):
-        role_json_pretty_str = role_json_pretty(display_json)
+    if (role_json := ev.role_json) and (parsed := parse_role(role_json)):
+        role_json_pretty_str = role_json_pretty(parsed.to_dict())
 
+    diff_dict = diff.to_dict() if diff else None
     return EnrichedChangeEvent(
         scan_timestamp=ev.scan_timestamp,
         azure_updated_on=ev.azure_updated_on,
         event_type=ev.event_type,
         summary=ev.summary,
-        diff=diff_json,
-        diff_pretty=(json.dumps(diff_json, indent=2, default=str) if diff_json else ""),
+        diff=diff,
+        diff_pretty=(json.dumps(diff_dict, indent=2, default=str) if diff_dict else ""),
         role_json_pretty=role_json_pretty_str,
     )

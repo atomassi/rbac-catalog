@@ -7,6 +7,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
+from azurerbac.core.diffing import RoleDiff
 from azurerbac.core.enums import SortOrder
 from azurerbac.core.types import JsonDict
 from azurerbac.matching.models import RoleCoverage
@@ -407,13 +408,22 @@ class EnrichedChangeEvent:
     azure_updated_on: datetime | None
     event_type: str
     summary: str | None
-    diff: JsonDict | None
+    diff: RoleDiff | None
     diff_pretty: str
     role_json_pretty: str
 
     def to_dict(self) -> JsonDict:
         """Convert to dict for template rendering."""
-        return asdict(self)
+        result: JsonDict = {
+            "scan_timestamp": self.scan_timestamp,
+            "azure_updated_on": self.azure_updated_on,
+            "event_type": self.event_type,
+            "summary": self.summary,
+            "diff": self.diff.to_dict() if self.diff else None,
+            "diff_pretty": self.diff_pretty,
+            "role_json_pretty": self.role_json_pretty,
+        }
+        return result
 
 
 @dataclass(slots=True)

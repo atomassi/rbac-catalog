@@ -617,9 +617,12 @@ class RoleRecommendationService:
     @staticmethod
     def extract_role_info(role: RoleDefinition) -> RoleInfo:
         """Extract role information from a RoleDefinition."""
+        scopes = role.properties.assignable_scopes
+        assignable_scope = scopes[0] if scopes else "/"
         return RoleInfo(
             role_id=role.role_id,
             role_name=role.role_name,
             description=role.description,
             permissions=role.properties.permissions,
+            assignable_scope=assignable_scope,
         )

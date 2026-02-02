@@ -103,6 +103,7 @@ def recommend_roles(
             role_name=role_info.role_name,
             description=role_info.description,
             permissions=role_info.permissions,
+            assignable_scope=role_info.assignable_scope,
         )
 
         # Evaluate role coverage using cached data
@@ -170,6 +171,7 @@ def recommend_roles(
                 missing_operations_count=expanded.total,
                 has_partial_wildcard_match=bool(c.ctx.wildcard_partial_coverage)
                 or bool(c.missing_ops),
+                assignable_scope=c.ctx.assignable_scope,
             )
         )
 

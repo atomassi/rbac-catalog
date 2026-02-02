@@ -5,7 +5,10 @@ from __future__ import annotations
 import difflib
 import json
 from datetime import datetime
-from typing import Any, Final
+from typing import TYPE_CHECKING, Any, Final
+
+if TYPE_CHECKING:
+    from azurerbac.core.diffing import DiffChange
 
 _CODE_HINT: Final = "? "
 _CODE_REMOVED: Final = "- "
@@ -70,7 +73,7 @@ def _process_ndiff(diff_lines_iter: list[str]) -> list[dict]:
     return result
 
 
-def diff_lines(change: Any) -> list[dict]:
+def diff_lines(change: DiffChange) -> list[dict]:
     """Compute unified diff between from_value and to_value in a DiffChange."""
     old_str = _json_to_str(change.from_value)
     new_str = _json_to_str(change.to_value)

@@ -238,7 +238,7 @@ async def get_common_dashboard_data(deps: DashboardDeps) -> DashboardSummary:
     """Get summary data for dashboard pages."""
     return DashboardSummary(
         total_roles=deps.app_cache.cache.active_roles_count,
-        total_operations=len(deps.app_cache.get_all_operations()),
+        total_operations=deps.app_cache.cache.metadata.operations_count,
         last_scan=deps.app_cache.cache.last_scan,
         first_scan=deps.app_cache.cache.first_scan,
     )

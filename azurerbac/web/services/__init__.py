@@ -10,7 +10,6 @@ from azurerbac.web.services.dashboard import (
     get_common_dashboard_data,
     search_roles,
     search_roles_in_cache,
-    search_roles_in_db,
 )
 from azurerbac.web.services.models import (
     DashboardSummary,
@@ -75,5 +74,4 @@ __all__ = [
     "preload_cache",
     "search_roles",
     "search_roles_in_cache",
-    "search_roles_in_db",
 ]

@@ -8,11 +8,10 @@ from dataclasses import replace
 from typing import TYPE_CHECKING, Any, Final, Protocol
 
 from sqlalchemy import and_, func, or_, select
-from sqlalchemy.sql import Select
 from sqlalchemy.sql.elements import ColumnElement
 
 from azurerbac.cache.models import CachedChangeEvent, CachedRole
-from azurerbac.core.constants import DEFAULT_ROLE_TYPE, EventType, RoleStatus
+from azurerbac.core.constants import DEFAULT_ROLE_TYPE, EventType
 from azurerbac.core.enums import EventTypeFilter, SortOrder, StatusFilter
 from azurerbac.core.utils import (
     ensure_utc,
@@ -114,32 +113,11 @@ def _sort_enriched_roles(
     enriched_roles.sort(key=key_func, reverse=(order == SortOrder.DESC))
 
 
-def _get_sort_column(role_model: type[Role], sort: str | SortField) -> Any:
-    """Get SQLAlchemy column for sorting."""
-    columns: dict[str | SortField, Any] = {
-        SortField.ID: role_model.role_id,
-        SortField.UPDATED: role_model.updated_on,
-    }
-    return columns.get(sort, role_model.role_name)
-
-
 def _matches_status(role_status: str, status_filter: str | StatusFilter) -> bool:
     """Check if role status matches filter."""
     if status_filter == StatusFilter.ALL:
         return True
     return role_status == status_filter
-
-
-def _build_status_filter(
-    role_model: type[Role], status_filter: str | StatusFilter
-) -> Select[tuple[Role]]:
-    """Build SQLAlchemy select with status filter."""
-    stmt = select(role_model)
-    if status_filter == StatusFilter.DELETED:
-        return stmt.where(role_model.status == RoleStatus.DELETED)
-    if status_filter != StatusFilter.ALL:
-        return stmt.where(role_model.status == RoleStatus.ACTIVE)
-    return stmt
 
 
 def _get_event_timestamp(
@@ -256,67 +234,6 @@ async def fetch_events_from_db(
         return list(result.scalars().all())
 
 
-async def _execute_paginated_role_query(
-    session: AsyncSession,
-    deps: DashboardDeps,
-    stmt: Select[tuple[Role]],
-    params: PaginationParams,
-) -> list[RoleWithCounts]:
-    """Execute role query with sorting and pagination.
-
-    For actions/data_actions sort: requires Python sort (values from cache).
-    For updated sort: uses SQL subquery (efficient, no N+1).
-    For name/id sort: uses simple DB column sort.
-    """
-    sort_field = params.sort_field
-
-    # actions/data_actions need Python sort (values come from cache)
-    if sort_field in (SortField.ACTIONS, SortField.DATA_ACTIONS):
-        stmt = stmt.order_by(deps.Role.role_name.asc())
-        async with TimedDbQuery("fetch_roles_paginated_all", fallback_type="dashboard_roles"):
-            all_roles = (await session.execute(stmt)).scalars().all()
-        enriched_roles = [enrich_role_with_counts(r) for r in all_roles]
-        _sort_enriched_roles(enriched_roles, sort=params.sort, order=params.order)
-        return enriched_roles[params.offset : params.offset + params.page_size]
-
-    # updated sort: use subquery to get max(azure_updated_on) per role
-    if sort_field == SortField.UPDATED:
-        # Subquery: get latest azure_updated_on per role_id
-        latest_update = (
-            select(
-                deps.RoleHistory.role_id,
-                func.max(deps.RoleHistory.azure_updated_on).label("latest_updated"),
-            )
-            .group_by(deps.RoleHistory.role_id)
-            .subquery()
-        )
-
-        # Join roles with the subquery and sort by latest_updated
-        stmt = stmt.outerjoin(latest_update, deps.Role.role_id == latest_update.c.role_id)
-        sort_col = latest_update.c.latest_updated
-        if params.order == SortOrder.DESC:
-            stmt = stmt.order_by(sort_col.desc().nulls_last())
-        else:
-            stmt = stmt.order_by(sort_col.asc().nulls_last())
-
-        stmt = stmt.offset(params.offset).limit(params.page_size)
-        async with TimedDbQuery("fetch_roles_paginated_updated", fallback_type="dashboard_roles"):
-            db_roles = (await session.execute(stmt)).scalars().all()
-        return [enrich_role_with_counts(r) for r in db_roles]
-
-    # name/id sort: simple column sort
-    sort_column = _get_sort_column(deps.Role, params.sort)
-    if params.order == SortOrder.DESC:
-        stmt = stmt.order_by(sort_column.desc())
-    else:
-        stmt = stmt.order_by(sort_column.asc())
-
-    stmt = stmt.offset(params.offset).limit(params.page_size)
-    async with TimedDbQuery("fetch_roles_paginated", fallback_type="dashboard_roles"):
-        db_roles = (await session.execute(stmt)).scalars().all()
-    return [enrich_role_with_counts(r) for r in db_roles]
-
-
 async def get_common_dashboard_data(deps: DashboardDeps) -> DashboardSummary:
     """Get summary data for dashboard pages."""
     return DashboardSummary(
@@ -353,8 +270,38 @@ async def ensure_scan_metadata(
     return ScanMetadata(last_scan=last_scan, first_scan=first_scan)
 
 
+def _fetch_roles_from_cache(
+    deps: DashboardDeps,
+    status_filter: str | StatusFilter,
+    sort: str | SortField,
+    order: str | SortOrder,
+    page: int,
+    page_size: int,
+) -> PaginatedResult[RoleWithCounts] | None:
+    """Fetch paginated roles from cache.
+
+    Returns None if cache is empty, otherwise returns paginated result.
+    This avoids DB queries since all role data is already cached.
+    """
+    cached_roles = deps.app_cache.cache.roles_by_id
+    if not cached_roles:
+        return None
+
+    # Filter by status
+    matching_roles = [
+        role for role in cached_roles.values() if _matches_status(role.status, status_filter)
+    ]
+
+    # Enrich, sort, and paginate
+    enriched_roles = [enrich_role_with_counts(r) for r in matching_roles]
+    _sort_enriched_roles(enriched_roles, sort=sort, order=order)
+
+    params = PaginationParams(page=page, page_size=page_size)
+    return _paginate_list(enriched_roles, params)
+
+
 async def fetch_roles_paginated(
-    session: AsyncSession,
+    _session: AsyncSession,  # unused - kept for API compatibility
     deps: DashboardDeps,
     status_filter: str | StatusFilter,
     sort: str | SortField,
@@ -362,7 +309,7 @@ async def fetch_roles_paginated(
     page: int,
     page_size: int,
 ) -> PaginatedResult[RoleWithCounts]:
-    """Fetch paginated roles with caching."""
+    """Fetch paginated roles from cache."""
     cache_key = f"roles:{status_filter}::{sort}:{order}:{page}:{page_size}"
     count_cache_key = f"roles_count:{status_filter}"
 
@@ -374,24 +321,14 @@ async def fetch_roles_paginated(
         total_pages = _calculate_total_pages(int(cached_count), page_size)
         return PaginatedResult(cached_roles, int(cached_count), total_pages)
 
-    stmt = _build_status_filter(deps.Role, status_filter)
+    # Build from in-memory cache
+    result = _fetch_roles_from_cache(deps, status_filter, sort, order, page, page_size)
+    if result is None:
+        raise RuntimeError("Role cache is empty - application not initialized")
 
-    # Use cached count if available, otherwise fetch from DB
-    if cached_count is not None:
-        total_filtered_roles = int(cached_count)
-    else:
-        count_stmt = select(func.count()).select_from(stmt.subquery())
-        async with TimedDbQuery("fetch_roles_count", fallback_type="dashboard_roles"):
-            total_filtered_roles = await session.scalar(count_stmt) or 0
-        deps.app_cache.set_role_page(count_cache_key, total_filtered_roles)
-
-    total_pages = _calculate_total_pages(total_filtered_roles, page_size)
-
-    params = PaginationParams(page=page, page_size=page_size, sort=sort, order=order)
-    roles = await _execute_paginated_role_query(session, deps, stmt, params)
-
-    deps.app_cache.set_role_page(cache_key, roles)
-    return PaginatedResult(roles, total_filtered_roles, total_pages)
+    deps.app_cache.set_role_page(cache_key, result.items)
+    deps.app_cache.set_role_page(count_cache_key, result.total_count)
+    return result
 
 
 def _role_matches_search(
@@ -421,25 +358,14 @@ async def search_roles(
     page_size: int,
     exact_match: str | None,
 ) -> PaginatedResult[RoleWithCounts]:
-    """Search roles using cache first, fallback to DB."""
+    """Search roles in cache."""
     cached_roles = deps.app_cache.cache.roles_by_id
 
-    if cached_roles:
-        return search_roles_in_cache(
-            cached_roles, q, status_filter, sort, order, page, page_size, exact_match
-        )
+    if not cached_roles:
+        raise RuntimeError("Role cache is empty - application not initialized")
 
-    # Cache empty - fallback tracked via TimedDbQuery
-    return await search_roles_in_db(
-        session,
-        deps,
-        q,
-        status_filter,
-        sort,
-        order,
-        page,
-        page_size,
-        exact_match,
+    return search_roles_in_cache(
+        cached_roles, q, status_filter, sort, order, page, page_size, exact_match
     )
 
 
@@ -470,46 +396,3 @@ def search_roles_in_cache(
 
     params = PaginationParams(page=page, page_size=page_size)
     return _paginate_list(enriched_roles, params)
-
-
-async def search_roles_in_db(
-    session: AsyncSession,
-    deps: DashboardDeps,
-    q: str,
-    status_filter: str | StatusFilter,
-    sort: str | SortField,
-    order: str | SortOrder,
-    page: int,
-    page_size: int,
-    exact_match: str | None,
-) -> PaginatedResult[RoleWithCounts]:
-    """Search roles in database (fallback when cache is empty)."""
-    stmt = _build_status_filter(deps.Role, status_filter)
-
-    if exact_match:
-        conditions: list[ColumnElement[bool]] = [
-            func.lower(deps.Role.role_name) == func.lower(q.strip()),
-            func.lower(deps.Role.role_id) == func.lower(q.strip()),
-        ]
-    else:
-        search_term = f"%{q}%"
-        conditions = [
-            deps.Role.role_name.ilike(search_term),
-            deps.Role.role_id.ilike(search_term),
-        ]
-
-    normalized_id = normalize_uuid_or_none(q)
-    if normalized_id is not None:
-        conditions.append(deps.Role.role_id == normalized_id)
-
-    stmt = stmt.where(or_(*conditions))
-
-    count_stmt = select(func.count()).select_from(stmt.subquery())
-    async with TimedDbQuery("search_roles_count", fallback_type="search_roles"):
-        total_filtered_roles = await session.scalar(count_stmt) or 0
-    total_pages = _calculate_total_pages(total_filtered_roles, page_size)
-
-    params = PaginationParams(page=page, page_size=page_size, sort=sort, order=order)
-    roles = await _execute_paginated_role_query(session, deps, stmt, params)
-
-    return PaginatedResult(roles, total_filtered_roles, total_pages)

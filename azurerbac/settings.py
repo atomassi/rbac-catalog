@@ -87,7 +87,7 @@ class Settings(BaseModel):
     enable_embeddings_in_tests: bool = False
     app_insights_connection_string: str = ""
     environment_name: str = "local"
-    use_rbac_api: bool = False
+    use_rbac_api: bool = True
     mcp_server_enabled: bool = True
 
     @property
@@ -133,7 +133,7 @@ def _load_settings() -> Settings:
         enable_embeddings_in_tests=_get_bool(EnvVars.AZURERBAC_ENABLE_EMBEDDINGS_IN_TESTS, False),
         app_insights_connection_string=app_insights,
         environment_name=env_name,
-        use_rbac_api=_get_bool(EnvVars.USE_RBAC_API, False),
+        use_rbac_api=_get_bool(EnvVars.USE_RBAC_API, True),
         mcp_server_enabled=_get_bool(EnvVars.MCP_SERVER_ENABLED, True),
     )
 

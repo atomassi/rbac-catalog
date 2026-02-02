@@ -70,29 +70,10 @@ def _process_ndiff(diff_lines_iter: list[str]) -> list[dict]:
     return result
 
 
-def diff_lines(change: dict) -> list[dict]:
-    """Compute unified diff between 'from' and 'to' in a change object."""
-    # Handle list-style changes (added/removed arrays)
-    if "added" in change or "removed" in change:
-        result: list[dict[str, str]] = []
-        for item in change.get("removed", []):
-            result.extend(
-                {"type": "removed", "text": line} for line in _ensure_str(item).splitlines()
-            )
-
-        for item in change.get("added", []):
-            result.extend(
-                {"type": "added", "text": line} for line in _ensure_str(item).splitlines()
-            )
-
-        return result
-
-    # Handle from/to style changes (also support old/new keys)
-    old_val = change.get("from") if "from" in change else change.get("old")
-    new_val = change.get("to") if "to" in change else change.get("new")
-
-    old_str = _json_to_str(old_val)
-    new_str = _json_to_str(new_val)
+def diff_lines(change: Any) -> list[dict]:
+    """Compute unified diff between from_value and to_value in a DiffChange."""
+    old_str = _json_to_str(change.from_value)
+    new_str = _json_to_str(change.to_value)
 
     if not old_str and not new_str:
         return []

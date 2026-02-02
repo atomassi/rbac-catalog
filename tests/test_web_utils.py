@@ -2,6 +2,7 @@
 
 import pytest
 
+from azurerbac.core.diffing import DiffChange
 from azurerbac.core.utils import slugify
 from azurerbac.web.filters import (
     diff_lines,
@@ -18,11 +19,19 @@ class TestDiffLines:
     @pytest.mark.parametrize(
         ("change", "expected_type"),
         [
-            pytest.param({"from": None, "to": {"key": "value"}}, "added", id="added_lines"),
-            pytest.param({"from": {"key": "value"}, "to": None}, "removed", id="removed_lines"),
+            pytest.param(
+                DiffChange(path="root", from_value=None, to_value={"key": "value"}),
+                "added",
+                id="added_lines",
+            ),
+            pytest.param(
+                DiffChange(path="root", from_value={"key": "value"}, to_value=None),
+                "removed",
+                id="removed_lines",
+            ),
         ],
     )
-    def test_diff_single_type(self, change: dict, expected_type: str):
+    def test_diff_single_type(self, change: DiffChange, expected_type: str):
         """Test diff showing only added or removed lines."""
         result = diff_lines(change)
         assert len(result) > 0
@@ -30,37 +39,27 @@ class TestDiffLines:
 
     def test_from_to_diff_modified(self):
         """Test diff showing modifications."""
-        change = {"from": {"key": "old"}, "to": {"key": "new"}}
+        change = DiffChange(path="root", from_value={"key": "old"}, to_value={"key": "new"})
         result = diff_lines(change)
 
         assert len(result) > 0
         types = {r["type"] for r in result}
         assert "added" in types or "removed" in types
 
-    def test_list_style_changes(self):
-        """Test handling of added/removed array format."""
-        change = {"added": ["item1", "item2"], "removed": ["item3"]}
-        result = diff_lines(change)
-
-        added = [r for r in result if r["type"] == "added"]
-        removed = [r for r in result if r["type"] == "removed"]
-
-        assert len(added) >= 2
-        assert len(removed) >= 1
-
     def test_empty_change_returns_empty(self):
         """Test that empty from/to returns empty result."""
-        change = {"from": None, "to": None}
+        change = DiffChange(path="root", from_value=None, to_value=None)
         result = diff_lines(change)
 
         assert result == []
 
     def test_handles_complex_nested_objects(self):
         """Test diffing complex nested objects."""
-        change = {
-            "from": {"nested": {"a": 1, "b": 2}},
-            "to": {"nested": {"a": 1, "b": 3}},
-        }
+        change = DiffChange(
+            path="root",
+            from_value={"nested": {"a": 1, "b": 2}},
+            to_value={"nested": {"a": 1, "b": 3}},
+        )
         result = diff_lines(change)
 
         assert len(result) > 0
@@ -68,10 +67,11 @@ class TestDiffLines:
     def test_comma_only_changes_treated_as_unchanged(self):
         """Test that trailing comma differences are ignored."""
         # This tests the comma normalization logic
-        change = {
-            "from": {"a": 1, "b": 2},
-            "to": {"a": 1, "b": 2},  # Same content
-        }
+        change = DiffChange(
+            path="root",
+            from_value={"a": 1, "b": 2},
+            to_value={"a": 1, "b": 2},  # Same content
+        )
         result = diff_lines(change)
 
         # Should be mostly unchanged

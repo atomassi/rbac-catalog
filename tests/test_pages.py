@@ -599,3 +599,122 @@ class TestEnrichEventWithDiff:
         assert before_created == after_created
         # The value should be from the after_json
         assert after_created == "2025-11-17T16:01:32.566Z"
+
+    def test_changes_only_diff_not_modified(self):
+        """Test that diff_json with only 'changes' (no before_json/after_json) is preserved.
+
+        Delete events created by diff_roles(old, None) only have 'changes' - not the full JSON.
+        The function should NOT introduce before_json/after_json keys in this case.
+        """
+        from azurerbac.web.services.pages import enrich_event_with_diff
+
+        event = CachedChangeEvent(
+            id=6,
+            role_id="deleted-role",
+            role_name="Deleted Role",
+            event_type=EventType.DELETED,
+            scan_timestamp=None,
+            azure_updated_on=None,
+            summary="Role deleted",
+            diff_json={
+                "changed": True,
+                "changes": [{"path": "<root>", "from": {"id": "test"}, "to": None}],
+                # No before_json or after_json - this is how delete events are stored
+            },
+            role_json=None,
+        )
+
+        result = enrich_event_with_diff(event)
+
+        # Should preserve the original structure - NOT introduce before_json/after_json
+        assert "before_json" not in result.diff
+        assert "after_json" not in result.diff
+        # changes should still be present
+        assert result.diff["changed"] is True
+        assert len(result.diff["changes"]) == 1
+
+    def test_created_on_normalized_when_after_json_is_none(self):
+        """Test createdOn normalization when after_json is None.
+
+        E.g., delete scenario with full JSON.
+        Bug regression test: If after_json is missing but before_json has createdOn,
+        the value should still be preserved (not cause issues).
+        """
+        from azurerbac.web.services.pages import enrich_event_with_diff
+
+        event = CachedChangeEvent(
+            id=7,
+            role_id="deleted-role",
+            role_name="Deleted Role",
+            event_type=EventType.DELETED,
+            scan_timestamp=None,
+            azure_updated_on=None,
+            summary="Role deleted",
+            diff_json={
+                "changed": True,
+                "changes": [{"path": "<root>", "from": {"id": "test"}, "to": None}],
+                "before_json": {
+                    "id": "test-id",
+                    "name": "test-guid",
+                    "properties": {
+                        "roleName": "Deleted Role",
+                        "createdOn": "2025-11-18T16:10:13.262Z",
+                    },
+                },
+                "after_json": None,  # Role was deleted
+            },
+            role_json=None,
+        )
+
+        result = enrich_event_with_diff(event)
+
+        # before_json should still have createdOn (fallback to before's value)
+        before_created = result.diff["before_json"]["properties"]["createdOn"]
+        assert before_created == "2025-11-18T16:10:13.262Z"
+        # after_json should remain None
+        assert result.diff["after_json"] is None
+
+    def test_created_on_normalized_when_before_missing_properties(self):
+        """Test createdOn normalization when before_json has no properties key.
+
+        Bug regression test: If before_json exists but has no 'properties' key,
+        and after_json has createdOn, the function should add properties to before.
+        """
+        from azurerbac.web.services.pages import enrich_event_with_diff
+
+        event = CachedChangeEvent(
+            id=8,
+            role_id="test-id",
+            role_name="Test Role",
+            event_type=EventType.UPDATED,
+            scan_timestamp=None,
+            azure_updated_on=None,
+            summary="Updated",
+            diff_json={
+                "changed": True,
+                "changes": [{"path": "properties", "from": None, "to": {"roleName": "Test"}}],
+                "before_json": {
+                    "id": "test-id",
+                    "name": "test-guid",
+                    # No properties key
+                },
+                "after_json": {
+                    "id": "test-id",
+                    "name": "test-guid",
+                    "properties": {
+                        "roleName": "Test Role",
+                        "createdOn": "2025-11-17T16:01:32.566Z",
+                    },
+                },
+            },
+            role_json=None,
+        )
+
+        result = enrich_event_with_diff(event)
+
+        # before_json should now have properties with createdOn added
+        assert "properties" in result.diff["before_json"]
+        before_created = result.diff["before_json"]["properties"]["createdOn"]
+        after_created = result.diff["after_json"]["properties"]["createdOn"]
+        assert before_created == after_created
+        assert after_created == "2025-11-17T16:01:32.566Z"

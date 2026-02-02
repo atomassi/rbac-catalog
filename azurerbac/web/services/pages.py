@@ -352,17 +352,35 @@ def enrich_event_with_diff(ev: CachedChangeEvent) -> EnrichedChangeEvent:
 
     diff_json = ev.diff_json
     if diff_json:
-        before = to_clean_dict(diff_json.get("before_json"))
-        after = to_clean_dict(diff_json.get("after_json"))
+        orig_before = diff_json.get("before_json")
+        orig_after = diff_json.get("after_json")
 
-        # Normalize createdOn to avoid showing it as a diff (Azure API returns inconsistent values)
-        # Use the "after" value for both so it's displayed but not highlighted as changed
-        if before and after:
-            after_created_on = after.get("properties", {}).get("createdOn")
-            if after_created_on and "properties" in before:
-                before["properties"]["createdOn"] = after_created_on
+        # Only process before_json/after_json if they existed in the original diff
+        # (delete events only have "changes", not the full JSON)
+        if orig_before is not None or orig_after is not None:
+            before = to_clean_dict(orig_before)
+            after = to_clean_dict(orig_after)
 
-        diff_json = {**diff_json, "before_json": before, "after_json": after}
+            # Normalize createdOn to avoid showing it as a diff
+            # (Azure API returns inconsistent values)
+            # Prefer the "after" value; if missing, fall back to "before" value
+            created_on_value: Any | None = None
+            if after is not None:
+                created_on_value = after.get("properties", {}).get("createdOn")
+            if created_on_value is None and before is not None:
+                created_on_value = before.get("properties", {}).get("createdOn")
+
+            if created_on_value is not None:
+                for doc in (before, after):
+                    if doc is None:
+                        continue
+                    properties = doc.get("properties")
+                    if properties is None:
+                        properties = {}
+                        doc["properties"] = properties
+                    properties["createdOn"] = created_on_value
+
+            diff_json = {**diff_json, "before_json": before, "after_json": after}
 
     # Process role_json for created/initial_scan events
     role_json_pretty_str = ""

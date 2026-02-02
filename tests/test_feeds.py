@@ -143,20 +143,6 @@ class TestBuildAtomFeed:
         assert "Test Reader Role" in (title.text or "")
         assert "Created" in (title.text or "")
 
-    def test_handles_empty_events(self):
-        """Should handle empty event list."""
-        result = build_atom_feed(
-            [],
-            site_url="https://example.com",
-            updated=dt.datetime.now(dt.UTC),
-        )
-
-        root = ET.fromstring(result)
-        ns = {"atom": "http://www.w3.org/2005/Atom"}
-        entries = root.findall("atom:entry", ns)
-
-        assert len(entries) == 0
-
 
 class TestBuildRssFeed:
     """Unit tests for RSS feed generation."""
@@ -313,7 +299,11 @@ class TestGetRecentEvents:
 
 
 class TestFeedEndpointsIntegration:
-    """Integration tests for feed HTTP endpoints."""
+    """Integration tests for feed HTTP endpoints.
+
+    Note: Basic format validation and parameter validation are in TestFeedEndpointsParametrized.
+    This class contains tests for specific feed behavior with multiple events.
+    """
 
     @pytest.fixture
     async def test_client_with_events(self, async_session_maker):
@@ -369,54 +359,14 @@ class TestFeedEndpointsIntegration:
         app_module.app.dependency_overrides.clear()
 
     @pytest.mark.asyncio
-    async def test_atom_feed_returns_xml(self, test_client_with_events):
-        """GET /feeds/changelog.atom returns valid Atom XML."""
-        response = await test_client_with_events.get("/feeds/changelog.atom")
-
-        assert response.status_code == 200
-        assert "application/atom+xml" in response.headers["content-type"]
-
-        # Should be valid XML
-        root = ET.fromstring(response.content)
-        assert "feed" in root.tag
-
-    @pytest.mark.asyncio
-    async def test_rss_feed_returns_xml(self, test_client_with_events):
-        """GET /feeds/changelog.rss returns valid RSS XML."""
-        response = await test_client_with_events.get("/feeds/changelog.rss")
-
-        assert response.status_code == 200
-        assert "application/rss+xml" in response.headers["content-type"]
-
-        root = ET.fromstring(response.content)
-        assert root.tag == "rss"
-
-    @pytest.mark.asyncio
-    async def test_feed_respects_days_param(self, test_client_with_events):
-        """Feed should filter by days parameter."""
-        # Default 30 days should include our 1-day-old event
+    async def test_feed_returns_multiple_entries(self, test_client_with_events):
+        """Feed with multiple events should return multiple entries."""
         response = await test_client_with_events.get("/feeds/changelog.atom")
         root = ET.fromstring(response.content)
         ns = {"atom": "http://www.w3.org/2005/Atom"}
         entries = root.findall("atom:entry", ns)
-        assert len(entries) >= 1
-
-    @pytest.mark.asyncio
-    async def test_feed_respects_limit_param(self, test_client_with_events):
-        """Feed should respect limit parameter."""
-        response = await test_client_with_events.get("/feeds/changelog.atom?limit=1")
-        assert response.status_code == 200
-
-    @pytest.mark.asyncio
-    async def test_feed_validates_days_range(self, test_client_with_events):
-        """Feed should reject invalid days values."""
-        # days=0 should be invalid (min is 1)
-        response = await test_client_with_events.get("/feeds/changelog.atom?days=0")
-        assert response.status_code in (400, 422)
-
-        # days=400 should be invalid (max is 365)
-        response = await test_client_with_events.get("/feeds/changelog.atom?days=400")
-        assert response.status_code in (400, 422)
+        # Should have both events (1 day and 3 days old, within default 30 days)
+        assert len(entries) >= 2
 
     @pytest.mark.asyncio
     async def test_feed_has_cache_header(self, test_client_with_events):

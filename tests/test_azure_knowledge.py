@@ -11,12 +11,12 @@ from azurerbac.airecommender.knowledge import (
 )
 
 # =============================================================================
-# Azure Service Synonyms Tests
+# Knowledge Base Data Tests
 # =============================================================================
 
 
-class TestAzureServiceSynonyms:
-    """Tests for Azure service synonyms dictionary."""
+class TestKnowledgeBaseData:
+    """Tests for Azure knowledge base constants and data."""
 
     @pytest.mark.parametrize(
         "service,expected_synonym",
@@ -35,15 +35,6 @@ class TestAzureServiceSynonyms:
         assert len(synonyms) > 0
         assert any(expected_synonym in s for s in synonyms)
 
-
-# =============================================================================
-# Permission Levels Tests
-# =============================================================================
-
-
-class TestPermissionLevels:
-    """Tests for permission level keywords."""
-
     @pytest.mark.parametrize(
         "level,expected_keywords",
         [
@@ -59,6 +50,15 @@ class TestPermissionLevels:
         assert level in PERMISSION_LEVELS
         keywords = PERMISSION_LEVELS[level]
         assert any(kw in keywords for kw in expected_keywords)
+
+    @pytest.mark.parametrize(
+        "query",
+        ["read storage", "write data", "", "delete resources"],
+    )
+    def test_negative_patterns_returns_sequence(self, query):
+        """Test that negative patterns returns a sequence (tuple for caching)."""
+        patterns = get_negative_patterns(query)
+        assert isinstance(patterns, (list, tuple))
 
 
 # =============================================================================
@@ -147,24 +147,6 @@ class TestFindMatchingUseCases:
         matches = find_matching_use_cases("")
         assert isinstance(matches, list)
         assert len(matches) == 0
-
-
-# =============================================================================
-# Negative Pattern Tests
-# =============================================================================
-
-
-class TestGetNegativePatterns:
-    """Tests for negative pattern matching."""
-
-    @pytest.mark.parametrize(
-        "query",
-        ["read storage", "write data", "", "delete resources"],
-    )
-    def test_negative_patterns_returns_sequence(self, query):
-        """Test that negative patterns returns a sequence (tuple for caching)."""
-        patterns = get_negative_patterns(query)
-        assert isinstance(patterns, (list, tuple))
 
 
 # =============================================================================

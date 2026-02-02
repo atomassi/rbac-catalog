@@ -549,3 +549,53 @@ class TestEnrichEventWithDiff:
         assert result.diff is not None
         assert result.diff["changed"] is True
         assert len(result.diff["changes"]) == 1
+
+    def test_created_on_normalized_in_diff_json(self):
+        """Test that createdOn is normalized to avoid showing as a diff.
+
+        Azure API sometimes returns different createdOn values for the same role.
+        The before_json should have its createdOn set to match after_json.
+        """
+        from azurerbac.web.services.pages import enrich_event_with_diff
+
+        event = CachedChangeEvent(
+            id=5,
+            role_id="test-id",
+            role_name="Test Role",
+            event_type=EventType.UPDATED,
+            scan_timestamp=None,
+            azure_updated_on=None,
+            summary="Updated",
+            diff_json={
+                "changed": True,
+                "changes": [{"path": "description", "from": "old", "to": "new"}],
+                "before_json": {
+                    "id": "test-id",
+                    "name": "test-guid",
+                    "properties": {
+                        "roleName": "Test Role",
+                        "createdOn": "2025-11-18T16:10:13.262Z",  # Different createdOn
+                        "updatedOn": "2025-12-01T00:00:00Z",
+                    },
+                },
+                "after_json": {
+                    "id": "test-id",
+                    "name": "test-guid",
+                    "properties": {
+                        "roleName": "Test Role",
+                        "createdOn": "2025-11-17T16:01:32.566Z",  # Different createdOn
+                        "updatedOn": "2025-12-17T00:00:00Z",
+                    },
+                },
+            },
+            role_json=None,
+        )
+
+        result = enrich_event_with_diff(event)
+
+        # Both before and after should have the same createdOn (normalized to after's value)
+        before_created = result.diff["before_json"]["properties"]["createdOn"]
+        after_created = result.diff["after_json"]["properties"]["createdOn"]
+        assert before_created == after_created
+        # The value should be from the after_json
+        assert after_created == "2025-11-17T16:01:32.566Z"

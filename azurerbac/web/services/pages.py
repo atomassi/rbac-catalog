@@ -352,10 +352,17 @@ def enrich_event_with_diff(ev: CachedChangeEvent) -> EnrichedChangeEvent:
 
     diff_json = ev.diff_json
     if diff_json:
-        if before := diff_json.get("before_json"):
-            diff_json = {**diff_json, "before_json": to_clean_dict(before)}
-        if after := diff_json.get("after_json"):
-            diff_json = {**diff_json, "after_json": to_clean_dict(after)}
+        before = to_clean_dict(diff_json.get("before_json"))
+        after = to_clean_dict(diff_json.get("after_json"))
+
+        # Normalize createdOn to avoid showing it as a diff (Azure API returns inconsistent values)
+        # Use the "after" value for both so it's displayed but not highlighted as changed
+        if before and after:
+            after_created_on = after.get("properties", {}).get("createdOn")
+            if after_created_on and "properties" in before:
+                before["properties"]["createdOn"] = after_created_on
+
+        diff_json = {**diff_json, "before_json": before, "after_json": after}
 
     # Process role_json for created/initial_scan events
     role_json_pretty_str = ""

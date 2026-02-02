@@ -119,6 +119,7 @@ class RoleMatchResponse(BaseModel):
     is_full_match: bool
     matched_operations_count: int
     requested_operations_count: int
+    assignable_scope: str = "/"
 
 
 class RecommendRolesResponse(BaseModel):

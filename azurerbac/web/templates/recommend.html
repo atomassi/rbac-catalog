@@ -1592,6 +1592,11 @@
                                 <strong>ℹ️ Conditional permissions:</strong> Some permissions in this role have conditions attached. The matched operations may be granted only in specific contexts (e.g., based on resource properties or request attributes).
                             </div>
                         ` : ''}
+                        ${role.assignable_scope && role.assignable_scope !== '/' ? `
+                            <div class="mt-3 p-3 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-lg text-sm text-blue-800 dark:text-blue-300">
+                                <strong>ℹ️ Limited assignable scope:</strong> This role has a restricted assignable scope, limiting where it can be assigned: <code class="font-mono text-xs text-blue-800 dark:text-blue-200 bg-blue-100 dark:bg-blue-800/50 px-1.5 py-0.5 rounded break-all">${escapeHtml(role.assignable_scope)}</code>
+                            </div>
+                        ` : ''}
                         ${!role.is_full_match && role.missing_operations.length > 0 ? `
                             <div class="mt-3 p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 rounded-lg overflow-hidden">
                                 <p class="text-sm font-medium text-red-800 dark:text-red-300 mb-2">

@@ -88,6 +88,7 @@ class RoleInfo(NamedTuple):
     role_name: str
     description: str
     permissions: list[Permission]
+    assignable_scope: str = "/"
 
 
 class PatternCacheKey(NamedTuple):
@@ -188,6 +189,7 @@ class RoleEvaluationContext:
     role_name: str
     description: str
     permissions: list[Permission]
+    assignable_scope: str = "/"
     matched_ops: set[str] = field(default_factory=set)
     wildcard_partial_coverage: dict[WildcardKey, CoverageResult] = field(default_factory=dict)
     fully_covered_wildcards: set[WildcardKey] = field(default_factory=set)
@@ -232,6 +234,7 @@ class RoleMatch:
     missing_operations_expanded: list[str] = field(default_factory=list)
     missing_operations_count: int = 0
     has_partial_wildcard_match: bool = False
+    assignable_scope: str = "/"
 
     @property
     def is_full_match(self) -> bool:

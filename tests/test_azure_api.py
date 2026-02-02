@@ -910,8 +910,8 @@ def _make_mock_response(json_data):
     return mock_response
 
 
-class TestFetchBuiltinRoles:
-    """Tests for fetch_builtin_roles with mocked Azure API."""
+class TestFetchBuiltinRolesResourceGraph:
+    """Tests for fetch_builtin_roles_resource_graph with mocked Azure API."""
 
     @pytest.mark.asyncio
     async def test_returns_role_definitions_on_success(self):
@@ -939,9 +939,9 @@ class TestFetchBuiltinRoles:
             "azurerbac.azure.roles.authenticated_management_async_client",
             return_value=mock_client,
         ):
-            from azurerbac.azure.roles import fetch_builtin_roles
+            from azurerbac.azure.roles import fetch_builtin_roles_resource_graph
 
-            roles = await fetch_builtin_roles()
+            roles = await fetch_builtin_roles_resource_graph()
 
         assert len(roles) == 1
         assert isinstance(roles[0], RoleDefinition)
@@ -987,9 +987,9 @@ class TestFetchBuiltinRoles:
             "azurerbac.azure.roles.authenticated_management_async_client",
             return_value=mock_client,
         ):
-            from azurerbac.azure.roles import fetch_builtin_roles
+            from azurerbac.azure.roles import fetch_builtin_roles_resource_graph
 
-            roles = await fetch_builtin_roles()
+            roles = await fetch_builtin_roles_resource_graph()
 
         assert len(roles) == 2
         assert mock_client.post.call_count == 2
@@ -1194,8 +1194,14 @@ class TestAzureFetchErrorHandling:
         [
             (
                 "azurerbac.azure.roles",
-                "fetch_builtin_roles",
+                "fetch_builtin_roles_resource_graph",
                 "post",
+                "azurerbac.azure.roles.authenticated_management_async_client",
+            ),
+            (
+                "azurerbac.azure.roles",
+                "fetch_builtin_roles_rbac_api",
+                "get",
                 "azurerbac.azure.roles.authenticated_management_async_client",
             ),
             (

@@ -9,12 +9,9 @@ import time
 from collections.abc import Callable
 
 import anyio
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from azurerbac.cache import get_cache_service
-from azurerbac.core.constants import RoleStatus
-from azurerbac.core.models import Role
 from azurerbac.settings import Settings
 
 logger = logging.getLogger(__name__)
@@ -22,42 +19,19 @@ logger = logging.getLogger(__name__)
 
 async def preload_cache(session_factory: async_sessionmaker[AsyncSession]) -> None:
     """Preload cache with commonly accessed data."""
-    from azurerbac.telemetry import TimedDbQuery
-
     logger.info("CACHE INITIALIZATION STARTED")
     start = time.time()
 
     service = get_cache_service()
 
     async with session_factory() as session:
-        logger.info("[Step 1/2] Rebuilding cache from database...")
+        logger.info("Rebuilding cache from database...")
         if not await service.rebuild_in_memory(session):
             raise RuntimeError("Cache initialization failed - cannot start without cache")
 
-        # Warm common role list pages (first 5 pages)
-        logger.info("[Step 2/2] Preloading role pages (first 5 pages)...")
-        async with TimedDbQuery("preload_role_pages") as timer:
-            pages_loaded = 0
-            for page in range(1, 6):
-                offset = (page - 1) * 50
-                roles_result = await session.execute(
-                    select(Role)
-                    .where(Role.status == RoleStatus.ACTIVE)
-                    .order_by(Role.role_name.asc())
-                    .offset(offset)
-                    .limit(50)
-                )
-                page_roles = roles_result.scalars().all()
-                if page_roles:
-                    cache_key = f"roles:active::name:asc:{page}:50"
-                    service.set_role_page(cache_key, list(page_roles))
-                    pages_loaded += 1
-            timer.rows = pages_loaded * 50
-        logger.info("Loaded %d pages (%d roles)", pages_loaded, pages_loaded * 50)
-
     elapsed = time.time() - start
-    roles_count = len(service.cache.roles_by_id)
-    operations_count = len(service.cache.all_operations)
+    roles_count = service.cache.metadata.roles_count
+    operations_count = service.cache.metadata.operations_count
     logger.info("CACHE INITIALIZATION COMPLETE in %.2fs", elapsed)
     logger.info("Roles: %d | Operations: %d", roles_count, operations_count)
 
@@ -100,8 +74,8 @@ async def cache_refresh_task(session_factory: async_sessionmaker[AsyncSession]) 
                         track_cache_refresh(
                             elapsed,
                             "periodic",
-                            len(service.cache.roles_by_id),
-                            len(service.get_all_operations()),
+                            service.cache.metadata.roles_count,
+                            service.cache.metadata.operations_count,
                         )
                     else:
                         logger.warning("Background: periodic rebuild skipped or failed")

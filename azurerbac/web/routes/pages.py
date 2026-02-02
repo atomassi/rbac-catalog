@@ -283,8 +283,7 @@ async def recommend_page(
 ) -> Response:
     """Role recommender page."""
     logger.info("Recommend page loaded")
-    # Get count from cache - if 0, cache hasn't been initialized yet
-    ops_count = len(deps.app_cache.get_all_operations())
+    ops_count = deps.app_cache.cache.metadata.operations_count
 
     return deps.templates.TemplateResponse(
         request,
@@ -306,9 +305,8 @@ async def about_page(
     # Preserve ai=1 parameter if set
     ai_mode = request.query_params.get("ai") == "1"
 
-    # Get counts from cache - if 0, cache hasn't been initialized yet
-    roles_count = len(deps.app_cache.cache.roles_by_id)
-    ops_count = len(deps.app_cache.get_all_operations())
+    roles_count = deps.app_cache.cache.active_roles_count
+    ops_count = deps.app_cache.cache.metadata.operations_count
 
     return deps.templates.TemplateResponse(
         request,

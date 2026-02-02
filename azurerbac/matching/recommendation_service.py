@@ -134,7 +134,7 @@ class RoleRecommendationService:
 
     def get_all_roles(self) -> list[RoleDefinition]:
         """Get all active roles from the cache."""
-        return self._cache.get_role_definitions()
+        return self._cache.role_definitions
 
     def get_cache_stats(self) -> CacheStats:
         """Get current cache entry counts for logging.

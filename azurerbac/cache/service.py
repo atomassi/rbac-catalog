@@ -120,10 +120,6 @@ class CacheService:
         finally:
             _REBUILD_LOCK.release()
 
-    async def invalidate_all(self) -> None:
-        """Reset in-memory cache."""
-        self.reset()
-
     def _initialize_ai_recommender(self, cache_data: CacheData) -> None:
         """Re-initialize AI recommender with updated role data."""
         try:
@@ -151,7 +147,7 @@ class CacheService:
         return result
 
     def get_all_roles(self) -> list[RoleDefinition]:
-        result = self._cache.get_role_definitions()
+        result = self._cache.role_definitions
         track_cache_call("get_all_roles")
         return result
 
@@ -195,10 +191,6 @@ class CacheService:
         result = self._cache.all_operations
         track_cache_call("get_all_operations")
         return result
-
-    def get_ops_lowered_to_orig(self) -> dict[str, str]:
-        """Get mapping from lowered operation name to original casing."""
-        return self._cache.ops_lowered_to_orig
 
     def restore_operation_casing(self, ops: Iterable[str]) -> list[str]:
         """Restore original casing for lowered operation names."""
@@ -291,9 +283,6 @@ class CacheService:
     def set_role_page(self, page_key: str, roles: Any) -> None:
         """Cache a role page or count value."""
         self._request_caches.role_pages[page_key] = roles
-
-    def get_role_pages_count(self) -> int:
-        return len(self._request_caches.role_pages)
 
     def get_operation_page(self, page_key: str) -> Any:
         """Get a cached operation page or count value."""

@@ -48,6 +48,9 @@ async def test_client(async_session_maker):
     """Create a test client with in-memory database."""
     # Lazy import to avoid loading .env during test collection
     from azurerbac.cache import get_cache_service
+    from azurerbac.cache.build import precompute_all
+    from azurerbac.cache.models import CachedRole
+    from azurerbac.core.constants import RoleStatus
     from azurerbac.web import app as app_module
     from azurerbac.web.dependencies import (
         BaseDeps,
@@ -57,9 +60,35 @@ async def test_client(async_session_maker):
         get_dashboard_deps,
         get_pages_deps,
     )
+    from tests.helpers import make_operation, make_role_definition
 
     test_session_maker = async_session_maker
     cache = get_cache_service()
+
+    # Create test roles and operations with full cache (including role_coverage)
+    test_role_defs = [
+        make_role_definition(
+            role_id="test-role-1",
+            role_name="Test Role 1",
+            actions=["Microsoft.Storage/storageAccounts/read"],
+        ),
+        make_role_definition(
+            role_id="test-role-2",
+            role_name="Test Role 2",
+            actions=["Microsoft.Compute/virtualMachines/read"],
+        ),
+    ]
+    test_operations = [
+        make_operation("Microsoft.Storage/storageAccounts/read"),
+        make_operation("Microsoft.Compute/virtualMachines/read"),
+    ]
+    # Build roles_by_id dict for cache
+    roles_by_id = {
+        role.role_id: CachedRole(definition=role, status=RoleStatus.ACTIVE)
+        for role in test_role_defs
+    }
+    # Build full cache with role_coverage (required for recommend_roles and dashboard)
+    cache.swap_in_memory(precompute_all(test_role_defs, test_operations, roles_by_id=roles_by_id))
 
     # Store original session maker
     original_session = app_module.SessionLocal

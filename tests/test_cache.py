@@ -335,8 +335,8 @@ class TestLowerOptimization:
         service = CacheService()
         service.swap(cache_data)
 
-        # Verify mapping exists and is correct
-        mapping = service.get_ops_lowered_to_orig()
+        # Verify mapping exists and is correct via cache property
+        mapping = service.cache.ops_lowered_to_orig
         assert (
             mapping["microsoft.storage/storageaccounts/read"]
             == "Microsoft.Storage/storageAccounts/read"
@@ -814,25 +814,16 @@ class TestPreloadCacheIntegration:
 
     @pytest.mark.asyncio
     async def test_preload_cache_calls_build_methods(self, mock_db_results):
-        """Test that preload_cache delegates to rebuild_in_memory and warms role pages."""
+        """Test that preload_cache delegates to rebuild_in_memory."""
         from unittest.mock import AsyncMock, MagicMock, patch
 
         # Create a mock cache service
         mock_service = MagicMock()
         mock_service.cache = CacheData()
         mock_service.rebuild_in_memory = AsyncMock(return_value=True)
-        mock_service.set_role_page = MagicMock()
 
         # Mock database session
         mock_session = AsyncMock()
-
-        # Set up scalar returns
-        mock_session.scalar = AsyncMock(return_value=None)
-
-        # Set up execute returns for different queries
-        mock_result = MagicMock()
-        mock_result.scalars.return_value.all.return_value = [mock_db_results["roles"][0]]
-        mock_session.execute = AsyncMock(return_value=mock_result)
 
         mock_session_local = MagicMock()
         mock_session_local.return_value.__aenter__ = AsyncMock(return_value=mock_session)
@@ -848,7 +839,6 @@ class TestPreloadCacheIntegration:
             await preload_cache(mock_session_local)
 
         mock_service.rebuild_in_memory.assert_awaited_once_with(mock_session)
-        mock_service.set_role_page.assert_called()
 
 
 # =============================================================================
@@ -1322,9 +1312,8 @@ class TestCacheLifecycle:
 
         assert len(set(results)) == 1
 
-    @pytest.mark.asyncio
-    async def test_invalidate_all_clears_memory_cache(self, sample_roles, sample_operations):
-        """invalidate_all clears all in-memory caches."""
+    def test_reset_clears_memory_cache(self, sample_roles, sample_operations):
+        """reset() clears all in-memory caches."""
         from azurerbac.cache import precompute_all
 
         roles_by_id = make_cached_roles_by_id(sample_roles)
@@ -1336,7 +1325,7 @@ class TestCacheLifecycle:
         assert len(get_cache_service().cache.all_operations) > 0
         assert get_cache_service().get_role_page("page1") is not None
 
-        await get_cache_service().invalidate_all()
+        get_cache_service().reset()
 
         assert len(get_cache_service().cache.all_operations) == 0
         assert get_cache_service().get_role_page("page1") is None

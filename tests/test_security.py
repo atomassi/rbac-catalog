@@ -25,12 +25,36 @@ from httpx import ASGITransport, AsyncClient
 async def client(async_session_maker) -> AsyncGenerator[AsyncClient, None]:
     """Create an async test client for security testing.
 
-    Uses the real app with properly initialized in-memory database.
+    Uses the real app with properly initialized in-memory database and cache.
     """
     # Lazy import to avoid loading .env during test collection
+    from azurerbac.cache import get_cache_service
+    from azurerbac.cache.build import precompute_all
+    from azurerbac.cache.models import CachedRole
+    from azurerbac.core.constants import RoleStatus
     from azurerbac.web import app as app_module
+    from tests.helpers import make_operation, make_role_definition
 
     test_session_maker = async_session_maker
+    cache = get_cache_service()
+
+    # Create minimal test data for cache (required for /roles endpoint)
+    test_role_defs = [
+        make_role_definition(
+            role_id="test-role-1",
+            role_name="Test Role 1",
+            actions=["Microsoft.Storage/storageAccounts/read"],
+        ),
+    ]
+    test_operations = [
+        make_operation("Microsoft.Storage/storageAccounts/read"),
+    ]
+    roles_by_id = {
+        role.role_id: CachedRole(definition=role, status=RoleStatus.ACTIVE)
+        for role in test_role_defs
+    }
+    cache.swap_in_memory(precompute_all(test_role_defs, test_operations, roles_by_id=roles_by_id))
+
     original_session = app_module.app.state.session_local
     app_module.app.state.session_local = test_session_maker
 

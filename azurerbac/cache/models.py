@@ -225,6 +225,10 @@ _ALLOWING_ROLES_CACHE_MAX_SIZE: Final[int] = 5000
 # Maximum entries in the filtered events cache (by days/event_type)
 _FILTERED_EVENTS_CACHE_MAX_SIZE: Final[int] = 100
 
+# Maximum entries in the related_roles cache (related roles per role page)
+# Each entry is ~12 RelatedRole dataclasses x ~0.5KB ≈ 6KB per entry, ~3MB max
+_RELATED_ROLES_CACHE_MAX_SIZE: Final[int] = 500
+
 # Maximum entries in role_pages cache (paginated role lists)
 # Each page is ~50 roles x ~1KB = ~50KB per entry, ~25MB max
 _ROLE_PAGES_CACHE_MAX_SIZE: Final[int] = 500
@@ -268,6 +272,9 @@ class RequestCaches:
     )
     filtered_events: LRUCache[str, Any] = field(
         default_factory=lambda: create_lru_cache(_FILTERED_EVENTS_CACHE_MAX_SIZE)
+    )
+    related_roles: LRUCache[str, Any] = field(
+        default_factory=lambda: create_lru_cache(_RELATED_ROLES_CACHE_MAX_SIZE)
     )
 
 

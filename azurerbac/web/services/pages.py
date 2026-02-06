@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import heapq
 import logging
 from typing import TYPE_CHECKING, Any, Final
 
@@ -14,6 +15,7 @@ from azurerbac.web.services.models import (
     EnrichedChangeEvent,
     OperationSearchParams,
     OperationSortField,
+    RelatedRole,
     RoleAllowingOperation,
     RoleDetailResult,
     RoleEffectivePermissions,
@@ -111,6 +113,154 @@ def compute_role_effective_permissions(
     """Compute effective permissions for a role."""
     analyzer = RolePermissionAnalyzer(role, cache=cache)
     return analyzer.get_effective_permissions(all_operations)
+
+
+# Weights for composite related-role similarity
+_W_OPS: Final[float] = 0.90
+_W_SCOPE: Final[float] = 0.05
+_W_COND: Final[float] = 0.05
+
+
+def _jaccard(a: frozenset[str], b: frozenset[str]) -> float:
+    """Compute Jaccard similarity between two frozensets."""
+    if not a and not b:
+        return 1.0
+    union_size = len(a | b)
+    return len(a & b) / union_size if union_size > 0 else 0.0
+
+
+def _condition_similarity(a: frozenset[str], b: frozenset[str]) -> float:
+    """Compute condition similarity between two roles.
+
+    Both roles unconditioned → 1.0 (equally unconstrained).
+    One conditioned, one not → 0.0 (fundamentally different).
+    Both conditioned → Jaccard on condition strings.
+    """
+    if not a and not b:
+        return 1.0
+    if not a or not b:
+        return 0.0
+    return _jaccard(a, b)
+
+
+def _extract_role_metadata(
+    cached_role: CachedRole,
+) -> tuple[frozenset[str], frozenset[str]]:
+    """Extract assignable scopes and condition strings from a cached role.
+
+    Args:
+        cached_role: The cached role to extract metadata from.
+
+    Returns:
+        Tuple of (scopes frozenset, conditions frozenset).
+    """
+    props = cached_role.definition.properties
+    scopes = frozenset(props.assignable_scopes) if props.assignable_scopes else frozenset(("/",))
+    conditions = frozenset(p.condition for p in props.permissions if p.condition)
+    return scopes, conditions
+
+
+def compute_related_roles(
+    role_id: str,
+    limit: int = 12,
+    cache: CacheService | None = None,
+) -> list[RelatedRole]:
+    """Compute roles with highest operation overlap using inverted index.
+
+    Uses the precomputed operation_to_roles index for efficient co-occurrence
+    counting, then computes composite similarity for top candidates based on:
+
+    - Operation overlap (Jaccard, 90% weight)
+    - Assignable scope match (binary equality, 5% weight)
+    - Condition similarity (Jaccard on condition strings, 5% weight)
+
+    Args:
+        role_id: The role ID to find related roles for.
+        limit: Maximum number of related roles to return.
+        cache: Optional cache service override.
+
+    Returns:
+        List of related roles sorted by similarity (descending).
+    """
+    from azurerbac.core.constants import RoleStatus
+
+    cache_resolved = _get_cache(cache)
+
+    # Check request cache first
+    if (cached_result := cache_resolved.get_related_roles(role_id)) is not None:
+        return cached_result
+
+    current_cached = cache_resolved.get_role_by_id(role_id)
+    if not current_cached:
+        return []
+
+    coverage = cache_resolved.get_role_coverage(role_id)
+    if not coverage:
+        return []
+
+    current_ops = coverage.control | coverage.data
+    if not current_ops:
+        return []
+
+    current_scopes, current_conditions = _extract_role_metadata(current_cached)
+
+    # Use inverted index to count co-occurring roles efficiently
+    co_occurrence: dict[str, int] = {}
+    op_to_roles = cache_resolved.cache.operation_to_roles
+    for op in current_ops:
+        for rid in op_to_roles.get(op, []):
+            if rid != role_id:
+                co_occurrence[rid] = co_occurrence.get(rid, 0) + 1
+
+    if not co_occurrence:
+        return []
+
+    # Take top candidates by co-occurrence, compute composite similarity
+    top_candidates = heapq.nlargest(limit * 3, co_occurrence.items(), key=lambda x: x[1])
+    current_len = len(current_ops)
+
+    results: list[RelatedRole] = []
+    for rid, _ in top_candidates:
+        cached_role = cache_resolved.get_role_by_id(rid)
+        if not cached_role or cached_role.status == RoleStatus.DELETED:
+            continue
+
+        other_coverage = cache_resolved.get_role_coverage(rid)
+        if not other_coverage:
+            continue
+
+        other_ops = other_coverage.control | other_coverage.data
+        other_len = len(other_ops)
+        if other_len == 0:
+            continue
+
+        intersection = len(current_ops & other_ops)
+        union = current_len + other_len - intersection
+        ops_sim = intersection / union if union > 0 else 0.0
+
+        other_scopes, other_conditions = _extract_role_metadata(cached_role)
+        scope_sim = 1.0 if current_scopes == other_scopes else 0.0
+        cond_sim = _condition_similarity(current_conditions, other_conditions)
+
+        similarity = _W_OPS * ops_sim + _W_SCOPE * scope_sim + _W_COND * cond_sim
+
+        if similarity < 0.20:
+            continue
+
+        results.append(
+            RelatedRole(
+                role_id=rid,
+                role_name=cached_role.role_name,
+                similarity=similarity,
+                shared_count=intersection,
+                total_count=other_len,
+            )
+        )
+
+    results.sort(key=lambda x: x.similarity, reverse=True)
+    final = results[:limit]
+    cache_resolved.set_related_roles(role_id, final)
+    return final
 
 
 def _get_cache(cache: CacheService | None) -> CacheService:

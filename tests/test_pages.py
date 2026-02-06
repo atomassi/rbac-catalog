@@ -9,9 +9,10 @@ from unittest.mock import MagicMock
 import pytest
 
 from azurerbac.azure.models import OperationData, RoleDefinition
-from azurerbac.cache.models import CachedChangeEvent
-from azurerbac.core.constants import EventType
-from tests.helpers import make_role_definition
+from azurerbac.cache.models import CachedChangeEvent, CachedRole
+from azurerbac.core.constants import EventType, ROLE_DEFINITION_TYPE, RoleStatus
+from azurerbac.matching.models import RoleCoverage
+from tests.helpers import make_cached_role, make_role_definition
 
 # =============================================================================
 # Tests for pages service functions
@@ -718,3 +719,517 @@ class TestEnrichEventWithDiff:
         after_created = result.diff.after_json["properties"]["createdOn"]
         assert before_created == after_created
         assert after_created == "2025-11-17T16:01:32.566Z"
+
+
+# =============================================================================
+# Helper to build a CachedRole with custom scopes / conditions
+# =============================================================================
+
+
+def _make_cached_role_full(
+    role_id: str,
+    role_name: str,
+    *,
+    actions: list[str] | None = None,
+    data_actions: list[str] | None = None,
+    assignable_scopes: list[str] | None = None,
+    condition: str | None = None,
+    status: RoleStatus = RoleStatus.ACTIVE,
+) -> CachedRole:
+    """Create a CachedRole with full control over scopes and conditions."""
+    permission_dict: dict = {
+        "actions": actions or [],
+        "notActions": [],
+        "dataActions": data_actions or [],
+        "notDataActions": [],
+    }
+    if condition:
+        permission_dict["condition"] = condition
+
+    definition = RoleDefinition.model_validate(
+        {
+            "name": role_id,
+            "id": f"/providers/{ROLE_DEFINITION_TYPE}/{role_id}",
+            "type": ROLE_DEFINITION_TYPE,
+            "properties": {
+                "roleName": role_name,
+                "type": "BuiltInRole",
+                "description": f"Test role: {role_name}",
+                "permissions": [permission_dict],
+                "assignableScopes": assignable_scopes or ["/"],
+            },
+        }
+    )
+    return CachedRole(definition=definition, status=status)
+
+
+# =============================================================================
+# Tests for related-role helper functions
+# =============================================================================
+
+
+class TestJaccard:
+    """Tests for _jaccard similarity function."""
+
+    def test_both_empty(self):
+        from azurerbac.web.services.pages import _jaccard
+
+        assert _jaccard(frozenset(), frozenset()) == 1.0
+
+    def test_identical_sets(self):
+        from azurerbac.web.services.pages import _jaccard
+
+        s = frozenset({"a", "b", "c"})
+        assert _jaccard(s, s) == 1.0
+
+    def test_disjoint_sets(self):
+        from azurerbac.web.services.pages import _jaccard
+
+        assert _jaccard(frozenset({"a"}), frozenset({"b"})) == 0.0
+
+    def test_partial_overlap(self):
+        from azurerbac.web.services.pages import _jaccard
+
+        a = frozenset({"a", "b", "c"})
+        b = frozenset({"b", "c", "d"})
+        # intersection=2, union=4 → 0.5
+        assert _jaccard(a, b) == pytest.approx(0.5)
+
+    def test_one_empty(self):
+        from azurerbac.web.services.pages import _jaccard
+
+        assert _jaccard(frozenset({"a"}), frozenset()) == 0.0
+
+    def test_subset(self):
+        from azurerbac.web.services.pages import _jaccard
+
+        a = frozenset({"a", "b"})
+        b = frozenset({"a", "b", "c"})
+        # intersection=2, union=3
+        assert _jaccard(a, b) == pytest.approx(2 / 3)
+
+
+class TestConditionSimilarity:
+    """Tests for _condition_similarity function."""
+
+    def test_both_empty_returns_one(self):
+        from azurerbac.web.services.pages import _condition_similarity
+
+        assert _condition_similarity(frozenset(), frozenset()) == 1.0
+
+    def test_first_empty_second_not_returns_zero(self):
+        from azurerbac.web.services.pages import _condition_similarity
+
+        assert _condition_similarity(frozenset(), frozenset({"cond1"})) == 0.0
+
+    def test_first_not_empty_second_empty_returns_zero(self):
+        from azurerbac.web.services.pages import _condition_similarity
+
+        assert _condition_similarity(frozenset({"cond1"}), frozenset()) == 0.0
+
+    def test_identical_conditions(self):
+        from azurerbac.web.services.pages import _condition_similarity
+
+        c = frozenset({"@Resource[Microsoft.Storage/storageAccounts/blobServices]"})
+        assert _condition_similarity(c, c) == 1.0
+
+    def test_partial_overlap_conditions(self):
+        from azurerbac.web.services.pages import _condition_similarity
+
+        a = frozenset({"condA", "condB"})
+        b = frozenset({"condB", "condC"})
+        # Jaccard: intersection=1, union=3
+        assert _condition_similarity(a, b) == pytest.approx(1 / 3)
+
+
+class TestExtractRoleMetadata:
+    """Tests for _extract_role_metadata function."""
+
+    def test_default_scope(self):
+        from azurerbac.web.services.pages import _extract_role_metadata
+
+        role = make_cached_role("r1", "Reader")
+        scopes, conditions = _extract_role_metadata(role)
+        assert scopes == frozenset(("/",))
+        assert conditions == frozenset()
+
+    def test_custom_scopes(self):
+        from azurerbac.web.services.pages import _extract_role_metadata
+
+        role = _make_cached_role_full(
+            "r1",
+            "Custom",
+            assignable_scopes=["/subscriptions/abc", "/subscriptions/def"],
+        )
+        scopes, conditions = _extract_role_metadata(role)
+        assert scopes == frozenset({"/subscriptions/abc", "/subscriptions/def"})
+
+    def test_conditions_extracted(self):
+        from azurerbac.web.services.pages import _extract_role_metadata
+
+        role = _make_cached_role_full(
+            "r1",
+            "Conditional",
+            actions=["Microsoft.Storage/*/read"],
+            condition="@Resource[Microsoft.Storage/storageAccounts:kind] == 'BlobStorage'",
+        )
+        _, conditions = _extract_role_metadata(role)
+        assert len(conditions) == 1
+        assert "BlobStorage" in next(iter(conditions))
+
+    def test_no_conditions_when_absent(self):
+        from azurerbac.web.services.pages import _extract_role_metadata
+
+        role = _make_cached_role_full("r1", "Plain", actions=["*/read"])
+        _, conditions = _extract_role_metadata(role)
+        assert conditions == frozenset()
+
+
+# =============================================================================
+# Tests for compute_related_roles
+# =============================================================================
+
+
+def _build_cache_service(
+    roles: dict[str, CachedRole],
+    coverage: dict[str, RoleCoverage],
+    op_to_roles: dict[str, list[str]],
+) -> MagicMock:
+    """Build a MagicMock CacheService with the given data."""
+    mock = MagicMock()
+    mock.get_role_by_id.side_effect = lambda rid: roles.get(rid)
+    mock.get_role_coverage.side_effect = lambda rid: coverage.get(rid)
+    mock.get_related_roles.return_value = None  # cache miss by default
+    mock.cache.operation_to_roles = op_to_roles
+    return mock
+
+
+class TestComputeRelatedRoles:
+    """Tests for compute_related_roles function."""
+
+    def test_role_not_found_returns_empty(self):
+        from azurerbac.web.services.pages import compute_related_roles
+
+        cache = _build_cache_service({}, {}, {})
+        assert compute_related_roles("missing-id", cache=cache) == []
+
+    def test_no_coverage_returns_empty(self):
+        from azurerbac.web.services.pages import compute_related_roles
+
+        role = make_cached_role("r1", "Reader")
+        cache = _build_cache_service({"r1": role}, {}, {})
+        assert compute_related_roles("r1", cache=cache) == []
+
+    def test_empty_operations_returns_empty(self):
+        from azurerbac.web.services.pages import compute_related_roles
+
+        role = make_cached_role("r1", "Reader")
+        coverage = RoleCoverage(control=set(), data=set())
+        cache = _build_cache_service({"r1": role}, {"r1": coverage}, {})
+        assert compute_related_roles("r1", cache=cache) == []
+
+    def test_no_co_occurring_roles_returns_empty(self):
+        from azurerbac.web.services.pages import compute_related_roles
+
+        role = make_cached_role("r1", "Reader")
+        coverage = RoleCoverage(control={"op1"}, data=set())
+        # op1 maps only to r1 itself
+        cache = _build_cache_service({"r1": role}, {"r1": coverage}, {"op1": ["r1"]})
+        assert compute_related_roles("r1", cache=cache) == []
+
+    def test_basic_related_role(self):
+        """Two roles sharing all operations should have high similarity."""
+        from azurerbac.web.services.pages import compute_related_roles
+
+        ops = {"op1", "op2", "op3"}
+        r1 = make_cached_role("r1", "Alpha")
+        r2 = make_cached_role("r2", "Beta")
+        cov1 = RoleCoverage(control=ops, data=set())
+        cov2 = RoleCoverage(control=ops, data=set())
+        op_to_roles = {op: ["r1", "r2"] for op in ops}
+        cache = _build_cache_service(
+            {"r1": r1, "r2": r2}, {"r1": cov1, "r2": cov2}, op_to_roles
+        )
+
+        results = compute_related_roles("r1", cache=cache)
+        assert len(results) == 1
+        assert results[0].role_id == "r2"
+        # Same ops, same scope (/), same conditions (none) → 0.90*1 + 0.05*1 + 0.05*1 = 1.0
+        assert results[0].similarity == pytest.approx(1.0)
+        assert results[0].shared_count == 3
+        assert results[0].total_count == 3
+
+    def test_partial_overlap_similarity(self):
+        """Partial operation overlap should produce fractional similarity."""
+        from azurerbac.web.services.pages import compute_related_roles
+
+        r1 = make_cached_role("r1", "Alpha")
+        r2 = make_cached_role("r2", "Beta")
+        cov1 = RoleCoverage(control={"op1", "op2", "op3", "op4"}, data=set())
+        cov2 = RoleCoverage(control={"op1", "op2", "op5", "op6"}, data=set())
+        op_to_roles = {
+            "op1": ["r1", "r2"],
+            "op2": ["r1", "r2"],
+            "op3": ["r1"],
+            "op4": ["r1"],
+            "op5": ["r2"],
+            "op6": ["r2"],
+        }
+        cache = _build_cache_service(
+            {"r1": r1, "r2": r2}, {"r1": cov1, "r2": cov2}, op_to_roles
+        )
+
+        results = compute_related_roles("r1", cache=cache)
+        assert len(results) == 1
+        # Jaccard: intersection=2, union=6 → 1/3
+        # Same scope → 1.0, same conditions (none) → 1.0
+        # 0.90*(1/3) + 0.05*1 + 0.05*1 = 0.3 + 0.1 = 0.4
+        expected = 0.90 * (2 / 6) + 0.05 * 1.0 + 0.05 * 1.0
+        assert results[0].similarity == pytest.approx(expected)
+
+    def test_below_threshold_filtered(self):
+        """Roles below 20% composite similarity should be excluded."""
+        from azurerbac.web.services.pages import compute_related_roles
+
+        r1 = make_cached_role("r1", "Alpha")
+        r2 = _make_cached_role_full(
+            "r2",
+            "Beta",
+            actions=["x"],
+            assignable_scopes=["/subscriptions/different"],
+        )
+        # Tiny overlap: 1 shared out of many → low Jaccard
+        # Different scopes → scope_sim = 0.0
+        # One conditioned, one not → cond_sim mismatch handled
+        many_ops = {f"op{i}" for i in range(20)}
+        cov1 = RoleCoverage(control=many_ops | {"shared_op"}, data=set())
+        cov2 = RoleCoverage(control={f"uniq{i}" for i in range(20)} | {"shared_op"}, data=set())
+        op_to_roles: dict[str, list[str]] = {"shared_op": ["r1", "r2"]}
+        for op in many_ops:
+            op_to_roles[op] = ["r1"]
+        for i in range(20):
+            op_to_roles[f"uniq{i}"] = ["r2"]
+        cache = _build_cache_service(
+            {"r1": r1, "r2": r2}, {"r1": cov1, "r2": cov2}, op_to_roles
+        )
+
+        results = compute_related_roles("r1", cache=cache)
+        # intersection=1, union=41 → ops_sim ≈ 0.024
+        # scope_sim=0.0, cond_sim=1.0 → 0.90*0.024 + 0.05*0 + 0.05*1 = 0.072 < 0.20
+        assert results == []
+
+    def test_deleted_roles_excluded(self):
+        """Deleted roles should not appear in results."""
+        from azurerbac.web.services.pages import compute_related_roles
+
+        ops = {"op1", "op2"}
+        r1 = make_cached_role("r1", "Alpha")
+        r2 = _make_cached_role_full("r2", "Deleted", actions=["x"], status=RoleStatus.DELETED)
+        cov1 = RoleCoverage(control=ops, data=set())
+        cov2 = RoleCoverage(control=ops, data=set())
+        op_to_roles = {op: ["r1", "r2"] for op in ops}
+        cache = _build_cache_service(
+            {"r1": r1, "r2": r2}, {"r1": cov1, "r2": cov2}, op_to_roles
+        )
+
+        results = compute_related_roles("r1", cache=cache)
+        assert results == []
+
+    def test_results_sorted_descending(self):
+        """Results should be sorted by similarity from highest to lowest."""
+        from azurerbac.web.services.pages import compute_related_roles
+
+        r1 = make_cached_role("r1", "Alpha")
+        r_high = make_cached_role("r2", "High")
+        r_mid = make_cached_role("r3", "Medium")
+
+        cov1 = RoleCoverage(control={"a", "b", "c", "d"}, data=set())
+        # r2 shares 4/4 ops → high similarity
+        cov_high = RoleCoverage(control={"a", "b", "c", "d"}, data=set())
+        # r3 shares 2/4 ops → medium similarity
+        cov_mid = RoleCoverage(control={"a", "b", "x", "y"}, data=set())
+
+        op_to_roles = {
+            "a": ["r1", "r2", "r3"],
+            "b": ["r1", "r2", "r3"],
+            "c": ["r1", "r2"],
+            "d": ["r1", "r2"],
+            "x": ["r3"],
+            "y": ["r3"],
+        }
+        cache = _build_cache_service(
+            {"r1": r1, "r2": r_high, "r3": r_mid},
+            {"r1": cov1, "r2": cov_high, "r3": cov_mid},
+            op_to_roles,
+        )
+
+        results = compute_related_roles("r1", cache=cache)
+        assert len(results) == 2
+        assert results[0].role_id == "r2"
+        assert results[1].role_id == "r3"
+        assert results[0].similarity > results[1].similarity
+
+    def test_limit_respected(self):
+        """Results should be capped at the limit parameter."""
+        from azurerbac.web.services.pages import compute_related_roles
+
+        r1 = make_cached_role("r1", "Alpha")
+        roles = {"r1": r1}
+        coverages = {"r1": RoleCoverage(control={"shared"}, data=set())}
+        op_to_roles: dict[str, list[str]] = {"shared": ["r1"]}
+
+        # Create 10 roles that share operations with r1
+        for i in range(2, 12):
+            rid = f"r{i}"
+            roles[rid] = make_cached_role(rid, f"Role{i}")
+            coverages[rid] = RoleCoverage(control={"shared"}, data=set())
+            op_to_roles["shared"].append(rid)
+
+        cache = _build_cache_service(roles, coverages, op_to_roles)
+
+        results = compute_related_roles("r1", limit=3, cache=cache)
+        assert len(results) <= 3
+
+    def test_scope_mismatch_reduces_similarity(self):
+        """Different assignable scopes should reduce similarity."""
+        from azurerbac.web.services.pages import compute_related_roles
+
+        r1 = _make_cached_role_full("r1", "Alpha", actions=["op1"])
+        r_same_scope = _make_cached_role_full("r2", "SameScope", actions=["op1"])
+        r_diff_scope = _make_cached_role_full(
+            "r3", "DiffScope", actions=["op1"],
+            assignable_scopes=["/subscriptions/xyz"],
+        )
+
+        ops = {"op1"}
+        cov1 = RoleCoverage(control=ops, data=set())
+        cov_same = RoleCoverage(control=ops, data=set())
+        cov_diff = RoleCoverage(control=ops, data=set())
+
+        op_to_roles = {"op1": ["r1", "r2", "r3"]}
+        cache = _build_cache_service(
+            {"r1": r1, "r2": r_same_scope, "r3": r_diff_scope},
+            {"r1": cov1, "r2": cov_same, "r3": cov_diff},
+            op_to_roles,
+        )
+
+        results = compute_related_roles("r1", cache=cache)
+        same_scope_result = next(r for r in results if r.role_id == "r2")
+        diff_scope_result = next(r for r in results if r.role_id == "r3")
+        assert same_scope_result.similarity > diff_scope_result.similarity
+
+    def test_condition_mismatch_reduces_similarity(self):
+        """One role with conditions vs one without should reduce similarity."""
+        from azurerbac.web.services.pages import compute_related_roles
+
+        r1 = _make_cached_role_full("r1", "Alpha", actions=["op1"])
+        r_no_cond = _make_cached_role_full("r2", "NoCond", actions=["op1"])
+        r_with_cond = _make_cached_role_full(
+            "r3", "WithCond", actions=["op1"],
+            condition="@Resource[Microsoft.Storage/storageAccounts:kind] == 'BlobStorage'",
+        )
+
+        ops = {"op1"}
+        cov1 = RoleCoverage(control=ops, data=set())
+        cov2 = RoleCoverage(control=ops, data=set())
+        cov3 = RoleCoverage(control=ops, data=set())
+
+        op_to_roles = {"op1": ["r1", "r2", "r3"]}
+        cache = _build_cache_service(
+            {"r1": r1, "r2": r_no_cond, "r3": r_with_cond},
+            {"r1": cov1, "r2": cov2, "r3": cov3},
+            op_to_roles,
+        )
+
+        results = compute_related_roles("r1", cache=cache)
+        no_cond_result = next(r for r in results if r.role_id == "r2")
+        with_cond_result = next(r for r in results if r.role_id == "r3")
+        # r1 has no condition, r3 has condition → cond_sim = 0.0 → lower
+        assert no_cond_result.similarity > with_cond_result.similarity
+
+    def test_data_actions_included_in_similarity(self):
+        """Data actions should contribute to operation overlap."""
+        from azurerbac.web.services.pages import compute_related_roles
+
+        r1 = make_cached_role("r1", "Alpha")
+        r2 = make_cached_role("r2", "Beta")
+
+        # r1 and r2 share only data actions
+        cov1 = RoleCoverage(control=set(), data={"data_op1", "data_op2"})
+        cov2 = RoleCoverage(control=set(), data={"data_op1", "data_op2"})
+
+        op_to_roles = {"data_op1": ["r1", "r2"], "data_op2": ["r1", "r2"]}
+        cache = _build_cache_service(
+            {"r1": r1, "r2": r2}, {"r1": cov1, "r2": cov2}, op_to_roles
+        )
+
+        results = compute_related_roles("r1", cache=cache)
+        assert len(results) == 1
+        assert results[0].role_id == "r2"
+        assert results[0].similarity == pytest.approx(1.0)
+
+    def test_related_role_dataclass_fields(self):
+        """Verify all fields of the RelatedRole dataclass are populated."""
+        from azurerbac.web.services.pages import compute_related_roles
+
+        r1 = make_cached_role("r1", "Alpha")
+        r2 = make_cached_role("r2", "Beta")
+
+        cov1 = RoleCoverage(control={"op1", "op2"}, data=set())
+        cov2 = RoleCoverage(control={"op1", "op2", "op3"}, data=set())
+
+        op_to_roles = {"op1": ["r1", "r2"], "op2": ["r1", "r2"], "op3": ["r2"]}
+        cache = _build_cache_service(
+            {"r1": r1, "r2": r2}, {"r1": cov1, "r2": cov2}, op_to_roles
+        )
+
+        results = compute_related_roles("r1", cache=cache)
+        assert len(results) == 1
+        result = results[0]
+        assert result.role_id == "r2"
+        assert result.role_name == "Beta"
+        assert result.shared_count == 2
+        assert result.total_count == 3
+        # Jaccard: 2/3 → 0.90*(2/3) + 0.05*1 + 0.05*1 = 0.7
+        expected_sim = 0.90 * (2 / 3) + 0.05 * 1.0 + 0.05 * 1.0
+        assert result.similarity == pytest.approx(expected_sim)
+
+    def test_result_cached_on_second_call(self):
+        """Second call should return cached result without recomputing."""
+        from azurerbac.web.services.pages import compute_related_roles
+
+        ops = {"op1", "op2"}
+        r1 = make_cached_role("r1", "Alpha")
+        r2 = make_cached_role("r2", "Beta")
+        cov1 = RoleCoverage(control=ops, data=set())
+        cov2 = RoleCoverage(control=ops, data=set())
+        op_to_roles = {op: ["r1", "r2"] for op in ops}
+        cache = _build_cache_service(
+            {"r1": r1, "r2": r2}, {"r1": cov1, "r2": cov2}, op_to_roles
+        )
+
+        # First call computes and caches
+        first = compute_related_roles("r1", cache=cache)
+        assert len(first) == 1
+
+        # Second call should hit cache — verify via get_related_roles
+        cache.get_related_roles.assert_called_with("r1")
+        second = compute_related_roles("r1", cache=cache)
+        assert second == first
+
+    def test_cache_miss_then_stores(self):
+        """First call should store computed result in cache."""
+        from azurerbac.web.services.pages import compute_related_roles
+
+        ops = {"op1"}
+        r1 = make_cached_role("r1", "Alpha")
+        r2 = make_cached_role("r2", "Beta")
+        cov1 = RoleCoverage(control=ops, data=set())
+        cov2 = RoleCoverage(control=ops, data=set())
+        op_to_roles = {"op1": ["r1", "r2"]}
+        cache = _build_cache_service(
+            {"r1": r1, "r2": r2}, {"r1": cov1, "r2": cov2}, op_to_roles
+        )
+
+        results = compute_related_roles("r1", cache=cache)
+        cache.set_related_roles.assert_called_once_with("r1", results)

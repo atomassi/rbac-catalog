@@ -466,6 +466,17 @@ class RoleAllowingOperation:
         return asdict(self)
 
 
+@dataclass(frozen=True, slots=True)
+class RelatedRole:
+    """A role related to another through shared operations."""
+
+    role_id: str
+    role_name: str
+    similarity: float  # Jaccard similarity 0.0-1.0
+    shared_count: int  # Number of shared operations
+    total_count: int  # Total operations of the related role
+
+
 @dataclass(slots=True)
 class RoleWithCounts:
     """Role with action counts."""

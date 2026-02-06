@@ -10,6 +10,7 @@ from urllib.parse import unquote
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
+from azurerbac.comparer import compute_role_comparison
 from azurerbac.core.enums import SortOrder
 from azurerbac.core.utils import slugify
 from azurerbac.web.constants import (
@@ -34,7 +35,6 @@ from azurerbac.web.services.pages import (
     add_role_counts,
     build_role_redirect_url,
     compute_related_roles,
-    compute_role_comparison,
     compute_role_effective_permissions,
     enrich_event_with_diff,
     filter_operations,

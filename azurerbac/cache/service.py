@@ -28,7 +28,8 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from azurerbac.azure.models import OperationData, RoleDefinition
-    from azurerbac.web.services.models import RelatedRole, RoleAllowingOperation, RoleComparison
+    from azurerbac.comparer import RoleComparison
+    from azurerbac.web.services.models import RelatedRole, RoleAllowingOperation
 
 logger = logging.getLogger(__name__)
 
@@ -145,7 +146,7 @@ class CacheService:
         Warms the comparisons LRU cache so popular pairs are instant
         on first request after startup or cache refresh.
         """
-        from azurerbac.web.services.pages import compute_role_comparison
+        from azurerbac.comparer import compute_role_comparison
 
         if not (popular := self._cache.popular_comparisons):
             return

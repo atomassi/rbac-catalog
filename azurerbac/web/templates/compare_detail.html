@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     {% include 'partials/darkmode_init.html' %}
     <title>{{ comparison.role_a.role_name }} vs {{ comparison.role_b.role_name }} - Compare Azure Roles | RBAC Catalog</title>
-    <meta name="description" content="Compare {{ comparison.role_a.role_name }} and {{ comparison.role_b.role_name }} Azure RBAC roles side by side. {{ comparison.shared_control | length + comparison.shared_data | length }} shared permissions, {{ comparison.only_a_control | length + comparison.only_a_data | length }} unique to {{ comparison.role_a.role_name }}, {{ comparison.only_b_control | length + comparison.only_b_data | length }} unique to {{ comparison.role_b.role_name }}.">
+    <meta name="description" content="Compare {{ comparison.role_a.role_name }} and {{ comparison.role_b.role_name }} Azure RBAC roles side by side. {{ (comparison.shared_control + comparison.shared_data) | length }} shared permissions, {{ (comparison.only_a_control + comparison.only_a_data) | length }} unique to {{ comparison.role_a.role_name }}, {{ (comparison.only_b_control + comparison.only_b_data) | length }} unique to {{ comparison.role_b.role_name }}.">
     <meta name="keywords" content="{{ comparison.role_a.role_name }}, {{ comparison.role_b.role_name }}, compare Azure roles, RBAC comparison, Azure permissions, role difference, IAM, least privilege">
     <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
     <meta name="author" content="Azure RBAC Catalog">
@@ -27,7 +27,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="{{ comparison.role_a.role_name }} vs {{ comparison.role_b.role_name }}">
-    <meta name="twitter:description" content="Compare {{ comparison.role_a.role_name }} and {{ comparison.role_b.role_name }} Azure RBAC roles. {{ comparison.shared_control | length + comparison.shared_data | length }} shared, {{ comparison.only_a_control | length + comparison.only_a_data | length + comparison.only_b_control | length + comparison.only_b_data | length }} unique permissions.">
+    <meta name="twitter:description" content="Compare {{ comparison.role_a.role_name }} and {{ comparison.role_b.role_name }} Azure RBAC roles. {{ (comparison.shared_control + comparison.shared_data) | length }} shared, {{ (comparison.only_a_control + comparison.only_a_data + comparison.only_b_control + comparison.only_b_data) | length }} unique permissions.">
     <meta name="twitter:image" content="{{ site_url }}/static/images/og-image.png">
     <meta name="twitter:image:alt" content="Azure RBAC Catalog - Compare Azure built-in roles">
 
@@ -59,11 +59,11 @@
         "mainEntity": {
             "@type": "ItemList",
             "name": "Permission Comparison",
-            "numberOfItems": {{ comparison.shared_control | length + comparison.shared_data | length + comparison.only_a_control | length + comparison.only_a_data | length + comparison.only_b_control | length + comparison.only_b_data | length }},
+            "numberOfItems": {{ (comparison.shared_control + comparison.shared_data + comparison.only_a_control + comparison.only_a_data + comparison.only_b_control + comparison.only_b_data) | length }},
             "itemListElement": [
-                {"@type": "ListItem", "position": 1, "name": "Shared permissions", "description": "{{ comparison.shared_control | length + comparison.shared_data | length }} operations granted by both roles"},
-                {"@type": "ListItem", "position": 2, "name": "Unique to {{ comparison.role_a.role_name }}", "description": "{{ comparison.only_a_control | length + comparison.only_a_data | length }} operations only in {{ comparison.role_a.role_name }}"},
-                {"@type": "ListItem", "position": 3, "name": "Unique to {{ comparison.role_b.role_name }}", "description": "{{ comparison.only_b_control | length + comparison.only_b_data | length }} operations only in {{ comparison.role_b.role_name }}"}
+                {"@type": "ListItem", "position": 1, "name": "Shared permissions", "description": "{{ (comparison.shared_control + comparison.shared_data) | length }} operations granted by both roles"},
+                {"@type": "ListItem", "position": 2, "name": "Unique to {{ comparison.role_a.role_name }}", "description": "{{ (comparison.only_a_control + comparison.only_a_data) | length }} operations only in {{ comparison.role_a.role_name }}"},
+                {"@type": "ListItem", "position": 3, "name": "Unique to {{ comparison.role_b.role_name }}", "description": "{{ (comparison.only_b_control + comparison.only_b_data) | length }} operations only in {{ comparison.role_b.role_name }}"}
             ]
         }
     }
@@ -79,7 +79,7 @@
                 "name": "What is the difference between {{ comparison.role_a.role_name }} and {{ comparison.role_b.role_name }}?",
                 "acceptedAnswer": {
                     "@type": "Answer",
-                    "text": "{{ comparison.role_a.role_name }} and {{ comparison.role_b.role_name }} share {{ comparison.shared_control | length + comparison.shared_data | length }} permissions. {{ comparison.role_a.role_name }} has {{ comparison.only_a_control | length + comparison.only_a_data | length }} unique permissions, while {{ comparison.role_b.role_name }} has {{ comparison.only_b_control | length + comparison.only_b_data | length }} unique permissions."
+                    "text": "{{ comparison.role_a.role_name }} and {{ comparison.role_b.role_name }} share {{ (comparison.shared_control + comparison.shared_data) | length }} permissions. {{ comparison.role_a.role_name }} has {{ (comparison.only_a_control + comparison.only_a_data) | length }} unique permissions, while {{ comparison.role_b.role_name }} has {{ (comparison.only_b_control + comparison.only_b_data) | length }} unique permissions."
                 }
             },
             {
@@ -87,7 +87,7 @@
                 "name": "How many permissions do {{ comparison.role_a.role_name }} and {{ comparison.role_b.role_name }} share?",
                 "acceptedAnswer": {
                     "@type": "Answer",
-                    "text": "They share {{ comparison.shared_control | length + comparison.shared_data | length }} permissions ({{ comparison.shared_control | length }} control plane and {{ comparison.shared_data | length }} data plane operations)."
+                    "text": "They share {{ (comparison.shared_control + comparison.shared_data) | length }} permissions ({{ comparison.shared_control | length }} control plane and {{ comparison.shared_data | length }} data plane operations)."
                 }
             },
             {
@@ -260,9 +260,9 @@
             </div>
 
             <!-- Stats Bar -->
-            {% set only_a_total = comparison.only_a_control | length + comparison.only_a_data | length %}
-            {% set shared_total = comparison.shared_control | length + comparison.shared_data | length %}
-            {% set only_b_total = comparison.only_b_control | length + comparison.only_b_data | length %}
+            {% set only_a_total = (comparison.only_a_control + comparison.only_a_data) | length %}
+            {% set shared_total = (comparison.shared_control + comparison.shared_data) | length %}
+            {% set only_b_total = (comparison.only_b_control + comparison.only_b_data) | length %}
             {% set grand_total = only_a_total + shared_total + only_b_total %}
 
             <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-5 mb-8">

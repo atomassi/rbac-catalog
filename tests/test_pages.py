@@ -1425,13 +1425,13 @@ class TestComputeRoleComparison:
     """Tests for compute_role_comparison function."""
 
     def test_role_a_not_found_returns_none(self):
-        from azurerbac.web.services.pages import compute_role_comparison
+        from azurerbac.comparer import compute_role_comparison
 
         cache = _build_cache_service({}, {}, {})
         assert compute_role_comparison("missing", "also-missing", cache=cache) is None
 
     def test_role_b_not_found_returns_none(self):
-        from azurerbac.web.services.pages import compute_role_comparison
+        from azurerbac.comparer import compute_role_comparison
 
         r1 = make_cached_role("r1", "Alpha")
         cache = _build_cache_service({"r1": r1}, {}, {})
@@ -1439,7 +1439,7 @@ class TestComputeRoleComparison:
 
     def test_identical_roles_all_shared(self):
         """Two roles with identical operations should have no unique ops."""
-        from azurerbac.web.services.pages import compute_role_comparison
+        from azurerbac.comparer import compute_role_comparison
 
         ops = {"op1", "op2", "op3"}
         r1 = make_cached_role("r1", "Alpha")
@@ -1459,7 +1459,7 @@ class TestComputeRoleComparison:
 
     def test_disjoint_roles_no_shared(self):
         """Two roles with no overlap should have no shared ops."""
-        from azurerbac.web.services.pages import compute_role_comparison
+        from azurerbac.comparer import compute_role_comparison
 
         r1 = make_cached_role("r1", "Alpha")
         r2 = make_cached_role("r2", "Beta")
@@ -1475,7 +1475,7 @@ class TestComputeRoleComparison:
 
     def test_partial_overlap(self):
         """Partial overlap should correctly split into three sets."""
-        from azurerbac.web.services.pages import compute_role_comparison
+        from azurerbac.comparer import compute_role_comparison
 
         r1 = make_cached_role("r1", "Alpha")
         r2 = make_cached_role("r2", "Beta")
@@ -1494,7 +1494,7 @@ class TestComputeRoleComparison:
 
     def test_no_coverage_treated_as_empty(self):
         """Roles without coverage should be treated as having no operations."""
-        from azurerbac.web.services.pages import compute_role_comparison
+        from azurerbac.comparer import compute_role_comparison
 
         r1 = make_cached_role("r1", "Alpha")
         r2 = make_cached_role("r2", "Beta")
@@ -1510,7 +1510,7 @@ class TestComputeRoleComparison:
 
     def test_side_metadata_populated(self):
         """RoleComparisonSide fields should be populated correctly."""
-        from azurerbac.web.services.pages import compute_role_comparison
+        from azurerbac.comparer import compute_role_comparison
 
         r1 = _make_cached_role_full("r1", "Alpha", actions=["op1"], data_actions=["d1"])
         r2 = _make_cached_role_full("r2", "Beta", actions=["op2"])
@@ -1531,7 +1531,7 @@ class TestComputeRoleComparison:
 
     def test_results_are_sorted(self):
         """Operation lists should be alphabetically sorted."""
-        from azurerbac.web.services.pages import compute_role_comparison
+        from azurerbac.comparer import compute_role_comparison
 
         r1 = make_cached_role("r1", "Alpha")
         r2 = make_cached_role("r2", "Beta")
@@ -1545,7 +1545,7 @@ class TestComputeRoleComparison:
 
     def test_same_role_returns_none(self):
         """Comparing a role with itself should return None."""
-        from azurerbac.web.services.pages import compute_role_comparison
+        from azurerbac.comparer import compute_role_comparison
 
         r1 = make_cached_role("r1", "Alpha")
         cache = _build_cache_service({"r1": r1}, {}, {})
@@ -1553,7 +1553,7 @@ class TestComputeRoleComparison:
 
     def test_cache_hit_avoids_recompute(self):
         """Second call with same IDs should return cached result."""
-        from azurerbac.web.services.pages import compute_role_comparison
+        from azurerbac.comparer import compute_role_comparison
 
         ops = {"op1", "op2"}
         r1 = make_cached_role("r1", "Alpha")
@@ -1574,7 +1574,7 @@ class TestComputeRoleComparison:
 
     def test_reverse_order_separate_cache(self):
         """Calling with (B, A) produces a separate cache entry with swapped sides."""
-        from azurerbac.web.services.pages import compute_role_comparison
+        from azurerbac.comparer import compute_role_comparison
 
         r1 = make_cached_role("r1", "Alpha")
         r2 = make_cached_role("r2", "Beta")
@@ -1605,7 +1605,7 @@ class TestComputeRoleComparison:
 
     def test_conditions_populated_in_sides(self):
         """ABAC conditions should appear in role comparison sides."""
-        from azurerbac.web.services.pages import compute_role_comparison
+        from azurerbac.comparer import compute_role_comparison
 
         cond = "@Resource[Microsoft.Storage/storageAccounts:kind] == 'BlobStorage'"
         r1 = _make_cached_role_full("r1", "Alpha", actions=["op1"], condition=cond)
@@ -1621,7 +1621,7 @@ class TestComputeRoleComparison:
 
     def test_assignable_scopes_populated_in_sides(self):
         """Assignable scopes should appear in role comparison sides."""
-        from azurerbac.web.services.pages import compute_role_comparison
+        from azurerbac.comparer import compute_role_comparison
 
         r1 = _make_cached_role_full(
             "r1", "Alpha", actions=["op1"], assignable_scopes=["/subscriptions/abc"]

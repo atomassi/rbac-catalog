@@ -136,26 +136,6 @@
     }
     </script>
 
-    <!-- ItemList Schema for Roles -->
-    {% if tab == 'roles' and roles %}
-    <script type="application/ld+json">
-    {
-        "@context": "https://schema.org",
-        "@type": "ItemList",
-        "itemListElement": [
-            {% for role in roles %}
-            {
-                "@type": "ListItem",
-                "position": {{ loop.index }},
-                "url": "{{ site_url }}/roles/{{ role.role_id }}/{{ role.role_name | slugify }}",
-                "name": "{{ role.role_name }}"
-            }{{ "," if not loop.last }}
-            {% endfor %}
-        ]
-    }
-    </script>
-    {% endif %}
-    
     <!-- WebApplication Structured Data -->
     <script type="application/ld+json">
     {
@@ -210,22 +190,6 @@
             },
             "query-input": "required name=search_term_string"
         }
-    }
-    </script>
-    
-    <!-- Breadcrumb Structured Data -->
-    <script type="application/ld+json">
-    {
-        "@context": "https://schema.org",
-        "@type": "BreadcrumbList",
-        "itemListElement": [
-            {
-                "@type": "ListItem",
-                "position": 1,
-                "name": "Home",
-                "item": "{{ site_url }}/"
-            }
-        ]
     }
     </script>
     

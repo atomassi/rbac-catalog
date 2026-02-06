@@ -4,14 +4,20 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     {% include 'partials/darkmode_init.html' %}
-    <title>About - Azure RBAC Catalog</title>
-    <meta name="description" content="Learn about the Azure RBAC Catalog - a free, open educational resource for exploring Azure built-in roles, permissions, and RBAC definitions.">
-    <meta name="robots" content="index, follow">
+    <title>About Azure RBAC Catalog - Free Azure Role Browser & Permissions Tool</title>
+    <meta name="description" content="Learn about the Azure RBAC Catalog - a free, open educational resource for exploring {{ total_roles }}+ Azure built-in roles, {{ total_operations }}+ operations, and RBAC definitions. Track role changes daily.">
+    <meta name="keywords" content="Azure RBAC Catalog, About Azure RBAC, Azure built-in roles tool, Azure permissions browser, free Azure security tool, Azure IAM reference, RBAC education">
+    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
+    <meta name="author" content="Azure RBAC Catalog">
     <link rel="canonical" href="{{ site_url }}/about">
     
+    <!-- RSS/Atom Feed Autodiscovery -->
+    <link rel="alternate" type="application/atom+xml" title="Azure RBAC Role Changes (Atom)" href="{{ site_url }}/feeds/changelog.atom">
+    <link rel="alternate" type="application/rss+xml" title="Azure RBAC Role Changes (RSS)" href="{{ site_url }}/feeds/changelog.rss">
+    
     <!-- Open Graph -->
-    <meta property="og:title" content="About - Azure RBAC Catalog">
-    <meta property="og:description" content="A free, open educational resource for exploring Azure built-in roles and permissions.">
+    <meta property="og:title" content="About Azure RBAC Catalog - Free Azure Role Browser & Permissions Tool">
+    <meta property="og:description" content="A free, open educational resource for exploring {{ total_roles }}+ Azure built-in roles, {{ total_operations }}+ operations, and RBAC definitions.">
     <meta property="og:type" content="website">
     <meta property="og:url" content="{{ site_url }}/about">
     <meta property="og:site_name" content="Azure RBAC Catalog">

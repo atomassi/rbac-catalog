@@ -4,14 +4,20 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     {% include 'partials/darkmode_init.html' %}
-    <title>Analytics - Azure RBAC Catalog</title>
-    <meta name="description" content="Analytics dashboard for Azure RBAC role changes. Track additions, updates, and deletions over time. Monitor Microsoft's RBAC evolution.">
-    <meta name="robots" content="index, follow">
+    <title>Azure RBAC Analytics - Role Change Trends & Statistics Dashboard</title>
+    <meta name="description" content="Analytics dashboard tracking Azure RBAC role changes over time. Monitor {{ total_roles }}+ built-in role additions, updates, and deletions. Visualize Microsoft's RBAC evolution with charts and statistics.">
+    <meta name="keywords" content="Azure RBAC Analytics, Azure role changes, Azure RBAC statistics, Azure role updates, Azure permissions trends, Azure IAM monitoring, RBAC dashboard">
+    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
+    <meta name="author" content="Azure RBAC Catalog">
     <link rel="canonical" href="{{ site_url }}/analytics">
     
+    <!-- RSS/Atom Feed Autodiscovery -->
+    <link rel="alternate" type="application/atom+xml" title="Azure RBAC Role Changes (Atom)" href="{{ site_url }}/feeds/changelog.atom">
+    <link rel="alternate" type="application/rss+xml" title="Azure RBAC Role Changes (RSS)" href="{{ site_url }}/feeds/changelog.rss">
+    
     <!-- Open Graph -->
-    <meta property="og:title" content="Analytics - Azure RBAC Catalog">
-    <meta property="og:description" content="Analytics dashboard for Azure RBAC role changes. Track additions, updates, and deletions over time.">
+    <meta property="og:title" content="Azure RBAC Analytics - Role Change Trends & Statistics">
+    <meta property="og:description" content="Analytics dashboard tracking Azure RBAC role changes. Monitor role additions, updates, and deletions with interactive charts and statistics.">
     <meta property="og:type" content="website">
     <meta property="og:url" content="{{ site_url }}/analytics">
     <meta property="og:site_name" content="Azure RBAC Catalog">
@@ -19,13 +25,15 @@
     <meta property="og:image:type" content="image/png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="Azure RBAC Catalog - Analytics Dashboard">
     <meta property="og:locale" content="en_US">
 
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="Analytics - Azure RBAC Catalog">
-    <meta name="twitter:description" content="Analytics dashboard for Azure RBAC role changes. Track additions, updates, and deletions over time.">
+    <meta name="twitter:title" content="Azure RBAC Analytics - Role Change Trends & Statistics">
+    <meta name="twitter:description" content="Analytics dashboard tracking Azure RBAC role changes. Monitor role additions, updates, and deletions over time.">
     <meta name="twitter:image" content="{{ site_url }}/static/images/og-image.png">
+    <meta name="twitter:image:alt" content="Azure RBAC Catalog - Analytics Dashboard">
     
     <!-- Breadcrumb Schema -->
     <script type="application/ld+json">
@@ -44,6 +52,35 @@
                 "position": 2,
                 "name": "Analytics",
                 "item": "{{ site_url }}/analytics"
+            }
+        ]
+    }
+    </script>
+    
+    <!-- Dataset Schema for Analytics Data -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "Dataset",
+        "name": "Azure RBAC Role Change Analytics",
+        "description": "Historical dataset tracking additions, updates, and deletions of Azure built-in RBAC roles over time. Includes change frequency, permission modifications, and trend analysis.",
+        "url": "{{ site_url }}/analytics",
+        "license": "https://creativecommons.org/licenses/by/4.0/",
+        "creator": {
+            "@type": "Organization",
+            "name": "Azure RBAC Catalog",
+            "url": "{{ site_url }}/"
+        },
+        "distribution": [
+            {
+                "@type": "DataDownload",
+                "encodingFormat": "application/atom+xml",
+                "contentUrl": "{{ site_url }}/feeds/changelog.atom"
+            },
+            {
+                "@type": "DataDownload",
+                "encodingFormat": "application/rss+xml",
+                "contentUrl": "{{ site_url }}/feeds/changelog.rss"
             }
         ]
     }

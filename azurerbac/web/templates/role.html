@@ -11,6 +11,10 @@
     <meta name="author" content="Azure RBAC Catalog">
     <link rel="canonical" href="{{ site_url }}/roles/{{ role.role_id }}/{{ role.role_name | slugify }}">
     
+    <!-- RSS/Atom Feed Autodiscovery -->
+    <link rel="alternate" type="application/atom+xml" title="Azure RBAC Role Changes (Atom)" href="{{ site_url }}/feeds/changelog.atom">
+    <link rel="alternate" type="application/rss+xml" title="Azure RBAC Role Changes (RSS)" href="{{ site_url }}/feeds/changelog.rss">
+    
     <!-- Open Graph / Facebook -->
     <meta property="og:title" content="{{ role.role_name }} - Azure Built-in Role ({{ role.role_id[:8] }}...)">
     <meta property="og:description" content="{{ role.description[:200] if role.description else 'Azure built-in RBAC role ' ~ role.role_name ~ '. View permissions, actions, and JSON definition.' }}{% if effective_perms and effective_perms.has_conditions %} With ABAC condition explanations.{% endif %}">

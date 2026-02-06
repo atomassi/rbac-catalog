@@ -11,6 +11,10 @@
     <meta name="author" content="Azure RBAC Catalog">
     <link rel="canonical" href="{{ site_url }}/operations/{{ operation.name | urlencode_path }}">
     
+    <!-- RSS/Atom Feed Autodiscovery -->
+    <link rel="alternate" type="application/atom+xml" title="Azure RBAC Role Changes (Atom)" href="{{ site_url }}/feeds/changelog.atom">
+    <link rel="alternate" type="application/rss+xml" title="Azure RBAC Role Changes (RSS)" href="{{ site_url }}/feeds/changelog.rss">
+    
     <!-- Open Graph / Facebook -->
     <meta property="og:title" content="{{ operation.name }} - Azure Operation">
     <meta property="og:description" content="{{ operation.description or 'Azure RBAC operation' }}. View which Azure built-in roles allow this operation.">

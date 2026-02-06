@@ -959,6 +959,7 @@ def _build_cache_service(
     mock.get_role_coverage.side_effect = lambda rid: coverage.get(rid)
     mock.get_related_roles.return_value = None  # cache miss by default
     mock.get_comparison.return_value = None  # cache miss by default
+    mock.restore_operation_casing.side_effect = lambda ops: list(ops)
     mock.cache.operation_to_roles = op_to_roles
     return mock
 

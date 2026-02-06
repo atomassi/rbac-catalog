@@ -177,9 +177,9 @@ def _extract_abac_conditions(role: CachedRole) -> list[str]:
 
 
 def _extract_assignable_scopes(role: CachedRole) -> list[str]:
-    """Extract assignable scopes from a role, defaulting to root scope."""
+    """Extract sorted, de-duplicated assignable scopes from a role."""
     scopes = role.definition.properties.assignable_scopes
-    return scopes or ["/"]
+    return sorted(set(scopes)) if scopes else ["/"]
 
 
 def _extract_role_metadata(
@@ -368,6 +368,9 @@ def compute_role_comparison(
     data_a = cov_a.data if cov_a else set()
     data_b = cov_b.data if cov_b else set()
 
+    # Restore original casing from the lowered coverage sets
+    restore = cache_resolved.restore_operation_casing
+
     result = RoleComparison(
         role_a=RoleComparisonSide(
             role_id=role_a_id,
@@ -387,12 +390,12 @@ def compute_role_comparison(
             conditions=_extract_abac_conditions(role_b),
             assignable_scopes=_extract_assignable_scopes(role_b),
         ),
-        only_a_control=sorted(ctrl_a - ctrl_b),
-        only_a_data=sorted(data_a - data_b),
-        shared_control=sorted(ctrl_a & ctrl_b),
-        shared_data=sorted(data_a & data_b),
-        only_b_control=sorted(ctrl_b - ctrl_a),
-        only_b_data=sorted(data_b - data_a),
+        only_a_control=sorted(restore(ctrl_a - ctrl_b)),
+        only_a_data=sorted(restore(data_a - data_b)),
+        shared_control=sorted(restore(ctrl_a & ctrl_b)),
+        shared_data=sorted(restore(data_a & data_b)),
+        only_b_control=sorted(restore(ctrl_b - ctrl_a)),
+        only_b_data=sorted(restore(data_b - data_a)),
     )
     cache_resolved.set_comparison(cache_key, result)
     return result

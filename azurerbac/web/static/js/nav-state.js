@@ -197,7 +197,7 @@ const NavState = {
                 }
                 break;
             case 'compare':
-                url = state.from_compare_url || '/roles';
+                url = state.from_compare_url || '/roles/compare';
                 break;
             case 'analytics':
                 url = '/analytics';
@@ -248,7 +248,7 @@ const NavState = {
             case 'compare':
                 return state.from_compare_label
                     ? 'Back to ' + state.from_compare_label
-                    : 'Back to Compare';
+                    : 'Back to Compare Roles';
             case 'analytics':
                 return 'Back to Analytics';
             default:

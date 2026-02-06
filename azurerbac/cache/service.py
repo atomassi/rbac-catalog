@@ -14,6 +14,7 @@ from azurerbac.cache.models import (
     CacheData,
     CachedChangeEvent,
     CachedRole,
+    PopularComparison,
     RequestCaches,
     Sitemap,
 )
@@ -114,6 +115,7 @@ class CacheService:
             cache_data = await self.build_from_db(session)
             self.swap_in_memory(cache_data)
             self._initialize_ai_recommender(cache_data)
+            self._seed_popular_comparisons()
             return True
         except Exception as e:
             logger.exception("Failed to rebuild cache in memory: %s", e)
@@ -136,6 +138,24 @@ class CacheService:
             logger.info("AI recommender re-initialized with updated roles")
         except Exception as e:
             logger.exception("Failed to re-initialize AI recommender: %s", e)
+
+    def _seed_popular_comparisons(self) -> None:
+        """Pre-compute comparison results for popular role pairs.
+
+        Warms the comparisons LRU cache so popular pairs are instant
+        on first request after startup or cache refresh.
+        """
+        from azurerbac.web.services.pages import compute_role_comparison
+
+        if not (popular := self._cache.popular_comparisons):
+            return
+
+        seeded = 0
+        for pair in popular:
+            if compute_role_comparison(pair.role_a_id, pair.role_b_id, cache=self) is not None:
+                seeded += 1
+
+        logger.info("Seeded %d/%d popular comparisons into cache", seeded, len(popular))
 
     # -------------------------------------------------------------------------
     # Role accessors
@@ -270,6 +290,10 @@ class CacheService:
     def get_sitemap(self) -> Sitemap | None:
         """Get pre-built sitemap or None if cache not loaded."""
         return self._cache.sitemap
+
+    def get_popular_comparisons(self) -> list[PopularComparison]:
+        """Get pre-built popular comparison pairs."""
+        return self._cache.popular_comparisons
 
     # -------------------------------------------------------------------------
     # Request-scoped caches (role pages, operation pages, allowing roles)

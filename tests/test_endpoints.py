@@ -397,3 +397,66 @@ class TestDashboardSorting:
         client, _ = test_client
         response = await client.get("/roles?sort=invalid_field&order=asc")
         assert response.status_code == 200
+
+
+# =============================================================================
+# Compare Page
+# =============================================================================
+
+
+class TestComparePage:
+    """Smoke tests for the compare roles page."""
+
+    @pytest.mark.asyncio
+    async def test_compare_page_returns_200(self, test_client):
+        """GET /roles/compare should return 200."""
+        client, _ = test_client
+        response = await client.get("/roles/compare")
+        assert response.status_code == 200
+
+    @pytest.mark.asyncio
+    async def test_compare_page_contains_key_elements(self, test_client):
+        """Compare page should contain role picker and SEO content."""
+        client, _ = test_client
+        response = await client.get("/roles/compare")
+        assert response.status_code == 200
+        assert "Choose Two Roles to Compare" in response.text
+        assert (
+            "Popular Role Comparisons" in response.text
+            or "How Role Comparison Works" in response.text
+        )
+        assert "Compare Azure RBAC Roles" in response.text
+
+    @pytest.mark.asyncio
+    async def test_compare_page_head_returns_200(self, test_client):
+        """HEAD /roles/compare should return 200."""
+        client, _ = test_client
+        response = await client.head("/roles/compare")
+        assert response.status_code == 200
+
+    @pytest.mark.asyncio
+    async def test_compare_page_has_seo_meta(self, test_client):
+        """Compare page should include canonical and OG meta tags."""
+        client, _ = test_client
+        response = await client.get("/roles/compare")
+        assert response.status_code == 200
+        assert 'rel="canonical"' in response.text
+        assert "og:title" in response.text
+        assert "og:description" in response.text
+
+    @pytest.mark.asyncio
+    async def test_compare_page_includes_role_picker_data(self, test_client):
+        """Compare page should include role data for the JS picker."""
+        client, _ = test_client
+        response = await client.get("/roles/compare")
+        assert response.status_code == 200
+        # The page should inject role data for the Alpine.js picker
+        assert "_allRoles" in response.text
+
+    @pytest.mark.asyncio
+    async def test_compare_page_not_matched_as_role_id(self, test_client):
+        """Ensure /roles/compare is NOT interpreted as /roles/{role_id}."""
+        client, _ = test_client
+        response = await client.get("/roles/compare")
+        # Should NOT return 400 (UUID parse error) or 404
+        assert response.status_code == 200

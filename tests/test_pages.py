@@ -1635,3 +1635,85 @@ class TestComputeRoleComparison:
         assert result is not None
         assert result.role_a.assignable_scopes == ["/subscriptions/abc"]
         assert result.role_b.assignable_scopes == ["/"]
+
+
+# =============================================================================
+# _build_popular_comparisons (cache/build.py)
+# =============================================================================
+
+
+class TestBuildPopularComparisons:
+    """Tests for _build_popular_comparisons in the cache build pipeline."""
+
+    # Well-known IDs from POPULAR_COMPARE_PAIRS (Reader, Contributor)
+    READER_ID = "acdd72a7-3385-48ef-bd42-f606fba81ae7"
+    CONTRIBUTOR_ID = "b24988ac-6180-42a0-ab88-20f7382dd24c"
+
+    def test_resolves_known_pairs(self):
+        """Pairs whose IDs exist in roles_by_id should be resolved."""
+        from azurerbac.cache.build import _build_popular_comparisons
+
+        roles_by_id = {
+            self.READER_ID: make_cached_role(self.READER_ID, "Reader"),
+            self.CONTRIBUTOR_ID: make_cached_role(self.CONTRIBUTOR_ID, "Contributor"),
+        }
+
+        result = _build_popular_comparisons(roles_by_id)
+        pair = next(
+            (
+                p
+                for p in result
+                if p.role_a_id == self.READER_ID and p.role_b_id == self.CONTRIBUTOR_ID
+            ),
+            None,
+        )
+        assert pair is not None
+        assert pair.role_a_name == "Reader"
+        assert pair.role_b_name == "Contributor"
+        assert pair.category == "General"
+
+    def test_skips_pair_when_role_missing(self):
+        """Pairs where one role is missing should be skipped."""
+        from azurerbac.cache.build import _build_popular_comparisons
+
+        roles_by_id = {
+            self.READER_ID: make_cached_role(self.READER_ID, "Reader"),
+        }
+
+        result = _build_popular_comparisons(roles_by_id)
+        assert all(p.role_b_id != self.CONTRIBUTOR_ID for p in result)
+
+    def test_empty_roles_returns_empty(self):
+        """Empty roles_by_id should produce an empty list."""
+        from azurerbac.cache.build import _build_popular_comparisons
+
+        result = _build_popular_comparisons({})
+        assert result == []
+
+    def test_all_pairs_resolved_with_full_index(self):
+        """When all role IDs exist, all pairs should resolve."""
+        from azurerbac.cache.build import _build_popular_comparisons
+        from azurerbac.core.constants import POPULAR_COMPARE_PAIRS
+
+        roles_by_id: dict[str, CachedRole] = {}
+        for id_a, id_b, _cat in POPULAR_COMPARE_PAIRS:
+            for rid in (id_a, id_b):
+                if rid not in roles_by_id:
+                    roles_by_id[rid] = make_cached_role(rid, f"Role-{rid[:8]}")
+
+        result = _build_popular_comparisons(roles_by_id)
+        assert len(result) == len(POPULAR_COMPARE_PAIRS)
+
+    def test_returned_objects_are_frozen(self):
+        """PopularComparison instances should be immutable."""
+        from azurerbac.cache.build import _build_popular_comparisons
+
+        roles_by_id = {
+            self.READER_ID: make_cached_role(self.READER_ID, "Reader"),
+            self.CONTRIBUTOR_ID: make_cached_role(self.CONTRIBUTOR_ID, "Contributor"),
+        }
+
+        result = _build_popular_comparisons(roles_by_id)
+        if result:
+            with pytest.raises(AttributeError):
+                result[0].category = "modified"  # type: ignore[misc]

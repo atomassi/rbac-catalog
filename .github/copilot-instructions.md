@@ -56,6 +56,7 @@ When generating or modifying code, GitHub Copilot should:
 | `azure/` | Azure SDK integration (roles, operations) |
 | `backgroundjobs/` | Scheduled tasks and monitoring |
 | `cache/` | In-memory caching layer |
+| `comparer/` | Role comparison logic (three-way permission diffs) |
 | `core/` | Database models, constants, utilities |
 | `matching/` | Role matching and recommendation service |
 | `telemetry/` | OpenTelemetry logging and metrics |
@@ -69,12 +70,14 @@ Copilot must respect the following module boundaries:
 - `core/` — Domain logic and database models
 - `azure/` — External Azure API interaction only
 - `airecommender/` — AI logic; must not depend on web or FastAPI
+- `comparer/` — Role comparison logic; must not depend on web or FastAPI
 - `matching/` — Role matching logic; orchestrates airecommender and cache
 - `backgroundjobs/` — Scheduled tasks; may import from core and azure
 - `cache/` — May not import from `web/`
 - Database models must not import FastAPI or web-layer code
 
 Dependencies must point inward:
+- `web → comparer → core` ✔️
 - `web → matching → core` ✔️
 - `web → core` ✔️
 - `backgroundjobs → core` ✔️

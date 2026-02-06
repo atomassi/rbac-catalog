@@ -30,7 +30,7 @@ from urllib.parse import quote
 from cachetools import LRUCache
 
 from azurerbac.cache.utils import create_lru_cache, sitemap_url
-from azurerbac.core.constants import RoleStatus
+from azurerbac.core.constants import POPULAR_COMPARE_PAIRS, RoleStatus
 from azurerbac.core.types import JsonDict
 from azurerbac.matching.models import (
     CoverageResult,
@@ -142,10 +142,23 @@ class Sitemap:
             sitemap_url(f"{site_url}/", today, "daily", 1.0),
             sitemap_url(f"{site_url}/roles", today, "daily", 0.95),
             sitemap_url(f"{site_url}/operations", today, "weekly", 0.9),
+            sitemap_url(f"{site_url}/roles/compare", today, "weekly", 0.85),
             sitemap_url(f"{site_url}/recommend", today, "weekly", 0.85),
             sitemap_url(f"{site_url}/analytics", today, "weekly", 0.7),
             sitemap_url(f"{site_url}/about", today, "monthly", 0.5),
         ]
+
+        # Add popular comparison pages
+        for id_a, id_b, _category in POPULAR_COMPARE_PAIRS:
+            if id_a in roles_by_id and id_b in roles_by_id:
+                urls.append(
+                    sitemap_url(
+                        f"{site_url}/roles/compare/{id_a}/{id_b}",
+                        today,
+                        "weekly",
+                        0.75,
+                    )
+                )
 
         # Add role pages (sorted by role name) - include all roles (active + deleted)
         roles = [(role.role_id, role.role_name) for role in roles_by_id.values()]
@@ -285,12 +298,24 @@ class RequestCaches:
     )
 
 
+@dataclass(frozen=True, slots=True)
+class PopularComparison:
+    """A pre-computed popular role comparison pair for the landing page."""
+
+    role_a_id: str
+    role_a_name: str
+    role_b_id: str
+    role_b_name: str
+    category: str  # e.g. "General", "Storage", "Key Vault"
+
+
 @dataclass
 class PrerenderedContent:
     """Pre-built content to avoid expensive re-computation per request."""
 
     analytics: AnalyticsData | None = None
     sitemap: Sitemap | None = None
+    popular_comparisons: list[PopularComparison] = field(default_factory=list)
 
 
 @dataclass
@@ -454,6 +479,10 @@ class CacheData:
     @property
     def sitemap(self) -> Sitemap | None:
         return self.content.sitemap
+
+    @property
+    def popular_comparisons(self) -> list[PopularComparison]:
+        return self.content.popular_comparisons
 
     # =========================================================================
     # Derived properties (computed lazily from source data)

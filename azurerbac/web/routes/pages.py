@@ -10,6 +10,7 @@ from urllib.parse import unquote
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
+from azurerbac.comparer import compute_role_comparison
 from azurerbac.core.enums import SortOrder
 from azurerbac.core.utils import slugify
 from azurerbac.web.constants import (
@@ -34,7 +35,6 @@ from azurerbac.web.services.pages import (
     add_role_counts,
     build_role_redirect_url,
     compute_related_roles,
-    compute_role_comparison,
     compute_role_effective_permissions,
     enrich_event_with_diff,
     filter_operations,
@@ -47,6 +47,67 @@ from azurerbac.web.utils import role_json_pretty
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["pages"])
+
+
+# --- Compare routes MUST be registered before /roles/{role_id} to avoid
+#     FastAPI matching "compare" as a UUID path parameter. ---
+
+
+@router.api_route(
+    "/roles/compare",
+    methods=["GET", "HEAD"],
+    response_class=HTMLResponse,
+    name="compare",
+)
+async def compare(
+    request: Request,
+    deps: Annotated[PagesDeps, Depends(get_pages_deps)],
+) -> Response:
+    """Compare roles landing page with popular comparisons and role picker."""
+    popular = deps.app_cache.get_popular_comparisons()
+
+    # Build list of all active roles for the picker (sorted by name)
+    all_roles = [
+        {"role_id": r.role_id, "role_name": r.role_name}
+        for r in sorted(deps.app_cache.get_all_roles(), key=lambda r: r.role_name.lower())
+    ]
+
+    return deps.templates.TemplateResponse(
+        request,
+        "compare.html",
+        {
+            "popular_comparisons": popular,
+            "all_roles": all_roles,
+            "total_roles": len(all_roles),
+        },
+    )
+
+
+@router.api_route(
+    "/roles/compare/{role_a_id}/{role_b_id}",
+    methods=["GET", "HEAD"],
+    response_class=HTMLResponse,
+    name="compare_roles",
+)
+async def compare_roles(
+    request: Request,
+    role_a_id: uuid.UUID,
+    role_b_id: uuid.UUID,
+    deps: Annotated[PagesDeps, Depends(get_pages_deps)],
+) -> Response:
+    """Compare two roles side by side."""
+    if role_a_id == role_b_id:
+        raise HTTPException(status_code=400, detail="Cannot compare a role with itself")
+
+    comparison = compute_role_comparison(str(role_a_id), str(role_b_id), cache=deps.app_cache)
+    if comparison is None:
+        raise HTTPException(status_code=404)
+
+    return deps.templates.TemplateResponse(
+        request,
+        "compare_detail.html",
+        {"comparison": comparison},
+    )
 
 
 @router.api_route(
@@ -134,33 +195,6 @@ async def role_detail(
             "limit": limit,
             "days": days,
         },
-    )
-
-
-@router.api_route(
-    "/roles/compare/{role_a_id}/{role_b_id}",
-    methods=["GET", "HEAD"],
-    response_class=HTMLResponse,
-    name="compare_roles",
-)
-async def compare_roles(
-    request: Request,
-    role_a_id: uuid.UUID,
-    role_b_id: uuid.UUID,
-    deps: Annotated[PagesDeps, Depends(get_pages_deps)],
-) -> Response:
-    """Compare two roles side by side."""
-    if role_a_id == role_b_id:
-        raise HTTPException(status_code=400, detail="Cannot compare a role with itself")
-
-    comparison = compute_role_comparison(str(role_a_id), str(role_b_id), cache=deps.app_cache)
-    if comparison is None:
-        raise HTTPException(status_code=404)
-
-    return deps.templates.TemplateResponse(
-        request,
-        "compare.html",
-        {"comparison": comparison},
     )
 
 

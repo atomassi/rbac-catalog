@@ -23,6 +23,7 @@ from azurerbac.cache.build import (
     build_operations_prefix_index,
     get_matching_operations,
 )
+from azurerbac.cache.models import PopularComparison
 from azurerbac.core.constants import EventType, RoleStatus
 from azurerbac.matching.models import RoleCoverage
 
@@ -1157,3 +1158,79 @@ class TestCacheLifecycle:
 
         assert len(get_cache_service().cache.all_operations) == 0
         assert get_cache_service().get_role_page("page1") is None
+
+
+class TestSeedPopularComparisons:
+    """Tests for _seed_popular_comparisons warming the LRU cache at startup."""
+
+    def test_seeds_comparisons_for_popular_pairs(self, sample_roles, sample_operations):
+        """Popular pairs should be pre-computed and ready in the LRU cache."""
+        from azurerbac.cache import precompute_all
+
+        roles_by_id = make_cached_roles_by_id(sample_roles)
+        cache_data = precompute_all(sample_roles, sample_operations, roles_by_id=roles_by_id)
+
+        # Inject popular comparisons referencing our test roles
+        r_ids = list(roles_by_id.keys())
+        if len(r_ids) >= 2:
+            from dataclasses import replace
+
+            popular = [
+                PopularComparison(
+                    role_a_id=r_ids[0],
+                    role_a_name=roles_by_id[r_ids[0]].role_name,
+                    role_b_id=r_ids[1],
+                    role_b_name=roles_by_id[r_ids[1]].role_name,
+                    category="Test",
+                )
+            ]
+            cache_data = replace(
+                cache_data,
+                content=replace(cache_data.content, popular_comparisons=popular),
+            )
+
+        service = get_cache_service()
+        service.swap(cache_data)
+
+        # Before seeding, the comparisons LRU should be empty
+        cache_key = f"{r_ids[0]}:{r_ids[1]}"
+        assert service.get_comparison(cache_key) is None
+
+        # Seed and verify the comparison is now cached
+        service._seed_popular_comparisons()
+        result = service.get_comparison(cache_key)
+        assert result is not None
+        assert result.role_a.role_id == r_ids[0]
+        assert result.role_b.role_id == r_ids[1]
+
+    def test_seed_skips_missing_roles(self):
+        """Pairs referencing missing roles should be silently skipped."""
+        service = get_cache_service()
+        service.reset()
+
+        # Inject a popular pair pointing at nonexistent roles
+        from dataclasses import replace
+
+        popular = [
+            PopularComparison(
+                role_a_id="missing-a",
+                role_a_name="Missing A",
+                role_b_id="missing-b",
+                role_b_name="Missing B",
+                category="Test",
+            )
+        ]
+        service._cache = replace(
+            service._cache,
+            content=replace(service._cache.content, popular_comparisons=popular),
+        )
+
+        # Should not raise
+        service._seed_popular_comparisons()
+        assert service.get_comparison("missing-a:missing-b") is None
+
+    def test_seed_noop_when_no_popular_comparisons(self):
+        """Seeding with no popular comparisons should be a no-op."""
+        service = get_cache_service()
+        service.reset()
+        service._seed_popular_comparisons()  # should not raise

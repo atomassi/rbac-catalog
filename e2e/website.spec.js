@@ -1874,3 +1874,76 @@ test.describe('Analytics Page', () => {
     await expect(page).toHaveURL(/\/analytics/);
   });
 });
+
+// =============================================================================
+// COMPARE PAGE
+// =============================================================================
+test.describe('Compare Page', () => {
+  test('should load with role picker and popular comparisons', async ({ page }) => {
+    await page.goto('/roles/compare');
+    await expect(page).toHaveTitle(/Compare.*Azure.*Roles/i);
+    await expect(page.locator('text=Choose Two Roles to Compare')).toBeVisible();
+    await expect(page.locator('text=Popular Role Comparisons')).toBeVisible();
+    await expect(page.locator('text=How Role Comparison Works')).toBeVisible();
+  });
+
+  test('should have working role search dropdown', async ({ page }) => {
+    await page.goto('/roles/compare');
+    const input = page.locator('#role-a');
+    await input.click();
+    await input.fill('contributor');
+    // Should show dropdown with matching roles
+    const dropdown = page.locator('#role-a').locator('..').locator('div[x-show]');
+    await expect(dropdown).toBeVisible();
+    // "Contributor" should appear (exact match prioritized)
+    await expect(dropdown.locator('button', { hasText: 'Contributor' }).first()).toBeVisible();
+  });
+
+  test('should navigate to comparison from popular links', async ({ page }) => {
+    await page.goto('/roles/compare');
+    // Click first popular comparison link
+    const popularLink = page.locator('a[href^="/roles/compare/"]').first();
+    if (await popularLink.count() === 0) {
+      test.skip();
+      return;
+    }
+    await popularLink.click();
+    await page.waitForLoadState('networkidle');
+    await expect(page).toHaveURL(/\/roles\/compare\/[0-9a-f-]+\/[0-9a-f-]+/);
+  });
+
+  test('should have back navigation from popular comparison', async ({ page }) => {
+    await page.goto('/roles/compare');
+    const popularLink = page.locator('a[href^="/roles/compare/"]').first();
+    if (await popularLink.count() === 0) {
+      test.skip();
+      return;
+    }
+    await popularLink.click();
+    await page.waitForLoadState('networkidle');
+
+    // Back button should say "Back to Compare Roles"
+    const backLabel = page.locator('#back-label');
+    await expect(backLabel).toBeVisible();
+    await expect(backLabel).toContainText(/Compare Roles/i);
+
+    // Clicking back should return to compare landing
+    await page.locator('#back-button').click();
+    await page.waitForLoadState('networkidle');
+    await expect(page).toHaveURL(/\/roles\/compare$/);
+  });
+
+  test('should have SEO meta tags', async ({ page }) => {
+    await page.goto('/roles/compare');
+    const canonical = await page.locator('link[rel="canonical"]').getAttribute('href');
+    expect(canonical).toContain('/roles/compare');
+    const ogTitle = await page.locator('meta[property="og:title"]').getAttribute('content');
+    expect(ogTitle).toMatch(/compare/i);
+  });
+
+  test('should have Compare Roles in footer nav', async ({ page }) => {
+    await page.goto('/roles/compare');
+    const footerLink = page.locator('footer a[href="/roles/compare"]');
+    await expect(footerLink).toBeVisible();
+  });
+});

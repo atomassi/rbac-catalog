@@ -19,6 +19,7 @@ from azurerbac.cache.models import (
     ComputedCaches,
     Indexes,
     PatternCacheKey,
+    PopularComparison,
     PrerenderedContent,
     RoleAnalysis,
     Sitemap,
@@ -27,7 +28,7 @@ from azurerbac.cache.models import (
     compute_operations_hash,
     compute_roles_hash,
 )
-from azurerbac.core.constants import RoleStatus
+from azurerbac.core.constants import POPULAR_COMPARE_PAIRS, RoleStatus
 from azurerbac.core.patterns import is_wildcard_pattern, matches_pattern
 from azurerbac.core.utils import truncate_microseconds
 from azurerbac.matching.models import (
@@ -487,10 +488,18 @@ async def build_from_db(session: AsyncSession) -> CacheData:
 
     sitemap = Sitemap.build(roles_by_id, all_operations, SITE_URL)
 
+    # Build popular comparison pairs (resolve IDs to names from cache)
+    popular_comparisons = _build_popular_comparisons(roles_by_id)
+
     # Use replace to maintain immutability (CacheData is designed for atomic swaps)
     cache_data = replace(
         cache_data,
-        content=replace(cache_data.content, analytics=analytics_data, sitemap=sitemap),
+        content=replace(
+            cache_data.content,
+            analytics=analytics_data,
+            sitemap=sitemap,
+            popular_comparisons=popular_comparisons,
+        ),
     )
 
     logger.info(
@@ -499,3 +508,28 @@ async def build_from_db(session: AsyncSession) -> CacheData:
     )
 
     return cache_data
+
+
+def _build_popular_comparisons(
+    roles_by_id: dict[str, CachedRole],
+) -> list[PopularComparison]:
+    """Resolve popular comparison pairs against the roles index.
+
+    Uses POPULAR_COMPARE_PAIRS (role IDs + category) from core.constants.
+    Returns only pairs where both roles currently exist.
+    """
+    result: list[PopularComparison] = []
+    for id_a, id_b, category in POPULAR_COMPARE_PAIRS:
+        role_a = roles_by_id.get(id_a)
+        role_b = roles_by_id.get(id_b)
+        if role_a and role_b:
+            result.append(
+                PopularComparison(
+                    role_a_id=id_a,
+                    role_a_name=role_a.role_name,
+                    role_b_id=id_b,
+                    role_b_name=role_b.role_name,
+                    category=category,
+                )
+            )
+    return result

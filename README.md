@@ -311,6 +311,7 @@ azurerbac/
 ├── azure/           # Azure SDK integration (roles, operations)
 ├── backgroundjobs/  # Scheduled tasks and background workers
 ├── cache/           # Caching layer for roles and operations
+├── comparer/        # Role comparison logic (three-way permission diffs)
 ├── core/            # Database models and utilities
 ├── matching/        # Operation-to-role matching for least-privilege role composition
 ├── mcp/             # MCP server for AI assistant integrations

@@ -50,6 +50,11 @@ PAGES_WITH_CONTENT: Final = [
     ("About page", "/about", ["Azure RBAC"]),
     ("Analytics page", "/analytics", ["Analytics"]),
     (
+        "Compare page",
+        "/roles/compare",
+        ["Choose Two Roles to Compare", "How Role Comparison Works"],
+    ),
+    (
         "Role detail (Reader)",
         "/roles/acdd72a7-3385-48ef-bd42-f606fba81ae7",
         ["Reader", "Role Information"],

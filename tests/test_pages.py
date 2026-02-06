@@ -1425,13 +1425,13 @@ class TestComputeRoleComparison:
     """Tests for compute_role_comparison function."""
 
     def test_role_a_not_found_returns_none(self):
-        from azurerbac.web.services.pages import compute_role_comparison
+        from azurerbac.comparer import compute_role_comparison
 
         cache = _build_cache_service({}, {}, {})
         assert compute_role_comparison("missing", "also-missing", cache=cache) is None
 
     def test_role_b_not_found_returns_none(self):
-        from azurerbac.web.services.pages import compute_role_comparison
+        from azurerbac.comparer import compute_role_comparison
 
         r1 = make_cached_role("r1", "Alpha")
         cache = _build_cache_service({"r1": r1}, {}, {})
@@ -1439,7 +1439,7 @@ class TestComputeRoleComparison:
 
     def test_identical_roles_all_shared(self):
         """Two roles with identical operations should have no unique ops."""
-        from azurerbac.web.services.pages import compute_role_comparison
+        from azurerbac.comparer import compute_role_comparison
 
         ops = {"op1", "op2", "op3"}
         r1 = make_cached_role("r1", "Alpha")
@@ -1459,7 +1459,7 @@ class TestComputeRoleComparison:
 
     def test_disjoint_roles_no_shared(self):
         """Two roles with no overlap should have no shared ops."""
-        from azurerbac.web.services.pages import compute_role_comparison
+        from azurerbac.comparer import compute_role_comparison
 
         r1 = make_cached_role("r1", "Alpha")
         r2 = make_cached_role("r2", "Beta")
@@ -1475,7 +1475,7 @@ class TestComputeRoleComparison:
 
     def test_partial_overlap(self):
         """Partial overlap should correctly split into three sets."""
-        from azurerbac.web.services.pages import compute_role_comparison
+        from azurerbac.comparer import compute_role_comparison
 
         r1 = make_cached_role("r1", "Alpha")
         r2 = make_cached_role("r2", "Beta")
@@ -1494,7 +1494,7 @@ class TestComputeRoleComparison:
 
     def test_no_coverage_treated_as_empty(self):
         """Roles without coverage should be treated as having no operations."""
-        from azurerbac.web.services.pages import compute_role_comparison
+        from azurerbac.comparer import compute_role_comparison
 
         r1 = make_cached_role("r1", "Alpha")
         r2 = make_cached_role("r2", "Beta")
@@ -1510,7 +1510,7 @@ class TestComputeRoleComparison:
 
     def test_side_metadata_populated(self):
         """RoleComparisonSide fields should be populated correctly."""
-        from azurerbac.web.services.pages import compute_role_comparison
+        from azurerbac.comparer import compute_role_comparison
 
         r1 = _make_cached_role_full("r1", "Alpha", actions=["op1"], data_actions=["d1"])
         r2 = _make_cached_role_full("r2", "Beta", actions=["op2"])
@@ -1531,7 +1531,7 @@ class TestComputeRoleComparison:
 
     def test_results_are_sorted(self):
         """Operation lists should be alphabetically sorted."""
-        from azurerbac.web.services.pages import compute_role_comparison
+        from azurerbac.comparer import compute_role_comparison
 
         r1 = make_cached_role("r1", "Alpha")
         r2 = make_cached_role("r2", "Beta")
@@ -1545,7 +1545,7 @@ class TestComputeRoleComparison:
 
     def test_same_role_returns_none(self):
         """Comparing a role with itself should return None."""
-        from azurerbac.web.services.pages import compute_role_comparison
+        from azurerbac.comparer import compute_role_comparison
 
         r1 = make_cached_role("r1", "Alpha")
         cache = _build_cache_service({"r1": r1}, {}, {})
@@ -1553,7 +1553,7 @@ class TestComputeRoleComparison:
 
     def test_cache_hit_avoids_recompute(self):
         """Second call with same IDs should return cached result."""
-        from azurerbac.web.services.pages import compute_role_comparison
+        from azurerbac.comparer import compute_role_comparison
 
         ops = {"op1", "op2"}
         r1 = make_cached_role("r1", "Alpha")
@@ -1574,7 +1574,7 @@ class TestComputeRoleComparison:
 
     def test_reverse_order_separate_cache(self):
         """Calling with (B, A) produces a separate cache entry with swapped sides."""
-        from azurerbac.web.services.pages import compute_role_comparison
+        from azurerbac.comparer import compute_role_comparison
 
         r1 = make_cached_role("r1", "Alpha")
         r2 = make_cached_role("r2", "Beta")
@@ -1605,7 +1605,7 @@ class TestComputeRoleComparison:
 
     def test_conditions_populated_in_sides(self):
         """ABAC conditions should appear in role comparison sides."""
-        from azurerbac.web.services.pages import compute_role_comparison
+        from azurerbac.comparer import compute_role_comparison
 
         cond = "@Resource[Microsoft.Storage/storageAccounts:kind] == 'BlobStorage'"
         r1 = _make_cached_role_full("r1", "Alpha", actions=["op1"], condition=cond)
@@ -1621,7 +1621,7 @@ class TestComputeRoleComparison:
 
     def test_assignable_scopes_populated_in_sides(self):
         """Assignable scopes should appear in role comparison sides."""
-        from azurerbac.web.services.pages import compute_role_comparison
+        from azurerbac.comparer import compute_role_comparison
 
         r1 = _make_cached_role_full(
             "r1", "Alpha", actions=["op1"], assignable_scopes=["/subscriptions/abc"]
@@ -1635,3 +1635,85 @@ class TestComputeRoleComparison:
         assert result is not None
         assert result.role_a.assignable_scopes == ["/subscriptions/abc"]
         assert result.role_b.assignable_scopes == ["/"]
+
+
+# =============================================================================
+# _build_popular_comparisons (cache/build.py)
+# =============================================================================
+
+
+class TestBuildPopularComparisons:
+    """Tests for _build_popular_comparisons in the cache build pipeline."""
+
+    # Well-known IDs from POPULAR_COMPARE_PAIRS (Reader, Contributor)
+    READER_ID = "acdd72a7-3385-48ef-bd42-f606fba81ae7"
+    CONTRIBUTOR_ID = "b24988ac-6180-42a0-ab88-20f7382dd24c"
+
+    def test_resolves_known_pairs(self):
+        """Pairs whose IDs exist in roles_by_id should be resolved."""
+        from azurerbac.cache.build import _build_popular_comparisons
+
+        roles_by_id = {
+            self.READER_ID: make_cached_role(self.READER_ID, "Reader"),
+            self.CONTRIBUTOR_ID: make_cached_role(self.CONTRIBUTOR_ID, "Contributor"),
+        }
+
+        result = _build_popular_comparisons(roles_by_id)
+        pair = next(
+            (
+                p
+                for p in result
+                if p.role_a_id == self.READER_ID and p.role_b_id == self.CONTRIBUTOR_ID
+            ),
+            None,
+        )
+        assert pair is not None
+        assert pair.role_a_name == "Reader"
+        assert pair.role_b_name == "Contributor"
+        assert pair.category == "General"
+
+    def test_skips_pair_when_role_missing(self):
+        """Pairs where one role is missing should be skipped."""
+        from azurerbac.cache.build import _build_popular_comparisons
+
+        roles_by_id = {
+            self.READER_ID: make_cached_role(self.READER_ID, "Reader"),
+        }
+
+        result = _build_popular_comparisons(roles_by_id)
+        assert all(p.role_b_id != self.CONTRIBUTOR_ID for p in result)
+
+    def test_empty_roles_returns_empty(self):
+        """Empty roles_by_id should produce an empty list."""
+        from azurerbac.cache.build import _build_popular_comparisons
+
+        result = _build_popular_comparisons({})
+        assert result == []
+
+    def test_all_pairs_resolved_with_full_index(self):
+        """When all role IDs exist, all pairs should resolve."""
+        from azurerbac.cache.build import _build_popular_comparisons
+        from azurerbac.core.constants import POPULAR_COMPARE_PAIRS
+
+        roles_by_id: dict[str, CachedRole] = {}
+        for id_a, id_b, _cat in POPULAR_COMPARE_PAIRS:
+            for rid in (id_a, id_b):
+                if rid not in roles_by_id:
+                    roles_by_id[rid] = make_cached_role(rid, f"Role-{rid[:8]}")
+
+        result = _build_popular_comparisons(roles_by_id)
+        assert len(result) == len(POPULAR_COMPARE_PAIRS)
+
+    def test_returned_objects_are_frozen(self):
+        """PopularComparison instances should be immutable."""
+        from azurerbac.cache.build import _build_popular_comparisons
+
+        roles_by_id = {
+            self.READER_ID: make_cached_role(self.READER_ID, "Reader"),
+            self.CONTRIBUTOR_ID: make_cached_role(self.CONTRIBUTOR_ID, "Contributor"),
+        }
+
+        result = _build_popular_comparisons(roles_by_id)
+        if result:
+            with pytest.raises(AttributeError):
+                result[0].category = "modified"  # type: ignore[misc]

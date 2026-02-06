@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from azurerbac.azure.models import OperationData, RoleDefinition
-    from azurerbac.web.services.models import RelatedRole, RoleAllowingOperation
+    from azurerbac.web.services.models import RelatedRole, RoleAllowingOperation, RoleComparison
 
 logger = logging.getLogger(__name__)
 
@@ -313,13 +313,13 @@ class CacheService:
         """Cache related roles for a role ID."""
         self._request_caches.related_roles[key] = value
 
-    def get_comparison(self, key: str) -> Any | None:
+    def get_comparison(self, key: str) -> RoleComparison | None:
         """Get cached role comparison result."""
         result = self._request_caches.comparisons.get(key)
         track_cache_hit("comparisons", result is not None, key)
         return result
 
-    def set_comparison(self, key: str, value: Any) -> None:
+    def set_comparison(self, key: str, value: RoleComparison) -> None:
         """Cache role comparison result."""
         self._request_caches.comparisons[key] = value
 

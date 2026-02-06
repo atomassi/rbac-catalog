@@ -1571,27 +1571,36 @@ class TestComputeRoleComparison:
         second = compute_role_comparison("r1", "r2", cache=cache)
         assert second is first
 
-    def test_reverse_order_hits_cache(self):
-        """Calling with (B, A) should hit cache from (A, B)."""
+    def test_reverse_order_separate_cache(self):
+        """Calling with (B, A) produces a separate cache entry with swapped sides."""
         from azurerbac.web.services.pages import compute_role_comparison
 
-        ops = {"op1"}
         r1 = make_cached_role("r1", "Alpha")
         r2 = make_cached_role("r2", "Beta")
-        cov1 = RoleCoverage(control=ops, data=set())
-        cov2 = RoleCoverage(control=ops, data=set())
+        cov1 = RoleCoverage(control={"op1", "shared"}, data=set())
+        cov2 = RoleCoverage(control={"op2", "shared"}, data=set())
         cache = _build_cache_service({"r1": r1, "r2": r2}, {"r1": cov1, "r2": cov2}, {})
 
-        # First call stores under canonical key
-        first = compute_role_comparison("r1", "r2", cache=cache)
-        assert first is not None
-        canon_key = "r1:r2" if "r1" < "r2" else "r2:r1"
-        cache.set_comparison.assert_called_once_with(canon_key, first)
+        # Forward order: A=r1, B=r2
+        forward = compute_role_comparison("r1", "r2", cache=cache)
+        assert forward is not None
+        cache.set_comparison.assert_called_once_with("r1:r2", forward)
+        assert forward.role_a.role_id == "r1"
+        assert forward.role_b.role_id == "r2"
 
-        # Simulate cache hit when called in reverse order
-        cache.get_comparison.return_value = first
-        second = compute_role_comparison("r2", "r1", cache=cache)
-        assert second is first
+        # Reset mock and compute reverse order
+        cache.get_comparison.return_value = None
+        cache.set_comparison.reset_mock()
+        reverse = compute_role_comparison("r2", "r1", cache=cache)
+        assert reverse is not None
+        cache.set_comparison.assert_called_once_with("r2:r1", reverse)
+        assert reverse.role_a.role_id == "r2"
+        assert reverse.role_b.role_id == "r1"
+
+        # Verify operation sets are mirrored
+        assert forward.only_a_control == reverse.only_b_control
+        assert forward.only_b_control == reverse.only_a_control
+        assert forward.shared_control == reverse.shared_control
 
     def test_conditions_populated_in_sides(self):
         """ABAC conditions should appear in role comparison sides."""

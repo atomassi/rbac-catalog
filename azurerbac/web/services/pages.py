@@ -164,15 +164,22 @@ def _scopes_contain(broader: frozenset[str], narrower: frozenset[str]) -> bool:
     broader_lower = [s.lower().rstrip("/") for s in broader]
     for scope in narrower:
         scope_lower = scope.lower().rstrip("/")
-        contained = False
-        for bs in broader_lower:
-            if bs in ("", scope_lower) or scope_lower.startswith(bs + "/"):
-                # "" is root "/" stripped, matches everything
-                contained = True
-                break
-        if not contained:
+        if not any(
+            bs in ("", scope_lower) or scope_lower.startswith(bs + "/") for bs in broader_lower
+        ):
             return False
     return True
+
+
+def _extract_abac_conditions(role: CachedRole) -> list[str]:
+    """Extract sorted unique ABAC condition expressions from a role."""
+    return sorted({p.condition for p in role.definition.properties.permissions if p.condition})
+
+
+def _extract_assignable_scopes(role: CachedRole) -> list[str]:
+    """Extract assignable scopes from a role, defaulting to root scope."""
+    scopes = role.definition.properties.assignable_scopes
+    return scopes or ["/"]
 
 
 def _extract_role_metadata(
@@ -343,9 +350,9 @@ def compute_role_comparison(
     if role_a_id == role_b_id:
         return None
 
-    # Check LRU cache (canonical key so A:B == B:A)
-    canon_key = f"{role_a_id}:{role_b_id}" if role_a_id < role_b_id else f"{role_b_id}:{role_a_id}"
-    if (cached := cache_resolved.get_comparison(canon_key)) is not None:
+    # Cache key preserves argument order so role_a/role_b stay correct
+    cache_key = f"{role_a_id}:{role_b_id}"
+    if (cached := cache_resolved.get_comparison(cache_key)) is not None:
         return cached
 
     role_a = cache_resolved.get_role_by_id(role_a_id)
@@ -361,14 +368,6 @@ def compute_role_comparison(
     data_a = cov_a.data if cov_a else set()
     data_b = cov_b.data if cov_b else set()
 
-    # Collect ABAC conditions from permission blocks
-    def _extract_abac_conditions(role: CachedRole) -> list[str]:
-        return sorted({p.condition for p in role.definition.properties.permissions if p.condition})
-
-    def _extract_scopes(role: CachedRole) -> list[str]:
-        scopes = role.definition.properties.assignable_scopes
-        return scopes if scopes else ["/"]
-
     result = RoleComparison(
         role_a=RoleComparisonSide(
             role_id=role_a_id,
@@ -377,7 +376,7 @@ def compute_role_comparison(
             control_count=len(ctrl_a),
             data_count=len(data_a),
             conditions=_extract_abac_conditions(role_a),
-            assignable_scopes=_extract_scopes(role_a),
+            assignable_scopes=_extract_assignable_scopes(role_a),
         ),
         role_b=RoleComparisonSide(
             role_id=role_b_id,
@@ -386,7 +385,7 @@ def compute_role_comparison(
             control_count=len(ctrl_b),
             data_count=len(data_b),
             conditions=_extract_abac_conditions(role_b),
-            assignable_scopes=_extract_scopes(role_b),
+            assignable_scopes=_extract_assignable_scopes(role_b),
         ),
         only_a_control=sorted(ctrl_a - ctrl_b),
         only_a_data=sorted(data_a - data_b),
@@ -395,7 +394,7 @@ def compute_role_comparison(
         only_b_control=sorted(ctrl_b - ctrl_a),
         only_b_data=sorted(data_b - data_a),
     )
-    cache_resolved.set_comparison(canon_key, result)
+    cache_resolved.set_comparison(cache_key, result)
     return result
 
 

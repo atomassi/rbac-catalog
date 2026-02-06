@@ -124,8 +124,6 @@ pre::-webkit-scrollbar-thumb:hover {
 }
 
 
-
-
 /* Dark mode: Navigation hover states */
 .dark nav .hover\:bg-white\/20:hover {
   background: rgba(59, 130, 246, 0.25) !important;

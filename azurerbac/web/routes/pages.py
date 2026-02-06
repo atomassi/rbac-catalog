@@ -34,6 +34,7 @@ from azurerbac.web.services.pages import (
     add_role_counts,
     build_role_redirect_url,
     compute_related_roles,
+    compute_role_comparison,
     compute_role_effective_permissions,
     enrich_event_with_diff,
     filter_operations,
@@ -133,6 +134,33 @@ async def role_detail(
             "limit": limit,
             "days": days,
         },
+    )
+
+
+@router.api_route(
+    "/roles/compare/{role_a_id}/{role_b_id}",
+    methods=["GET", "HEAD"],
+    response_class=HTMLResponse,
+    name="compare_roles",
+)
+async def compare_roles(
+    request: Request,
+    role_a_id: uuid.UUID,
+    role_b_id: uuid.UUID,
+    deps: Annotated[PagesDeps, Depends(get_pages_deps)],
+) -> Response:
+    """Compare two roles side by side."""
+    if role_a_id == role_b_id:
+        raise HTTPException(status_code=400, detail="Cannot compare a role with itself")
+
+    comparison = compute_role_comparison(str(role_a_id), str(role_b_id), cache=deps.app_cache)
+    if comparison is None:
+        raise HTTPException(status_code=404)
+
+    return deps.templates.TemplateResponse(
+        request,
+        "compare.html",
+        {"comparison": comparison},
     )
 
 

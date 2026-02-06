@@ -291,6 +291,10 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException) -> Response:
     """Handle HTTP exceptions with friendly HTML pages."""
+    if exc.status_code == 400:
+        return templates.TemplateResponse(
+            request, "400.html", {"errors": None, "detail": exc.detail}, status_code=400
+        )
     if exc.status_code == 404:
         return templates.TemplateResponse(request, "404.html", status_code=404)
     # Return other HTTP exceptions directly with their headers (e.g., Allow header for 405)

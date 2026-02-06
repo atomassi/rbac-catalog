@@ -454,13 +454,13 @@
                     <!-- Navigation tabs - compact on mobile, prominent on desktop -->
                     <div class="flex items-center">
                         <div class="flex items-center bg-white/10 backdrop-blur-sm rounded-2xl p-1.5 sm:p-2 gap-1 sm:gap-2">
-                            <a href="/recent" class="ai-nav-link group flex items-center justify-center px-3 sm:px-4 py-2.5 sm:py-2.5 rounded-xl text-xs sm:text-base sm:w-[133px] font-semibold transition-all duration-200 {{ 'bg-white text-azure-700 shadow-md' if tab == 'recent' else 'text-white hover:bg-white/20' }}" aria-label="Recent Changes">
+                            <a href="/recent" class="ai-nav-link group flex items-center justify-center px-3 sm:px-4 py-2.5 sm:py-2.5 rounded-xl text-xs sm:text-base sm:w-[133px] font-semibold transition-all duration-200 {{ 'bg-white text-azure-700 shadow-md dark:bg-slate-700 dark:text-azure-300' if tab == 'recent' else 'text-white hover:bg-white/20' }}" aria-label="Recent Changes">
                                 <svg class="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
                                 </svg>
                                 <span class="hidden sm:inline ml-2">Recent</span>
                             </a>
-                            <a href="/roles" class="ai-nav-link group flex items-center justify-center px-3 sm:px-4 py-2.5 sm:py-2.5 rounded-xl text-xs sm:text-base sm:w-[133px] font-semibold transition-all duration-200 {{ 'bg-white text-azure-700 shadow-md' if tab == 'roles' else 'text-white hover:bg-white/20' }}" aria-label="Browse Roles">
+                            <a href="/roles" class="ai-nav-link group flex items-center justify-center px-3 sm:px-4 py-2.5 sm:py-2.5 rounded-xl text-xs sm:text-base sm:w-[133px] font-semibold transition-all duration-200 {{ 'bg-white text-azure-700 shadow-md dark:bg-slate-700 dark:text-azure-300' if tab == 'roles' else 'text-white hover:bg-white/20' }}" aria-label="Browse Roles">
                                 <svg class="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 12h16.5m-16.5 3.75h16.5M3.75 19.5h16.5M5.625 4.5h12.75a1.875 1.875 0 010 3.75H5.625a1.875 1.875 0 010-3.75z" />
                                 </svg>
@@ -531,9 +531,9 @@
             <!-- Stats Cards -->
             <div class="grid {% if tab == 'recent' %}grid-cols-1 sm:grid-cols-3{% else %}grid-cols-2{% endif %} gap-3 sm:gap-5 mb-6 sm:mb-8">
                 {% if tab == 'recent' %}
-                <a href="/roles" class="bg-white rounded-xl sm:rounded-2xl shadow-lg overflow-hidden card-hover cursor-pointer transition-transform hover:scale-[1.02]">
+                <a href="/roles" class="bg-white dark:bg-slate-800 rounded-xl sm:rounded-2xl shadow-lg overflow-hidden card-hover cursor-pointer transition-transform hover:scale-[1.02]">
                 {% else %}
-                <div class="bg-white rounded-xl sm:rounded-2xl shadow-lg overflow-hidden card-hover">
+                <div class="bg-white dark:bg-slate-800 rounded-xl sm:rounded-2xl shadow-lg overflow-hidden card-hover">
                 {% endif %}
                     <div class="p-4 sm:p-6">
                         <div class="flex items-center">
@@ -543,8 +543,8 @@
                                 </svg>
                             </div>
                             <div class="ml-3 sm:ml-4">
-                                <p class="text-xs sm:text-sm lg:text-base font-medium text-slate-500">Total Built-in Roles</p>
-                                <p class="text-2xl sm:text-3xl font-bold text-slate-900">{{ total_roles }}</p>
+                                <p class="text-xs sm:text-sm lg:text-base font-medium text-slate-500 dark:text-slate-400">Total Built-in Roles</p>
+                                <p class="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-slate-100">{{ total_roles }}</p>
                             </div>
                         </div>
                     </div>
@@ -554,7 +554,7 @@
                 </div>
                 {% endif %}
                 {% if tab == 'recent' %}
-                <a href="/operations" class="bg-white rounded-xl sm:rounded-2xl shadow-lg overflow-hidden card-hover cursor-pointer transition-transform hover:scale-[1.02]">
+                <a href="/operations" class="bg-white dark:bg-slate-800 rounded-xl sm:rounded-2xl shadow-lg overflow-hidden card-hover cursor-pointer transition-transform hover:scale-[1.02]">
                     <div class="p-4 sm:p-6">
                         <div class="flex items-center">
                             <div class="flex-shrink-0 rounded-lg sm:rounded-xl p-2 sm:p-3 bg-gradient-to-br from-violet-500 to-purple-600">
@@ -563,14 +563,14 @@
                                 </svg>
                             </div>
                             <div class="ml-3 sm:ml-4">
-                                <p class="text-xs sm:text-sm lg:text-base font-medium text-slate-500">Total Operations</p>
-                                <p class="text-2xl sm:text-3xl font-bold text-slate-900">{{ "{:,}".format(total_operations) }}</p>
+                                <p class="text-xs sm:text-sm lg:text-base font-medium text-slate-500 dark:text-slate-400">Total Operations</p>
+                                <p class="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-slate-100">{{ "{:,}".format(total_operations) }}</p>
                             </div>
                         </div>
                     </div>
                 </a>
                 {% endif %}
-                <div class="bg-white rounded-xl sm:rounded-2xl shadow-lg overflow-hidden card-hover">
+                <div class="bg-white dark:bg-slate-800 rounded-xl sm:rounded-2xl shadow-lg overflow-hidden card-hover">
                     <div class="p-4 sm:p-6">
                         <div class="flex items-center">
                             <div class="flex-shrink-0 rounded-lg sm:rounded-xl p-2 sm:p-3 bg-gradient-to-br from-emerald-500 to-teal-600">
@@ -579,8 +579,8 @@
                                 </svg>
                             </div>
                             <div class="ml-3 sm:ml-4">
-                                <p class="text-xs sm:text-sm lg:text-base font-medium text-slate-500">Last Scan</p>
-                                <p class="text-lg sm:text-lg font-semibold text-slate-900">{{ last_scan.strftime('%Y-%m-%d %H:%M') if last_scan else "Never" }} <span class="text-xs font-normal text-slate-500">UTC</span></p>
+                                <p class="text-xs sm:text-sm lg:text-base font-medium text-slate-500 dark:text-slate-400">Last Scan</p>
+                                <p class="text-lg sm:text-lg font-semibold text-slate-900 dark:text-slate-100">{{ last_scan.strftime('%Y-%m-%d %H:%M') if last_scan else "Never" }} <span class="text-xs font-normal text-slate-500 dark:text-slate-400">UTC</span></p>
                             </div>
                         </div>
                     </div>
@@ -588,9 +588,9 @@
             </div>
 
             <!-- Content -->
-            <div class="bg-white rounded-xl sm:rounded-2xl shadow-lg overflow-hidden mb-6 sm:mb-8">
+            <div class="bg-white dark:bg-slate-800 rounded-xl sm:rounded-2xl shadow-lg overflow-hidden mb-6 sm:mb-8">
                 {% if tab == 'roles' %}
-                    <div class="p-4 border-b border-slate-100">
+                    <div class="p-4 border-b border-slate-100 dark:border-slate-700">
                         <!-- Mobile: stacked layout -->
                         <form action="/roles" method="get" class="sm:hidden" onsubmit="return cleanFormSubmit(this)">
                             <div class="flex flex-col gap-3">
@@ -600,7 +600,7 @@
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                                         </svg>
                                     </div>
-                                    <input type="text" name="q" value="{{ q or '' }}" placeholder="Search by Role Name or ID..." class="block w-full pl-9 pr-3 py-3 border border-slate-200 rounded-lg bg-slate-50 text-base placeholder-slate-400 focus:outline-none focus:border-azure-500 focus:ring-2 focus:ring-azure-500/20 transition-colors">
+                                    <input type="text" name="q" value="{{ q or '' }}" placeholder="Search by Role Name or ID..." class="block w-full pl-9 pr-3 py-3 border border-slate-200 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-700 text-base text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-azure-500 focus:ring-2 focus:ring-azure-500/20 transition-colors">
                                 </div>
                                 <div class="flex gap-2 items-center">
                                     <button type="submit" class="flex-1 inline-flex items-center justify-center px-4 py-3 bg-gradient-to-r from-azure-500 to-azure-600 text-white text-sm font-medium rounded-lg shadow-md">
@@ -610,7 +610,7 @@
                                         Search
                                     </button>
                                     {% if q %}
-                                    <a href="/roles" class="px-4 py-3 border border-slate-200 text-sm font-medium rounded-lg text-slate-600 bg-white inline-flex items-center">
+                                    <a href="/roles" class="px-4 py-3 border border-slate-200 dark:border-slate-600 text-sm font-medium rounded-lg text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-700 inline-flex items-center">
                                         <svg class="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                                         </svg>
@@ -618,8 +618,8 @@
                                     </a>
                                     {% endif %}
                                 </div>
-                                <div class="flex items-center justify-between px-3 py-2 border border-slate-200 rounded-lg bg-white">
-                                    <span class="text-sm text-slate-600">Exact match</span>
+                                <div class="flex items-center justify-between px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700">
+                                    <span class="text-sm text-slate-600 dark:text-slate-300">Exact match</span>
                                     <button type="button" onclick="toggleExactMatch(this)" 
                                             style="width: 44px; height: 24px; border-radius: 12px; padding: 2px; transition: background-color 0.2s; background-color: {% if exact_match %}#0078d4{% else %}#cbd5e1{% endif %};">
                                         <span style="display: block; width: 20px; height: 20px; border-radius: 50%; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.2); transition: transform 0.2s; transform: translateX({% if exact_match %}20px{% else %}0{% endif %});"></span>
@@ -627,13 +627,13 @@
                                     <input type="hidden" name="exact_match" value="{% if exact_match %}1{% endif %}" {% if not exact_match %}disabled{% endif %}>
                                 </div>
                                 <div class="flex gap-2">
-                                    <select name="limit" onchange="cleanSubmit(this)" class="flex-1 px-3 py-2 text-sm text-slate-600 border border-slate-200 rounded-lg bg-white">
+                                    <select name="limit" onchange="cleanSubmit(this)" class="flex-1 px-3 py-2 text-sm text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700">
                                         <option value="25" {% if limit == 25 %}selected{% endif %}>25 rows</option>
                                         <option value="100" {% if limit == 100 %}selected{% endif %}>100 rows</option>
                                         <option value="500" {% if limit == 500 %}selected{% endif %}>500 rows</option>
                                         <option value="1000" {% if limit == 1000 %}selected{% endif %}>1000 rows</option>
                                     </select>
-                                    <select name="status_filter" onchange="cleanSubmit(this)" class="flex-1 px-3 py-2 text-sm text-slate-600 border border-slate-200 rounded-lg bg-white">
+                                    <select name="status_filter" onchange="cleanSubmit(this)" class="flex-1 px-3 py-2 text-sm text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700">
                                         <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Active</option>
                                         <option value="deleted" {% if status_filter == 'deleted' %}selected{% endif %}>Deleted</option>
                                         <option value="all" {% if status_filter == 'all' %}selected{% endif %}>All</option>
@@ -650,11 +650,11 @@
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                                         </svg>
                                     </div>
-                                    <input type="text" name="q" value="{{ q or '' }}" placeholder="Search by Role Name or ID..." class="block w-full pl-9 pr-3 py-2.5 border border-slate-200 rounded-lg bg-slate-50 text-sm placeholder-slate-400 focus:outline-none focus:border-azure-500 focus:ring-2 focus:ring-azure-500/20 transition-colors">
+                                    <input type="text" name="q" value="{{ q or '' }}" placeholder="Search by Role Name or ID..." class="block w-full pl-9 pr-3 py-2.5 border border-slate-200 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-700 text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-azure-500 focus:ring-2 focus:ring-azure-500/20 transition-colors">
                                 </div>
                                 <label class="inline-flex items-center cursor-pointer">
-                                    <input type="checkbox" name="exact_match" value="1" {% if exact_match %}checked{% endif %} onchange="cleanSubmit(this)" class="w-4 h-4 text-azure-600 bg-slate-100 border-slate-300 rounded focus:ring-azure-500 focus:ring-2">
-                                    <span class="ml-2 text-sm text-slate-600">Exact match</span>
+                                    <input type="checkbox" name="exact_match" value="1" {% if exact_match %}checked{% endif %} onchange="cleanSubmit(this)" class="w-4 h-4 text-azure-600 bg-slate-100 dark:bg-slate-700 border-slate-300 dark:border-slate-600 rounded focus:ring-azure-500 focus:ring-2">
+                                    <span class="ml-2 text-sm text-slate-600 dark:text-slate-300">Exact match</span>
                                 </label>
                                 <button type="submit" class="inline-flex items-center px-5 py-2.5 bg-gradient-to-r from-azure-500 to-azure-600 text-white text-sm font-medium rounded-lg shadow-md hover:shadow-lg hover:from-azure-600 hover:to-azure-700 transition-all">
                                     <svg class="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -663,7 +663,7 @@
                                     Search
                                 </button>
                                 {% if q %}
-                                <a href="/roles" class="inline-flex items-center px-4 py-2.5 border border-slate-200 text-sm font-medium rounded-lg text-slate-600 bg-white hover:bg-slate-50 transition-all">
+                                <a href="/roles" class="inline-flex items-center px-4 py-2.5 border border-slate-200 dark:border-slate-600 text-sm font-medium rounded-lg text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-700 hover:bg-slate-50 dark:hover:bg-slate-600 transition-all">
                                     <svg class="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                                     </svg>
@@ -672,26 +672,26 @@
                                 {% endif %}
                                 <!-- Spacer to push filters to the right -->
                                 <div class="flex-1"></div>
-                                <div class="flex items-center border border-slate-200 rounded-lg bg-white">
-                                    <div class="pl-3 pr-2 py-2 border-r border-slate-200">
-                                        <svg class="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <div class="flex items-center border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700">
+                                    <div class="pl-3 pr-2 py-2 border-r border-slate-200 dark:border-slate-600">
+                                        <svg class="w-4 h-4 text-slate-400 dark:text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
                                         </svg>
                                     </div>
-                                    <select name="limit" onchange="cleanSubmit(this)" class="pl-2 pr-8 py-2 text-sm text-slate-600 bg-transparent border-0 focus:outline-none focus:ring-0 cursor-pointer appearance-none" style="background-image: url('data:image/svg+xml;charset=UTF-8,%3csvg xmlns=%27http://www.w3.org/2000/svg%27 fill=%27none%27 viewBox=%270 0 24 24%27 stroke=%27%236b7280%27%3e%3cpath stroke-linecap=%27round%27 stroke-linejoin=%27round%27 stroke-width=%272%27 d=%27M19 9l-7 7-7-7%27/%3e%3c/svg%3e'); background-repeat: no-repeat; background-position: right 0.5rem center; background-size: 1rem;">
+                                    <select name="limit" onchange="cleanSubmit(this)" class="pl-2 pr-8 py-2 text-sm text-slate-600 dark:text-slate-300 bg-transparent border-0 focus:outline-none focus:ring-0 cursor-pointer appearance-none" style="background-image: url('data:image/svg+xml;charset=UTF-8,%3csvg xmlns=%27http://www.w3.org/2000/svg%27 fill=%27none%27 viewBox=%270 0 24 24%27 stroke=%27%236b7280%27%3e%3cpath stroke-linecap=%27round%27 stroke-linejoin=%27round%27 stroke-width=%272%27 d=%27M19 9l-7 7-7-7%27/%3e%3c/svg%3e'); background-repeat: no-repeat; background-position: right 0.5rem center; background-size: 1rem;">
                                         <option value="25" {% if limit == 25 %}selected{% endif %}>25 rows</option>
                                         <option value="100" {% if limit == 100 %}selected{% endif %}>100 rows</option>
                                         <option value="500" {% if limit == 500 %}selected{% endif %}>500 rows</option>
                                         <option value="1000" {% if limit == 1000 %}selected{% endif %}>1000 rows</option>
                                     </select>
                                 </div>
-                                <div class="flex items-center border border-slate-200 rounded-lg bg-white">
-                                    <div class="pl-3 pr-2 py-2 border-r border-slate-200">
-                                        <svg class="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <div class="flex items-center border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700">
+                                    <div class="pl-3 pr-2 py-2 border-r border-slate-200 dark:border-slate-600">
+                                        <svg class="w-4 h-4 text-slate-400 dark:text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
                                         </svg>
                                     </div>
-                                    <select name="status_filter" onchange="cleanSubmit(this)" class="pl-2 pr-8 py-2 text-sm text-slate-600 bg-transparent border-0 focus:outline-none focus:ring-0 cursor-pointer appearance-none" style="background-image: url('data:image/svg+xml;charset=UTF-8,%3csvg xmlns=%27http://www.w3.org/2000/svg%27 fill=%27none%27 viewBox=%270 0 24 24%27 stroke=%27%236b7280%27%3e%3cpath stroke-linecap=%27round%27 stroke-linejoin=%27round%27 stroke-width=%272%27 d=%27M19 9l-7 7-7-7%27/%3e%3c/svg%3e'); background-repeat: no-repeat; background-position: right 0.5rem center; background-size: 1rem;">
+                                    <select name="status_filter" onchange="cleanSubmit(this)" class="pl-2 pr-8 py-2 text-sm text-slate-600 dark:text-slate-300 bg-transparent border-0 focus:outline-none focus:ring-0 cursor-pointer appearance-none" style="background-image: url('data:image/svg+xml;charset=UTF-8,%3csvg xmlns=%27http://www.w3.org/2000/svg%27 fill=%27none%27 viewBox=%270 0 24 24%27 stroke=%27%236b7280%27%3e%3cpath stroke-linecap=%27round%27 stroke-linejoin=%27round%27 stroke-width=%272%27 d=%27M19 9l-7 7-7-7%27/%3e%3c/svg%3e'); background-repeat: no-repeat; background-position: right 0.5rem center; background-size: 1rem;">
                                         <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Active</option>
                                         <option value="deleted" {% if status_filter == 'deleted' %}selected{% endif %}>Deleted</option>
                                         <option value="all" {% if status_filter == 'all' %}selected{% endif %}>All</option>
@@ -717,16 +717,16 @@
                                     <col class="hide-mobile" style="width: 25%;">
                                 </colgroup>
                                 <thead>
-                                    <tr class="bg-slate-50 border-b border-slate-100">
-                                        <th scope="col" class="px-4 sm:px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                                            <a href="{{ sort_url('name', 'desc' if sort == 'name' and order == 'asc' else 'asc') }}" class="group inline-flex items-center hover:text-slate-700">
+                                    <tr class="bg-slate-50 dark:bg-slate-700/50 border-b border-slate-100 dark:border-slate-700">
+                                        <th scope="col" class="px-4 sm:px-6 py-4 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                                            <a href="{{ sort_url('name', 'desc' if sort == 'name' and order == 'asc' else 'asc') }}" class="group inline-flex items-center hover:text-slate-700 dark:hover:text-slate-300">
                                                 Role Name
                                                 <span class="ml-1 flex-none">
                                                     {% if sort == 'name' %}
                                                         {% if order == 'asc' %}
-                                                        <svg class="h-4 w-4 text-azure-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/></svg>
+                                                        <svg class="h-4 w-4 text-azure-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/></svg>
                                                         {% else %}
-                                                        <svg class="h-4 w-4 text-azure-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                                                        <svg class="h-4 w-4 text-azure-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
                                                         {% endif %}
                                                     {% else %}
                                                         <svg class="h-4 w-4 text-slate-300 group-hover:text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/></svg>
@@ -734,15 +734,15 @@
                                                 </span>
                                             </a>
                                         </th>
-                                        <th scope="col" class="hide-mobile px-6 py-4 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                                            <a href="{{ sort_url('actions', 'desc' if sort == 'actions' and order == 'asc' else 'asc') }}" class="group inline-flex items-center justify-center hover:text-slate-700" title="Actions minus notActions exclusions">
+                                        <th scope="col" class="hide-mobile px-6 py-4 text-center text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                                            <a href="{{ sort_url('actions', 'desc' if sort == 'actions' and order == 'asc' else 'asc') }}" class="group inline-flex items-center justify-center hover:text-slate-700 dark:hover:text-slate-300" title="Actions minus notActions exclusions">
                                                 Effective Actions
                                                 <span class="ml-1 flex-none">
                                                     {% if sort == 'actions' %}
                                                         {% if order == 'asc' %}
-                                                        <svg class="h-4 w-4 text-azure-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/></svg>
+                                                        <svg class="h-4 w-4 text-azure-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/></svg>
                                                         {% else %}
-                                                        <svg class="h-4 w-4 text-azure-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                                                        <svg class="h-4 w-4 text-azure-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
                                                         {% endif %}
                                                     {% else %}
                                                         <svg class="h-4 w-4 text-slate-300 group-hover:text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/></svg>
@@ -750,15 +750,15 @@
                                                 </span>
                                             </a>
                                         </th>
-                                        <th scope="col" class="hide-mobile px-6 py-4 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                                            <a href="{{ sort_url('data_actions', 'desc' if sort == 'data_actions' and order == 'asc' else 'asc') }}" class="group inline-flex items-center justify-center hover:text-slate-700" title="Data actions minus notDataActions exclusions">
+                                        <th scope="col" class="hide-mobile px-6 py-4 text-center text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                                            <a href="{{ sort_url('data_actions', 'desc' if sort == 'data_actions' and order == 'asc' else 'asc') }}" class="group inline-flex items-center justify-center hover:text-slate-700 dark:hover:text-slate-300" title="Data actions minus notDataActions exclusions">
                                                 Effective Data Actions
                                                 <span class="ml-1 flex-none">
                                                     {% if sort == 'data_actions' %}
                                                         {% if order == 'asc' %}
-                                                        <svg class="h-4 w-4 text-azure-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/></svg>
+                                                        <svg class="h-4 w-4 text-azure-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/></svg>
                                                         {% else %}
-                                                        <svg class="h-4 w-4 text-azure-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                                                        <svg class="h-4 w-4 text-azure-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
                                                         {% endif %}
                                                     {% else %}
                                                         <svg class="h-4 w-4 text-slate-300 group-hover:text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/></svg>
@@ -766,15 +766,15 @@
                                                 </span>
                                             </a>
                                         </th>
-                                        <th scope="col" class="hide-mobile px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                                            <a href="{{ sort_url('updated', 'desc' if sort == 'updated' and order == 'asc' else 'asc') }}" class="group inline-flex items-center hover:text-slate-700">
+                                        <th scope="col" class="hide-mobile px-6 py-4 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                                            <a href="{{ sort_url('updated', 'desc' if sort == 'updated' and order == 'asc' else 'asc') }}" class="group inline-flex items-center hover:text-slate-700 dark:hover:text-slate-300">
                                                 Last Updated
                                                 <span class="ml-1 flex-none">
                                                     {% if sort == 'updated' %}
                                                         {% if order == 'asc' %}
-                                                        <svg class="h-4 w-4 text-azure-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/></svg>
+                                                        <svg class="h-4 w-4 text-azure-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/></svg>
                                                         {% else %}
-                                                        <svg class="h-4 w-4 text-azure-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                                                        <svg class="h-4 w-4 text-azure-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
                                                         {% endif %}
                                                     {% else %}
                                                         <svg class="h-4 w-4 text-slate-300 group-hover:text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/></svg>
@@ -784,29 +784,29 @@
                                         </th>
                                     </tr>
                                 </thead>
-                                <tbody class="divide-y divide-slate-100">
+                                <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
                                     {% for role in roles %}
-                                    <tr class="hover:bg-slate-50/50 transition-colors {% if role.status == 'deleted' %}opacity-60{% endif %}">
+                                    <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-700/30 transition-colors {% if role.status == 'deleted' %}opacity-60{% endif %}">
                                         <td class="px-4 sm:px-6 py-4">
                                             <div class="flex flex-col">
                                                 <div class="flex items-center gap-2">
-                                                    <a href="{{ role_url(role.role_id, role.role_name) }}" onclick="NavState.setBackContext('roles')" class="text-sm font-semibold text-azure-600 hover:text-azure-700 hover:underline {% if role.status == 'deleted' %}line-through{% endif %}">{{ role.role_name }}</a>
+                                                    <a href="{{ role_url(role.role_id, role.role_name) }}" onclick="NavState.setBackContext('roles')" class="text-sm font-semibold text-azure-600 dark:text-azure-400 hover:text-azure-700 dark:hover:text-azure-300 hover:underline {% if role.status == 'deleted' %}line-through{% endif %}">{{ role.role_name }}</a>
                                                     {% if role.status == 'deleted' %}
-                                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
+                                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300">
                                                         Deleted
                                                     </span>
                                                     {% endif %}
                                                 </div>
-                                                <code class="text-xs font-mono text-slate-500 mt-0.5">{{ role.role_id }}</code>
+                                                <code class="text-xs font-mono text-slate-500 dark:text-slate-400 mt-0.5">{{ role.role_id }}</code>
                                             </div>
                                         </td>
                                         <td class="hide-mobile px-6 py-4 text-center">
-                                            <span class="text-sm font-mono tabular-nums text-slate-600">{{ "{:,}".format(role.actions_count or 0) }}</span>
+                                            <span class="text-sm font-mono tabular-nums text-slate-600 dark:text-slate-300">{{ "{:,}".format(role.actions_count or 0) }}</span>
                                         </td>
                                         <td class="hide-mobile px-6 py-4 text-center">
-                                            <span class="text-sm font-mono tabular-nums text-slate-600">{{ "{:,}".format(role.data_actions_count or 0) }}</span>
+                                            <span class="text-sm font-mono tabular-nums text-slate-600 dark:text-slate-300">{{ "{:,}".format(role.data_actions_count or 0) }}</span>
                                         </td>
-                                        <td class="hide-mobile px-6 py-4 text-sm font-mono tabular-nums text-slate-500">{{ role.updated_on.strftime('%Y-%m-%d') if role.updated_on else '-' }}</td>
+                                        <td class="hide-mobile px-6 py-4 text-sm font-mono tabular-nums text-slate-500 dark:text-slate-400">{{ role.updated_on.strftime('%Y-%m-%d') if role.updated_on else '-' }}</td>
                                     </tr>
                                     {% endfor %}
                                 </tbody>
@@ -814,13 +814,13 @@
                         </div>
                         
                         {% if total_pages > 1 %}
-                        <div class="px-6 py-4 flex items-center justify-between border-t border-slate-100">
-                            <div class="text-sm text-slate-500">
-                                Page <span class="font-semibold text-slate-700">{{ page }}</span> of <span class="font-semibold text-slate-700">{{ total_pages }}</span>
+                        <div class="px-6 py-4 flex items-center justify-between border-t border-slate-100 dark:border-slate-700">
+                            <div class="text-sm text-slate-500 dark:text-slate-400">
+                                Page <span class="font-semibold text-slate-700 dark:text-slate-200">{{ page }}</span> of <span class="font-semibold text-slate-700 dark:text-slate-200">{{ total_pages }}</span>
                             </div>
                             <div class="flex space-x-2">
                                 {% if page > 1 %}
-                                    <a href="{{ build_url(page - 1) }}" class="inline-flex items-center px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-all">
+                                    <a href="{{ build_url(page - 1) }}" class="inline-flex items-center px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-600 transition-all">
                                         <svg class="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
                                         </svg>
@@ -828,7 +828,7 @@
                                     </a>
                                 {% endif %}
                                 {% if page < total_pages %}
-                                    <a href="{{ build_url(page + 1) }}" class="inline-flex items-center px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-all">
+                                    <a href="{{ build_url(page + 1) }}" class="inline-flex items-center px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-600 transition-all">
                                         Next
                                         <svg class="w-4 h-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
@@ -840,59 +840,59 @@
                         {% endif %}
                     {% else %}
                         <div class="text-center py-16">
-                            <svg class="mx-auto h-12 w-12 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <svg class="mx-auto h-12 w-12 text-slate-300 dark:text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
-                            <h3 class="mt-4 text-lg font-medium text-slate-900">No roles found</h3>
-                            <p class="mt-2 text-sm text-slate-500">Try adjusting your search query.</p>
+                            <h3 class="mt-4 text-lg font-medium text-slate-900 dark:text-slate-100">No roles found</h3>
+                            <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">Try adjusting your search query.</p>
                         </div>
                     {% endif %}
                 {% else %}
                     <!-- Recent Changes Filter -->
-                    <div class="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-100">
+                    <div class="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-100 dark:border-slate-700">
                         <div class="flex flex-wrap items-center gap-2 sm:gap-4 sm:justify-between">
                             <!-- Event Type Filter -->
                             <div class="flex items-center gap-2">
-                                <span class="text-xs font-medium text-slate-500 uppercase tracking-wider hidden sm:inline">Filter</span>
-                                <div class="inline-flex rounded-lg bg-white border border-slate-200 p-1 shadow-sm">
-                                    <a href="{{ build_recent_url(new_page=1, new_event_type='all') }}" class="px-2 sm:px-3 py-1.5 text-xs font-medium rounded-md transition-all {{ 'bg-azure-500 text-white shadow-sm' if event_type == 'all' else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}">All</a>
-                                    <a href="{{ build_recent_url(new_page=1, new_event_type='created') }}" class="px-2 sm:px-3 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-emerald-500 text-white shadow-sm' if event_type == 'created' else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}"><span class="hidden sm:inline">Created</span><span class="sm:hidden">New</span></a>
-                                    <a href="{{ build_recent_url(new_page=1, new_event_type='updated') }}" class="px-2 sm:px-3 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-blue-500 text-white shadow-sm' if event_type == 'updated' else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}"><span class="hidden sm:inline">Updated</span><span class="sm:hidden">Edit</span></a>
-                                    <a href="{{ build_recent_url(new_page=1, new_event_type='deleted') }}" class="px-2 sm:px-3 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-red-500 text-white shadow-sm' if event_type == 'deleted' else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}"><span class="hidden sm:inline">Deleted</span><span class="sm:hidden">Del</span></a>
+                                <span class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider hidden sm:inline">Filter</span>
+                                <div class="inline-flex rounded-lg bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 p-1 shadow-sm">
+                                    <a href="{{ build_recent_url(new_page=1, new_event_type='all') }}" class="px-2 sm:px-3 py-1.5 text-xs font-medium rounded-md transition-all {{ 'bg-azure-500 text-white shadow-sm' if event_type == 'all' else 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-600' }}">All</a>
+                                    <a href="{{ build_recent_url(new_page=1, new_event_type='created') }}" class="px-2 sm:px-3 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-emerald-500 text-white shadow-sm' if event_type == 'created' else 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-600' }}"><span class="hidden sm:inline">Created</span><span class="sm:hidden">New</span></a>
+                                    <a href="{{ build_recent_url(new_page=1, new_event_type='updated') }}" class="px-2 sm:px-3 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-blue-500 text-white shadow-sm' if event_type == 'updated' else 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-600' }}"><span class="hidden sm:inline">Updated</span><span class="sm:hidden">Edit</span></a>
+                                    <a href="{{ build_recent_url(new_page=1, new_event_type='deleted') }}" class="px-2 sm:px-3 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-red-500 text-white shadow-sm' if event_type == 'deleted' else 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-600' }}"><span class="hidden sm:inline">Deleted</span><span class="sm:hidden">Del</span></a>
                                 </div>
                             </div>
                             
                             <!-- Time Range Filter -->
                             <div class="flex items-center gap-2">
-                                <span class="text-xs font-medium text-slate-500 uppercase tracking-wider hidden sm:inline">From</span>
-                                <div class="inline-flex rounded-lg bg-white border border-slate-200 p-1 shadow-sm">
-                                    <a href="{{ build_recent_url(new_page=1, new_days=7) }}" class="px-1.5 sm:px-3 py-1.5 text-xs font-medium rounded-md transition-all {{ 'bg-slate-700 text-white shadow-sm' if days == 7 else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}"><span class="hidden sm:inline">7 days</span><span class="sm:hidden">7d</span></a>
-                                    <a href="{{ build_recent_url(new_page=1, new_days=15) }}" class="px-1.5 sm:px-3 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-slate-700 text-white shadow-sm' if days == 15 else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}"><span class="hidden sm:inline">15 days</span><span class="sm:hidden">15d</span></a>
-                                    <a href="{{ build_recent_url(new_page=1, new_days=30) }}" class="px-1.5 sm:px-3 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-slate-700 text-white shadow-sm' if days == 30 else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}"><span class="hidden sm:inline">30 days</span><span class="sm:hidden">30d</span></a>
-                                    <a href="{{ build_recent_url(new_page=1, new_days=90) }}" class="px-1.5 sm:px-3 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-slate-700 text-white shadow-sm' if days == 90 else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}"><span class="hidden sm:inline">90 days</span><span class="sm:hidden">90d</span></a>
-                                    <a href="{{ build_recent_url(new_page=1, new_days=365) }}" class="px-1.5 sm:px-3 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-slate-700 text-white shadow-sm' if days == 365 else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}"><span class="hidden sm:inline">1 year</span><span class="sm:hidden">1y</span></a>
+                                <span class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider hidden sm:inline">From</span>
+                                <div class="inline-flex rounded-lg bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 p-1 shadow-sm">
+                                    <a href="{{ build_recent_url(new_page=1, new_days=7) }}" class="px-1.5 sm:px-3 py-1.5 text-xs font-medium rounded-md transition-all {{ 'bg-slate-700 dark:bg-slate-500 text-white shadow-sm' if days == 7 else 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-600' }}"><span class="hidden sm:inline">7 days</span><span class="sm:hidden">7d</span></a>
+                                    <a href="{{ build_recent_url(new_page=1, new_days=15) }}" class="px-1.5 sm:px-3 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-slate-700 dark:bg-slate-500 text-white shadow-sm' if days == 15 else 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-600' }}"><span class="hidden sm:inline">15 days</span><span class="sm:hidden">15d</span></a>
+                                    <a href="{{ build_recent_url(new_page=1, new_days=30) }}" class="px-1.5 sm:px-3 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-slate-700 dark:bg-slate-500 text-white shadow-sm' if days == 30 else 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-600' }}"><span class="hidden sm:inline">30 days</span><span class="sm:hidden">30d</span></a>
+                                    <a href="{{ build_recent_url(new_page=1, new_days=90) }}" class="px-1.5 sm:px-3 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-slate-700 dark:bg-slate-500 text-white shadow-sm' if days == 90 else 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-600' }}"><span class="hidden sm:inline">90 days</span><span class="sm:hidden">90d</span></a>
+                                    <a href="{{ build_recent_url(new_page=1, new_days=365) }}" class="px-1.5 sm:px-3 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-slate-700 dark:bg-slate-500 text-white shadow-sm' if days == 365 else 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-600' }}"><span class="hidden sm:inline">1 year</span><span class="sm:hidden">1y</span></a>
                                 </div>
                             </div>
                             
                             <!-- Per Page Filter -->
                             <div class="flex items-center gap-2">
-                                <span class="text-xs font-medium text-slate-500 uppercase tracking-wider hidden sm:inline">Show</span>
-                                <div class="inline-flex rounded-lg bg-white border border-slate-200 p-1 shadow-sm">
-                                    <a href="{{ build_recent_url(new_page=1, new_limit=25) }}" class="px-2 py-1.5 text-xs font-medium rounded-md transition-all {{ 'bg-slate-700 text-white shadow-sm' if limit == 25 else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}">25</a>
-                                    <a href="{{ build_recent_url(new_page=1, new_limit=100) }}" class="px-2 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-slate-700 text-white shadow-sm' if limit == 100 else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}">100</a>
-                                    <a href="{{ build_recent_url(new_page=1, new_limit=500) }}" class="px-2 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-slate-700 text-white shadow-sm' if limit == 500 else 'text-slate-500 hover:text-slate-900 hover:bg-slate-50' }}">500</a>
+                                <span class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider hidden sm:inline">Show</span>
+                                <div class="inline-flex rounded-lg bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 p-1 shadow-sm">
+                                    <a href="{{ build_recent_url(new_page=1, new_limit=25) }}" class="px-2 py-1.5 text-xs font-medium rounded-md transition-all {{ 'bg-slate-700 dark:bg-slate-500 text-white shadow-sm' if limit == 25 else 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-600' }}">25</a>
+                                    <a href="{{ build_recent_url(new_page=1, new_limit=100) }}" class="px-2 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-slate-700 dark:bg-slate-500 text-white shadow-sm' if limit == 100 else 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-600' }}">100</a>
+                                    <a href="{{ build_recent_url(new_page=1, new_limit=500) }}" class="px-2 py-1.5 text-xs font-medium rounded-md transition-all ml-0.5 {{ 'bg-slate-700 dark:bg-slate-500 text-white shadow-sm' if limit == 500 else 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-600' }}">500</a>
                                 </div>
-                                <span class="text-xs text-slate-500 hidden sm:inline">per page</span>
+                                <span class="text-xs text-slate-500 dark:text-slate-400 hidden sm:inline">per page</span>
                             </div>
                             
                             <!-- Results count -->
                             <div class="sm:ml-auto pl-0 sm:pl-4 flex items-center gap-3">
-                                <span class="inline-flex items-center px-2 sm:px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">
+                                <span class="inline-flex items-center px-2 sm:px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600">
                                     {{ total_events }} changes
                                 </span>
                                 {% if total_pages > 1 %}
-                                <span class="text-xs text-slate-500 hidden sm:inline">Page {{ page }} of {{ total_pages }}</span>
-                                <span class="text-xs text-slate-500 sm:hidden">Page {{ page }}/{{ total_pages }}</span>
+                                <span class="text-xs text-slate-500 dark:text-slate-400 hidden sm:inline">Page {{ page }} of {{ total_pages }}</span>
+                                <span class="text-xs text-slate-500 dark:text-slate-400 sm:hidden">Page {{ page }}/{{ total_pages }}</span>
                                 {% endif %}
                             </div>
                         </div>
@@ -902,34 +902,34 @@
                         <div class="overflow-x-auto" style="scrollbar-gutter: stable;">
                             <table class="min-w-full">
                                 <thead>
-                                    <tr class="bg-slate-50 border-b border-slate-100">
-                                        <th scope="col" class="px-2 sm:px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider whitespace-nowrap">Date</th>
-                                        <th scope="col" class="px-2 sm:px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Role</th>
-                                        <th scope="col" class="px-2 sm:px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider whitespace-nowrap">Event</th>
+                                    <tr class="bg-slate-50 dark:bg-slate-700/50 border-b border-slate-100 dark:border-slate-700">
+                                        <th scope="col" class="px-2 sm:px-6 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">Date</th>
+                                        <th scope="col" class="px-2 sm:px-6 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Role</th>
+                                        <th scope="col" class="px-2 sm:px-6 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">Event</th>
                                     </tr>
                                 </thead>
-                                <tbody class="divide-y divide-slate-100">
+                                <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
                                     {% for ev in events %}
-                                    <tr class="hover:bg-slate-50/50 transition-colors">
-                                        <td class="px-2 sm:px-6 py-3 whitespace-nowrap text-xs sm:text-sm font-mono tabular-nums text-slate-500">
+                                    <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-700/30 transition-colors">
+                                        <td class="px-2 sm:px-6 py-3 whitespace-nowrap text-xs sm:text-sm font-mono tabular-nums text-slate-500 dark:text-slate-400">
                                             {% set event_date = ev.azure_updated_on or ev.scan_timestamp %}
                                             {{ event_date.strftime('%Y-%m-%d') if event_date else '' }}
                                         </td>
                                         <td class="px-2 sm:px-6 py-3">
-                                            <div class="text-sm font-semibold text-azure-600">
-                                                <a href="{{ role_url(ev.role_id, ev.role_name) }}" onclick="NavState.setBackContext('recent')" class="hover:text-azure-700 hover:underline">{{ ev.role_name }}</a>
+                                            <div class="text-sm font-semibold text-azure-600 dark:text-azure-400">
+                                                <a href="{{ role_url(ev.role_id, ev.role_name) }}" onclick="NavState.setBackContext('recent')" class="hover:text-azure-700 dark:hover:text-azure-300 hover:underline">{{ ev.role_name }}</a>
                                             </div>
-                                            <code class="text-xs font-mono text-slate-500 hidden sm:block">{{ ev.role_id }}</code>
+                                            <code class="text-xs font-mono text-slate-500 dark:text-slate-400 hidden sm:block">{{ ev.role_id }}</code>
                                         </td>
                                         <td class="px-2 sm:px-6 py-3 whitespace-nowrap">
                                             {% if ev.event_type == 'created' %}
-                                                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-700"><span class="hidden sm:inline">Created</span><span class="sm:hidden">New</span></span>
+                                                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300"><span class="hidden sm:inline">Created</span><span class="sm:hidden">New</span></span>
                                             {% elif ev.event_type == 'updated' %}
-                                                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700"><span class="hidden sm:inline">Updated</span><span class="sm:hidden">Edit</span></span>
+                                                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300"><span class="hidden sm:inline">Updated</span><span class="sm:hidden">Edit</span></span>
                                             {% elif ev.event_type == 'deleted' %}
-                                                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700"><span class="hidden sm:inline">Deleted</span><span class="sm:hidden">Del</span></span>
+                                                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300"><span class="hidden sm:inline">Deleted</span><span class="sm:hidden">Del</span></span>
                                             {% else %}
-                                                <span class="text-xs text-slate-600">{{ ev.event_type }}</span>
+                                                <span class="text-xs text-slate-600 dark:text-slate-400">{{ ev.event_type }}</span>
                                             {% endif %}
                                         </td>
                                     </tr>
@@ -939,13 +939,13 @@
                         </div>
                         <!-- Recent Changes Pagination -->
                         {% if total_pages > 1 %}
-                        <div class="px-6 py-4 flex items-center justify-between border-t border-slate-100">
-                            <div class="text-sm text-slate-500">
-                                Page <span class="font-semibold text-slate-700">{{ page }}</span> of <span class="font-semibold text-slate-700">{{ total_pages }}</span>
+                        <div class="px-6 py-4 flex items-center justify-between border-t border-slate-100 dark:border-slate-700">
+                            <div class="text-sm text-slate-500 dark:text-slate-400">
+                                Page <span class="font-semibold text-slate-700 dark:text-slate-200">{{ page }}</span> of <span class="font-semibold text-slate-700 dark:text-slate-200">{{ total_pages }}</span>
                             </div>
                             <div class="flex space-x-2">
                                 {% if page > 1 %}
-                                    <a href="{{ build_recent_url(new_page=page - 1) }}" class="inline-flex items-center px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-all">
+                                    <a href="{{ build_recent_url(new_page=page - 1) }}" class="inline-flex items-center px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-600 transition-all">
                                         <svg class="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
                                         </svg>
@@ -953,7 +953,7 @@
                                     </a>
                                 {% endif %}
                                 {% if page < total_pages %}
-                                    <a href="{{ build_recent_url(new_page=page + 1) }}" class="inline-flex items-center px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-all">
+                                    <a href="{{ build_recent_url(new_page=page + 1) }}" class="inline-flex items-center px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-600 transition-all">
                                         Next
                                         <svg class="w-4 h-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
@@ -965,11 +965,11 @@
                         {% endif %}
                     {% else %}
                         <div class="text-center py-16">
-                            <svg class="mx-auto h-12 w-12 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <svg class="mx-auto h-12 w-12 text-slate-300 dark:text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
-                            <h3 class="mt-4 text-lg font-medium text-slate-900">All quiet</h3>
-                            <p class="mt-2 text-sm text-slate-500">No changes detected in the last {{ days }} days.</p>
+                            <h3 class="mt-4 text-lg font-medium text-slate-900 dark:text-slate-100">All quiet</h3>
+                            <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">No changes detected in the last {{ days }} days.</p>
                         </div>
                     {% endif %}
                 {% endif %}
@@ -977,27 +977,27 @@
         </main>
 
         <!-- Footer -->
-        <footer class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <div class="border-t border-slate-200 pt-8">
+        <footer class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 dark:bg-slate-900 dark:border-slate-700">
+            <div class="border-t border-slate-200 dark:border-slate-700 pt-8">
                 <div class="flex flex-col items-center" style="gap: 20px;">
                     <!-- Internal navigation links for SEO -->
                     <nav class="flex flex-col sm:flex-row flex-wrap justify-center items-center text-sm" style="gap: 12px 24px;">
-                        <a href="/recent" class="ai-nav-link text-slate-600 hover:text-azure-600 transition-colors">Recent Changes</a>
-                        <a href="/roles" class="ai-nav-link text-slate-600 hover:text-azure-600 transition-colors">Browse Roles</a>
-                        <a href="/operations" class="ai-nav-link text-slate-600 hover:text-azure-600 transition-colors">Browse Operations</a>
-                        <a href="/recommend" class="ai-nav-link text-slate-600 hover:text-azure-600 transition-colors">Role Recommender</a>
-                        <a href="/analytics" class="ai-nav-link text-slate-600 hover:text-azure-600 transition-colors">Analytics</a>
-                        <a href="/about" class="ai-nav-link text-slate-600 hover:text-azure-600 transition-colors">About</a>
-                        <a href="/sitemap.xml" class="text-slate-600 hover:text-azure-600 transition-colors">Sitemap</a>
-                        <span class="hidden sm:inline text-slate-300">|</span>
-                        <a href="/feeds/changelog.atom" class="text-slate-600 hover:text-orange-500 transition-colors" title="Subscribe via RSS/Atom">
+                        <a href="/recent" class="ai-nav-link text-slate-600 dark:text-slate-400 hover:text-azure-600 dark:hover:text-azure-400 transition-colors">Recent Changes</a>
+                        <a href="/roles" class="ai-nav-link text-slate-600 dark:text-slate-400 hover:text-azure-600 dark:hover:text-azure-400 transition-colors">Browse Roles</a>
+                        <a href="/operations" class="ai-nav-link text-slate-600 dark:text-slate-400 hover:text-azure-600 dark:hover:text-azure-400 transition-colors">Browse Operations</a>
+                        <a href="/recommend" class="ai-nav-link text-slate-600 dark:text-slate-400 hover:text-azure-600 dark:hover:text-azure-400 transition-colors">Role Recommender</a>
+                        <a href="/analytics" class="ai-nav-link text-slate-600 dark:text-slate-400 hover:text-azure-600 dark:hover:text-azure-400 transition-colors">Analytics</a>
+                        <a href="/about" class="ai-nav-link text-slate-600 dark:text-slate-400 hover:text-azure-600 dark:hover:text-azure-400 transition-colors">About</a>
+                        <a href="/sitemap.xml" class="text-slate-600 dark:text-slate-400 hover:text-azure-600 dark:hover:text-azure-400 transition-colors">Sitemap</a>
+                        <span class="hidden sm:inline text-slate-300 dark:text-slate-600">|</span>
+                        <a href="/feeds/changelog.atom" class="text-slate-600 dark:text-slate-400 hover:text-orange-500 transition-colors" title="Subscribe via RSS/Atom">
                             <svg class="w-5 h-5" viewBox="0 0 24 24" aria-hidden="true"><rect width="24" height="24" rx="4" fill="#f97316"/><circle cx="7" cy="17" r="2.5" fill="white"/><path d="M5 12.5c3.5 0 6.5 3 6.5 6.5h3c0-5.25-4.25-9.5-9.5-9.5v3z" fill="white"/><path d="M5 7c6.5 0 12 5.5 12 12h3c0-8.25-6.75-15-15-15v3z" fill="white"/></svg>
                         </a>
                     </nav>
                     <div class="text-center px-4">
-                        <p class="text-sm text-slate-600">Azure RBAC Built-in Role Definitions Catalog — Track changes to <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles" target="_blank" rel="noopener noreferrer" class="text-azure-600 underline font-medium hover:text-azure-700">Azure built-in roles</a></p>
-                        <p class="text-xs text-slate-500 mt-3">{{ app_version }}</p>
-                        <p class="text-xs text-slate-500 mt-3 leading-relaxed">This site is not affiliated with or endorsed by Microsoft.<br class="sm:hidden"> Content is provided "as is" without warranty of any kind.</p>
+                        <p class="text-sm text-slate-600 dark:text-slate-400">Azure RBAC Built-in Role Definitions Catalog — Track changes to <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles" target="_blank" rel="noopener noreferrer" class="text-azure-600 dark:text-azure-400 underline font-medium hover:text-azure-700 dark:hover:text-azure-300">Azure built-in roles</a></p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-3">{{ app_version }}</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-3 leading-relaxed">This site is not affiliated with or endorsed by Microsoft.<br class="sm:hidden"> Content is provided "as is" without warranty of any kind.</p>
                     </div>
                 </div>
             </div>

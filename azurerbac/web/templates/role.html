@@ -227,6 +227,7 @@
     <script src="/static/js/nav-state.js"></script>
     <script src="/static/js/clipboard.js"></script>
     <script>NavState.initAiModeFromUrl();</script>
+    <script>var _roleBackCtx = {{ {"from_role_id": role.role_id, "from_role_name": role.role_name, "from_role_slug": role.role_name | slugify} | tojson }};</script>
     <div class="min-h-full">
         <!-- Header -->
         <div class="gradient-bg">
@@ -957,7 +958,7 @@
                                                   :class="getOperationTypeClass(action)">
                                                 <span x-text="getOperationType(action)"></span>
                                             </span>
-                                            <a :href="'/operations/' + encodeURIComponent(action)" @click="NavState.setBackContext('role', { from_role_id: {{ role.role_id | tojson }}, from_role_name: {{ role.role_name | tojson }}, from_role_slug: {{ (role.role_name | slugify) | tojson }} })" class="text-xs font-mono text-slate-700 dark:text-slate-300 break-all hover:text-azure-600 dark:hover:text-azure-400 hover:underline" x-text="action" :title="action"></a>
+                                            <a :href="'/operations/' + encodeURIComponent(action)" @click="NavState.setBackContext('role', _roleBackCtx)" class="text-xs font-mono text-slate-700 dark:text-slate-300 break-all hover:text-azure-600 dark:hover:text-azure-400 hover:underline" x-text="action" :title="action"></a>
                                         </div>
                                     </div>
                                 </template>
@@ -1013,7 +1014,7 @@
                                                   :class="getOperationTypeClass(action)">
                                                 <span x-text="getOperationType(action)"></span>
                                             </span>
-                                            <a :href="'/operations/' + encodeURIComponent(action)" @click="NavState.setBackContext('role', { from_role_id: {{ role.role_id | tojson }}, from_role_name: {{ role.role_name | tojson }}, from_role_slug: {{ (role.role_name | slugify) | tojson }} })" class="text-xs font-mono text-slate-700 dark:text-slate-300 break-all hover:text-azure-600 dark:hover:text-azure-400 hover:underline" x-text="action" :title="action"></a>
+                                            <a :href="'/operations/' + encodeURIComponent(action)" @click="NavState.setBackContext('role', _roleBackCtx)" class="text-xs font-mono text-slate-700 dark:text-slate-300 break-all hover:text-azure-600 dark:hover:text-azure-400 hover:underline" x-text="action" :title="action"></a>
                                         </div>
                                     </div>
                                 </template>
@@ -1062,7 +1063,7 @@
                     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                         {% for r in related_roles %}
                         <a href="/roles/{{ r.role_id }}/{{ r.role_name | slugify }}" 
-                           onclick="NavState.setBackContext('role', { from_role_id: {{ role.role_id | tojson }}, from_role_name: {{ role.role_name | tojson }}, from_role_slug: {{ (role.role_name | slugify) | tojson }} })"
+                           onclick="NavState.setBackContext('role', _roleBackCtx)"
                            class="group flex items-center gap-3 p-3 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-azure-300 dark:hover:border-azure-600 hover:bg-azure-50 dark:hover:bg-azure-900/20 transition-all">
                             <div class="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold text-white"
                                  style="background: linear-gradient(135deg, #0078d4 {{ (r.similarity * 100)|int }}%, #94a3b8 {{ (r.similarity * 100)|int }}%);">

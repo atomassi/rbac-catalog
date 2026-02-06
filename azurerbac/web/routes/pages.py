@@ -33,6 +33,7 @@ from azurerbac.web.services.models import (
 from azurerbac.web.services.pages import (
     add_role_counts,
     build_role_redirect_url,
+    compute_related_roles,
     compute_role_effective_permissions,
     enrich_event_with_diff,
     filter_operations,
@@ -115,6 +116,7 @@ async def role_detail(
     display_json = role_def.to_dict() if role_def else {}
     all_ops = deps.app_cache.get_all_operations()
     effective_perms = compute_role_effective_permissions(role_def, all_ops) if role_def else None
+    related_roles = compute_related_roles(role_id_str, cache=deps.app_cache) if role_def else []
 
     return deps.templates.TemplateResponse(
         request,
@@ -125,6 +127,7 @@ async def role_detail(
             "first_scan": result.first_scan,
             "role_json_pretty": role_json_pretty(display_json),
             "effective_perms": effective_perms,
+            "related_roles": related_roles,
             "q": q,
             "page": page,
             "limit": limit,

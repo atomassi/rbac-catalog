@@ -11,6 +11,10 @@
     <meta name="author" content="Azure RBAC Catalog">
     <link rel="canonical" href="{{ site_url }}/roles/compare/{{ comparison.role_a.role_id }}/{{ comparison.role_b.role_id }}">
 
+    <!-- RSS/Atom Feed Autodiscovery -->
+    <link rel="alternate" type="application/atom+xml" title="Azure RBAC Role Changes (Atom)" href="{{ site_url }}/feeds/changelog.atom">
+    <link rel="alternate" type="application/rss+xml" title="Azure RBAC Role Changes (RSS)" href="{{ site_url }}/feeds/changelog.rss">
+
     <!-- Open Graph / Facebook -->
     <meta property="og:title" content="{{ comparison.role_a.role_name }} vs {{ comparison.role_b.role_name }} - Compare Azure Roles">
     <meta property="og:description" content="Side-by-side comparison of {{ comparison.role_a.role_name }} and {{ comparison.role_b.role_name }} Azure RBAC roles. See shared and unique permissions at a glance.">

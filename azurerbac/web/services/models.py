@@ -472,7 +472,7 @@ class RelatedRole:
 
     role_id: str
     role_name: str
-    similarity: float  # Jaccard similarity 0.0-1.0
+    similarity: float  # Composite score (ops overlap + scope + conditions), 0.0-1.0
     shared_count: int  # Number of shared operations
     total_count: int  # Total operations of the related role
 

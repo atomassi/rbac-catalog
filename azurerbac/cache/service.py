@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from azurerbac.azure.models import OperationData, RoleDefinition
-    from azurerbac.web.services.models import RoleAllowingOperation
+    from azurerbac.web.services.models import RelatedRole, RoleAllowingOperation
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +36,7 @@ _REBUILD_LOCK: Final[threading.Lock] = threading.Lock()
 
 # Type alias for the allowing_roles_cache value type
 RoleAllowingOperationList = list["RoleAllowingOperation"]
+RelatedRoleList = list["RelatedRole"]
 
 
 class CacheService:
@@ -302,13 +303,13 @@ class CacheService:
     def set_allowing_roles(self, key: str, value: RoleAllowingOperationList) -> None:
         self._request_caches.allowing_roles[key] = value
 
-    def get_related_roles(self, key: str) -> list[Any] | None:
+    def get_related_roles(self, key: str) -> RelatedRoleList | None:
         """Get cached related roles for a role ID."""
         result = self._request_caches.related_roles.get(key)
         track_cache_hit("related_roles", result is not None, key)
         return result
 
-    def set_related_roles(self, key: str, value: list[Any]) -> None:
+    def set_related_roles(self, key: str, value: RelatedRoleList) -> None:
         """Cache related roles for a role ID."""
         self._request_caches.related_roles[key] = value
 

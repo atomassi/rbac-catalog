@@ -186,9 +186,10 @@ def compute_related_roles(
 
     cache_resolved = _get_cache(cache)
 
-    # Check request cache first
-    if (cached_result := cache_resolved.get_related_roles(role_id)) is not None:
-        return cached_result
+    # Check request cache first. Only use cache when it can satisfy the requested limit.
+    cached_result = cache_resolved.get_related_roles(role_id)
+    if cached_result is not None and len(cached_result) >= limit:
+        return cached_result[:limit]
 
     current_cached = cache_resolved.get_role_by_id(role_id)
     if not current_cached:

@@ -1198,14 +1198,22 @@ class TestComputeRelatedRoles:
         op_to_roles = {op: ["r1", "r2"] for op in ops}
         cache = _build_cache_service({"r1": r1, "r2": r2}, {"r1": cov1, "r2": cov2}, op_to_roles)
 
-        # First call computes and caches
-        first = compute_related_roles("r1", cache=cache)
+        # First call computes and stores result via the cache implementation
+        first = compute_related_roles("r1", limit=1, cache=cache)
         assert len(first) == 1
 
-        # Second call should hit cache — verify via get_related_roles
-        cache.get_related_roles.assert_called_with("r1")
-        second = compute_related_roles("r1", cache=cache)
+        # Simulate that the cache now returns the computed result on lookup
+        cache.get_related_roles.reset_mock()
+        cache.get_related_roles.return_value = first
+
+        # Record expensive call count before second invocation
+        coverage_calls_before = cache.get_role_coverage.call_count
+
+        # Second call should hit cache, not recompute
+        second = compute_related_roles("r1", limit=1, cache=cache)
         assert second == first
+        cache.get_related_roles.assert_called_once_with("r1")
+        assert cache.get_role_coverage.call_count == coverage_calls_before
 
     def test_cache_miss_then_stores(self):
         """First call should store computed result in cache."""

@@ -3,18 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- Prevent dark mode flash -->
-    <script>
-    (function() {
-        var stored = localStorage.getItem('darkMode');
-        var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-        var hour = new Date().getHours();
-        var isNight = hour >= 19 || hour < 7;
-        if (stored === 'true' || (stored === null && (prefersDark || isNight))) {
-            document.documentElement.classList.add('dark');
-        }
-    })();
-    </script>
+    {% include 'partials/darkmode_init.html' %}
     <title>Analytics - Azure RBAC Catalog</title>
     <meta name="description" content="Analytics dashboard for Azure RBAC role changes. Track additions, updates, and deletions over time. Monitor Microsoft's RBAC evolution.">
     <meta name="robots" content="index, follow">

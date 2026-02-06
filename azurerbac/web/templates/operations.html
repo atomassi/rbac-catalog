@@ -30,18 +30,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- Prevent dark mode flash -->
-    <script>
-    (function() {
-        var stored = localStorage.getItem('darkMode');
-        var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-        var hour = new Date().getHours();
-        var isNight = hour >= 19 || hour < 7;
-        if (stored === 'true' || (stored === null && (prefersDark || isNight))) {
-            document.documentElement.classList.add('dark');
-        }
-    })();
-    </script>
+    {% include 'partials/darkmode_init.html' %}
     <meta name="google-site-verification" content="googleec37c4d2676ac205" />
     <title>{{ total_operations }} Azure Operations - Complete RBAC Permissions List</title>
     <meta name="description" content="Complete list of all {{ total_operations }} Azure RBAC operations. Search operations by name, provider, or description. Find which built-in roles allow each operation.">

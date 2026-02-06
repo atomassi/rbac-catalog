@@ -1,0 +1,13 @@
+<!-- Prevent dark mode flash — must run in <head> to avoid FOUC -->
+<script>
+(function() {
+    var stored = null;
+    try { stored = localStorage.getItem('darkMode'); } catch(e) {}
+    var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    var hour = new Date().getHours();
+    var isNight = hour >= 19 || hour < 7;
+    if (stored === 'true' || (stored === null && (prefersDark || isNight))) {
+        document.documentElement.classList.add('dark');
+    }
+})();
+</script>

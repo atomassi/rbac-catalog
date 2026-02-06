@@ -3,18 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- Prevent dark mode flash -->
-    <script>
-    (function() {
-        var stored = localStorage.getItem('darkMode');
-        var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-        var hour = new Date().getHours();
-        var isNight = hour >= 19 || hour < 7;
-        if (stored === 'true' || (stored === null && (prefersDark || isNight))) {
-            document.documentElement.classList.add('dark');
-        }
-    })();
-    </script>
+    {% include 'partials/darkmode_init.html' %}
     <title>Azure Role Recommender - Find Least Privilege Built-in Roles | Azure RBAC Tool</title>
     <meta name="description" content="Free Azure role finder tool. Select the operations you need and get recommendations for the most appropriate Azure built-in RBAC role with minimal permissions. Implement least privilege access for Azure security.">
     <meta name="keywords" content="Azure Role Recommender, Azure Least Privilege, Azure RBAC Tool, Azure Permissions Finder, Azure Role Finder, Azure Security, IAM Tool, Azure Built-in Roles, Azure Role Selector">

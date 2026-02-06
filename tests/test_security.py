@@ -243,7 +243,7 @@ class TestInformationDisclosure:
         assert response.status_code == 404
         assert "Traceback" not in response.text
         assert 'File "' not in response.text
-        assert "line " not in response.text.lower() or "timeline" in response.text.lower()
+        assert ", line " not in response.text.lower()
 
     async def test_400_no_stack_trace(self, client: AsyncClient):
         """Verify 400 pages don't leak stack traces."""

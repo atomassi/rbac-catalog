@@ -7,7 +7,7 @@
  * Debug mode: To enable debug logs, run in browser console:
  *   window.NavStateDebug = true
  *
- * @typedef {'recommend' | 'roles' | 'operations' | 'operation' | 'role' | 'recent' | 'analytics'} BackTarget
+ * @typedef {'recommend' | 'roles' | 'operations' | 'operation' | 'role' | 'recent' | 'analytics' | 'compare'} BackTarget
  *
  * @typedef {Object} NavStateData
  * @property {BackTarget} [back] - Where to navigate back to
@@ -15,6 +15,8 @@
  * @property {string} [from_role_slug] - Role slug for URL
  * @property {string} [from_role_name] - Role name for display
  * @property {string} [from_operation] - Operation name to return to
+ * @property {string} [from_compare_url] - Compare page URL to return to
+ * @property {string} [from_compare_label] - Compare page label for back button
  * @property {string} [ai] - AI mode flag from state
  *
  * @typedef {Object} BackDefaults
@@ -194,6 +196,9 @@ const NavState = {
                     url = '/roles';
                 }
                 break;
+            case 'compare':
+                url = state.from_compare_url || '/roles';
+                break;
             case 'analytics':
                 url = '/analytics';
                 break;
@@ -240,6 +245,10 @@ const NavState = {
                 return state.from_role_name
                     ? 'Back to ' + state.from_role_name
                     : 'Back to Role';
+            case 'compare':
+                return state.from_compare_label
+                    ? 'Back to ' + state.from_compare_label
+                    : 'Back to Compare';
             case 'analytics':
                 return 'Back to Analytics';
             default:

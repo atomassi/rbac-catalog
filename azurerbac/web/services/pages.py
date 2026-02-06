@@ -17,6 +17,8 @@ from azurerbac.web.services.models import (
     OperationSortField,
     RelatedRole,
     RoleAllowingOperation,
+    RoleComparison,
+    RoleComparisonSide,
     RoleDetailResult,
     RoleEffectivePermissions,
     RolePermissionAnalyzer,
@@ -143,6 +145,43 @@ def _condition_similarity(a: frozenset[str], b: frozenset[str]) -> float:
     return _jaccard(a, b)
 
 
+def _scopes_contain(broader: frozenset[str], narrower: frozenset[str]) -> bool:
+    """Check if the broader scope set contains all narrower scopes.
+
+    A scope of "/" (root) contains every other scope. Otherwise a scope
+    contains another if it is a case-insensitive prefix of it.
+
+    Args:
+        broader: The scopes that should be broader (container).
+        narrower: The scopes that should be contained.
+
+    Returns:
+        True if every scope in narrower is contained by at least one
+        scope in broader.
+    """
+    if broader == narrower:
+        return True
+    broader_lower = [s.lower().rstrip("/") for s in broader]
+    for scope in narrower:
+        scope_lower = scope.lower().rstrip("/")
+        if not any(
+            bs in ("", scope_lower) or scope_lower.startswith(bs + "/") for bs in broader_lower
+        ):
+            return False
+    return True
+
+
+def _extract_abac_conditions(role: CachedRole) -> list[str]:
+    """Extract sorted unique ABAC condition expressions from a role."""
+    return sorted({p.condition for p in role.definition.properties.permissions if p.condition})
+
+
+def _extract_assignable_scopes(role: CachedRole) -> list[str]:
+    """Extract sorted, de-duplicated assignable scopes from a role."""
+    scopes = role.definition.properties.assignable_scopes
+    return sorted(set(scopes)) if scopes else ["/"]
+
+
 def _extract_role_metadata(
     cached_role: CachedRole,
 ) -> tuple[frozenset[str], frozenset[str]]:
@@ -184,6 +223,9 @@ def compute_related_roles(
     """
     from azurerbac.core.constants import RoleStatus
 
+    if limit <= 0:
+        return []
+
     cache_resolved = _get_cache(cache)
 
     # Check request cache first. Only use cache when it can satisfy the requested limit.
@@ -216,8 +258,12 @@ def compute_related_roles(
     if not co_occurrence:
         return []
 
-    # Take top candidates by co-occurrence, compute composite similarity
-    top_candidates = heapq.nlargest(limit * 3, co_occurrence.items(), key=lambda x: x[1])
+    # Take top candidates by co-occurrence (tie-break by role_id for determinism)
+    top_candidates = heapq.nlargest(
+        limit * 3,
+        co_occurrence.items(),
+        key=lambda x: (x[1], x[0]),
+    )
     current_len = len(current_ops)
 
     results: list[RelatedRole] = []
@@ -248,6 +294,19 @@ def compute_related_roles(
         if similarity < 0.20:
             continue
 
+        # Subset/superset requires identical conditions
+        same_conditions = current_conditions == other_conditions
+
+        # other is a subset of current: all other ops in current, current scopes ⊇ other scopes
+        ops_subset = intersection == other_len
+        is_subset = same_conditions and ops_subset and _scopes_contain(current_scopes, other_scopes)
+
+        # other is a superset of current: all current ops in other, other scopes ⊇ current scopes
+        ops_superset = intersection == current_len
+        is_superset = (
+            same_conditions and ops_superset and _scopes_contain(other_scopes, current_scopes)
+        )
+
         results.append(
             RelatedRole(
                 role_id=rid,
@@ -255,13 +314,91 @@ def compute_related_roles(
                 similarity=similarity,
                 shared_count=intersection,
                 total_count=other_len,
+                is_subset=is_subset,
+                is_superset=is_superset,
             )
         )
 
-    results.sort(key=lambda x: x.similarity, reverse=True)
+    results.sort(key=lambda x: (-x.similarity, -x.shared_count, x.role_name))
     final = results[:limit]
     cache_resolved.set_related_roles(role_id, final)
     return final
+
+
+def compute_role_comparison(
+    role_a_id: str,
+    role_b_id: str,
+    cache: CacheService | None = None,
+) -> RoleComparison | None:
+    """Compare effective operations between two roles.
+
+    Uses precomputed role coverage sets to compute three-way split:
+    operations only in A, shared, and operations only in B.
+
+    Args:
+        role_a_id: The first role's ID.
+        role_b_id: The second role's ID.
+        cache: Optional cache service override (for testing).
+
+    Returns:
+        RoleComparison with the three-way operation split, or None if
+        either role is not found.
+    """
+    cache_resolved = _get_cache(cache)
+
+    # Reject comparing a role with itself
+    if role_a_id == role_b_id:
+        return None
+
+    # Cache key preserves argument order so role_a/role_b stay correct
+    cache_key = f"{role_a_id}:{role_b_id}"
+    if (cached := cache_resolved.get_comparison(cache_key)) is not None:
+        return cached
+
+    role_a = cache_resolved.get_role_by_id(role_a_id)
+    role_b = cache_resolved.get_role_by_id(role_b_id)
+    if not role_a or not role_b:
+        return None
+
+    cov_a = cache_resolved.get_role_coverage(role_a_id)
+    cov_b = cache_resolved.get_role_coverage(role_b_id)
+
+    ctrl_a = cov_a.control if cov_a else set()
+    ctrl_b = cov_b.control if cov_b else set()
+    data_a = cov_a.data if cov_a else set()
+    data_b = cov_b.data if cov_b else set()
+
+    # Restore original casing from the lowered coverage sets
+    restore = cache_resolved.restore_operation_casing
+
+    result = RoleComparison(
+        role_a=RoleComparisonSide(
+            role_id=role_a_id,
+            role_name=role_a.definition.properties.role_name,
+            description=role_a.definition.properties.description or "",
+            control_count=len(ctrl_a),
+            data_count=len(data_a),
+            conditions=_extract_abac_conditions(role_a),
+            assignable_scopes=_extract_assignable_scopes(role_a),
+        ),
+        role_b=RoleComparisonSide(
+            role_id=role_b_id,
+            role_name=role_b.definition.properties.role_name,
+            description=role_b.definition.properties.description or "",
+            control_count=len(ctrl_b),
+            data_count=len(data_b),
+            conditions=_extract_abac_conditions(role_b),
+            assignable_scopes=_extract_assignable_scopes(role_b),
+        ),
+        only_a_control=sorted(restore(ctrl_a - ctrl_b)),
+        only_a_data=sorted(restore(data_a - data_b)),
+        shared_control=sorted(restore(ctrl_a & ctrl_b)),
+        shared_data=sorted(restore(data_a & data_b)),
+        only_b_control=sorted(restore(ctrl_b - ctrl_a)),
+        only_b_data=sorted(restore(data_b - data_a)),
+    )
+    cache_resolved.set_comparison(cache_key, result)
+    return result
 
 
 def _get_cache(cache: CacheService | None) -> CacheService:

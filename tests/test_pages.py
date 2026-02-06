@@ -885,6 +885,64 @@ class TestExtractRoleMetadata:
         assert conditions == frozenset()
 
 
+class TestScopesContain:
+    """Tests for _scopes_contain function."""
+
+    def test_identical_scopes(self):
+        from azurerbac.web.services.pages import _scopes_contain
+
+        s = frozenset(("/",))
+        assert _scopes_contain(s, s) is True
+
+    def test_root_contains_everything(self):
+        from azurerbac.web.services.pages import _scopes_contain
+
+        root = frozenset(("/",))
+        narrow = frozenset(("/subscriptions/abc",))
+        assert _scopes_contain(root, narrow) is True
+
+    def test_narrow_does_not_contain_root(self):
+        from azurerbac.web.services.pages import _scopes_contain
+
+        root = frozenset(("/",))
+        narrow = frozenset(("/subscriptions/abc",))
+        assert _scopes_contain(narrow, root) is False
+
+    def test_prefix_containment(self):
+        from azurerbac.web.services.pages import _scopes_contain
+
+        broader = frozenset(("/subscriptions/abc",))
+        narrower = frozenset(("/subscriptions/abc/resourceGroups/rg1",))
+        assert _scopes_contain(broader, narrower) is True
+        assert _scopes_contain(narrower, broader) is False
+
+    def test_disjoint_scopes(self):
+        from azurerbac.web.services.pages import _scopes_contain
+
+        a = frozenset(("/subscriptions/abc",))
+        b = frozenset(("/subscriptions/xyz",))
+        assert _scopes_contain(a, b) is False
+
+    def test_case_insensitive(self):
+        from azurerbac.web.services.pages import _scopes_contain
+
+        a = frozenset(("/Subscriptions/ABC",))
+        b = frozenset(("/subscriptions/abc/resourceGroups/rg1",))
+        assert _scopes_contain(a, b) is True
+
+    def test_multiple_broader_scopes(self):
+        from azurerbac.web.services.pages import _scopes_contain
+
+        broader = frozenset(("/subscriptions/abc", "/subscriptions/xyz"))
+        narrower = frozenset(("/subscriptions/abc/resourceGroups/rg1",))
+        assert _scopes_contain(broader, narrower) is True
+
+    def test_both_empty(self):
+        from azurerbac.web.services.pages import _scopes_contain
+
+        assert _scopes_contain(frozenset(), frozenset()) is True
+
+
 # =============================================================================
 # Tests for compute_related_roles
 # =============================================================================
@@ -900,6 +958,8 @@ def _build_cache_service(
     mock.get_role_by_id.side_effect = lambda rid: roles.get(rid)
     mock.get_role_coverage.side_effect = lambda rid: coverage.get(rid)
     mock.get_related_roles.return_value = None  # cache miss by default
+    mock.get_comparison.return_value = None  # cache miss by default
+    mock.restore_operation_casing.side_effect = lambda ops: list(ops)
     mock.cache.operation_to_roles = op_to_roles
     return mock
 
@@ -1229,3 +1289,349 @@ class TestComputeRelatedRoles:
 
         results = compute_related_roles("r1", cache=cache)
         cache.set_related_roles.assert_called_once_with("r1", results)
+
+    def test_subset_same_ops_same_scope_same_conditions(self):
+        """Other has fewer ops, all in current, same scope/conditions → subset."""
+        from azurerbac.web.services.pages import compute_related_roles
+
+        r1 = _make_cached_role_full("r1", "Alpha", actions=["op1", "op2", "op3"])
+        r2 = _make_cached_role_full("r2", "Beta", actions=["op1", "op2"])
+        cov1 = RoleCoverage(control={"op1", "op2", "op3"}, data=set())
+        cov2 = RoleCoverage(control={"op1", "op2"}, data=set())
+        op_to_roles = {"op1": ["r1", "r2"], "op2": ["r1", "r2"], "op3": ["r1"]}
+        cache = _build_cache_service({"r1": r1, "r2": r2}, {"r1": cov1, "r2": cov2}, op_to_roles)
+
+        results = compute_related_roles("r1", cache=cache)
+        assert len(results) == 1
+        assert results[0].is_subset is True
+        assert results[0].is_superset is False
+
+    def test_superset_same_ops_same_scope_same_conditions(self):
+        """Other has more ops, all current ops in other, same scope/conditions → superset."""
+        from azurerbac.web.services.pages import compute_related_roles
+
+        r1 = _make_cached_role_full("r1", "Alpha", actions=["op1", "op2"])
+        r2 = _make_cached_role_full("r2", "Beta", actions=["op1", "op2", "op3"])
+        cov1 = RoleCoverage(control={"op1", "op2"}, data=set())
+        cov2 = RoleCoverage(control={"op1", "op2", "op3"}, data=set())
+        op_to_roles = {"op1": ["r1", "r2"], "op2": ["r1", "r2"], "op3": ["r2"]}
+        cache = _build_cache_service({"r1": r1, "r2": r2}, {"r1": cov1, "r2": cov2}, op_to_roles)
+
+        results = compute_related_roles("r1", cache=cache)
+        assert len(results) == 1
+        assert results[0].is_superset is True
+        assert results[0].is_subset is False
+
+    def test_subset_narrower_scope(self):
+        """Other has same ops but narrower scope → subset."""
+        from azurerbac.web.services.pages import compute_related_roles
+
+        r1 = _make_cached_role_full("r1", "Alpha", actions=["op1"], assignable_scopes=["/"])
+        r2 = _make_cached_role_full(
+            "r2", "Beta", actions=["op1"], assignable_scopes=["/subscriptions/abc"]
+        )
+        cov1 = RoleCoverage(control={"op1"}, data=set())
+        cov2 = RoleCoverage(control={"op1"}, data=set())
+        op_to_roles = {"op1": ["r1", "r2"]}
+        cache = _build_cache_service({"r1": r1, "r2": r2}, {"r1": cov1, "r2": cov2}, op_to_roles)
+
+        results = compute_related_roles("r1", cache=cache)
+        assert len(results) == 1
+        # r2 has narrower scope, so from r1's POV: r2 is a subset
+        assert results[0].is_subset is True
+        # r2 is NOT a superset (it has narrower scope)
+        assert results[0].is_superset is False
+
+    def test_superset_broader_scope(self):
+        """Other has same ops but broader scope → superset."""
+        from azurerbac.web.services.pages import compute_related_roles
+
+        r1 = _make_cached_role_full(
+            "r1", "Alpha", actions=["op1"], assignable_scopes=["/subscriptions/abc"]
+        )
+        r2 = _make_cached_role_full("r2", "Beta", actions=["op1"], assignable_scopes=["/"])
+        cov1 = RoleCoverage(control={"op1"}, data=set())
+        cov2 = RoleCoverage(control={"op1"}, data=set())
+        op_to_roles = {"op1": ["r1", "r2"]}
+        cache = _build_cache_service({"r1": r1, "r2": r2}, {"r1": cov1, "r2": cov2}, op_to_roles)
+
+        results = compute_related_roles("r1", cache=cache)
+        assert len(results) == 1
+        # r2 has broader scope, so from r1's POV: r2 is a superset
+        assert results[0].is_superset is True
+        assert results[0].is_subset is False
+
+    def test_different_conditions_neither_subset_nor_superset(self):
+        """Same ops but different conditions → neither subset nor superset."""
+        from azurerbac.web.services.pages import compute_related_roles
+
+        r1 = _make_cached_role_full(
+            "r1", "Alpha", actions=["op1"], condition="@Resource[Microsoft.Storage:kind] == 'Blob'"
+        )
+        r2 = _make_cached_role_full(
+            "r2", "Beta", actions=["op1"], condition="@Resource[Microsoft.Storage:kind] == 'Table'"
+        )
+        cov1 = RoleCoverage(control={"op1"}, data=set())
+        cov2 = RoleCoverage(control={"op1"}, data=set())
+        op_to_roles = {"op1": ["r1", "r2"]}
+        cache = _build_cache_service({"r1": r1, "r2": r2}, {"r1": cov1, "r2": cov2}, op_to_roles)
+
+        results = compute_related_roles("r1", cache=cache)
+        assert len(results) == 1
+        assert results[0].is_subset is False
+        assert results[0].is_superset is False
+
+    def test_one_conditioned_one_not_neither(self):
+        """One role has conditions, other doesn't → neither."""
+        from azurerbac.web.services.pages import compute_related_roles
+
+        r1 = _make_cached_role_full("r1", "Alpha", actions=["op1"])
+        r2 = _make_cached_role_full(
+            "r2", "Beta", actions=["op1"], condition="@Resource[Microsoft.Storage:kind] == 'Blob'"
+        )
+        cov1 = RoleCoverage(control={"op1"}, data=set())
+        cov2 = RoleCoverage(control={"op1"}, data=set())
+        op_to_roles = {"op1": ["r1", "r2"]}
+        cache = _build_cache_service({"r1": r1, "r2": r2}, {"r1": cov1, "r2": cov2}, op_to_roles)
+
+        results = compute_related_roles("r1", cache=cache)
+        assert len(results) == 1
+        assert results[0].is_subset is False
+        assert results[0].is_superset is False
+
+    def test_equal_roles_both_subset_and_superset(self):
+        """Same ops, same scope, same conditions → both subset and superset."""
+        from azurerbac.web.services.pages import compute_related_roles
+
+        r1 = _make_cached_role_full("r1", "Alpha", actions=["op1"])
+        r2 = _make_cached_role_full("r2", "Beta", actions=["op1"])
+        cov1 = RoleCoverage(control={"op1"}, data=set())
+        cov2 = RoleCoverage(control={"op1"}, data=set())
+        op_to_roles = {"op1": ["r1", "r2"]}
+        cache = _build_cache_service({"r1": r1, "r2": r2}, {"r1": cov1, "r2": cov2}, op_to_roles)
+
+        results = compute_related_roles("r1", cache=cache)
+        assert len(results) == 1
+        assert results[0].is_subset is True
+        assert results[0].is_superset is True
+
+
+# =============================================================================
+# Tests for compute_role_comparison
+# =============================================================================
+
+
+class TestComputeRoleComparison:
+    """Tests for compute_role_comparison function."""
+
+    def test_role_a_not_found_returns_none(self):
+        from azurerbac.web.services.pages import compute_role_comparison
+
+        cache = _build_cache_service({}, {}, {})
+        assert compute_role_comparison("missing", "also-missing", cache=cache) is None
+
+    def test_role_b_not_found_returns_none(self):
+        from azurerbac.web.services.pages import compute_role_comparison
+
+        r1 = make_cached_role("r1", "Alpha")
+        cache = _build_cache_service({"r1": r1}, {}, {})
+        assert compute_role_comparison("r1", "missing", cache=cache) is None
+
+    def test_identical_roles_all_shared(self):
+        """Two roles with identical operations should have no unique ops."""
+        from azurerbac.web.services.pages import compute_role_comparison
+
+        ops = {"op1", "op2", "op3"}
+        r1 = make_cached_role("r1", "Alpha")
+        r2 = make_cached_role("r2", "Beta")
+        cov1 = RoleCoverage(control=ops, data=set())
+        cov2 = RoleCoverage(control=ops, data=set())
+        cache = _build_cache_service({"r1": r1, "r2": r2}, {"r1": cov1, "r2": cov2}, {})
+
+        result = compute_role_comparison("r1", "r2", cache=cache)
+        assert result is not None
+        assert result.only_a_control == []
+        assert result.only_a_data == []
+        assert sorted(result.shared_control) == sorted(ops)
+        assert result.shared_data == []
+        assert result.only_b_control == []
+        assert result.only_b_data == []
+
+    def test_disjoint_roles_no_shared(self):
+        """Two roles with no overlap should have no shared ops."""
+        from azurerbac.web.services.pages import compute_role_comparison
+
+        r1 = make_cached_role("r1", "Alpha")
+        r2 = make_cached_role("r2", "Beta")
+        cov1 = RoleCoverage(control={"op1", "op2"}, data=set())
+        cov2 = RoleCoverage(control={"op3", "op4"}, data=set())
+        cache = _build_cache_service({"r1": r1, "r2": r2}, {"r1": cov1, "r2": cov2}, {})
+
+        result = compute_role_comparison("r1", "r2", cache=cache)
+        assert result is not None
+        assert sorted(result.only_a_control) == ["op1", "op2"]
+        assert result.shared_control == []
+        assert sorted(result.only_b_control) == ["op3", "op4"]
+
+    def test_partial_overlap(self):
+        """Partial overlap should correctly split into three sets."""
+        from azurerbac.web.services.pages import compute_role_comparison
+
+        r1 = make_cached_role("r1", "Alpha")
+        r2 = make_cached_role("r2", "Beta")
+        cov1 = RoleCoverage(control={"shared", "only_a"}, data={"d_shared", "d_only_a"})
+        cov2 = RoleCoverage(control={"shared", "only_b"}, data={"d_shared", "d_only_b"})
+        cache = _build_cache_service({"r1": r1, "r2": r2}, {"r1": cov1, "r2": cov2}, {})
+
+        result = compute_role_comparison("r1", "r2", cache=cache)
+        assert result is not None
+        assert result.only_a_control == ["only_a"]
+        assert result.shared_control == ["shared"]
+        assert result.only_b_control == ["only_b"]
+        assert result.only_a_data == ["d_only_a"]
+        assert result.shared_data == ["d_shared"]
+        assert result.only_b_data == ["d_only_b"]
+
+    def test_no_coverage_treated_as_empty(self):
+        """Roles without coverage should be treated as having no operations."""
+        from azurerbac.web.services.pages import compute_role_comparison
+
+        r1 = make_cached_role("r1", "Alpha")
+        r2 = make_cached_role("r2", "Beta")
+        cov1 = RoleCoverage(control={"op1"}, data=set())
+        # r2 has no coverage entry
+        cache = _build_cache_service({"r1": r1, "r2": r2}, {"r1": cov1}, {})
+
+        result = compute_role_comparison("r1", "r2", cache=cache)
+        assert result is not None
+        assert result.only_a_control == ["op1"]
+        assert result.shared_control == []
+        assert result.only_b_control == []
+
+    def test_side_metadata_populated(self):
+        """RoleComparisonSide fields should be populated correctly."""
+        from azurerbac.web.services.pages import compute_role_comparison
+
+        r1 = _make_cached_role_full("r1", "Alpha", actions=["op1"], data_actions=["d1"])
+        r2 = _make_cached_role_full("r2", "Beta", actions=["op2"])
+        cov1 = RoleCoverage(control={"op1"}, data={"d1"})
+        cov2 = RoleCoverage(control={"op2"}, data=set())
+        cache = _build_cache_service({"r1": r1, "r2": r2}, {"r1": cov1, "r2": cov2}, {})
+
+        result = compute_role_comparison("r1", "r2", cache=cache)
+        assert result is not None
+        assert result.role_a.role_id == "r1"
+        assert result.role_a.role_name == "Alpha"
+        assert result.role_a.control_count == 1
+        assert result.role_a.data_count == 1
+        assert result.role_b.role_id == "r2"
+        assert result.role_b.role_name == "Beta"
+        assert result.role_b.control_count == 1
+        assert result.role_b.data_count == 0
+
+    def test_results_are_sorted(self):
+        """Operation lists should be alphabetically sorted."""
+        from azurerbac.web.services.pages import compute_role_comparison
+
+        r1 = make_cached_role("r1", "Alpha")
+        r2 = make_cached_role("r2", "Beta")
+        cov1 = RoleCoverage(control={"z_op", "a_op", "m_op"}, data=set())
+        cov2 = RoleCoverage(control=set(), data=set())
+        cache = _build_cache_service({"r1": r1, "r2": r2}, {"r1": cov1, "r2": cov2}, {})
+
+        result = compute_role_comparison("r1", "r2", cache=cache)
+        assert result is not None
+        assert result.only_a_control == ["a_op", "m_op", "z_op"]
+
+    def test_same_role_returns_none(self):
+        """Comparing a role with itself should return None."""
+        from azurerbac.web.services.pages import compute_role_comparison
+
+        r1 = make_cached_role("r1", "Alpha")
+        cache = _build_cache_service({"r1": r1}, {}, {})
+        assert compute_role_comparison("r1", "r1", cache=cache) is None
+
+    def test_cache_hit_avoids_recompute(self):
+        """Second call with same IDs should return cached result."""
+        from azurerbac.web.services.pages import compute_role_comparison
+
+        ops = {"op1", "op2"}
+        r1 = make_cached_role("r1", "Alpha")
+        r2 = make_cached_role("r2", "Beta")
+        cov1 = RoleCoverage(control=ops, data=set())
+        cov2 = RoleCoverage(control=ops, data=set())
+        cache = _build_cache_service({"r1": r1, "r2": r2}, {"r1": cov1, "r2": cov2}, {})
+
+        first = compute_role_comparison("r1", "r2", cache=cache)
+        assert first is not None
+        # Verify it was stored
+        cache.set_comparison.assert_called_once()
+
+        # Now simulate a cache hit on second call
+        cache.get_comparison.return_value = first
+        second = compute_role_comparison("r1", "r2", cache=cache)
+        assert second is first
+
+    def test_reverse_order_separate_cache(self):
+        """Calling with (B, A) produces a separate cache entry with swapped sides."""
+        from azurerbac.web.services.pages import compute_role_comparison
+
+        r1 = make_cached_role("r1", "Alpha")
+        r2 = make_cached_role("r2", "Beta")
+        cov1 = RoleCoverage(control={"op1", "shared"}, data=set())
+        cov2 = RoleCoverage(control={"op2", "shared"}, data=set())
+        cache = _build_cache_service({"r1": r1, "r2": r2}, {"r1": cov1, "r2": cov2}, {})
+
+        # Forward order: A=r1, B=r2
+        forward = compute_role_comparison("r1", "r2", cache=cache)
+        assert forward is not None
+        cache.set_comparison.assert_called_once_with("r1:r2", forward)
+        assert forward.role_a.role_id == "r1"
+        assert forward.role_b.role_id == "r2"
+
+        # Reset mock and compute reverse order
+        cache.get_comparison.return_value = None
+        cache.set_comparison.reset_mock()
+        reverse = compute_role_comparison("r2", "r1", cache=cache)
+        assert reverse is not None
+        cache.set_comparison.assert_called_once_with("r2:r1", reverse)
+        assert reverse.role_a.role_id == "r2"
+        assert reverse.role_b.role_id == "r1"
+
+        # Verify operation sets are mirrored
+        assert forward.only_a_control == reverse.only_b_control
+        assert forward.only_b_control == reverse.only_a_control
+        assert forward.shared_control == reverse.shared_control
+
+    def test_conditions_populated_in_sides(self):
+        """ABAC conditions should appear in role comparison sides."""
+        from azurerbac.web.services.pages import compute_role_comparison
+
+        cond = "@Resource[Microsoft.Storage/storageAccounts:kind] == 'BlobStorage'"
+        r1 = _make_cached_role_full("r1", "Alpha", actions=["op1"], condition=cond)
+        r2 = _make_cached_role_full("r2", "Beta", actions=["op1"])
+        cov1 = RoleCoverage(control={"op1"}, data=set())
+        cov2 = RoleCoverage(control={"op1"}, data=set())
+        cache = _build_cache_service({"r1": r1, "r2": r2}, {"r1": cov1, "r2": cov2}, {})
+
+        result = compute_role_comparison("r1", "r2", cache=cache)
+        assert result is not None
+        assert result.role_a.conditions == [cond]
+        assert result.role_b.conditions == []
+
+    def test_assignable_scopes_populated_in_sides(self):
+        """Assignable scopes should appear in role comparison sides."""
+        from azurerbac.web.services.pages import compute_role_comparison
+
+        r1 = _make_cached_role_full(
+            "r1", "Alpha", actions=["op1"], assignable_scopes=["/subscriptions/abc"]
+        )
+        r2 = _make_cached_role_full("r2", "Beta", actions=["op1"])
+        cov1 = RoleCoverage(control={"op1"}, data=set())
+        cov2 = RoleCoverage(control={"op1"}, data=set())
+        cache = _build_cache_service({"r1": r1, "r2": r2}, {"r1": cov1, "r2": cov2}, {})
+
+        result = compute_role_comparison("r1", "r2", cache=cache)
+        assert result is not None
+        assert result.role_a.assignable_scopes == ["/subscriptions/abc"]
+        assert result.role_b.assignable_scopes == ["/"]

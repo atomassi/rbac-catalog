@@ -18,6 +18,8 @@ A comprehensive catalog and monitoring tool for [Azure built-in RBAC roles](http
 - **Reverse Lookup** — "Which roles grant this operation?" answered instantly
 - **Change Tracking** — Daily scans detect when Microsoft adds, modifies, or deprecates roles
 - **Diff Viewer** — See exactly what changed between role versions
+- **Related Roles** — See similar roles ranked by permission overlap, with subset/superset indicators
+- **Role Comparison** — Compare any two roles side by side
 - **Analytics** — Visualize permission distribution, role changes over time, and provider stats
 - **AI Role Recommender** — Describe what you need in natural language, get least-privilege suggestions (experimental)
 - **MCP Server** — Integrate with AI agents (Copilot, Claude) via Model Context Protocol

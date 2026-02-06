@@ -1,0 +1,544 @@
+<!doctype html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    {% include 'partials/darkmode_init.html' %}
+    <title>{{ comparison.role_a.role_name }} vs {{ comparison.role_b.role_name }} - Compare Azure Roles | RBAC Catalog</title>
+    <meta name="description" content="Compare {{ comparison.role_a.role_name }} and {{ comparison.role_b.role_name }} Azure RBAC roles side by side. See shared and unique permissions.">
+    <meta name="robots" content="noindex, follow">
+
+    <!-- Favicon -->
+    <link rel="icon" href="/favicon.ico" sizes="any">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192.png">
+    <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48.png">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+
+    <!-- Preload critical resources -->
+    <link rel="preload" href="/static/css/tailwind.min.css" as="style">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+
+    <!-- Self-hosted Tailwind CSS -->
+    <link rel="stylesheet" href="/static/css/tailwind.min.css">
+    <!-- Load Google Fonts asynchronously -->
+    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"></noscript>
+
+    <!-- Pass comparison data to JS safely (avoids JSON-in-HTML-attribute breakage) -->
+    <script>
+        window._compareData = {
+            onlyAControl: {{ comparison.only_a_control | tojson | safe }},
+            onlyAData: {{ comparison.only_a_data | tojson | safe }},
+            sharedControl: {{ comparison.shared_control | tojson | safe }},
+            sharedData: {{ comparison.shared_data | tojson | safe }},
+            onlyBControl: {{ comparison.only_b_control | tojson | safe }},
+            onlyBData: {{ comparison.only_b_data | tojson | safe }}
+        };
+    </script>
+    <script>
+        function compareData() {
+            const d = window._compareData || {};
+            return {
+                filterA: '',
+                filterB: '',
+                filterShared: '',
+                onlyAControl: d.onlyAControl || [],
+                onlyAData: d.onlyAData || [],
+                sharedControl: d.sharedControl || [],
+                sharedData: d.sharedData || [],
+                onlyBControl: d.onlyBControl || [],
+                onlyBData: d.onlyBData || [],
+                filteredList(items, filter) {
+                    if (!filter) return items;
+                    const q = filter.toLowerCase();
+                    return items.filter(i => i.toLowerCase().includes(q));
+                }
+            };
+        }
+    </script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .gradient-bg {
+            background: linear-gradient(135deg, #0078d4 0%, #005a9e 50%, #003d6a 100%);
+        }
+    </style>
+</head>
+<body class="h-full bg-slate-50 dark:bg-slate-900 transition-colors duration-200">
+    <!-- Navigation state handler -->
+    <script src="/static/js/nav-state.js"></script>
+    <script>NavState.initAiModeFromUrl();</script>
+    <div class="min-h-full">
+        <!-- Header -->
+        <div class="gradient-bg">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                <!-- Navigation Button Group -->
+                <div class="flex items-center justify-between mb-6">
+                    <div class="inline-flex items-center bg-white/10 backdrop-blur-sm rounded-lg overflow-hidden">
+                        <a href="/" class="inline-flex items-center justify-center px-3 py-2 text-white/70 hover:text-white hover:bg-white/10 transition-colors border-r border-white/20" title="Home">
+                            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                            </svg>
+                        </a>
+                        <a href="/roles/{{ comparison.role_a.role_id }}/{{ comparison.role_a.role_name | slugify }}" class="inline-flex items-center px-3 py-2 text-sm font-medium text-white/70 hover:text-white hover:bg-white/10 transition-colors">
+                            <svg class="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                            </svg>
+                            Back to {{ comparison.role_a.role_name }}
+                        </a>
+                    </div>
+                    <!-- Dark mode toggle -->
+                    <button id="dark-mode-toggle" type="button" class="flex items-center justify-center w-10 h-10 rounded-xl bg-white/10 hover:bg-white/25 text-white transition-all duration-200" title="Toggle dark mode" aria-pressed="false">
+                        <svg class="sun-icon hidden w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />
+                        </svg>
+                        <svg class="moon-icon w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z" />
+                        </svg>
+                    </button>
+                </div>
+
+                <h1 class="text-3xl sm:text-4xl font-bold text-white mb-2">Compare Roles</h1>
+                <p class="text-azure-200 text-sm">{{ comparison.role_a.role_name }} vs {{ comparison.role_b.role_name }}</p>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-6" x-data="compareData()">
+
+            <!-- Role Summary Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+                <!-- Role A -->
+                <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-5 border-l-4 border-azure-500 flex flex-col">
+                    <div class="flex items-center gap-3 mb-2">
+                        <div class="flex-shrink-0 w-8 h-8 rounded-full bg-azure-100 dark:bg-azure-900/40 flex items-center justify-center text-sm font-bold text-azure-700 dark:text-azure-300">A</div>
+                        <a href="/roles/{{ comparison.role_a.role_id }}/{{ comparison.role_a.role_name | slugify }}" class="text-lg font-semibold text-slate-900 dark:text-slate-100 hover:text-azure-600 dark:hover:text-azure-400 truncate">{{ comparison.role_a.role_name }}</a>
+                    </div>
+                    <p class="text-sm text-slate-500 dark:text-slate-400 mb-3 line-clamp-2 flex-1">{{ comparison.role_a.description }}</p>
+                    <div class="flex items-center gap-4 text-xs text-slate-600 dark:text-slate-400">
+                        <span class="inline-flex items-center gap-1">
+                            <span class="w-2 h-2 rounded-full bg-yellow-500"></span>
+                            {{ comparison.role_a.control_count }} control plane
+                        </span>
+                        <span class="inline-flex items-center gap-1">
+                            <span class="w-2 h-2 rounded-full bg-purple-500"></span>
+                            {{ comparison.role_a.data_count }} data plane
+                        </span>
+                    </div>
+                </div>
+                <!-- Role B -->
+                <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-5 border-l-4 border-orange-500 flex flex-col">
+                    <div class="flex items-center gap-3 mb-2">
+                        <div class="flex-shrink-0 w-8 h-8 rounded-full bg-orange-100 dark:bg-orange-900/40 flex items-center justify-center text-sm font-bold text-orange-700 dark:text-orange-300">B</div>
+                        <a href="/roles/{{ comparison.role_b.role_id }}/{{ comparison.role_b.role_name | slugify }}" class="text-lg font-semibold text-slate-900 dark:text-slate-100 hover:text-orange-600 dark:hover:text-orange-400 truncate">{{ comparison.role_b.role_name }}</a>
+                    </div>
+                    <p class="text-sm text-slate-500 dark:text-slate-400 mb-3 line-clamp-2 flex-1">{{ comparison.role_b.description }}</p>
+                    <div class="flex items-center gap-4 text-xs text-slate-600 dark:text-slate-400">
+                        <span class="inline-flex items-center gap-1">
+                            <span class="w-2 h-2 rounded-full bg-yellow-500"></span>
+                            {{ comparison.role_b.control_count }} control plane
+                        </span>
+                        <span class="inline-flex items-center gap-1">
+                            <span class="w-2 h-2 rounded-full bg-purple-500"></span>
+                            {{ comparison.role_b.data_count }} data plane
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stats Bar -->
+            {% set only_a_total = comparison.only_a_control | length + comparison.only_a_data | length %}
+            {% set shared_total = comparison.shared_control | length + comparison.shared_data | length %}
+            {% set only_b_total = comparison.only_b_control | length + comparison.only_b_data | length %}
+            {% set grand_total = only_a_total + shared_total + only_b_total %}
+
+            <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-5 mb-8">
+                <div class="grid grid-cols-3 gap-4 text-center mb-4">
+                    <div>
+                        <p class="text-2xl font-bold text-azure-600 dark:text-azure-400">{{ only_a_total }}</p>
+                        <p class="text-xs font-semibold text-azure-600 dark:text-azure-400">Only in {{ comparison.role_a.role_name }}</p>
+                    </div>
+                    <div>
+                        <p class="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{{ shared_total }}</p>
+                        <p class="text-xs font-semibold text-emerald-600 dark:text-emerald-400">Shared</p>
+                    </div>
+                    <div>
+                        <p class="text-2xl font-bold text-orange-600 dark:text-orange-400">{{ only_b_total }}</p>
+                        <p class="text-xs font-semibold text-orange-600 dark:text-orange-400">Only in {{ comparison.role_b.role_name }}</p>
+                    </div>
+                </div>
+                <!-- Visual proportion bar -->
+                {% if grand_total > 0 %}
+                <div class="flex rounded-full overflow-hidden h-3">
+                    {% if only_a_total > 0 %}
+                    <div class="bg-azure-500" style="width: {{ (only_a_total / grand_total * 100)|round(1) }}%" title="{{ only_a_total }} only in {{ comparison.role_a.role_name }}"></div>
+                    {% endif %}
+                    {% if shared_total > 0 %}
+                    <div class="bg-emerald-500" style="width: {{ (shared_total / grand_total * 100)|round(1) }}%" title="{{ shared_total }} shared"></div>
+                    {% endif %}
+                    {% if only_b_total > 0 %}
+                    <div class="bg-orange-500" style="width: {{ (only_b_total / grand_total * 100)|round(1) }}%" title="{{ only_b_total }} only in {{ comparison.role_b.role_name }}"></div>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Three Column Comparison -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
+
+                <!-- Only in Role A -->
+                <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-lg overflow-hidden flex flex-col">
+                    <div class="px-5 py-4 h-[5.5rem] border-b border-slate-100 dark:border-slate-700 bg-azure-50 dark:bg-azure-900/20">
+                        <div class="flex items-center gap-2">
+                            <div class="w-6 h-6 rounded-full bg-azure-100 dark:bg-azure-900/40 flex items-center justify-center text-xs font-bold text-azure-700 dark:text-azure-300">A</div>
+                            <h3 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Only in {{ comparison.role_a.role_name }}</h3>
+                        </div>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">{{ only_a_total }} operations</p>
+                    </div>
+                    <div class="p-4 flex-1">
+                        {% if only_a_total > 0 %}
+                        <div class="mb-3">
+                            <div class="relative">
+                                <input type="text" x-model="filterA" placeholder="Filter operations..."
+                                       class="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-azure-500 focus:border-azure-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500">
+                                <svg class="absolute left-2.5 top-2 h-3.5 w-3.5 text-slate-400 dark:text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                </svg>
+                            </div>
+                        </div>
+
+                        {% if comparison.only_a_control %}
+                        <div class="mb-3">
+                            <h4 class="text-xs font-medium text-yellow-700 dark:text-yellow-400 mb-1.5">Control Plane ({{ comparison.only_a_control | length }})</h4>
+                            <div class="max-h-72 overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/50">
+                                <template x-for="op in filteredList(onlyAControl, filterA)" :key="op">
+                                    <div class="px-2.5 py-1.5 border-b border-slate-100 dark:border-slate-700 last:border-b-0">
+                                        <a :href="'/operations/' + encodeURIComponent(op)" @click="NavState.setBackContext('compare', { from_compare_url: window.location.pathname, from_compare_label: 'Compare' })" class="text-xs font-mono text-slate-700 dark:text-slate-300 break-all hover:text-azure-600 dark:hover:text-azure-400" x-text="op"></a>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        {% if comparison.only_a_data %}
+                        <div>
+                            <h4 class="text-xs font-medium text-purple-700 dark:text-purple-400 mb-1.5">Data Plane ({{ comparison.only_a_data | length }})</h4>
+                            <div class="max-h-72 overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/50">
+                                <template x-for="op in filteredList(onlyAData, filterA)" :key="op">
+                                    <div class="px-2.5 py-1.5 border-b border-slate-100 dark:border-slate-700 last:border-b-0">
+                                        <a :href="'/operations/' + encodeURIComponent(op)" @click="NavState.setBackContext('compare', { from_compare_url: window.location.pathname, from_compare_label: 'Compare' })" class="text-xs font-mono text-slate-700 dark:text-slate-300 break-all hover:text-azure-600 dark:hover:text-azure-400" x-text="op"></a>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        {% else %}
+                        <p class="text-sm text-slate-500 dark:text-slate-400 text-center italic py-4">No unique operations</p>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Shared -->
+                <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-lg overflow-hidden flex flex-col">
+                    <div class="px-5 py-4 h-[5.5rem] border-b border-slate-100 dark:border-slate-700 bg-emerald-50 dark:bg-emerald-900/20">
+                        <div class="flex items-center gap-2">
+                            <svg class="w-5 h-5 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                            </svg>
+                            <h3 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Shared</h3>
+                        </div>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">{{ shared_total }} operations in both roles</p>
+                    </div>
+                    <div class="p-4 flex-1">
+                        {% if shared_total > 0 %}
+                        <div class="mb-3">
+                            <div class="relative">
+                                <input type="text" x-model="filterShared" placeholder="Filter operations..."
+                                       class="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500">
+                                <svg class="absolute left-2.5 top-2 h-3.5 w-3.5 text-slate-400 dark:text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                </svg>
+                            </div>
+                        </div>
+
+                        {% if comparison.shared_control %}
+                        <div class="mb-3">
+                            <h4 class="text-xs font-medium text-yellow-700 dark:text-yellow-400 mb-1.5">Control Plane ({{ comparison.shared_control | length }})</h4>
+                            <div class="max-h-72 overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/50">
+                                <template x-for="op in filteredList(sharedControl, filterShared)" :key="op">
+                                    <div class="px-2.5 py-1.5 border-b border-slate-100 dark:border-slate-700 last:border-b-0">
+                                        <a :href="'/operations/' + encodeURIComponent(op)" @click="NavState.setBackContext('compare', { from_compare_url: window.location.pathname, from_compare_label: 'Compare' })" class="text-xs font-mono text-slate-700 dark:text-slate-300 break-all hover:text-azure-600 dark:hover:text-azure-400" x-text="op"></a>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        {% if comparison.shared_data %}
+                        <div>
+                            <h4 class="text-xs font-medium text-purple-700 dark:text-purple-400 mb-1.5">Data Plane ({{ comparison.shared_data | length }})</h4>
+                            <div class="max-h-72 overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/50">
+                                <template x-for="op in filteredList(sharedData, filterShared)" :key="op">
+                                    <div class="px-2.5 py-1.5 border-b border-slate-100 dark:border-slate-700 last:border-b-0">
+                                        <a :href="'/operations/' + encodeURIComponent(op)" @click="NavState.setBackContext('compare', { from_compare_url: window.location.pathname, from_compare_label: 'Compare' })" class="text-xs font-mono text-slate-700 dark:text-slate-300 break-all hover:text-azure-600 dark:hover:text-azure-400" x-text="op"></a>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        {% else %}
+                        <p class="text-sm text-slate-500 dark:text-slate-400 text-center italic py-4">No shared operations</p>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Only in Role B -->
+                <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-lg overflow-hidden flex flex-col">
+                    <div class="px-5 py-4 h-[5.5rem] border-b border-slate-100 dark:border-slate-700 bg-orange-50 dark:bg-orange-900/20">
+                        <div class="flex items-center gap-2">
+                            <div class="w-6 h-6 rounded-full bg-orange-100 dark:bg-orange-900/40 flex items-center justify-center text-xs font-bold text-orange-700 dark:text-orange-300">B</div>
+                            <h3 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Only in {{ comparison.role_b.role_name }}</h3>
+                        </div>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">{{ only_b_total }} operations</p>
+                    </div>
+                    <div class="p-4 flex-1">
+                        {% if only_b_total > 0 %}
+                        <div class="mb-3">
+                            <div class="relative">
+                                <input type="text" x-model="filterB" placeholder="Filter operations..."
+                                       class="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-orange-500 focus:border-orange-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500">
+                                <svg class="absolute left-2.5 top-2 h-3.5 w-3.5 text-slate-400 dark:text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                </svg>
+                            </div>
+                        </div>
+
+                        {% if comparison.only_b_control %}
+                        <div class="mb-3">
+                            <h4 class="text-xs font-medium text-yellow-700 dark:text-yellow-400 mb-1.5">Control Plane ({{ comparison.only_b_control | length }})</h4>
+                            <div class="max-h-72 overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/50">
+                                <template x-for="op in filteredList(onlyBControl, filterB)" :key="op">
+                                    <div class="px-2.5 py-1.5 border-b border-slate-100 dark:border-slate-700 last:border-b-0">
+                                        <a :href="'/operations/' + encodeURIComponent(op)" @click="NavState.setBackContext('compare', { from_compare_url: window.location.pathname, from_compare_label: 'Compare' })" class="text-xs font-mono text-slate-700 dark:text-slate-300 break-all hover:text-azure-600 dark:hover:text-azure-400" x-text="op"></a>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        {% if comparison.only_b_data %}
+                        <div>
+                            <h4 class="text-xs font-medium text-purple-700 dark:text-purple-400 mb-1.5">Data Plane ({{ comparison.only_b_data | length }})</h4>
+                            <div class="max-h-72 overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/50">
+                                <template x-for="op in filteredList(onlyBData, filterB)" :key="op">
+                                    <div class="px-2.5 py-1.5 border-b border-slate-100 dark:border-slate-700 last:border-b-0">
+                                        <a :href="'/operations/' + encodeURIComponent(op)" @click="NavState.setBackContext('compare', { from_compare_url: window.location.pathname, from_compare_label: 'Compare' })" class="text-xs font-mono text-slate-700 dark:text-slate-300 break-all hover:text-azure-600 dark:hover:text-azure-400" x-text="op"></a>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        {% else %}
+                        <p class="text-sm text-slate-500 dark:text-slate-400 text-center italic py-4">No unique operations</p>
+                        {% endif %}
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- ABAC Conditions (shown only if either role has conditions) -->
+            {% if comparison.role_a.conditions or comparison.role_b.conditions %}
+            <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-lg overflow-hidden mt-8">
+                <div class="px-5 py-4 border-b border-slate-100 dark:border-slate-700 bg-amber-50 dark:bg-amber-900/20">
+                    <div class="flex items-center gap-2">
+                        <svg class="w-5 h-5 text-amber-600 dark:text-amber-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"/>
+                        </svg>
+                        <h3 class="text-sm font-semibold text-slate-900 dark:text-slate-100">ABAC Conditions</h3>
+                    </div>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Attribute-based access control conditions that restrict effective permissions</p>
+                </div>
+                <div class="p-5">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- Role A Conditions -->
+                        <div>
+                            <h4 class="text-xs font-semibold text-azure-700 dark:text-azure-400 mb-3">{{ comparison.role_a.role_name }}</h4>
+                            {% if comparison.role_a.conditions %}
+                            <div class="space-y-4">
+                                {% for cond in comparison.role_a.conditions %}
+                                <div class="border border-amber-200 dark:border-amber-700/50 rounded-lg overflow-hidden" x-data="conditionFormatter({{ cond | tojson | forceescape }})">
+                                    <div class="flex items-center justify-between px-3 py-2 bg-amber-50 dark:bg-amber-900/20">
+                                        <span class="text-xs font-medium text-amber-700 dark:text-amber-400">Condition {{ loop.index }}</span>
+                                        <div class="flex items-center gap-3">
+                                            <button @click="toggleExplanation()" class="text-xs text-azure-600 dark:text-azure-400 hover:underline flex items-center gap-1">
+                                                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                </svg>
+                                                <span x-text="showExplanation ? 'Hide explanation' : 'Explain'"></span>
+                                            </button>
+                                            <button @click="formatted = !formatted" class="text-xs text-azure-600 dark:text-azure-400 hover:underline">
+                                                <span x-text="formatted ? 'Show raw' : 'Format'"></span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <template x-if="showExplanation">
+                                        <div class="px-3 py-2 bg-blue-50 dark:bg-blue-900/30 border-b border-blue-200 dark:border-blue-700">
+                                            <p class="text-sm font-medium text-blue-800 dark:text-blue-200 mb-1" x-text="getExplanation().summary"></p>
+                                            <ul class="list-disc list-inside space-y-0.5">
+                                                <template x-for="(detail, idx) in getExplanation().details" :key="idx">
+                                                    <li class="text-xs text-blue-700 dark:text-blue-300" x-html="detail"></li>
+                                                </template>
+                                            </ul>
+                                        </div>
+                                    </template>
+                                    <div class="px-3 py-2">
+                                        <template x-if="!formatted">
+                                            <code class="block text-xs font-mono text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-700 px-3 py-2 rounded whitespace-pre-wrap break-all">{{ cond }}</code>
+                                        </template>
+                                        <template x-if="formatted">
+                                            <div class="text-xs font-mono text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-700 px-3 py-2 rounded overflow-x-auto max-h-96 overflow-y-auto">
+                                                <template x-for="(line, idx) in lines" :key="idx">
+                                                    <div class="whitespace-nowrap" :style="'padding-left: ' + (line.indent * 16) + 'px'" x-html="line.html"></div>
+                                                </template>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            {% else %}
+                            <p class="text-xs text-slate-400 dark:text-slate-500 italic">No conditions</p>
+                            {% endif %}
+                        </div>
+                        <!-- Role B Conditions -->
+                        <div>
+                            <h4 class="text-xs font-semibold text-orange-700 dark:text-orange-400 mb-3">{{ comparison.role_b.role_name }}</h4>
+                            {% if comparison.role_b.conditions %}
+                            <div class="space-y-4">
+                                {% for cond in comparison.role_b.conditions %}
+                                <div class="border border-amber-200 dark:border-amber-700/50 rounded-lg overflow-hidden" x-data="conditionFormatter({{ cond | tojson | forceescape }})">
+                                    <div class="flex items-center justify-between px-3 py-2 bg-amber-50 dark:bg-amber-900/20">
+                                        <span class="text-xs font-medium text-amber-700 dark:text-amber-400">Condition {{ loop.index }}</span>
+                                        <div class="flex items-center gap-3">
+                                            <button @click="toggleExplanation()" class="text-xs text-azure-600 dark:text-azure-400 hover:underline flex items-center gap-1">
+                                                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                </svg>
+                                                <span x-text="showExplanation ? 'Hide explanation' : 'Explain'"></span>
+                                            </button>
+                                            <button @click="formatted = !formatted" class="text-xs text-azure-600 dark:text-azure-400 hover:underline">
+                                                <span x-text="formatted ? 'Show raw' : 'Format'"></span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <template x-if="showExplanation">
+                                        <div class="px-3 py-2 bg-blue-50 dark:bg-blue-900/30 border-b border-blue-200 dark:border-blue-700">
+                                            <p class="text-sm font-medium text-blue-800 dark:text-blue-200 mb-1" x-text="getExplanation().summary"></p>
+                                            <ul class="list-disc list-inside space-y-0.5">
+                                                <template x-for="(detail, idx) in getExplanation().details" :key="idx">
+                                                    <li class="text-xs text-blue-700 dark:text-blue-300" x-html="detail"></li>
+                                                </template>
+                                            </ul>
+                                        </div>
+                                    </template>
+                                    <div class="px-3 py-2">
+                                        <template x-if="!formatted">
+                                            <code class="block text-xs font-mono text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-700 px-3 py-2 rounded whitespace-pre-wrap break-all">{{ cond }}</code>
+                                        </template>
+                                        <template x-if="formatted">
+                                            <div class="text-xs font-mono text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-700 px-3 py-2 rounded overflow-x-auto max-h-96 overflow-y-auto">
+                                                <template x-for="(line, idx) in lines" :key="idx">
+                                                    <div class="whitespace-nowrap" :style="'padding-left: ' + (line.indent * 16) + 'px'" x-html="line.html"></div>
+                                                </template>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            {% else %}
+                            <p class="text-xs text-slate-400 dark:text-slate-500 italic">No conditions</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Assignable Scopes Comparison (shown only when different) -->
+            {% if comparison.role_a.assignable_scopes != comparison.role_b.assignable_scopes %}
+            <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-lg overflow-hidden mt-8">
+                <div class="px-5 py-4 border-b border-slate-100 dark:border-slate-700 bg-azure-50 dark:bg-azure-900/20">
+                    <div class="flex items-center gap-2">
+                        <svg class="w-5 h-5 text-azure-600 dark:text-azure-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21" />
+                        </svg>
+                        <h3 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Assignable Scopes</h3>
+                    </div>
+                    <p class="text-xs text-slate-600 dark:text-slate-400 mt-1">These roles have different assignable scopes, which determines where they can be assigned</p>
+                </div>
+                <div class="p-5">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <h4 class="text-xs font-semibold text-azure-700 dark:text-azure-400 mb-2">{{ comparison.role_a.role_name }}</h4>
+                            <div class="space-y-1.5">
+                                {% for scope in comparison.role_a.assignable_scopes %}
+                                <code class="block text-xs font-mono text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-700 px-3 py-1.5 rounded-lg break-all">{{ scope }}</code>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        <div>
+                            <h4 class="text-xs font-semibold text-orange-700 dark:text-orange-400 mb-2">{{ comparison.role_b.role_name }}</h4>
+                            <div class="space-y-1.5">
+                                {% for scope in comparison.role_b.assignable_scopes %}
+                                <code class="block text-xs font-mono text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-700 px-3 py-1.5 rounded-lg break-all">{{ scope }}</code>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+        </main>
+
+        <!-- Footer -->
+        <footer class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 dark:bg-slate-900 dark:border-slate-700">
+            <div class="border-t border-slate-200 dark:border-slate-700 pt-8">
+                <div class="flex flex-col items-center" style="gap: 20px;">
+                    <nav class="flex flex-col sm:flex-row flex-wrap justify-center items-center text-sm" style="gap: 12px 24px;">
+                        <!-- Internal navigation links for SEO -->
+                        <a href="/recent" class="ai-nav-link text-slate-600 dark:text-slate-400 hover:text-azure-600 dark:hover:text-azure-400 transition-colors">Recent Changes</a>
+                        <a href="/roles" class="ai-nav-link text-slate-600 dark:text-slate-400 hover:text-azure-600 dark:hover:text-azure-400 transition-colors">Browse Roles</a>
+                        <a href="/operations" class="ai-nav-link text-slate-600 dark:text-slate-400 hover:text-azure-600 dark:hover:text-azure-400 transition-colors">Browse Operations</a>
+                        <a href="/recommend" class="ai-nav-link text-slate-600 dark:text-slate-400 hover:text-azure-600 dark:hover:text-azure-400 transition-colors">Role Recommender</a>
+                        <a href="/analytics" class="ai-nav-link text-slate-600 dark:text-slate-400 hover:text-azure-600 dark:hover:text-azure-400 transition-colors">Analytics</a>
+                        <a href="/about" class="ai-nav-link text-slate-600 dark:text-slate-400 hover:text-azure-600 dark:hover:text-azure-400 transition-colors">About</a>
+                        <a href="/sitemap.xml" class="text-slate-600 dark:text-slate-400 hover:text-azure-600 dark:hover:text-azure-400 transition-colors">Sitemap</a>
+                        <span class="hidden sm:inline text-slate-300 dark:text-slate-600">|</span>
+                        <a href="/feeds/changelog.atom" class="text-slate-600 dark:text-slate-400 hover:text-orange-500 transition-colors" title="Subscribe via RSS/Atom">
+                            <svg class="w-5 h-5" viewBox="0 0 24 24" aria-hidden="true"><rect width="24" height="24" rx="4" fill="#f97316"/><circle cx="7" cy="17" r="2.5" fill="white"/><path d="M5 12.5c3.5 0 6.5 3 6.5 6.5h3c0-5.25-4.25-9.5-9.5-9.5v3z" fill="white"/><path d="M5 7c6.5 0 12 5.5 12 12h3c0-8.25-6.75-15-15-15v3z" fill="white"/></svg>
+                        </a>
+                    </nav>
+                    <div class="text-center px-4">
+                        <p class="text-sm text-slate-500 dark:text-slate-400">Azure RBAC Built-in Role Definitions Catalog — Track changes to <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles" target="_blank" rel="noopener noreferrer" class="text-azure-500 hover:text-azure-600 dark:hover:text-azure-400 hover:underline">Azure built-in roles</a></p>
+                        <p class="text-xs text-slate-400 dark:text-slate-500 mt-3">{{ app_version }}</p>
+                        <p class="text-xs text-slate-400 dark:text-slate-500 mt-3 leading-relaxed">This site is not affiliated with or endorsed by Microsoft.<br class="sm:hidden"> Content is provided "as is" without warranty of any kind.</p>
+                    </div>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Condition formatter for ABAC conditions -->
+    <script src="/static/js/condition-formatter.js"></script>
+    <!-- Dark mode handler -->
+    <script src="/static/js/darkmode.js"></script>
+</body>
+</html>

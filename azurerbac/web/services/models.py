@@ -475,6 +475,39 @@ class RelatedRole:
     similarity: float  # Composite score (ops overlap + scope + conditions), 0.0-1.0
     shared_count: int  # Number of shared operations
     total_count: int  # Total operations of the related role
+    is_subset: bool = (
+        False  # All ops in related are in current, scopes equal-or-narrower, same conditions
+    )
+    is_superset: bool = (
+        False  # All ops in current are in related, scopes equal-or-broader, same conditions
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class RoleComparisonSide:
+    """One side of a role comparison."""
+
+    role_id: str
+    role_name: str
+    description: str
+    control_count: int
+    data_count: int
+    conditions: list[str]  # ABAC condition expressions
+    assignable_scopes: list[str]  # Assignable scopes (e.g. ["/"])
+
+
+@dataclass(frozen=True, slots=True)
+class RoleComparison:
+    """Result of comparing two roles' effective operations."""
+
+    role_a: RoleComparisonSide
+    role_b: RoleComparisonSide
+    only_a_control: list[str]  # Control plane ops only in role A
+    only_a_data: list[str]  # Data plane ops only in role A
+    shared_control: list[str]  # Control plane ops in both
+    shared_data: list[str]  # Data plane ops in both
+    only_b_control: list[str]  # Control plane ops only in role B
+    only_b_data: list[str]  # Data plane ops only in role B
 
 
 @dataclass(slots=True)

@@ -123,16 +123,7 @@ pre::-webkit-scrollbar-thumb:hover {
   border: 1px solid rgba(71, 85, 105, 0.4);
 }
 
-/* Dark mode: Active navigation tab */
-.dark nav .bg-white {
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
-  color: #ffffff !important;
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4) !important;
-}
 
-.dark nav .bg-white.text-azure-700 {
-  color: #ffffff !important;
-}
 
 /* Dark mode: Navigation hover states */
 .dark nav .hover\:bg-white\/20:hover {

@@ -129,17 +129,11 @@
     <!-- Load Google Fonts asynchronously to prevent render blocking -->
     <link rel="preload" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"></noscript>
-    <style>
-        body { font-family: 'Inter', sans-serif; }
-        .gradient-bg {
-            background: linear-gradient(135deg, #0078d4 0%, #005a9e 50%, #003d6a 100%);
-        }
-    </style>
 </head>
 <body class="h-full bg-slate-50 dark:bg-slate-900 transition-colors duration-200">
     <script src="/static/js/nav-state.js" defer></script>
     <script>document.addEventListener('DOMContentLoaded', function() { if (window.NavState) NavState.initAiModeFromUrl(); });</script>
-    <div class="min-h-full flex flex-col">
+    <div class="min-h-full">
         <!-- Header with gradient -->
         <div class="gradient-bg">
             <nav class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -221,15 +215,17 @@
                     </div>
                 </div>
             </nav>
-            <!-- Page title section -->
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-                <h1 class="text-3xl sm:text-4xl font-bold text-white mb-2">About Azure RBAC Catalog</h1>
-                <p class="text-azure-200">A free, open educational resource for Azure security professionals</p>
+            <!-- Hero section -->
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-12 pt-4">
+                <div class="flex items-center gap-3 mb-3">
+                    <h1 class="text-3xl sm:text-4xl font-bold text-white">About Azure RBAC Catalog</h1>
+                </div>
+                <p class="text-azure-200 text-lg">A free, open educational resource for Azure security professionals</p>
             </div>
         </div>
 
         <!-- Main Content -->
-        <main class="flex-1 max-w-[68rem] mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12 w-full">
+        <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-8 pb-12">
             <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-lg overflow-hidden">
                 <div class="px-5 py-6 sm:px-10 sm:py-10 lg:px-14 lg:py-12 overflow-x-auto">
                     <!-- Mission Section -->

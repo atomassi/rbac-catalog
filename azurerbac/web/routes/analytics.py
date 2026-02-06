@@ -54,6 +54,7 @@ async def analytics_dashboard(
         "daily_chart_data": daily_chart_data,
         "provider_chart_data": provider_chart_data,
         "ai_mode": ai_mode,
+        "total_roles": deps.app_cache.cache.active_roles_count,
     }
 
     return deps.templates.TemplateResponse(request, "analytics.html", context)

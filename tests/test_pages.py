@@ -10,7 +10,7 @@ import pytest
 
 from azurerbac.azure.models import OperationData, RoleDefinition
 from azurerbac.cache.models import CachedChangeEvent, CachedRole
-from azurerbac.core.constants import EventType, ROLE_DEFINITION_TYPE, RoleStatus
+from azurerbac.core.constants import ROLE_DEFINITION_TYPE, EventType, RoleStatus
 from azurerbac.matching.models import RoleCoverage
 from tests.helpers import make_cached_role, make_role_definition
 
@@ -861,7 +861,7 @@ class TestExtractRoleMetadata:
             "Custom",
             assignable_scopes=["/subscriptions/abc", "/subscriptions/def"],
         )
-        scopes, conditions = _extract_role_metadata(role)
+        scopes, _conditions = _extract_role_metadata(role)
         assert scopes == frozenset({"/subscriptions/abc", "/subscriptions/def"})
 
     def test_conditions_extracted(self):
@@ -947,9 +947,7 @@ class TestComputeRelatedRoles:
         cov1 = RoleCoverage(control=ops, data=set())
         cov2 = RoleCoverage(control=ops, data=set())
         op_to_roles = {op: ["r1", "r2"] for op in ops}
-        cache = _build_cache_service(
-            {"r1": r1, "r2": r2}, {"r1": cov1, "r2": cov2}, op_to_roles
-        )
+        cache = _build_cache_service({"r1": r1, "r2": r2}, {"r1": cov1, "r2": cov2}, op_to_roles)
 
         results = compute_related_roles("r1", cache=cache)
         assert len(results) == 1
@@ -975,9 +973,7 @@ class TestComputeRelatedRoles:
             "op5": ["r2"],
             "op6": ["r2"],
         }
-        cache = _build_cache_service(
-            {"r1": r1, "r2": r2}, {"r1": cov1, "r2": cov2}, op_to_roles
-        )
+        cache = _build_cache_service({"r1": r1, "r2": r2}, {"r1": cov1, "r2": cov2}, op_to_roles)
 
         results = compute_related_roles("r1", cache=cache)
         assert len(results) == 1
@@ -1009,9 +1005,7 @@ class TestComputeRelatedRoles:
             op_to_roles[op] = ["r1"]
         for i in range(20):
             op_to_roles[f"uniq{i}"] = ["r2"]
-        cache = _build_cache_service(
-            {"r1": r1, "r2": r2}, {"r1": cov1, "r2": cov2}, op_to_roles
-        )
+        cache = _build_cache_service({"r1": r1, "r2": r2}, {"r1": cov1, "r2": cov2}, op_to_roles)
 
         results = compute_related_roles("r1", cache=cache)
         # intersection=1, union=41 → ops_sim ≈ 0.024
@@ -1028,9 +1022,7 @@ class TestComputeRelatedRoles:
         cov1 = RoleCoverage(control=ops, data=set())
         cov2 = RoleCoverage(control=ops, data=set())
         op_to_roles = {op: ["r1", "r2"] for op in ops}
-        cache = _build_cache_service(
-            {"r1": r1, "r2": r2}, {"r1": cov1, "r2": cov2}, op_to_roles
-        )
+        cache = _build_cache_service({"r1": r1, "r2": r2}, {"r1": cov1, "r2": cov2}, op_to_roles)
 
         results = compute_related_roles("r1", cache=cache)
         assert results == []
@@ -1097,7 +1089,9 @@ class TestComputeRelatedRoles:
         r1 = _make_cached_role_full("r1", "Alpha", actions=["op1"])
         r_same_scope = _make_cached_role_full("r2", "SameScope", actions=["op1"])
         r_diff_scope = _make_cached_role_full(
-            "r3", "DiffScope", actions=["op1"],
+            "r3",
+            "DiffScope",
+            actions=["op1"],
             assignable_scopes=["/subscriptions/xyz"],
         )
 
@@ -1125,7 +1119,9 @@ class TestComputeRelatedRoles:
         r1 = _make_cached_role_full("r1", "Alpha", actions=["op1"])
         r_no_cond = _make_cached_role_full("r2", "NoCond", actions=["op1"])
         r_with_cond = _make_cached_role_full(
-            "r3", "WithCond", actions=["op1"],
+            "r3",
+            "WithCond",
+            actions=["op1"],
             condition="@Resource[Microsoft.Storage/storageAccounts:kind] == 'BlobStorage'",
         )
 
@@ -1159,9 +1155,7 @@ class TestComputeRelatedRoles:
         cov2 = RoleCoverage(control=set(), data={"data_op1", "data_op2"})
 
         op_to_roles = {"data_op1": ["r1", "r2"], "data_op2": ["r1", "r2"]}
-        cache = _build_cache_service(
-            {"r1": r1, "r2": r2}, {"r1": cov1, "r2": cov2}, op_to_roles
-        )
+        cache = _build_cache_service({"r1": r1, "r2": r2}, {"r1": cov1, "r2": cov2}, op_to_roles)
 
         results = compute_related_roles("r1", cache=cache)
         assert len(results) == 1
@@ -1179,9 +1173,7 @@ class TestComputeRelatedRoles:
         cov2 = RoleCoverage(control={"op1", "op2", "op3"}, data=set())
 
         op_to_roles = {"op1": ["r1", "r2"], "op2": ["r1", "r2"], "op3": ["r2"]}
-        cache = _build_cache_service(
-            {"r1": r1, "r2": r2}, {"r1": cov1, "r2": cov2}, op_to_roles
-        )
+        cache = _build_cache_service({"r1": r1, "r2": r2}, {"r1": cov1, "r2": cov2}, op_to_roles)
 
         results = compute_related_roles("r1", cache=cache)
         assert len(results) == 1
@@ -1204,9 +1196,7 @@ class TestComputeRelatedRoles:
         cov1 = RoleCoverage(control=ops, data=set())
         cov2 = RoleCoverage(control=ops, data=set())
         op_to_roles = {op: ["r1", "r2"] for op in ops}
-        cache = _build_cache_service(
-            {"r1": r1, "r2": r2}, {"r1": cov1, "r2": cov2}, op_to_roles
-        )
+        cache = _build_cache_service({"r1": r1, "r2": r2}, {"r1": cov1, "r2": cov2}, op_to_roles)
 
         # First call computes and caches
         first = compute_related_roles("r1", cache=cache)
@@ -1227,9 +1217,7 @@ class TestComputeRelatedRoles:
         cov1 = RoleCoverage(control=ops, data=set())
         cov2 = RoleCoverage(control=ops, data=set())
         op_to_roles = {"op1": ["r1", "r2"]}
-        cache = _build_cache_service(
-            {"r1": r1, "r2": r2}, {"r1": cov1, "r2": cov2}, op_to_roles
-        )
+        cache = _build_cache_service({"r1": r1, "r2": r2}, {"r1": cov1, "r2": cov2}, op_to_roles)
 
         results = compute_related_roles("r1", cache=cache)
         cache.set_related_roles.assert_called_once_with("r1", results)

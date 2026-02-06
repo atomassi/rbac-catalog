@@ -196,11 +196,11 @@
                 getOperationTypeClass(action) {
                     const type = this.getOperationType(action);
                     switch(type) {
-                        case 'read': return 'bg-emerald-100 text-emerald-700';
-                        case 'write': return 'bg-blue-100 text-blue-700';
-                        case 'delete': return 'bg-red-100 text-red-700';
-                        case 'action': return 'bg-purple-100 text-purple-700';
-                        default: return 'bg-slate-100 text-slate-600';
+                        case 'read': return 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300';
+                        case 'write': return 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300';
+                        case 'delete': return 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300';
+                        case 'action': return 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300';
+                        default: return 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400';
                     }
                 },
                 get filteredControl() {
@@ -269,24 +269,24 @@
 
         <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-6">
             {% if role.status == 'deleted' %}
-            <div class="deleted-banner-outer mt-10 rounded-lg bg-red-100 border border-red-200 p-4 mb-6">
+            <div class="mt-10 rounded-lg bg-red-100 dark:bg-red-500/15 border border-red-200 dark:border-red-400/40 p-4 mb-6">
                 <div class="flex">
                     <div class="flex-shrink-0">
-                        <svg class="h-5 w-5 text-red-500 deleted-banner-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <svg class="h-5 w-5 text-red-500 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                         </svg>
                     </div>
                     <div class="ml-3">
-                        <h4 class="text-sm font-medium text-red-800 deleted-banner-title">Role Deleted</h4>
-                        <p class="text-sm text-red-700 deleted-banner-text mt-1">This role has been deleted from Azure.</p>
+                        <h4 class="text-sm font-medium text-red-800 dark:text-red-400">Role Deleted</h4>
+                        <p class="text-sm text-red-700 dark:text-red-400 mt-1">This role has been deleted from Azure.</p>
                     </div>
                 </div>
             </div>
             {% endif %}
 
             <!-- Meta Card -->
-            <div class="bg-white rounded-2xl shadow-lg overflow-hidden mb-8">
-                <div class="px-6 py-5 border-b border-slate-100">
+            <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-lg overflow-hidden mb-8">
+                <div class="px-6 py-5 border-b border-slate-100 dark:border-slate-700">
                     <div class="flex items-center">
                         <div class="flex-shrink-0 bg-gradient-to-br from-azure-500 to-azure-600 rounded-xl p-3">
                             <svg class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -294,8 +294,8 @@
                             </svg>
                         </div>
                         <div class="ml-4">
-                            <h3 class="text-lg font-semibold text-slate-900">Role Information</h3>
-                            <p class="text-sm text-slate-500">Details and metadata</p>
+                            <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Role Information</h3>
+                            <p class="text-sm text-slate-500 dark:text-slate-400">Details and metadata</p>
                         </div>
                     </div>
 
@@ -317,15 +317,15 @@
                     </div>
                     {%- endif -%}
                 </div>
-                <div class="divide-y divide-slate-100">
+                <div class="divide-y divide-slate-100 dark:divide-slate-700">
                     <div class="px-6 py-4 sm:grid sm:grid-cols-3 sm:gap-4">
-                        <dt class="text-sm font-medium text-slate-500 self-center">Role ID</dt>
+                        <dt class="text-sm font-medium text-slate-500 dark:text-slate-400 self-center">Role ID</dt>
                         <dd class="mt-1 sm:mt-0 sm:col-span-2 flex items-center gap-2">
-                            <code class="text-sm font-mono text-slate-700 bg-slate-100 px-3 py-1.5 rounded-lg">{{ role.role_id }}</code>
+                            <code class="text-sm font-mono text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-700 px-3 py-1.5 rounded-lg">{{ role.role_id }}</code>
                             <button 
                                 type="button"
                                 onclick="Clipboard.copyWithTooltip(this, '{{ role.role_id }}')"
-                                class="relative inline-flex items-center justify-center w-8 h-8 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-md transition-colors"
+                                class="relative inline-flex items-center justify-center w-8 h-8 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-md transition-colors"
                                 title="Copy Role ID"
                                 aria-label="Copy Role ID to clipboard"
                             >
@@ -345,27 +345,27 @@
                         </dd>
                     </div>
                     <div class="px-6 py-4 sm:grid sm:grid-cols-3 sm:gap-4">
-                        <dt class="text-sm font-medium text-slate-500 self-center">Role Type</dt>
-                        <dd class="mt-1 text-sm text-slate-900 sm:mt-0 sm:col-span-2">
-                            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-azure-100 text-azure-700">
+                        <dt class="text-sm font-medium text-slate-500 dark:text-slate-400 self-center">Role Type</dt>
+                        <dd class="mt-1 text-sm text-slate-900 dark:text-slate-100 sm:mt-0 sm:col-span-2">
+                            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-azure-100 dark:bg-azure-900/50 text-azure-700 dark:text-azure-300">
                                 {{ role.role_type or 'BuiltInRole' }}
                             </span>
                         </dd>
                     </div>
                     <div class="px-6 py-4 sm:grid sm:grid-cols-3 sm:gap-4">
-                        <dt class="text-sm font-medium text-slate-500 self-center">Assignable Scope</dt>
-                        <dd class="mt-1 text-sm text-slate-900 sm:mt-0 sm:col-span-2">
+                        <dt class="text-sm font-medium text-slate-500 dark:text-slate-400 self-center">Assignable Scope</dt>
+                        <dd class="mt-1 text-sm text-slate-900 dark:text-slate-100 sm:mt-0 sm:col-span-2">
                             {%- set scopes = role.definition.properties.assignable_scopes if role.definition and role.definition.properties else [] -%}
                             {%- if scopes -%}
-                                <code class="text-sm font-mono text-slate-700 bg-slate-100 px-3 py-1.5 rounded-lg inline-block">{{ scopes[0] }}</code>
+                                <code class="text-sm font-mono text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-700 px-3 py-1.5 rounded-lg inline-block">{{ scopes[0] }}</code>
                             {%- else -%}
                                 <span class="text-slate-400">(not available)</span>
                             {%- endif -%}
                         </dd>
                     </div>
                     <div class="px-6 py-4 sm:grid sm:grid-cols-3 sm:gap-4">
-                        <dt class="text-sm font-medium text-slate-500 self-center">Description</dt>
-                        <dd class="mt-1 text-sm text-slate-900 sm:mt-0 sm:col-span-2">
+                        <dt class="text-sm font-medium text-slate-500 dark:text-slate-400 self-center">Description</dt>
+                        <dd class="mt-1 text-sm text-slate-900 dark:text-slate-100 sm:mt-0 sm:col-span-2">
                             {%- if role.description -%}
                                 {{ role.description }}
                             {%- else -%}
@@ -374,8 +374,8 @@
                         </dd>
                     </div>
                     <div class="px-6 py-4 sm:grid sm:grid-cols-3 sm:gap-4">
-                        <dt class="text-sm font-medium text-slate-500 self-center">Created (Azure)</dt>
-                        <dd class="mt-1 text-sm font-mono tabular-nums text-slate-500 sm:mt-0 sm:col-span-2">
+                        <dt class="text-sm font-medium text-slate-500 dark:text-slate-400 self-center">Created (Azure)</dt>
+                        <dd class="mt-1 text-sm font-mono tabular-nums text-slate-500 dark:text-slate-400 sm:mt-0 sm:col-span-2">
                             {%- if role.created_on -%}
                                 {{ role.created_on | format_date }}
                             {%- elif role.last_known_json and role.last_known_json.properties and role.last_known_json.properties.createdOn -%}
@@ -386,10 +386,10 @@
                         </dd>
                     </div>
                     <div class="px-6 py-4 sm:grid sm:grid-cols-3 sm:gap-4">
-                        <dt class="text-sm font-medium text-slate-500 self-center">
+                        <dt class="text-sm font-medium text-slate-500 dark:text-slate-400 self-center">
                             {%- if role.status == 'deleted' -%}Deleted{%- else -%}Last Updated (Azure){%- endif -%}
                         </dt>
-                        <dd class="mt-1 text-sm font-mono tabular-nums text-slate-500 sm:mt-0 sm:col-span-2">
+                        <dd class="mt-1 text-sm font-mono tabular-nums text-slate-500 dark:text-slate-400 sm:mt-0 sm:col-span-2">
                             {%- if role.status == 'deleted' -%}
                                 {{ role.last_seen_at | format_date if role.last_seen_at else '(not available)' }}
                             {%- elif role.updated_on -%}
@@ -407,8 +407,8 @@
             </div>
 
             <!-- Change History -->
-            <div class="bg-white rounded-2xl shadow-lg overflow-hidden mb-8">
-                <div class="px-6 py-5 border-b border-slate-100">
+            <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-lg overflow-hidden mb-8">
+                <div class="px-6 py-5 border-b border-slate-100 dark:border-slate-700">
                     <div class="flex items-center">
                         <div class="flex-shrink-0 bg-gradient-to-br from-violet-500 to-purple-600 rounded-xl p-3">
                             <svg class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -416,24 +416,24 @@
                             </svg>
                         </div>
                         <div class="ml-4">
-                            <h3 class="text-lg font-semibold text-slate-900">Change History</h3>
-                            <p class="text-sm text-slate-500">Track all modifications to this role{% if first_scan %} since {{ first_scan }}{% endif %}</p>
+                            <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Change History</h3>
+                            <p class="text-sm text-slate-500 dark:text-slate-400">Track all modifications to this role{% if first_scan %} since {{ first_scan }}{% endif %}</p>
                         </div>
                     </div>
                 </div>
                 <div class="overflow-x-auto">
                     <!-- Desktop Header row - hidden on mobile -->
-                    <div class="hidden sm:flex bg-slate-50 border-b border-slate-100 px-6 py-4" style="gap: 80px;">
-                        <div class="flex-shrink-0 text-xs font-semibold text-slate-500 uppercase tracking-wider" style="width: 180px;">Timestamp</div>
-                        <div class="flex-shrink-0 text-xs font-semibold text-slate-500 uppercase tracking-wider" style="width: 130px;">Event Type</div>
-                        <div class="flex-1 text-xs font-semibold text-slate-500 uppercase tracking-wider">Summary & Details</div>
+                    <div class="hidden sm:flex bg-slate-50 dark:bg-slate-700/50 border-b border-slate-100 dark:border-slate-700 px-6 py-4" style="gap: 80px;">
+                        <div class="flex-shrink-0 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider" style="width: 180px;">Timestamp</div>
+                        <div class="flex-shrink-0 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider" style="width: 130px;">Event Type</div>
+                        <div class="flex-1 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Summary & Details</div>
                     </div>
                     <!-- Body rows -->
-                    <div class="divide-y divide-slate-100">
+                    <div class="divide-y divide-slate-100 dark:divide-slate-700">
                         {% for ev in events %}
                         <!-- Desktop row -->
-                        <div class="hidden sm:flex px-6 py-4 hover:bg-slate-50/50 transition-colors overflow-hidden" style="gap: 80px;">
-                            <div class="flex-shrink-0 text-sm font-mono tabular-nums text-slate-500" style="width: 180px;">
+                        <div class="hidden sm:flex px-6 py-4 hover:bg-slate-50/50 dark:hover:bg-slate-700/30 transition-colors overflow-hidden" style="gap: 80px;">
+                            <div class="flex-shrink-0 text-sm font-mono tabular-nums text-slate-500 dark:text-slate-400" style="width: 180px;">
                                 {# Deleted events always show scan_timestamp (no Azure timestamp for deletions) #}
                                 {# Initial Scan events show scan_timestamp #}
                                 {# Other events show azure_updated_on or fall back to scan_timestamp #}
@@ -447,40 +447,40 @@
                             </div>
                             <div class="flex-shrink-0" style="width: 130px;">
                                     {% if ev.event_type == 'created' %}
-                                        <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-gradient-to-r from-emerald-50 to-teal-50 text-emerald-700 border border-emerald-200">
+                                        <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-900/30 dark:to-teal-900/30 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-700">
                                             <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-2"></span>
                                             Created
                                         </span>
                                     {% elif ev.event_type == 'initial_scan' %}
                                         <!-- Initial Scan: yellow -->
-                                        <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-gradient-to-r from-yellow-50 to-amber-50 text-yellow-700 border border-yellow-300">
+                                        <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-gradient-to-r from-yellow-50 to-amber-50 dark:from-yellow-900/30 dark:to-amber-900/30 text-yellow-700 dark:text-yellow-300 border border-yellow-300 dark:border-yellow-700">
                                             <span class="w-1.5 h-1.5 rounded-full bg-yellow-500 mr-2"></span>
                                             Initial Scan
                                         </span>
                                     {% elif ev.event_type == 'updated' %}
                                         <!-- Updated: blue -->
-                                        <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 border border-blue-200">
+                                        <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/30 dark:to-indigo-900/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-700">
                                             <span class="w-1.5 h-1.5 rounded-full bg-blue-500 mr-2"></span>
                                             Updated
                                         </span>
                                     {% elif ev.event_type == 'deleted' %}
-                                        <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-gradient-to-r from-red-50 to-rose-50 text-red-700 border border-red-200">
+                                        <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-gradient-to-r from-red-50 to-rose-50 dark:from-red-900/30 dark:to-rose-900/30 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-700">
                                             <span class="w-1.5 h-1.5 rounded-full bg-red-500 mr-2"></span>
                                             Deleted
                                         </span>
                                     {% else %}
-                                        <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700">
+                                        <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
                                             {{ ev.event_type }}
                                         </span>
                                     {% endif %}
                             </div>
-                            <div class="flex-1 min-w-0 text-sm text-slate-900">
+                            <div class="flex-1 min-w-0 text-sm text-slate-900 dark:text-slate-100">
                                     {% set display_summary = ev.summary | replace("<root>", "") | trim %}
                                     {% if display_summary %}
                                     <div class="mb-3 font-medium">{{ display_summary }}</div>
                                     {% endif %}
                                     <details class="group">
-                                        <summary class="flex items-center text-sm text-azure-600 cursor-pointer hover:text-azure-700 font-medium select-none py-0.5">
+                                        <summary class="flex items-center text-sm text-azure-600 dark:text-azure-400 cursor-pointer hover:text-azure-700 dark:hover:text-azure-300 font-medium select-none py-0.5">
                                             <svg class="mr-2 h-4 w-4 transition-transform group-open:rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
                                             </svg>
@@ -489,52 +489,52 @@
                                         <div class="mt-4">
                                             {% if ev.event_type == 'created' %}
                                                 {# Newly Created Role: show JSON in green (all added) #}
-                                                <div class="bg-slate-50 border border-slate-200 rounded-xl overflow-hidden">
-                                                    <div class="px-4 overflow-x-auto font-mono text-xs leading-6 bg-white max-h-96 overflow-y-auto">
+                                                <div class="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
+                                                    <div class="px-4 overflow-x-auto font-mono text-xs leading-6 bg-white dark:bg-slate-900 max-h-96 overflow-y-auto">
 {%- for line in (ev.role_json_pretty or role_json_pretty).split('\n') %}
-<div class="bg-emerald-50 text-emerald-800 -mx-4 px-4 whitespace-pre-wrap break-words border-l-4 border-emerald-400">+ {{ line }}</div>
+<div class="bg-emerald-50 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-300 -mx-4 px-4 whitespace-pre-wrap break-words border-l-4 border-emerald-400">+ {{ line }}</div>
 {%- endfor %}
                                                     </div>
                                                 </div>
                                             {% elif ev.event_type == 'initial_scan' %}
                                                 {# Initial Scan: show plain JSON without highlighting #}
-                                                <div class="bg-slate-50 border border-slate-200 rounded-xl overflow-hidden">
-                                                    <div class="overflow-x-auto font-mono text-xs leading-6 bg-white max-h-96 overflow-y-auto">
-<pre class="text-slate-700 whitespace-pre-wrap break-words m-0 py-0 px-4">{{ (ev.role_json_pretty or role_json_pretty) | trim }}</pre>
+                                                <div class="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
+                                                    <div class="overflow-x-auto font-mono text-xs leading-6 bg-white dark:bg-slate-900 max-h-96 overflow-y-auto">
+<pre class="text-slate-700 dark:text-slate-300 whitespace-pre-wrap break-words m-0 py-0 px-4">{{ (ev.role_json_pretty or role_json_pretty) | trim }}</pre>
                                                     </div>
                                                 </div>
                                             {% elif ev.diff and ev.diff.before_json is not none and ev.diff.after_json is not none %}
-                                                <div class="bg-slate-50 border border-slate-200 rounded-xl overflow-hidden">
-                                                    <div class="px-4 overflow-x-auto font-mono text-xs leading-6 bg-white max-h-96 overflow-y-auto">
+                                                <div class="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
+                                                    <div class="px-4 overflow-x-auto font-mono text-xs leading-6 bg-white dark:bg-slate-900 max-h-96 overflow-y-auto">
 {%- for line in ev.diff.before_json | full_json_diff(ev.diff.after_json) %}
 {% if line.type == 'removed' -%}
-<div class="bg-red-50 text-red-800 -mx-4 px-4 whitespace-pre-wrap break-words border-l-4 border-red-400">- {{ line.text }}</div>
+<div class="bg-red-50 dark:bg-red-900/30 text-red-800 dark:text-red-300 -mx-4 px-4 whitespace-pre-wrap break-words border-l-4 border-red-400">- {{ line.text }}</div>
 {% elif line.type == 'added' -%}
-<div class="bg-emerald-50 text-emerald-800 -mx-4 px-4 whitespace-pre-wrap break-words border-l-4 border-emerald-400">+ {{ line.text }}</div>
+<div class="bg-emerald-50 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-300 -mx-4 px-4 whitespace-pre-wrap break-words border-l-4 border-emerald-400">+ {{ line.text }}</div>
 {% else -%}
-<div class="text-slate-500 whitespace-pre-wrap break-words">  {{ line.text }}</div>
+<div class="text-slate-500 dark:text-slate-400 whitespace-pre-wrap break-words">  {{ line.text }}</div>
 {% endif -%}
 {%- endfor %}
                                                     </div>
                                                 </div>
                                             {% elif ev.diff and ev.diff.changes %}
-                                                <div class="bg-slate-50 border border-slate-200 rounded-xl overflow-hidden">
+                                                <div class="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
                                                     {% for change in ev.diff.changes %}
-                                                        <div class="border-b border-slate-200 last:border-b-0">
+                                                        <div class="border-b border-slate-200 dark:border-slate-700 last:border-b-0">
                                                             {% set display_path = change.path | replace("<root>", "") %}
                                                             {% if display_path %}
-                                                            <div class="bg-slate-100 px-4 py-2 text-xs font-mono font-semibold text-slate-700 border-b border-slate-200">
+                                                            <div class="bg-slate-100 dark:bg-slate-700/50 px-4 py-2 text-xs font-mono font-semibold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
                                                                 {{ display_path }}
                                                             </div>
                                                             {% endif %}
-                                                            <div class="px-4 overflow-x-auto font-mono text-xs leading-6 bg-white">
+                                                            <div class="px-4 overflow-x-auto font-mono text-xs leading-6 bg-white dark:bg-slate-900">
 {%- for line in change | diff_lines %}
 {% if line.type == 'removed' -%}
-<div class="bg-red-50 text-red-800 -mx-4 px-4 whitespace-pre-wrap break-words border-l-4 border-red-400">- {{ line.text }}</div>
+<div class="bg-red-50 dark:bg-red-900/30 text-red-800 dark:text-red-300 -mx-4 px-4 whitespace-pre-wrap break-words border-l-4 border-red-400">- {{ line.text }}</div>
 {% elif line.type == 'added' -%}
-<div class="bg-emerald-50 text-emerald-800 -mx-4 px-4 whitespace-pre-wrap break-words border-l-4 border-emerald-400">+ {{ line.text }}</div>
+<div class="bg-emerald-50 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-300 -mx-4 px-4 whitespace-pre-wrap break-words border-l-4 border-emerald-400">+ {{ line.text }}</div>
 {% else -%}
-<div class="text-slate-400 whitespace-pre-wrap break-words">  {{ line.text }}</div>
+<div class="text-slate-400 dark:text-slate-500 whitespace-pre-wrap break-words">  {{ line.text }}</div>
 {% endif -%}
 {%- endfor %}
                                                             </div>
@@ -542,7 +542,7 @@
                                                     {% endfor %}
                                                 </div>
                                             {% else %}
-                                                <pre class="bg-slate-800 text-slate-100 p-4 rounded-xl overflow-auto text-xs font-mono leading-5">{{ ev.diff_pretty }}</pre>
+                                                <pre class="bg-slate-800 dark:bg-slate-900 text-slate-100 p-4 rounded-xl overflow-auto text-xs font-mono leading-5">{{ ev.diff_pretty }}</pre>
                                             {% endif %}
                                         </div>
                                     </details>
@@ -550,10 +550,10 @@
                         </div>
                         <!-- Mobile row - card layout -->
                         <div class="sm:hidden p-4">
-                            <div class="bg-slate-50 rounded-xl p-4">
+                            <div class="bg-slate-50 dark:bg-slate-700/50 rounded-xl p-4">
                                 <!-- Date on left, Badge on right -->
                                 <div class="flex items-center justify-between mb-3">
-                                    <span class="text-sm font-mono tabular-nums text-slate-500">
+                                    <span class="text-sm font-mono tabular-nums text-slate-500 dark:text-slate-400">
                                         {# Deleted events always show scan_timestamp (no Azure timestamp for deletions) #}
                                         {# Initial Scan events show scan_timestamp #}
                                         {# Other events show azure_updated_on or fall back to scan_timestamp #}
@@ -566,37 +566,37 @@
                                         {% endif %}
                                     </span>
                                     {% if ev.event_type == 'created' %}
-                                        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-emerald-100 text-emerald-700">
+                                        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300">
                                             <span class="w-2 h-2 rounded-full bg-emerald-500 mr-2"></span>
                                             Created
                                         </span>
                                     {% elif ev.event_type == 'initial_scan' %}
-                                        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-yellow-100 text-yellow-700">
+                                        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300">
                                             <span class="w-2 h-2 rounded-full bg-yellow-500 mr-2"></span>
                                             Initial Scan
                                         </span>
                                     {% elif ev.event_type == 'updated' %}
-                                        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-blue-100 text-blue-700">
+                                        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300">
                                             <span class="w-2 h-2 rounded-full bg-blue-500 mr-2"></span>
                                             Updated
                                         </span>
                                     {% elif ev.event_type == 'deleted' %}
-                                        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-red-100 text-red-700">
+                                        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300">
                                             <span class="w-2 h-2 rounded-full bg-red-500 mr-2"></span>
                                             Deleted
                                         </span>
                                     {% else %}
-                                        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-slate-200 text-slate-700">
+                                        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
                                             {{ ev.event_type }}
                                         </span>
                                     {% endif %}
                                 </div>
                                 {% set display_summary = ev.summary | replace("<root>", "") %}
                                 {% if display_summary %}
-                                <p class="text-sm text-slate-700 mb-3">{{ display_summary }}</p>
+                                <p class="text-sm text-slate-700 dark:text-slate-300 mb-3">{{ display_summary }}</p>
                                 {% endif %}
                                 <details class="group">
-                                    <summary class="flex items-center text-sm text-azure-600 cursor-pointer hover:text-azure-700 font-medium select-none py-1">
+                                    <summary class="flex items-center text-sm text-azure-600 dark:text-azure-400 cursor-pointer hover:text-azure-700 dark:hover:text-azure-300 font-medium select-none py-1">
                                         <svg class="mr-2 h-4 w-4 transition-transform group-open:rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
                                         </svg>
@@ -604,51 +604,51 @@
                                     </summary>
                                     <div class="mt-3 text-xs">
                                     {% if ev.event_type == 'created' %}
-                                        <div class="bg-slate-50 border border-slate-200 rounded-lg overflow-hidden">
-                                            <div class="px-3 overflow-x-auto font-mono text-xs leading-5 bg-white max-h-64 overflow-y-auto">
+                                        <div class="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+                                            <div class="px-3 overflow-x-auto font-mono text-xs leading-5 bg-white dark:bg-slate-900 max-h-64 overflow-y-auto">
 {%- for line in role_json_pretty.split('\n') %}
-<div class="bg-emerald-50 text-emerald-800 -mx-3 px-3 whitespace-pre-wrap break-words border-l-2 border-emerald-400">+ {{ line }}</div>
+<div class="bg-emerald-50 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-300 -mx-3 px-3 whitespace-pre-wrap break-words border-l-2 border-emerald-400">+ {{ line }}</div>
 {%- endfor %}
                                             </div>
                                         </div>
                                     {% elif ev.event_type == 'initial_scan' %}
-                                        <div class="bg-slate-50 border border-slate-200 rounded-lg overflow-hidden">
-                                            <div class="overflow-x-auto font-mono text-xs leading-5 bg-white max-h-64 overflow-y-auto">
-<pre class="text-slate-700 whitespace-pre-wrap break-words m-0 py-0 px-3">{{ role_json_pretty | trim }}</pre>
+                                        <div class="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+                                            <div class="overflow-x-auto font-mono text-xs leading-5 bg-white dark:bg-slate-900 max-h-64 overflow-y-auto">
+<pre class="text-slate-700 dark:text-slate-300 whitespace-pre-wrap break-words m-0 py-0 px-3">{{ role_json_pretty | trim }}</pre>
                                             </div>
                                         </div>
                                     {% elif ev.diff and ev.diff.before_json is not none and ev.diff.after_json is not none %}
-                                        <div class="bg-slate-50 border border-slate-200 rounded-lg overflow-hidden">
-                                            <div class="px-3 overflow-x-auto font-mono text-xs leading-5 bg-white max-h-64 overflow-y-auto">
+                                        <div class="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+                                            <div class="px-3 overflow-x-auto font-mono text-xs leading-5 bg-white dark:bg-slate-900 max-h-64 overflow-y-auto">
 {%- for line in ev.diff.before_json | full_json_diff(ev.diff.after_json) %}
 {% if line.type == 'removed' -%}
-<div class="bg-red-50 text-red-800 -mx-3 px-3 whitespace-pre-wrap break-words border-l-2 border-red-400">- {{ line.text }}</div>
+<div class="bg-red-50 dark:bg-red-900/30 text-red-800 dark:text-red-300 -mx-3 px-3 whitespace-pre-wrap break-words border-l-2 border-red-400">- {{ line.text }}</div>
 {% elif line.type == 'added' -%}
-<div class="bg-emerald-50 text-emerald-800 -mx-3 px-3 whitespace-pre-wrap break-words border-l-2 border-emerald-400">+ {{ line.text }}</div>
+<div class="bg-emerald-50 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-300 -mx-3 px-3 whitespace-pre-wrap break-words border-l-2 border-emerald-400">+ {{ line.text }}</div>
 {% else -%}
-<div class="text-slate-500 whitespace-pre-wrap break-words">  {{ line.text }}</div>
+<div class="text-slate-500 dark:text-slate-400 whitespace-pre-wrap break-words">  {{ line.text }}</div>
 {% endif -%}
 {%- endfor %}
                                             </div>
                                         </div>
                                     {% elif ev.diff and ev.diff.changes %}
-                                        <div class="bg-slate-50 border border-slate-200 rounded-lg overflow-hidden">
+                                        <div class="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
                                             {% for change in ev.diff.changes %}
-                                                <div class="border-b border-slate-200 last:border-b-0">
+                                                <div class="border-b border-slate-200 dark:border-slate-700 last:border-b-0">
                                                     {% set display_path = change.path | replace("<root>", "") %}
                                                     {% if display_path %}
-                                                    <div class="bg-slate-100 px-3 py-1.5 text-xs font-mono font-semibold text-slate-700 border-b border-slate-200">
+                                                    <div class="bg-slate-100 dark:bg-slate-700/50 px-3 py-1.5 text-xs font-mono font-semibold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
                                                         {{ display_path }}
                                                     </div>
                                                     {% endif %}
-                                                    <div class="px-3 overflow-x-auto font-mono text-xs leading-5 bg-white">
+                                                    <div class="px-3 overflow-x-auto font-mono text-xs leading-5 bg-white dark:bg-slate-900">
 {%- for line in change | diff_lines %}
 {% if line.type == 'removed' -%}
-<div class="bg-red-50 text-red-800 -mx-3 px-3 whitespace-pre-wrap break-words border-l-2 border-red-400">- {{ line.text }}</div>
+<div class="bg-red-50 dark:bg-red-900/30 text-red-800 dark:text-red-300 -mx-3 px-3 whitespace-pre-wrap break-words border-l-2 border-red-400">- {{ line.text }}</div>
 {% elif line.type == 'added' -%}
-<div class="bg-emerald-50 text-emerald-800 -mx-3 px-3 whitespace-pre-wrap break-words border-l-2 border-emerald-400">+ {{ line.text }}</div>
+<div class="bg-emerald-50 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-300 -mx-3 px-3 whitespace-pre-wrap break-words border-l-2 border-emerald-400">+ {{ line.text }}</div>
 {% else -%}
-<div class="text-slate-400 whitespace-pre-wrap break-words">  {{ line.text }}</div>
+<div class="text-slate-400 dark:text-slate-500 whitespace-pre-wrap break-words">  {{ line.text }}</div>
 {% endif -%}
 {%- endfor %}
                                                     </div>
@@ -656,7 +656,7 @@
                                             {% endfor %}
                                         </div>
                                     {% else %}
-                                        <pre class="bg-slate-800 text-slate-100 p-3 rounded-lg overflow-auto text-xs font-mono leading-5">{{ ev.diff_pretty }}</pre>
+                                        <pre class="bg-slate-800 dark:bg-slate-900 text-slate-100 p-3 rounded-lg overflow-auto text-xs font-mono leading-5">{{ ev.diff_pretty }}</pre>
                                     {% endif %}
                                     </div>
                                 </details>
@@ -668,8 +668,8 @@
             </div>
 
             <!-- Latest JSON -->
-            <div class="bg-white rounded-2xl shadow-lg overflow-hidden mb-8">
-                <div class="px-6 py-5 border-b border-slate-100">
+            <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-lg overflow-hidden mb-8">
+                <div class="px-6 py-5 border-b border-slate-100 dark:border-slate-700">
                     <div class="flex items-center justify-between">
                         <div class="flex items-center">
                             <div class="flex-shrink-0 bg-gradient-to-br from-slate-700 to-slate-800 rounded-xl p-3">
@@ -678,14 +678,14 @@
                                 </svg>
                             </div>
                             <div class="ml-4">
-                                <h3 class="text-lg font-semibold text-slate-900">Latest Role JSON</h3>
-                                <p class="text-sm text-slate-500">Raw definition from Azure</p>
+                                <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Latest Role JSON</h3>
+                                <p class="text-sm text-slate-500 dark:text-slate-400">Raw definition from Azure</p>
                             </div>
                         </div>
                         {% if role.status != 'deleted' %}
                         <div class="flex items-center gap-2">
                             <button onclick="Clipboard.copyWithFeedback(this, document.getElementById('role-json')?.textContent || '', 'JSON copied')" 
-                                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-slate-600 hover:text-azure-600 hover:bg-slate-100 rounded-lg transition-colors"
+                                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-azure-600 dark:hover:text-azure-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
                                     title="Copy JSON"
                                     aria-label="Copy JSON">
                                 <svg class="w-4 h-4 copy-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -698,7 +698,7 @@
                                 <span class="copied-text text-emerald-600 hidden sm:inline" style="display:none">Copied!</span>
                             </button>
                             <button onclick="Clipboard.download(document.getElementById('role-json')?.textContent || '', '{{ role.role_name | slugify }}.json')" 
-                                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-slate-600 hover:text-azure-600 hover:bg-slate-100 rounded-lg transition-colors"
+                                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-azure-600 dark:hover:text-azure-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
                                     title="Download JSON"
                                     aria-label="Download JSON">
                                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -712,8 +712,8 @@
                 </div>
                 {% if role.status == 'deleted' %}
                     <div class="p-6">
-                        <div class="bg-slate-50 rounded-xl p-6 text-sm text-slate-500 italic border border-slate-200 text-center">
-                            <svg class="mx-auto h-10 w-10 text-slate-300 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <div class="bg-slate-50 dark:bg-slate-800 rounded-xl p-6 text-sm text-slate-500 dark:text-slate-400 italic border border-slate-200 dark:border-slate-700 text-center">
+                            <svg class="mx-auto h-10 w-10 text-slate-300 dark:text-slate-600 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                             </svg>
                             Role has been deleted - no JSON available
@@ -721,7 +721,7 @@
                     </div>
                 {% else %}
                     <div class="bg-gradient-to-br from-slate-900 to-slate-800 m-4 rounded-xl overflow-hidden">
-                        <pre id="role-json" class="px-4 py-2 overflow-auto text-xs font-mono text-slate-100 leading-5 max-h-96">{{ role_json_pretty | trim }}</pre>
+                        <pre id="role-json" class="px-4 py-2 overflow-auto text-xs font-mono text-slate-100 leading-5 max-h-96 dark:bg-slate-900">{{ role_json_pretty | trim }}</pre>
                     </div>
                 {% endif %}
             </div>
@@ -734,9 +734,9 @@
                     data: {{ effective_perms.data_plane_actions | tojson | safe }}
                 };
             </script>
-            <div class="bg-white rounded-2xl shadow-lg overflow-hidden mb-8" 
+            <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-lg overflow-hidden mb-8" 
                  x-data="effectivePermsData()">
-                <div class="px-6 py-5 border-b border-slate-100">
+                <div class="px-6 py-5 border-b border-slate-100 dark:border-slate-700">
                     <div class="flex items-center justify-between">
                         <div class="flex items-center">
                             <div class="flex-shrink-0 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl p-3">
@@ -745,14 +745,14 @@
                                 </svg>
                             </div>
                             <div class="ml-4">
-                                <h3 class="text-lg font-semibold text-slate-900">Effective Permissions</h3>
-                                <p class="text-sm text-slate-500">Operations granted by this role ({{ effective_perms.control_plane_count + effective_perms.data_plane_count }} total)</p>
+                                <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Effective Permissions</h3>
+                                <p class="text-sm text-slate-500 dark:text-slate-400">Operations granted by this role ({{ effective_perms.control_plane_count + effective_perms.data_plane_count }} total)</p>
                             </div>
                         </div>
                     </div>
                     
                     {% if effective_perms.has_unresolved_permissions %}
-                    <div class="mt-4 rounded-lg bg-amber-50 border border-amber-200 p-4">
+                    <div class="mt-4 rounded-lg bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 p-4">
                         <div class="flex">
                             <div class="flex-shrink-0">
                                 <svg class="h-5 w-5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -760,8 +760,8 @@
                                 </svg>
                             </div>
                             <div class="ml-3">
-                                <h4 class="text-sm font-medium text-amber-800">Unresolved Operations</h4>
-                                <p class="text-sm text-amber-700 mt-1">This role defines permissions that could not be matched to any known Azure operations. This may indicate deprecated or removed operations that are no longer exposed by the Azure API.</p>
+                                <h4 class="text-sm font-medium text-amber-800 dark:text-amber-300">Unresolved Operations</h4>
+                                <p class="text-sm text-amber-700 dark:text-amber-400 mt-1">This role defines permissions that could not be matched to any known Azure operations. This may indicate deprecated or removed operations that are no longer exposed by the Azure API.</p>
                             </div>
                         </div>
                     </div>
@@ -927,9 +927,9 @@
                         <!-- Control Plane Actions -->
                         <div>
                             <div class="flex items-center justify-between mb-2">
-                                <h4 class="text-sm font-semibold text-slate-700">
+                                <h4 class="text-sm font-semibold text-slate-700 dark:text-slate-300">
                                     Control Plane Operations
-                                    <span class="ml-2 text-xs font-normal text-slate-500">({{ effective_perms.control_plane_count }})</span>
+                                    <span class="ml-2 text-xs font-normal text-slate-500 dark:text-slate-400">({{ effective_perms.control_plane_count }})</span>
                                 </h4>
                             </div>
                             
@@ -939,42 +939,42 @@
                                     <input type="text" 
                                            x-model="controlSearch"
                                            placeholder="Filter operations..." 
-                                           class="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-300 rounded-md focus:ring-2 focus:ring-azure-500 focus:border-azure-500">
-                                    <svg class="absolute left-2.5 top-2 h-3.5 w-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                           class="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-azure-500 focus:border-azure-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500">
+                                    <svg class="absolute left-2.5 top-2 h-3.5 w-3.5 text-slate-400 dark:text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                                     </svg>
                                 </div>
                             </div>
                             
-                            <div class="bg-slate-50 rounded-lg border border-slate-200 max-h-96 overflow-y-auto">
+                            <div class="bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700 max-h-96 overflow-y-auto">
                                 <template x-if="filteredControl.length === 0">
-                                    <div class="p-4 text-sm text-slate-500 text-center italic">No matching operations</div>
+                                    <div class="p-4 text-sm text-slate-500 dark:text-slate-400 text-center italic">No matching operations</div>
                                 </template>
                                 <template x-for="action in filteredControl" :key="action">
-                                    <div class="px-3 py-2 border-b border-slate-100 last:border-b-0 hover:bg-slate-100 transition-colors">
+                                    <div class="px-3 py-2 border-b border-slate-100 dark:border-slate-700 last:border-b-0 hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors">
                                         <div class="flex items-center gap-2 min-w-0">
                                             <span class="flex-shrink-0 w-12 text-center inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[10px] font-medium"
                                                   :class="getOperationTypeClass(action)">
                                                 <span x-text="getOperationType(action)"></span>
                                             </span>
-                                            <a :href="'/operations/' + encodeURIComponent(action)" @click="NavState.setBackContext('role', { from_role_id: '{{ role.role_id }}', from_role_name: '{{ role.role_name }}', from_role_slug: '{{ role.role_name | slugify }}' })" class="text-xs font-mono text-slate-700 break-all hover:text-azure-600 hover:underline" x-text="action" :title="action"></a>
+                                            <a :href="'/operations/' + encodeURIComponent(action)" @click="NavState.setBackContext('role', { from_role_id: '{{ role.role_id }}', from_role_name: '{{ role.role_name }}', from_role_slug: '{{ role.role_name | slugify }}' })" class="text-xs font-mono text-slate-700 dark:text-slate-300 break-all hover:text-azure-600 dark:hover:text-azure-400 hover:underline" x-text="action" :title="action"></a>
                                         </div>
                                     </div>
                                 </template>
                             </div>
                             
                             <template x-if="!controlSearch && controlActions.length > 100 && !showAllControl">
-                                <button @click="showAllControl = true" class="mt-2 text-xs text-azure-600 hover:text-azure-700 font-medium">
+                                <button @click="showAllControl = true" class="mt-2 text-xs text-azure-600 dark:text-blue-400 hover:text-azure-700 dark:hover:text-azure-300 font-medium">
                                     Show all <span x-text="controlActions.length"></span> operations...
                                 </button>
                             </template>
                             <template x-if="controlSearch">
-                                <p class="mt-1 text-xs text-slate-500">
+                                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
                                     <span x-text="filteredControl.length"></span> / <span x-text="controlActions.length"></span> shown
                                 </p>
                             </template>
                             {% else %}
-                            <div class="bg-slate-50 rounded-lg border border-slate-200 p-4 text-sm text-slate-500 text-center italic">
+                            <div class="bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700 p-4 text-sm text-slate-500 dark:text-slate-400 text-center italic">
                                 No control plane operations granted
                             </div>
                             {% endif %}
@@ -983,9 +983,9 @@
                         <!-- Data Plane Actions -->
                         <div>
                             <div class="flex items-center justify-between mb-2">
-                                <h4 class="text-sm font-semibold text-slate-700">
+                                <h4 class="text-sm font-semibold text-slate-700 dark:text-slate-300">
                                     Data Plane Operations
-                                    <span class="ml-2 text-xs font-normal text-slate-500">({{ effective_perms.data_plane_count }})</span>
+                                    <span class="ml-2 text-xs font-normal text-slate-500 dark:text-slate-400">({{ effective_perms.data_plane_count }})</span>
                                 </h4>
                             </div>
                             
@@ -995,42 +995,42 @@
                                     <input type="text" 
                                            x-model="dataSearch"
                                            placeholder="Filter operations..." 
-                                           class="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-300 rounded-md focus:ring-2 focus:ring-azure-500 focus:border-azure-500">
-                                    <svg class="absolute left-2.5 top-2 h-3.5 w-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                           class="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-azure-500 focus:border-azure-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500">
+                                    <svg class="absolute left-2.5 top-2 h-3.5 w-3.5 text-slate-400 dark:text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                                     </svg>
                                 </div>
                             </div>
                             
-                            <div class="bg-slate-50 rounded-lg border border-slate-200 max-h-96 overflow-y-auto">
+                            <div class="bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700 max-h-96 overflow-y-auto">
                                 <template x-if="filteredData.length === 0">
-                                    <div class="p-4 text-sm text-slate-500 text-center italic">No matching operations</div>
+                                    <div class="p-4 text-sm text-slate-500 dark:text-slate-400 text-center italic">No matching operations</div>
                                 </template>
                                 <template x-for="action in filteredData" :key="action">
-                                    <div class="px-3 py-2 border-b border-slate-100 last:border-b-0 hover:bg-slate-100 transition-colors">
+                                    <div class="px-3 py-2 border-b border-slate-100 dark:border-slate-700 last:border-b-0 hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors">
                                         <div class="flex items-center gap-2 min-w-0">
                                             <span class="flex-shrink-0 w-12 text-center inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[10px] font-medium"
                                                   :class="getOperationTypeClass(action)">
                                                 <span x-text="getOperationType(action)"></span>
                                             </span>
-                                            <a :href="'/operations/' + encodeURIComponent(action)" @click="NavState.setBackContext('role', { from_role_id: '{{ role.role_id }}', from_role_name: '{{ role.role_name }}', from_role_slug: '{{ role.role_name | slugify }}' })" class="text-xs font-mono text-slate-700 break-all hover:text-azure-600 hover:underline" x-text="action" :title="action"></a>
+                                            <a :href="'/operations/' + encodeURIComponent(action)" @click="NavState.setBackContext('role', { from_role_id: '{{ role.role_id }}', from_role_name: '{{ role.role_name }}', from_role_slug: '{{ role.role_name | slugify }}' })" class="text-xs font-mono text-slate-700 dark:text-slate-300 break-all hover:text-azure-600 dark:hover:text-azure-400 hover:underline" x-text="action" :title="action"></a>
                                         </div>
                                     </div>
                                 </template>
                             </div>
                             
                             <template x-if="!dataSearch && dataActions.length > 100 && !showAllData">
-                                <button @click="showAllData = true" class="mt-2 text-xs text-azure-600 hover:text-azure-700 font-medium">
+                                <button @click="showAllData = true" class="mt-2 text-xs text-azure-600 dark:text-blue-400 hover:text-azure-700 dark:hover:text-azure-300 font-medium">
                                     Show all <span x-text="dataActions.length"></span> operations...
                                 </button>
                             </template>
                             <template x-if="dataSearch">
-                                <p class="mt-1 text-xs text-slate-500">
+                                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
                                     <span x-text="filteredData.length"></span> / <span x-text="dataActions.length"></span> shown
                                 </p>
                             </template>
                             {% else %}
-                            <div class="bg-slate-50 rounded-lg border border-slate-200 p-4 text-sm text-slate-500 text-center italic">
+                            <div class="bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700 p-4 text-sm text-slate-500 dark:text-slate-400 text-center italic">
                                 No data plane operations granted
                             </div>
                             {% endif %}
@@ -1042,27 +1042,27 @@
         </main>
 
         <!-- Footer -->
-        <footer class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <div class="border-t border-slate-200 pt-8">
+        <footer class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 dark:bg-slate-900 dark:border-slate-700">
+            <div class="border-t border-slate-200 dark:border-slate-700 pt-8">
                 <div class="flex flex-col items-center" style="gap: 20px;">
                     <!-- Internal navigation links for SEO -->
                     <nav class="flex flex-col sm:flex-row flex-wrap justify-center items-center text-sm" style="gap: 12px 24px;">
-                        <a href="/recent" class="ai-nav-link text-slate-600 hover:text-azure-600 transition-colors">Recent Changes</a>
-                        <a href="/roles" class="ai-nav-link text-slate-600 hover:text-azure-600 transition-colors">Browse Roles</a>
-                        <a href="/operations" class="ai-nav-link text-slate-600 hover:text-azure-600 transition-colors">Browse Operations</a>
-                        <a href="/recommend" class="ai-nav-link text-slate-600 hover:text-azure-600 transition-colors">Role Recommender</a>
-                        <a href="/analytics" class="ai-nav-link text-slate-600 hover:text-azure-600 transition-colors">Analytics</a>
-                        <a href="/about" class="ai-nav-link text-slate-600 hover:text-azure-600 transition-colors">About</a>
-                        <a href="/sitemap.xml" class="text-slate-600 hover:text-azure-600 transition-colors">Sitemap</a>
-                        <span class="hidden sm:inline text-slate-300">|</span>
-                        <a href="/feeds/changelog.atom" class="text-slate-600 hover:text-orange-500 transition-colors" title="Subscribe via RSS/Atom">
+                        <a href="/recent" class="ai-nav-link text-slate-600 dark:text-slate-400 hover:text-azure-600 dark:hover:text-azure-400 transition-colors">Recent Changes</a>
+                        <a href="/roles" class="ai-nav-link text-slate-600 dark:text-slate-400 hover:text-azure-600 dark:hover:text-azure-400 transition-colors">Browse Roles</a>
+                        <a href="/operations" class="ai-nav-link text-slate-600 dark:text-slate-400 hover:text-azure-600 dark:hover:text-azure-400 transition-colors">Browse Operations</a>
+                        <a href="/recommend" class="ai-nav-link text-slate-600 dark:text-slate-400 hover:text-azure-600 dark:hover:text-azure-400 transition-colors">Role Recommender</a>
+                        <a href="/analytics" class="ai-nav-link text-slate-600 dark:text-slate-400 hover:text-azure-600 dark:hover:text-azure-400 transition-colors">Analytics</a>
+                        <a href="/about" class="ai-nav-link text-slate-600 dark:text-slate-400 hover:text-azure-600 dark:hover:text-azure-400 transition-colors">About</a>
+                        <a href="/sitemap.xml" class="text-slate-600 dark:text-slate-400 hover:text-azure-600 dark:hover:text-azure-400 transition-colors">Sitemap</a>
+                        <span class="hidden sm:inline text-slate-300 dark:text-slate-600">|</span>
+                        <a href="/feeds/changelog.atom" class="text-slate-600 dark:text-slate-400 hover:text-orange-500 transition-colors" title="Subscribe via RSS/Atom">
                             <svg class="w-5 h-5" viewBox="0 0 24 24" aria-hidden="true"><rect width="24" height="24" rx="4" fill="#f97316"/><circle cx="7" cy="17" r="2.5" fill="white"/><path d="M5 12.5c3.5 0 6.5 3 6.5 6.5h3c0-5.25-4.25-9.5-9.5-9.5v3z" fill="white"/><path d="M5 7c6.5 0 12 5.5 12 12h3c0-8.25-6.75-15-15-15v3z" fill="white"/></svg>
                         </a>
                     </nav>
                     <div class="text-center px-4">
-                        <p class="text-sm text-slate-500">Azure RBAC Built-in Role Definitions Catalog — Track changes to <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles" target="_blank" rel="noopener noreferrer" class="text-azure-500 hover:text-azure-600 hover:underline">Azure built-in roles</a></p>
-                        <p class="text-xs text-slate-400 mt-3">{{ app_version }}</p>
-                        <p class="text-xs text-slate-400 mt-3 leading-relaxed">This site is not affiliated with or endorsed by Microsoft.<br class="sm:hidden"> Content is provided "as is" without warranty of any kind.</p>
+                        <p class="text-sm text-slate-500 dark:text-slate-400">Azure RBAC Built-in Role Definitions Catalog — Track changes to <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles" target="_blank" rel="noopener noreferrer" class="text-azure-500 hover:text-azure-600 dark:hover:text-azure-400 hover:underline">Azure built-in roles</a></p>
+                        <p class="text-xs text-slate-400 dark:text-slate-500 mt-3">{{ app_version }}</p>
+                        <p class="text-xs text-slate-400 dark:text-slate-500 mt-3 leading-relaxed">This site is not affiliated with or endorsed by Microsoft.<br class="sm:hidden"> Content is provided "as is" without warranty of any kind.</p>
                     </div>
                 </div>
             </div>

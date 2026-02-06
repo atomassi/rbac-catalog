@@ -212,7 +212,7 @@
                                 </svg>
                                 <span class="hidden sm:inline ml-2">Analytics</span>
                             </a>
-                            <a href="/about" class="ai-nav-link group flex items-center justify-center px-3 sm:px-4 py-2.5 sm:py-2.5 rounded-xl text-xs sm:text-base sm:w-[133px] font-semibold transition-all duration-200 bg-white text-azure-700 shadow-md" aria-label="About">
+                            <a href="/about" class="ai-nav-link group flex items-center justify-center px-3 sm:px-4 py-2.5 sm:py-2.5 rounded-xl text-xs sm:text-base sm:w-[133px] font-semibold transition-all duration-200 bg-white text-azure-700 shadow-md dark:bg-slate-700 dark:text-azure-300" aria-label="About">
                                 <svg class="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
                                 </svg>
@@ -241,21 +241,21 @@
 
         <!-- Main Content -->
         <main class="flex-1 max-w-[68rem] mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12 w-full">
-            <div class="bg-white rounded-2xl shadow-lg overflow-hidden">
+            <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-lg overflow-hidden">
                 <div class="px-5 py-6 sm:px-10 sm:py-10 lg:px-14 lg:py-12 overflow-x-auto">
                     <!-- Mission Section -->
                     <section style="margin-bottom: 32px;">
-                        <h2 class="text-xl font-semibold text-slate-900 mb-4 flex items-center">
+                        <h2 class="text-xl font-semibold text-slate-900 dark:text-slate-100 mb-4 flex items-center">
                             <svg class="h-6 w-6 text-azure-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
                             </svg>
                             Our Mission
                         </h2>
-                        <p class="text-slate-600 leading-relaxed mb-4">
+                        <p class="text-slate-600 dark:text-slate-300 leading-relaxed mb-4">
                             Azure RBAC Catalog is a <strong>completely free, educational tool</strong> designed to help Azure administrators, 
-                            security professionals, and developers understand and work with Azure's <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/" target="_blank" rel="noopener noreferrer" class="text-azure-600 underline font-medium hover:text-azure-700">Role-Based Access Control (RBAC)</a> system.
+                            security professionals, and developers understand and work with Azure's <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/" target="_blank" rel="noopener noreferrer" class="text-azure-600 dark:text-blue-400 underline font-medium hover:text-azure-700 dark:hover:text-azure-300">Role-Based Access Control (RBAC)</a> system.
                         </p>
-                        <p class="text-slate-600 leading-relaxed">
+                        <p class="text-slate-600 dark:text-slate-300 leading-relaxed">
                             We believe that understanding permissions and roles should be accessible to everyone working with Azure, 
                             whether you're studying for a certification, designing a security architecture, or troubleshooting access issues.
                         </p>
@@ -263,68 +263,68 @@
 
                     <!-- What We Offer Section -->
                     <section style="margin-bottom: 32px;">
-                        <h2 class="text-xl font-semibold text-slate-900 mb-4 flex items-center">
+                        <h2 class="text-xl font-semibold text-slate-900 dark:text-slate-100 mb-4 flex items-center">
                             <svg class="h-6 w-6 text-emerald-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
                             What We Offer
                         </h2>
                         <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px;">
-                            <div class="bg-slate-50 rounded-lg p-4 border border-slate-200">
-                                <h3 class="font-semibold text-slate-800 mb-2">📋 Complete Role Catalog</h3>
-                                <p class="text-sm text-slate-600">Browse all {{ total_roles }}+ Azure built-in roles with full permission details and JSON definitions.</p>
+                            <div class="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-4 border border-slate-200 dark:border-slate-600">
+                                <h3 class="font-semibold text-slate-800 dark:text-slate-200 mb-2">📋 Complete Role Catalog</h3>
+                                <p class="text-sm text-slate-600 dark:text-slate-300">Browse all {{ total_roles }}+ Azure built-in roles with full permission details and JSON definitions.</p>
                             </div>
-                            <div class="bg-slate-50 rounded-lg p-4 border border-slate-200">
-                                <h3 class="font-semibold text-slate-800 mb-2">🔍 Operations Browser</h3>
-                                <p class="text-sm text-slate-600">Explore {{ total_operations }}+ Azure resource provider operations with detailed descriptions and see which roles grant each permission.</p>
+                            <div class="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-4 border border-slate-200 dark:border-slate-600">
+                                <h3 class="font-semibold text-slate-800 dark:text-slate-200 mb-2">🔍 Operations Browser</h3>
+                                <p class="text-sm text-slate-600 dark:text-slate-300">Explore {{ total_operations }}+ Azure resource provider operations with detailed descriptions and see which roles grant each permission.</p>
                             </div>
-                            <div class="bg-slate-50 rounded-lg p-4 border border-slate-200">
-                                <h3 class="font-semibold text-slate-800 mb-2">📊 Change Tracking</h3>
-                                <p class="text-sm text-slate-600">Monitor when Microsoft adds, modifies, or deprecates built-in roles.</p>
+                            <div class="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-4 border border-slate-200 dark:border-slate-600">
+                                <h3 class="font-semibold text-slate-800 dark:text-slate-200 mb-2">📊 Change Tracking</h3>
+                                <p class="text-sm text-slate-600 dark:text-slate-300">Monitor when Microsoft adds, modifies, or deprecates built-in roles.</p>
                             </div>
-                            <div class="bg-slate-50 rounded-lg p-4 border border-slate-200">
-                                <h3 class="font-semibold text-slate-800 mb-2">🤖 Role Recommender</h3>
-                                <p class="text-sm text-slate-600">Find the least-privilege role for your specific permission requirements.</p>
+                            <div class="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-4 border border-slate-200 dark:border-slate-600">
+                                <h3 class="font-semibold text-slate-800 dark:text-slate-200 mb-2">🤖 Role Recommender</h3>
+                                <p class="text-sm text-slate-600 dark:text-slate-300">Find the least-privilege role for your specific permission requirements.</p>
                             </div>
-                            <div class="bg-slate-50 rounded-lg p-4 border border-slate-200">
-                                <h3 class="font-semibold text-slate-800 mb-2">📡 RSS Feeds</h3>
-                                <p class="text-sm text-slate-600">Subscribe to <a href="/feeds/changelog.atom" class="text-azure-600 hover:underline">Atom</a> or <a href="/feeds/changelog.rss" class="text-azure-600 hover:underline">RSS</a> feeds to get notified when roles are added, updated, or deprecated.</p>
+                            <div class="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-4 border border-slate-200 dark:border-slate-600">
+                                <h3 class="font-semibold text-slate-800 dark:text-slate-200 mb-2">📡 RSS Feeds</h3>
+                                <p class="text-sm text-slate-600 dark:text-slate-300">Subscribe to <a href="/feeds/changelog.atom" class="text-azure-600 dark:text-azure-400 hover:underline">Atom</a> or <a href="/feeds/changelog.rss" class="text-azure-600 dark:text-azure-400 hover:underline">RSS</a> feeds to get notified when roles are added, updated, or deprecated.</p>
                             </div>
-                            <div class="bg-slate-50 rounded-lg p-4 border border-slate-200">
-                                <h3 class="font-semibold text-slate-800 mb-2">🔌 MCP Server</h3>
-                                <p class="text-sm text-slate-600">Connect AI assistants like GitHub Copilot, Claude, or Cursor to query Azure RBAC data directly via <a href="https://modelcontextprotocol.io/" target="_blank" rel="noopener" class="text-azure-600 hover:underline">Model Context Protocol</a>.</p>
+                            <div class="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-4 border border-slate-200 dark:border-slate-600">
+                                <h3 class="font-semibold text-slate-800 dark:text-slate-200 mb-2">🔌 MCP Server</h3>
+                                <p class="text-sm text-slate-600 dark:text-slate-300">Connect AI assistants like GitHub Copilot, Claude, or Cursor to query Azure RBAC data directly via <a href="https://modelcontextprotocol.io/" target="_blank" rel="noopener" class="text-azure-600 dark:text-azure-400 hover:underline">Model Context Protocol</a>.</p>
                             </div>
                         </div>
                     </section>
 
                     <!-- FAQ Section -->
                     <section style="margin-bottom: 32px;">
-                        <h2 class="text-xl font-semibold text-slate-900 mb-4 flex items-center">
+                        <h2 class="text-xl font-semibold text-slate-900 dark:text-slate-100 mb-4 flex items-center">
                             <svg class="h-6 w-6 text-amber-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
                             Frequently Asked Questions
                         </h2>
                         <div style="display: flex; flex-direction: column; gap: 12px;">
-                            <details class="border border-slate-200 rounded-lg overflow-hidden">
-                                <summary class="bg-slate-50 px-4 py-3 cursor-pointer font-semibold text-slate-800 hover:bg-slate-100 transition-colors">Is this tool free?</summary>
-                                <p class="px-4 py-3 text-sm text-slate-600">Yes, completely free. There are no paid tiers, subscriptions, or hidden costs. This is an educational resource for the Azure community.</p>
+                            <details class="border border-slate-200 dark:border-slate-600 rounded-lg overflow-hidden">
+                                <summary class="bg-slate-50 dark:bg-slate-700/50 px-4 py-3 cursor-pointer font-semibold text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">Is this tool free?</summary>
+                                <p class="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">Yes, completely free. There are no paid tiers, subscriptions, or hidden costs. This is an educational resource for the Azure community.</p>
                             </details>
-                            <details class="border border-slate-200 rounded-lg overflow-hidden">
-                                <summary class="bg-slate-50 px-4 py-3 cursor-pointer font-semibold text-slate-800 hover:bg-slate-100 transition-colors">Where does the data come from?</summary>
-                                <p class="px-4 py-3 text-sm text-slate-600">All role and operation data is sourced directly from the Azure Management API. We scan daily to keep the catalog up-to-date with Microsoft's latest changes.</p>
+                            <details class="border border-slate-200 dark:border-slate-600 rounded-lg overflow-hidden">
+                                <summary class="bg-slate-50 dark:bg-slate-700/50 px-4 py-3 cursor-pointer font-semibold text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">Where does the data come from?</summary>
+                                <p class="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">All role and operation data is sourced directly from the Azure Management API. We scan daily to keep the catalog up-to-date with Microsoft's latest changes.</p>
                             </details>
-                            <details class="border border-slate-200 rounded-lg overflow-hidden">
-                                <summary class="bg-slate-50 px-4 py-3 cursor-pointer font-semibold text-slate-800 hover:bg-slate-100 transition-colors">Is this affiliated with Microsoft?</summary>
-                                <p class="px-4 py-3 text-sm text-slate-600">No. This is an independent, community resource. We are not affiliated with, endorsed by, or officially connected to Microsoft in any way.</p>
+                            <details class="border border-slate-200 dark:border-slate-600 rounded-lg overflow-hidden">
+                                <summary class="bg-slate-50 dark:bg-slate-700/50 px-4 py-3 cursor-pointer font-semibold text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">Is this affiliated with Microsoft?</summary>
+                                <p class="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">No. This is an independent, community resource. We are not affiliated with, endorsed by, or officially connected to Microsoft in any way.</p>
                             </details>
-                            <details class="border border-slate-200 rounded-lg overflow-hidden">
-                                <summary class="bg-slate-50 px-4 py-3 cursor-pointer font-semibold text-slate-800 hover:bg-slate-100 transition-colors">How accurate is the data?</summary>
-                                <p class="px-4 py-3 text-sm text-slate-600">We pull data directly from Azure's APIs, so it reflects the current state of Azure's built-in roles. However, always verify against official Microsoft documentation for production decisions.</p>
+                            <details class="border border-slate-200 dark:border-slate-600 rounded-lg overflow-hidden">
+                                <summary class="bg-slate-50 dark:bg-slate-700/50 px-4 py-3 cursor-pointer font-semibold text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">How accurate is the data?</summary>
+                                <p class="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">We pull data directly from Azure's APIs, so it reflects the current state of Azure's built-in roles. However, always verify against official Microsoft documentation for production decisions.</p>
                             </details>
-                            <details class="border border-slate-200 rounded-lg overflow-hidden">
-                                <summary class="bg-slate-50 px-4 py-3 cursor-pointer font-semibold text-slate-800 hover:bg-slate-100 transition-colors">What data do you collect about me?</summary>
-                                <div class="px-4 py-3 text-sm text-slate-600">
+                            <details class="border border-slate-200 dark:border-slate-600 rounded-lg overflow-hidden">
+                                <summary class="bg-slate-50 dark:bg-slate-700/50 px-4 py-3 cursor-pointer font-semibold text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">What data do you collect about me?</summary>
+                                <div class="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">
                                     <p class="mb-3">We take privacy seriously and collect minimal data:</p>
                                     <ul class="ml-4 space-y-1">
                                         <li class="flex items-start"><span class="text-emerald-500 mr-2">✓</span><strong>No cookies</strong>&nbsp;– No tracking cookies or consent banners</li>
@@ -335,12 +335,12 @@
                                     <p class="mt-3">We collect anonymous server logs and metrics solely for monitoring service health, investigating issues, and making improvements. All data is automatically purged after 30 days.</p>
                                 </div>
                             </details>
-                            <details class="border border-slate-200 rounded-lg overflow-hidden">
-                                <summary class="bg-slate-50 px-4 py-3 cursor-pointer font-semibold text-slate-800 hover:bg-slate-100 transition-colors">How do I use the MCP server with my AI assistant?</summary>
-                                <div class="px-4 py-3 text-sm text-slate-600">
+                            <details class="border border-slate-200 dark:border-slate-600 rounded-lg overflow-hidden">
+                                <summary class="bg-slate-50 dark:bg-slate-700/50 px-4 py-3 cursor-pointer font-semibold text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">How do I use the MCP server with my AI assistant?</summary>
+                                <div class="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">
                                     <p class="mb-3">The MCP (Model Context Protocol) server allows AI assistants like GitHub Copilot, Claude, and Cursor to query Azure RBAC data directly.</p>
                                     
-                                    <p class="mb-3 font-semibold text-slate-700">Setup for VS Code / GitHub Copilot:</p>
+                                    <p class="mb-3 font-semibold text-slate-700 dark:text-slate-300">Setup for VS Code / GitHub Copilot:</p>
                                     <div class="space-y-2 mb-4">
                                         <div class="flex items-center">
                                             <span class="flex-shrink-0 w-5 h-5 bg-azure-500 text-white text-[10px] font-bold rounded-full inline-flex items-center justify-center mr-2">1</span>
@@ -348,14 +348,14 @@
                                         </div>
                                         <div class="flex items-center">
                                             <span class="flex-shrink-0 w-5 h-5 bg-azure-500 text-white text-[10px] font-bold rounded-full inline-flex items-center justify-center mr-2">2</span>
-                                            <span>Create this file: <code class="bg-slate-100 px-1.5 py-0.5 rounded text-xs font-mono">.vscode/mcp.json</code></span>
+                                            <span>Create this file: <code class="bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded text-xs font-mono">.vscode/mcp.json</code></span>
                                         </div>
                                         <div class="flex items-center">
                                             <span class="flex-shrink-0 w-5 h-5 bg-azure-500 text-white text-[10px] font-bold rounded-full inline-flex items-center justify-center mr-2">3</span>
                                             <span>Paste this configuration and save:</span>
                                         </div>
                                     </div>
-                                    <pre class="bg-slate-800 text-slate-100 p-3 rounded-lg text-xs mb-3 overflow-x-auto"><code>{
+                                    <pre class="bg-slate-800 dark:bg-slate-900 text-slate-100 p-3 rounded-lg text-xs mb-3 overflow-x-auto"><code>{
   "servers": {
     "azure-rbac-catalog": {
       "type": "http",
@@ -363,46 +363,46 @@
     }
   }
 }</code></pre>
-                                    <p class="mb-4 text-xs text-slate-500">💡 <strong>Tip:</strong> The MCP server will be available whenever you open that folder (or any subfolder) in VS Code. To use it everywhere, add the config to a folder you always have open, or configure it globally in VS Code settings under <code class="bg-slate-100 px-1 py-0.5 rounded">github.copilot.chat.mcp.servers</code>.</p>
+                                    <p class="mb-4 text-xs text-slate-500 dark:text-slate-400">💡 <strong>Tip:</strong> The MCP server will be available whenever you open that folder (or any subfolder) in VS Code. To use it everywhere, add the config to a folder you always have open, or configure it globally in VS Code settings under <code class="bg-slate-100 dark:bg-slate-700 px-1 py-0.5 rounded">github.copilot.chat.mcp.servers</code>.</p>
                                     
-                                    <p class="mb-2 font-semibold text-slate-700">Example questions you can ask:</p>
+                                    <p class="mb-2 font-semibold text-slate-700 dark:text-slate-300">Example questions you can ask:</p>
                                     <ul class="ml-4 space-y-1 mb-3">
                                         <li class="flex items-start"><span class="text-azure-500 mr-2">•</span><em>"What permissions does the Storage Blob Data Contributor role have?"</em></li>
                                         <li class="flex items-start"><span class="text-azure-500 mr-2">•</span><em>"Compare Storage Blob Data Contributor and Storage Blob Data Owner"</em></li>
                                         <li class="flex items-start"><span class="text-azure-500 mr-2">•</span><em>"What operations correspond to Microsoft.Storage/*/read?"</em></li>
                                         <li class="flex items-start"><span class="text-azure-500 mr-2">•</span><em>"Find the least-privilege role for reading Key Vault secrets"</em></li>
                                     </ul>
-                                    <p>See the <a href="https://modelcontextprotocol.io/docs" target="_blank" rel="noopener" class="text-azure-600 hover:underline">MCP documentation</a> for more details.</p>
+                                    <p>See the <a href="https://modelcontextprotocol.io/docs" target="_blank" rel="noopener" class="text-azure-600 dark:text-blue-400 hover:underline">MCP documentation</a> for more details.</p>
                                 </div>
                             </details>
-                            <details class="border border-slate-200 rounded-lg overflow-hidden">
-                                <summary class="bg-slate-50 px-4 py-3 cursor-pointer font-semibold text-slate-800 hover:bg-slate-100 transition-colors">Where can I learn more about Azure RBAC?</summary>
-                                <div class="px-4 py-3 text-sm text-slate-600">
+                            <details class="border border-slate-200 dark:border-slate-600 rounded-lg overflow-hidden">
+                                <summary class="bg-slate-50 dark:bg-slate-700/50 px-4 py-3 cursor-pointer font-semibold text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">Where can I learn more about Azure RBAC?</summary>
+                                <div class="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">
                                     <p class="mb-3">Microsoft provides comprehensive documentation on Azure Role-Based Access Control:</p>
                                     <ul class="ml-4 space-y-2">
                                         <li class="flex items-start">
                                             <span class="text-azure-500 mr-2">•</span>
-                                            <span><a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/overview" target="_blank" rel="noopener noreferrer" class="text-azure-600 hover:text-azure-700 hover:underline">What is Azure RBAC?</a> — Overview of role-based access control</span>
+                                            <span><a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/overview" target="_blank" rel="noopener noreferrer" class="text-azure-600 dark:text-blue-400 hover:text-azure-700 dark:hover:text-azure-300 hover:underline">What is Azure RBAC?</a> — Overview of role-based access control</span>
                                         </li>
                                         <li class="flex items-start">
                                             <span class="text-azure-500 mr-2">•</span>
-                                            <span><a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles" target="_blank" rel="noopener noreferrer" class="text-azure-600 hover:text-azure-700 hover:underline">Azure built-in roles</a> — Complete list of built-in role definitions</span>
+                                            <span><a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles" target="_blank" rel="noopener noreferrer" class="text-azure-600 dark:text-blue-400 hover:text-azure-700 dark:hover:text-azure-300 hover:underline">Azure built-in roles</a> — Complete list of built-in role definitions</span>
                                         </li>
                                         <li class="flex items-start">
                                             <span class="text-azure-500 mr-2">•</span>
-                                            <span><a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/best-practices" target="_blank" rel="noopener noreferrer" class="text-azure-600 hover:text-azure-700 hover:underline">Best practices for Azure RBAC</a> — Security and management best practices</span>
+                                            <span><a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/best-practices" target="_blank" rel="noopener noreferrer" class="text-azure-600 dark:text-blue-400 hover:text-azure-700 dark:hover:text-azure-300 hover:underline">Best practices for Azure RBAC</a> — Security and management best practices</span>
                                         </li>
                                         <li class="flex items-start">
                                             <span class="text-azure-500 mr-2">•</span>
-                                            <span><a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/custom-roles" target="_blank" rel="noopener noreferrer" class="text-azure-600 hover:text-azure-700 hover:underline">Azure custom roles</a> — How to create custom role definitions</span>
+                                            <span><a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/custom-roles" target="_blank" rel="noopener noreferrer" class="text-azure-600 dark:text-blue-400 hover:text-azure-700 dark:hover:text-azure-300 hover:underline">Azure custom roles</a> — How to create custom role definitions</span>
                                         </li>
                                         <li class="flex items-start">
                                             <span class="text-azure-500 mr-2">•</span>
-                                            <span><a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/role-assignments-steps" target="_blank" rel="noopener noreferrer" class="text-azure-600 hover:text-azure-700 hover:underline">Steps to assign an Azure role</a> — Guide to role assignments</span>
+                                            <span><a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/role-assignments-steps" target="_blank" rel="noopener noreferrer" class="text-azure-600 dark:text-blue-400 hover:text-azure-700 dark:hover:text-azure-300 hover:underline">Steps to assign an Azure role</a> — Guide to role assignments</span>
                                         </li>
                                         <li class="flex items-start">
                                             <span class="text-azure-500 mr-2">•</span>
-                                            <span><a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/troubleshooting" target="_blank" rel="noopener noreferrer" class="text-azure-600 hover:text-azure-700 hover:underline">Troubleshoot Azure RBAC</a> — Common issues and solutions</span>
+                                            <span><a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/troubleshooting" target="_blank" rel="noopener noreferrer" class="text-azure-600 dark:text-blue-400 hover:text-azure-700 dark:hover:text-azure-300 hover:underline">Troubleshoot Azure RBAC</a> — Common issues and solutions</span>
                                         </li>
                                     </ul>
                                 </div>
@@ -411,14 +411,14 @@
                     </section>
 
                     <!-- Disclaimer Section -->
-                    <section class="bg-amber-50 border border-amber-200 rounded-lg p-6">
-                        <h2 class="text-lg font-semibold text-amber-800 mb-3 flex items-center">
-                            <svg class="h-5 w-5 text-amber-600 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <section class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-6">
+                        <h2 class="text-lg font-semibold text-amber-800 dark:text-amber-300 mb-3 flex items-center">
+                            <svg class="h-5 w-5 text-amber-600 dark:text-amber-400 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                             </svg>
                             Disclaimer
                         </h2>
-                        <p class="text-sm text-amber-700 leading-relaxed">
+                        <p class="text-sm text-amber-700 dark:text-amber-300 leading-relaxed">
                             This site is provided for <strong>educational and informational purposes only</strong>. 
                             It is not affiliated with or endorsed by Microsoft. Content is provided "as is" without warranty of any kind. 
                             Always consult official Microsoft documentation and test in non-production environments before making RBAC changes in your Azure subscriptions.
@@ -427,13 +427,13 @@
 
                     <!-- Feedback Section -->
                     <section style="margin-top: 32px;">
-                        <h2 class="text-xl font-semibold text-slate-900 mb-4 flex items-center">
+                        <h2 class="text-xl font-semibold text-slate-900 dark:text-slate-100 mb-4 flex items-center">
                             <svg class="h-6 w-6 text-azure-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                             </svg>
                             Feedback
                         </h2>
-                        <p class="text-slate-600 leading-relaxed mb-4">
+                        <p class="text-slate-600 dark:text-slate-300 leading-relaxed mb-4">
                             Have suggestions, found a bug, or want to share your experience? We'd love to hear from you!
                         </p>
                         <a href="mailto:43-fun.phage@icloud.com?subject=Azure%20RBAC%20Catalog%20Feedback" 
@@ -449,27 +449,27 @@
         </main>
 
         <!-- Footer -->
-        <footer class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <div class="border-t border-slate-200 pt-8">
+        <footer class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 dark:bg-slate-900 dark:border-slate-700">
+            <div class="border-t border-slate-200 dark:border-slate-700 pt-8">
                 <div class="flex flex-col items-center" style="gap: 20px;">
                     <!-- Internal navigation links for SEO -->
                     <nav class="flex flex-col sm:flex-row flex-wrap justify-center items-center text-sm" style="gap: 12px 24px;">
-                        <a href="/recent" class="ai-nav-link text-slate-600 hover:text-azure-600 transition-colors">Recent Changes</a>
-                        <a href="/roles" class="ai-nav-link text-slate-600 hover:text-azure-600 transition-colors">Browse Roles</a>
-                        <a href="/operations" class="ai-nav-link text-slate-600 hover:text-azure-600 transition-colors">Browse Operations</a>
-                        <a href="/recommend" class="ai-nav-link text-slate-600 hover:text-azure-600 transition-colors">Role Recommender</a>
-                        <a href="/analytics" class="ai-nav-link text-slate-600 hover:text-azure-600 transition-colors">Analytics</a>
-                        <a href="/about" class="ai-nav-link text-slate-600 hover:text-azure-600 transition-colors">About</a>
-                        <a href="/sitemap.xml" class="text-slate-600 hover:text-azure-600 transition-colors">Sitemap</a>
-                        <span class="hidden sm:inline text-slate-300">|</span>
-                        <a href="/feeds/changelog.atom" class="text-slate-600 hover:text-orange-500 transition-colors" title="Subscribe via RSS/Atom">
+                        <a href="/recent" class="ai-nav-link text-slate-600 dark:text-slate-400 hover:text-azure-600 dark:hover:text-azure-400 transition-colors">Recent Changes</a>
+                        <a href="/roles" class="ai-nav-link text-slate-600 dark:text-slate-400 hover:text-azure-600 dark:hover:text-azure-400 transition-colors">Browse Roles</a>
+                        <a href="/operations" class="ai-nav-link text-slate-600 dark:text-slate-400 hover:text-azure-600 dark:hover:text-azure-400 transition-colors">Browse Operations</a>
+                        <a href="/recommend" class="ai-nav-link text-slate-600 dark:text-slate-400 hover:text-azure-600 dark:hover:text-azure-400 transition-colors">Role Recommender</a>
+                        <a href="/analytics" class="ai-nav-link text-slate-600 dark:text-slate-400 hover:text-azure-600 dark:hover:text-azure-400 transition-colors">Analytics</a>
+                        <a href="/about" class="ai-nav-link text-slate-600 dark:text-slate-400 hover:text-azure-600 dark:hover:text-azure-400 transition-colors">About</a>
+                        <a href="/sitemap.xml" class="text-slate-600 dark:text-slate-400 hover:text-azure-600 dark:hover:text-azure-400 transition-colors">Sitemap</a>
+                        <span class="hidden sm:inline text-slate-300 dark:text-slate-600">|</span>
+                        <a href="/feeds/changelog.atom" class="text-slate-600 dark:text-slate-400 hover:text-orange-500 transition-colors" title="Subscribe via RSS/Atom">
                             <svg class="w-5 h-5" viewBox="0 0 24 24" aria-hidden="true"><rect width="24" height="24" rx="4" fill="#f97316"/><circle cx="7" cy="17" r="2.5" fill="white"/><path d="M5 12.5c3.5 0 6.5 3 6.5 6.5h3c0-5.25-4.25-9.5-9.5-9.5v3z" fill="white"/><path d="M5 7c6.5 0 12 5.5 12 12h3c0-8.25-6.75-15-15-15v3z" fill="white"/></svg>
                         </a>
                     </nav>
                     <div class="text-center px-4">
-                        <p class="text-sm text-slate-600">Azure RBAC Built-in Role Definitions Catalog — Track changes to <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles" target="_blank" rel="noopener noreferrer" class="text-azure-600 underline font-medium hover:text-azure-700">Azure built-in roles</a></p>
-                        <p class="text-xs text-slate-500 mt-3">{{ app_version }}</p>
-                        <p class="text-xs text-slate-500 mt-3 leading-relaxed">This site is not affiliated with or endorsed by Microsoft.<br class="sm:hidden"> Content is provided "as is" without warranty of any kind.</p>
+                        <p class="text-sm text-slate-600 dark:text-slate-400">Azure RBAC Built-in Role Definitions Catalog — Track changes to <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles" target="_blank" rel="noopener noreferrer" class="text-azure-600 dark:text-azure-400 underline font-medium hover:text-azure-700 dark:hover:text-azure-300">Azure built-in roles</a></p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-3">{{ app_version }}</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-3 leading-relaxed">This site is not affiliated with or endorsed by Microsoft.<br class="sm:hidden"> Content is provided "as is" without warranty of any kind.</p>
                     </div>
                 </div>
             </div>

@@ -225,5 +225,5 @@ def _sort_and_filter_candidates(
         )
     )
     # Limit partial matches to 10 unless explicitly requested more
-    limit = max_results if max_results else 10
+    limit = max_results or 10
     return partial[:limit]

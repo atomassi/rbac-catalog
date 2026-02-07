@@ -34,7 +34,5 @@ class SerializableMixin:
         if isinstance(value, SerializableMixin):
             return value.to_dict()
         if isinstance(value, list):
-            return [
-                item.to_dict() if isinstance(item, SerializableMixin) else item for item in value
-            ]
+            return [SerializableMixin._serialize_value(item) for item in value]
         return value

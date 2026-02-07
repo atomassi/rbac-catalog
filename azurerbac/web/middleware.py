@@ -96,7 +96,14 @@ async def redirect_old_domain(
     if request.url.path in HEALTH_PATHS:
         return await call_next(request)
 
-    host = request.headers.get("x-forwarded-host", request.headers.get("host", "")).lower()
+    raw_host = request.headers.get("x-forwarded-host", request.headers.get("host", ""))
+    if not raw_host:
+        return await call_next(request)
+
+    # Proxies may comma-separate hosts; strip port suffix (e.g. ":443")
+    host = raw_host.split(",", 1)[0].strip().lower()
+    if ":" in host:
+        host = host.rsplit(":", 1)[0]
 
     if host in OLD_DOMAINS:
         new_url = f"https://{NEW_DOMAIN}{request.url.path}"

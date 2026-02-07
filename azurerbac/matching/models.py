@@ -163,10 +163,6 @@ class PlaneContext:
     wildcard_ops_map: dict[str, set[str]]
     cached_ops: set[str] | None
 
-    @property
-    def prefix(self) -> str:
-        return self.plane.value
-
     def make_key(self, pattern: str) -> WildcardKey:
         return self.plane.make_key(pattern)
 

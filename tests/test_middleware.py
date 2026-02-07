@@ -164,6 +164,16 @@ class TestDomainRedirect:
                 "x-forwarded-host",
                 id="old_frontdoor_domain",
             ),
+            pytest.param(
+                "azurerbac-builtinroles.azurewebsites.net:443",
+                "host",
+                id="old_domain_with_port",
+            ),
+            pytest.param(
+                "azurerbac-builtinroles.azurewebsites.net, proxy.internal",
+                "x-forwarded-host",
+                id="old_domain_comma_separated",
+            ),
         ],
     )
     async def test_old_domains_redirect(self, test_client, host_header: str, header_name: str):
@@ -206,6 +216,7 @@ class TestDomainRedirect:
         [
             pytest.param({"x-forwarded-host": "rbac-catalog.dev"}, id="canonical_domain"),
             pytest.param({"host": "localhost:8000"}, id="localhost"),
+            pytest.param({}, id="no_host_header"),
         ],
     )
     async def test_allowed_domains_no_redirect(self, test_client, headers: dict):

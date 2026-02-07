@@ -100,16 +100,9 @@ class Permission(BaseModel):
 
     def to_comparable_dict(self) -> JsonDict:
         """Export to dict with sorted lists for comparison/diffing."""
-        result: JsonDict = {
-            "actions": sorted(self.actions),
-            "notActions": sorted(self.not_actions),
-            "dataActions": sorted(self.data_actions),
-            "notDataActions": sorted(self.not_data_actions),
-        }
-        if self.condition:
-            result["condition"] = self.condition
-        if self.condition_version:
-            result["conditionVersion"] = self.condition_version
+        result = self.to_dict()
+        for key in ("actions", "notActions", "dataActions", "notDataActions"):
+            result[key] = sorted(result[key])
         return result
 
     @property
@@ -170,23 +163,6 @@ class RoleDefinition(BaseModel):
         """Normalize field names to lowercase for case-insensitive matching."""
         return _normalize_dict_keys(data, _ROLE_DEFINITION_FIELD_MAP)
 
-    @staticmethod
-    def _build_properties(props: dict[str, Any]) -> RoleProperties:
-        """Build RoleProperties from a raw properties dict."""
-        return RoleProperties.model_validate(
-            {
-                "roleName": props.get("roleName", ""),
-                "type": props.get("type", ""),
-                "description": props.get("description", ""),
-                "assignableScopes": props.get("assignableScopes", []),
-                "permissions": [Permission.model_validate(p) for p in props.get("permissions", [])],
-                "createdOn": props.get("createdOn", ""),
-                "updatedOn": props.get("updatedOn", ""),
-                "createdBy": props.get("createdBy"),
-                "updatedBy": props.get("updatedBy"),
-            }
-        )
-
     @classmethod
     def from_resource_graph(cls, item: dict[str, Any]) -> RoleDefinition:
         """Transform a Resource Graph role definition to normalized format."""
@@ -206,7 +182,7 @@ class RoleDefinition(BaseModel):
             id=normalized_id,
             name=name,
             type=ROLE_DEFINITION_TYPE,
-            properties=cls._build_properties(props),
+            properties=RoleProperties.model_validate(props),
         )
 
     @classmethod
@@ -216,7 +192,7 @@ class RoleDefinition(BaseModel):
             id=item.get("id", ""),
             name=item.get("name", ""),
             type=item.get("type", ROLE_DEFINITION_TYPE),
-            properties=cls._build_properties(item.get("properties", {})),
+            properties=RoleProperties.model_validate(item.get("properties", {})),
         )
 
     def to_dict(self) -> JsonDict:

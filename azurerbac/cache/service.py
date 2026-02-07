@@ -95,7 +95,6 @@ class CacheService:
     def swap_in_memory(self, cache_data: CacheData) -> None:
         """Swap cache data into memory."""
         self.swap(cache_data)
-        logger.debug("Cache swapped into memory")
 
     async def rebuild_in_memory(self, session: AsyncSession) -> bool:
         """Build cache from DB and swap into memory. Thread-safe via lock."""

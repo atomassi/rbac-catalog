@@ -197,7 +197,7 @@ const NavState = {
                 }
                 break;
             case 'compare':
-                url = state.from_compare_url || '/roles/compare';
+                url = state.from_compare_url || '/compare';
                 break;
             case 'analytics':
                 url = '/analytics';

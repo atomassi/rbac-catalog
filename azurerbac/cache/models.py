@@ -142,7 +142,7 @@ class Sitemap:
             sitemap_url(f"{site_url}/", today, "daily", 1.0),
             sitemap_url(f"{site_url}/roles", today, "daily", 0.95),
             sitemap_url(f"{site_url}/operations", today, "weekly", 0.9),
-            sitemap_url(f"{site_url}/roles/compare", today, "weekly", 0.85),
+            sitemap_url(f"{site_url}/compare", today, "weekly", 0.85),
             sitemap_url(f"{site_url}/recommend", today, "weekly", 0.85),
             sitemap_url(f"{site_url}/analytics", today, "weekly", 0.7),
             sitemap_url(f"{site_url}/about", today, "monthly", 0.5),
@@ -153,7 +153,7 @@ class Sitemap:
             if id_a in roles_by_id and id_b in roles_by_id:
                 urls.append(
                     sitemap_url(
-                        f"{site_url}/roles/compare/{id_a}/{id_b}",
+                        f"{site_url}/compare/{id_a}/{id_b}",
                         today,
                         "weekly",
                         0.75,

@@ -676,25 +676,6 @@ class TestPatternUtilities:
         assert is_wildcard_pattern(pattern) == expected
 
     @pytest.mark.parametrize(
-        "pattern,expected",
-        [
-            pytest.param("Microsoft.Storage/*", "Microsoft.Storage/%", id="trailing_wildcard"),
-            pytest.param("*/read", "%/read", id="leading_wildcard"),
-            pytest.param("Microsoft.*/read", "Microsoft.%/read", id="middle_wildcard"),
-            pytest.param("*", "%", id="universal_wildcard"),
-            pytest.param("Microsoft.Storage/read", "Microsoft.Storage/read", id="no_wildcard"),
-            # Escaping special SQL characters
-            pytest.param("test%pattern", r"test\%pattern", id="escape_percent"),
-            pytest.param("test_pattern", r"test\_pattern", id="escape_underscore"),
-        ],
-    )
-    def test_wildcard_to_sql_like(self, pattern: str, expected: str):
-        """Test wildcard_to_sql_like conversion."""
-        from azurerbac.core.patterns import wildcard_to_sql_like
-
-        assert wildcard_to_sql_like(pattern) == expected
-
-    @pytest.mark.parametrize(
         "patterns,all_ops,expected_count",
         [
             pytest.param(

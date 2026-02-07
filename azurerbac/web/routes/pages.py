@@ -165,9 +165,6 @@ async def role_detail(
             page,
             limit,
             days,
-            default_page=DEFAULT_PAGE,
-            default_limit=DEFAULT_LIMIT,
-            default_days=DEFAULT_DAYS,
         )
         return RedirectResponse(url=url, status_code=301)
 

@@ -26,11 +26,6 @@ def is_wildcard_pattern(pattern: str) -> bool:
     return "*" in pattern
 
 
-def wildcard_to_sql_like(pattern: str) -> str:
-    """Convert Azure wildcard to SQL LIKE pattern."""
-    return pattern.replace("%", r"\%").replace("_", r"\_").replace("*", "%")
-
-
 def expand_patterns_to_operations(patterns: list[str], all_ops: set[str]) -> set[str]:
     """Expand patterns (with wildcards) to matching operations.
 

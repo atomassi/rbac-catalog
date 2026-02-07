@@ -83,16 +83,10 @@ class PaginationParams:
 
     page: int
     page_size: int
-    sort: str | SortField = SortField.NAME
-    order: str | SortOrder = SortOrder.ASC
 
     @property
     def offset(self) -> int:
         return (self.page - 1) * self.page_size
-
-    @property
-    def sort_field(self) -> SortField:
-        return SortField.from_string(str(self.sort))
 
 
 class RawPermissions:

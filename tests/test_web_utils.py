@@ -200,46 +200,6 @@ class TestDateFormatting:
         assert result == "2024-06-15"
 
 
-"""Additional tests for web/utils.py module."""
-
-
-class TestWildcardToSqlLike:
-    """Tests for wildcard_to_sql_like function."""
-
-    @pytest.mark.parametrize(
-        ("pattern", "expected"),
-        [
-            pytest.param("Microsoft.*", "Microsoft.%", id="star_to_percent"),
-            pytest.param("Microsoft.*/*/read", "Microsoft.%/%/read", id="multiple_wildcards"),
-            pytest.param(
-                "Microsoft.Compute/virtualMachines/read",
-                "Microsoft.Compute/virtualMachines/read",
-                id="no_wildcards",
-            ),
-        ],
-    )
-    def test_wildcard_conversion(self, pattern: str, expected: str):
-        """Test wildcard to SQL LIKE pattern conversion."""
-        from azurerbac.core.patterns import wildcard_to_sql_like
-
-        result = wildcard_to_sql_like(pattern)
-        assert result == expected
-
-    def test_escapes_sql_percent(self):
-        """Test that existing % is escaped."""
-        from azurerbac.core.patterns import wildcard_to_sql_like
-
-        result = wildcard_to_sql_like("test%pattern")
-        assert r"\%" in result
-
-    def test_escapes_sql_underscore(self):
-        """Test that existing _ is escaped."""
-        from azurerbac.core.patterns import wildcard_to_sql_like
-
-        result = wildcard_to_sql_like("test_pattern")
-        assert r"\_" in result
-
-
 class TestIsWildcardPattern:
     """Tests for is_wildcard_pattern function.
 

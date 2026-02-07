@@ -458,22 +458,22 @@ def build_role_redirect_url(
     page: int,
     limit: int,
     days: int,
-    *,
-    default_page: int = 1,
-    default_limit: int = 25,
-    default_days: int = 30,
 ) -> str:
     """Build redirect URL with canonical slug for role detail page."""
     from urllib.parse import urlencode
 
+    from azurerbac.web.constants import DEFAULT_DAYS, DEFAULT_LIMIT, DEFAULT_PAGE
+
     # Build params dict, omitting defaults
-    param_specs: list[tuple[str, object, object]] = [
-        ("q", q, None),
-        ("page", page if page != default_page else None, None),
-        ("limit", limit if limit != default_limit else None, None),
-        ("days", days if days != default_days else None, None),
-    ]
-    query_params = {name: str(val) for name, val, _ in param_specs if val is not None}
+    query_params: dict[str, str] = {}
+    if q:
+        query_params["q"] = q
+    if page != DEFAULT_PAGE:
+        query_params["page"] = str(page)
+    if limit != DEFAULT_LIMIT:
+        query_params["limit"] = str(limit)
+    if days != DEFAULT_DAYS:
+        query_params["days"] = str(days)
 
     if expected_slug:
         url = request.url_for("role_detail_slug", role_id=role_id, slug=expected_slug)

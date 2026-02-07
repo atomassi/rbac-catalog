@@ -126,6 +126,36 @@ def _collect_role_patterns(roles: list[RoleDefinition]) -> set[str]:
     return patterns
 
 
+def _compute_plane_effective(
+    granted_patterns: list[str],
+    excluded_patterns: list[str],
+    all_ops: set[str],
+    plane: Plane,
+    pattern_match: dict[PatternCacheKey, set[str]],
+    ops_lower_to_orig: dict[str, str],
+) -> set[str]:
+    """Compute effective ops for one plane in one permission block."""
+    granted: set[str] = set()
+    excluded: set[str] = set()
+    _add_operations_for_patterns(
+        granted,
+        granted_patterns,
+        all_ops=all_ops,
+        plane=plane,
+        pattern_match=pattern_match,
+        ops_lower_to_orig=ops_lower_to_orig,
+    )
+    _add_operations_for_patterns(
+        excluded,
+        excluded_patterns,
+        all_ops=all_ops,
+        plane=plane,
+        pattern_match=pattern_match,
+        ops_lower_to_orig=ops_lower_to_orig,
+    )
+    return granted - excluded
+
+
 def _compute_role_coverage(
     role: RoleDefinition,
     all_control_ops: set[str],
@@ -143,47 +173,22 @@ def _compute_role_coverage(
     data_effective: set[str] = set()
 
     for perm in role.properties.permissions:
-        # Control plane: compute this block's effective ops
-        block_control_granted: set[str] = set()
-        block_control_excluded: set[str] = set()
-        _add_operations_for_patterns(
-            block_control_granted,
+        control_effective |= _compute_plane_effective(
             perm.actions,
-            all_ops=all_control_ops,
-            plane=Plane.CONTROL,
-            pattern_match=pattern_match,
-            ops_lower_to_orig=control_ops_lower_to_orig,
-        )
-        _add_operations_for_patterns(
-            block_control_excluded,
             perm.not_actions,
-            all_ops=all_control_ops,
-            plane=Plane.CONTROL,
-            pattern_match=pattern_match,
-            ops_lower_to_orig=control_ops_lower_to_orig,
+            all_control_ops,
+            Plane.CONTROL,
+            pattern_match,
+            control_ops_lower_to_orig,
         )
-        control_effective |= block_control_granted - block_control_excluded
-
-        # Data plane: compute this block's effective ops
-        block_data_granted: set[str] = set()
-        block_data_excluded: set[str] = set()
-        _add_operations_for_patterns(
-            block_data_granted,
+        data_effective |= _compute_plane_effective(
             perm.data_actions,
-            all_ops=all_data_ops,
-            plane=Plane.DATA,
-            pattern_match=pattern_match,
-            ops_lower_to_orig=data_ops_lower_to_orig,
-        )
-        _add_operations_for_patterns(
-            block_data_excluded,
             perm.not_data_actions,
-            all_ops=all_data_ops,
-            plane=Plane.DATA,
-            pattern_match=pattern_match,
-            ops_lower_to_orig=data_ops_lower_to_orig,
+            all_data_ops,
+            Plane.DATA,
+            pattern_match,
+            data_ops_lower_to_orig,
         )
-        data_effective |= block_data_granted - block_data_excluded
 
     return RoleCoverage(control_effective, data_effective)
 

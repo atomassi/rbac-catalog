@@ -178,30 +178,18 @@ async def ai_recommend_endpoint(
         )
     except EngineNotAvailableError as e:
         logger.warning("Engine not available: mode=%s missing=%s", e.mode, e.missing_components)
-        track_ai_recommendation(
-            mode=requested_mode,
-            result_count=0,
-            is_error=True,
-        )
+        track_ai_recommendation(mode=requested_mode, result_count=0, is_error=True)
         return ai_error_response(
             ErrorMessages.engine_unavailable((e.mode or "Selected").upper()),
             mode=e.mode,
         )
     except ColBERTInitializationError:
         logger.warning("ColBERT initialization failed")
-        track_ai_recommendation(
-            mode=requested_mode,
-            result_count=0,
-            is_error=True,
-        )
+        track_ai_recommendation(mode=requested_mode, result_count=0, is_error=True)
         return ai_error_response(ErrorMessages.engine_unavailable("COLBERT"), mode="colbert")
     except Exception:
         logger.exception("AI recommendation failed")
-        track_ai_recommendation(
-            mode=requested_mode,
-            result_count=0,
-            is_error=True,
-        )
+        track_ai_recommendation(mode=requested_mode, result_count=0, is_error=True)
         return ai_error_response(ErrorMessages.GENERIC_ERROR)
 
     logger.info(

@@ -707,7 +707,7 @@ test.describe('Operations Page', () => {
   test('should load with table and filters', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 720 });
     await page.goto('/operations');
-    await expect(page).toHaveTitle(/Azure RBAC Operations/i);
+    await expect(page).toHaveTitle(/Azure RBAC Operations.*Permissions/i);
     await expect(page.locator('table')).toBeVisible();
     await expect(page.locator('th:has-text("Granted By"), th:has-text("GRANTED BY")').first()).toBeVisible();
     await expect(page.locator('input[name="q"]:visible')).toBeVisible();

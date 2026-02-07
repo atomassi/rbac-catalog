@@ -17,8 +17,8 @@
     <link rel="alternate" type="application/rss+xml" title="Azure RBAC Role Changes (RSS)" href="{{ site_url }}/feeds/changelog.rss">
     
     <!-- Open Graph / Facebook -->
-    <meta property="og:title" content="{{ operation.name }} - Azure Operation">
-    <meta property="og:description" content="{{ operation.description or 'Azure RBAC operation' }}. View which Azure built-in roles allow this operation.">
+    <meta property="og:title" content="{{ operation.name }} - Azure RBAC {{ 'Data Plane' if operation.is_data_action else 'Control Plane' }} Operation">
+    <meta property="og:description" content="{{ operation.name }} Azure RBAC {{ 'dataAction' if operation.is_data_action else 'action' }}. {{ operation.description or 'Azure resource provider operation' }}. See all built-in roles that grant this permission.">
     <meta property="og:type" content="article">
     <meta property="og:url" content="{{ site_url }}/operations/{{ operation.name | urlencode_path }}">
     <meta property="og:site_name" content="Azure RBAC Catalog">
@@ -32,8 +32,8 @@
     
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="{{ operation.name }} - Azure Operation">
-    <meta name="twitter:description" content="{{ operation.description or 'Azure RBAC operation' }}. View which roles allow this operation.">
+    <meta name="twitter:title" content="{{ operation.name }} - Azure RBAC {{ 'Data Plane' if operation.is_data_action else 'Control Plane' }} Operation">
+    <meta name="twitter:description" content="{{ operation.name }} Azure RBAC {{ 'dataAction' if operation.is_data_action else 'action' }}. {{ operation.description or 'Azure resource provider operation' }}.">
     <meta name="twitter:image" content="{{ site_url }}/static/images/og-image.png">
     <meta name="twitter:image:alt" content="Azure RBAC Catalog - Azure operation details">
     

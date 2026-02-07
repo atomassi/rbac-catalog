@@ -17,8 +17,8 @@
     <link rel="alternate" type="application/rss+xml" title="Azure RBAC Role Changes (RSS)" href="{{ site_url }}/feeds/changelog.rss">
     
     <!-- Open Graph / Facebook -->
-    <meta property="og:title" content="{{ role.role_name }} - Azure Built-in Role ({{ role.role_id[:8] }}...)">
-    <meta property="og:description" content="{{ role.description[:200] if role.description else 'Azure built-in RBAC role ' ~ role.role_name ~ '. View permissions, actions, and JSON definition.' }}{% if effective_perms and effective_perms.has_conditions %} With ABAC condition explanations.{% endif %}">
+    <meta property="og:title" content="{{ role.role_name }} - Azure RBAC Built-in Role {{ role.role_id }} | Permissions & Definition">
+    <meta property="og:description" content="{{ role.role_name }} ({{ role.role_id }}) Azure RBAC built-in role definition. {{ role.description[:160] if role.description else 'View complete permissions, actions, and JSON definition.' }}{% if effective_perms and effective_perms.has_conditions %} ABAC conditions explained.{% endif %}">
     <meta property="og:type" content="article">
     <meta property="og:url" content="{{ site_url }}/roles/{{ role.role_id }}/{{ role.role_name | slugify }}">
     <meta property="og:site_name" content="Azure RBAC Catalog">
@@ -32,8 +32,8 @@
     
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="{{ role.role_name }} - Azure Built-in Role">
-    <meta name="twitter:description" content="{{ role.description[:200] if role.description else 'Azure built-in RBAC role ' ~ role.role_name ~ '. View permissions and JSON definition.' }}{% if effective_perms and effective_perms.has_conditions %} With ABAC condition explanations.{% endif %}">
+    <meta name="twitter:title" content="{{ role.role_name }} - Azure RBAC Built-in Role {{ role.role_id }} | Permissions & Definition">
+    <meta name="twitter:description" content="{{ role.role_name }} ({{ role.role_id }}) Azure RBAC built-in role definition. {{ role.description[:160] if role.description else 'View complete permissions, actions, and JSON definition.' }}{% if effective_perms and effective_perms.has_conditions %} ABAC conditions explained.{% endif %}">
     <meta name="twitter:image" content="{{ site_url }}/static/images/og-image.png">
     <meta name="twitter:image:alt" content="Azure RBAC Catalog - Azure built-in role details">
     
@@ -287,7 +287,7 @@
                         </svg>
                     </div>
                     <div class="ml-3">
-                        <h4 class="text-sm font-medium text-red-800 dark:text-red-400">Role Deleted</h4>
+                        <h3 class="text-sm font-medium text-red-800 dark:text-red-400">Role Deleted</h3>
                         <p class="text-sm text-red-700 dark:text-red-400 mt-1">This role has been deleted from Azure.</p>
                     </div>
                 </div>
@@ -320,7 +320,7 @@
                                 </svg>
                             </div>
                             <div class="ml-3 min-w-0">
-                                <h4 class="text-sm font-medium text-amber-800 dark:text-amber-300">Limited Assignable Scope</h4>
+                                <h3 class="text-sm font-medium text-amber-800 dark:text-amber-300">Limited Assignable Scope</h3>
                                 <p class="text-sm text-amber-700 dark:text-amber-400 mt-1">This built-in role has a restricted assignable scope, limiting where it can be assigned: <code class="font-mono text-xs text-amber-800 dark:text-amber-200 bg-amber-100 dark:bg-amber-800/50 px-1.5 py-0.5 rounded break-all">{{ scopes[0] }}</code></p>
                             </div>
                         </div>
@@ -770,7 +770,7 @@
                                 </svg>
                             </div>
                             <div class="ml-3">
-                                <h4 class="text-sm font-medium text-amber-800 dark:text-amber-300">Unresolved Operations</h4>
+                                <h3 class="text-sm font-medium text-amber-800 dark:text-amber-300">Unresolved Operations</h3>
                                 <p class="text-sm text-amber-700 dark:text-amber-400 mt-1">This role defines permissions that could not be matched to any known Azure operations. This may indicate deprecated or removed operations that are no longer exposed by the Azure API.</p>
                             </div>
                         </div>
@@ -786,7 +786,7 @@
                                 </svg>
                             </div>
                             <div class="ml-3">
-                                <h4 class="text-sm font-medium text-amber-800 dark:text-amber-300">Conditional Permissions</h4>
+                                <h3 class="text-sm font-medium text-amber-800 dark:text-amber-300">Conditional Permissions</h3>
                                 <p class="text-sm text-amber-700 dark:text-amber-400 mt-1">This role has conditions that may restrict effective permissions based on context (e.g., resource attributes, request properties).</p>
                             </div>
                         </div>
@@ -798,14 +798,14 @@
                     <!-- Raw Patterns Summary - show if there are wildcards OR conditions -->
                     {% if effective_perms.has_wildcards or effective_perms.has_conditions %}
                     <div class="mb-6">
-                        <h4 class="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">
+                        <h3 class="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">
                             Permission Patterns (from role definition)
                             {% if effective_perms.permission_blocks | length > 1 %}
                             <span class="ml-2 text-xs font-normal text-amber-600 dark:text-amber-400">
                                 {{ effective_perms.permission_blocks | length }} permission blocks
                             </span>
                             {% endif %}
-                        </h4>
+                        </h3>
                         
                         <!-- Per-block view (used for all roles) -->
                         <div class="space-y-4">
@@ -937,10 +937,10 @@
                         <!-- Control Plane Actions -->
                         <div>
                             <div class="flex items-center justify-between mb-2">
-                                <h4 class="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                                <h3 class="text-sm font-semibold text-slate-700 dark:text-slate-300">
                                     Control Plane Operations
                                     <span class="ml-2 text-xs font-normal text-slate-500 dark:text-slate-400">({{ effective_perms.control_plane_count }})</span>
-                                </h4>
+                                </h3>
                             </div>
                             
                             {% if effective_perms.control_plane_count > 0 %}
@@ -993,10 +993,10 @@
                         <!-- Data Plane Actions -->
                         <div>
                             <div class="flex items-center justify-between mb-2">
-                                <h4 class="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                                <h3 class="text-sm font-semibold text-slate-700 dark:text-slate-300">
                                     Data Plane Operations
                                     <span class="ml-2 text-xs font-normal text-slate-500 dark:text-slate-400">({{ effective_perms.data_plane_count }})</span>
-                                </h4>
+                                </h3>
                             </div>
                             
                             {% if effective_perms.data_plane_count > 0 %}

@@ -8,12 +8,14 @@ import pytest
 from azurerbac.core.patterns import matches_pattern, pattern_to_regex
 from azurerbac.matching.role_matching import (
     _prefix_pattern_covers,
+    _remove_excluded_operations,
     _segment_pattern_covers,
     _suffix_pattern_covers,
     check_operation_allowed,
     check_wildcard_operation_allowed,
     count_net_permissions,
     count_wildcard_partial_coverage,
+    has_any_wildcard_coverage,
     is_high_privilege_role,
     operation_matches_any_pattern,
     pattern_covers_pattern,
@@ -374,6 +376,31 @@ class TestCountNetPermissions:
         result = count_net_permissions(["Microsoft.Storage/*"], [], all_ops)
         assert result == 2
 
+    def test_wildcard_not_action_subtracts(self):
+        """A wildcard notAction reduces count_net_permissions."""
+        all_ops = {
+            "microsoft.storage/storageaccounts/read",
+            "microsoft.storage/storageaccounts/write",
+            "microsoft.storage/storageaccounts/delete",
+        }
+        # Grant all storage, exclude deletes
+        result = count_net_permissions(
+            ["Microsoft.Storage/*"],
+            ["Microsoft.Storage/*/delete"],
+            all_ops,
+        )
+        assert result == 2  # read + write, delete excluded
+
+    def test_explicit_not_action_matching_explicit_action(self):
+        """An explicit notAction matching an explicit action subtracts 1."""
+        all_ops = {"microsoft.storage/read", "microsoft.storage/write"}
+        result = count_net_permissions(
+            ["microsoft.storage/read", "microsoft.storage/write"],
+            ["microsoft.storage/write"],
+            all_ops,
+        )
+        assert result == 1
+
     @pytest.mark.parametrize(
         "operation,actions,not_actions,expected",
         [
@@ -411,6 +438,58 @@ class TestCountNetPermissions:
     ):
         """Test operation allowed logic with various patterns."""
         assert check_operation_allowed(operation, actions, not_actions) == expected
+
+
+# =============================================================================
+# _remove_excluded_operations Tests
+# =============================================================================
+
+
+class TestRemoveExcludedOperations:
+    """Tests for _remove_excluded_operations edge cases."""
+
+    def test_star_not_action_removes_everything(self):
+        """notActions=['*'] should return empty set."""
+        from azurerbac.cache import CacheData
+
+        cache = CacheData()
+        all_ops: frozenset[str] = frozenset({"op1", "op2", "op3"})
+        covered = {"op1", "op2", "op3"}
+        result = _remove_excluded_operations(covered, ["*"], all_ops, None, cache)
+        assert result == set()
+
+    def test_no_not_actions_returns_covered(self):
+        """Empty notActions returns the covered set unchanged."""
+        from azurerbac.cache import CacheData
+
+        cache = CacheData()
+        covered = {"op1", "op2"}
+        result = _remove_excluded_operations(covered, [], frozenset(), None, cache)
+        assert result == covered
+
+    def test_explicit_not_action_discards_single(self):
+        """An explicit notAction discards a single operation."""
+        from azurerbac.cache import CacheData
+
+        cache = CacheData()
+        covered = {"op1", "op2", "op3"}
+        result = _remove_excluded_operations(covered, ["op2"], frozenset(), None, cache)
+        assert result == {"op1", "op3"}
+
+
+# =============================================================================
+# has_any_wildcard_coverage Tests
+# =============================================================================
+
+
+class TestHasAnyWildcardCoverage:
+    """Tests for has_any_wildcard_coverage function."""
+
+    def test_returns_false_when_pattern_matches_nothing(self):
+        """Pattern that matches zero operations returns False."""
+        all_ops: frozenset[str] = frozenset({"microsoft.compute/read", "microsoft.compute/write"})
+        result = has_any_wildcard_coverage("Microsoft.Fake/*/read", ["*"], [], all_ops)
+        assert result is False
 
 
 # =============================================================================
@@ -1057,6 +1136,65 @@ class TestRecommendationService:
         assert total_count > 0
         assert "Microsoft.Compute/*" in svc.control_wildcard_ops
         assert len(svc.control_wildcard_ops["Microsoft.Compute/*"]) >= 3
+
+    def test_classify_unknown_wildcard_defaults_to_control(self, populated_cache):
+        """Wildcard matching no known operations defaults to control plane."""
+        from azurerbac.matching.recommendation_service import RoleRecommendationService
+
+        svc = RoleRecommendationService()
+        classified = svc.classify_operations(["Microsoft.FakeProvider/*/read"])
+
+        # Should default to control since it matches neither plane
+        assert "Microsoft.FakeProvider/*/read" in classified.control_wildcards
+        assert "Microsoft.FakeProvider/*/read" not in classified.data_wildcards
+
+    def test_evaluate_wildcards_fast_skips_when_cached_ops_none(self, populated_cache):
+        """_evaluate_wildcards_fast returns immediately when cached_ops is None."""
+        from azurerbac.matching.models import PlaneContext, RoleEvaluationContext
+        from azurerbac.matching.recommendation_service import RoleRecommendationService
+        from azurerbac.matching.role_matching import Plane
+
+        svc = RoleRecommendationService()
+        ctx = RoleEvaluationContext(
+            role_id="test", role_name="Test", description="", permissions=[]
+        )
+        plane = PlaneContext(
+            cached_ops=None,
+            wildcards=frozenset({"Microsoft.Storage/*"}),
+            wildcard_ops_map={},
+            plane=Plane.CONTROL,
+            all_ops=frozenset(),
+        )
+        svc._evaluate_wildcards_fast(ctx, plane)
+        assert len(ctx.matched_ops) == 0
+
+    def test_evaluate_wildcards_fast_records_partial_coverage(self, populated_cache):
+        """_evaluate_wildcards_fast stores partial coverage when not fully covered."""
+        from azurerbac.matching.models import PlaneContext, RoleEvaluationContext
+        from azurerbac.matching.recommendation_service import RoleRecommendationService
+        from azurerbac.matching.role_matching import Plane
+
+        svc = RoleRecommendationService()
+        classified = svc.classify_operations(["Microsoft.Storage/*"])
+        svc.compute_wildcard_matches(classified)
+
+        # Get a role that partially covers Microsoft.Storage/*
+        pattern_ops = svc.control_wildcard_ops.get("Microsoft.Storage/*", set())
+        if len(pattern_ops) >= 2:
+            partial_ops = frozenset(list(pattern_ops)[:1])  # Just 1 op
+            ctx = RoleEvaluationContext(
+                role_id="test", role_name="Test", description="", permissions=[]
+            )
+            plane = PlaneContext(
+                cached_ops=partial_ops,
+                wildcards=frozenset({"Microsoft.Storage/*"}),
+                wildcard_ops_map=svc.control_wildcard_ops,
+                plane=Plane.CONTROL,
+                all_ops=svc.op_sets.all_control,
+            )
+            svc._evaluate_wildcards_fast(ctx, plane)
+            # Should have partial coverage recorded
+            assert len(ctx.wildcard_partial_coverage) > 0
 
 
 # =============================================================================

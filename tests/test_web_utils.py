@@ -78,6 +78,36 @@ class TestDiffLines:
         changed = [r for r in result if r["type"] != "unchanged"]
         assert len(changed) == 0
 
+    def test_ndiff_hint_line_before_comma_change_collapsed(self):
+        """Hint '?' lines between comma-only remove/add are collapsed to unchanged.
+
+        This covers the _process_ndiff branch where a '?' hint line appears between
+        a removed line and an added line that differ only by a trailing comma.
+        """
+        from azurerbac.web.filters import _process_ndiff
+
+        # Simulate ndiff output: removed with comma, hint, added without comma
+        lines = [
+            '- "value": 1,',
+            "?            -",  # hint line
+            '+ "value": 1',
+            "  }",
+        ]
+        result = _process_ndiff(lines)
+        # The comma-only change should be collapsed to "unchanged"
+        types = [r["type"] for r in result]
+        assert "removed" not in types
+        assert "added" not in types
+        assert types.count("unchanged") == 2
+
+    def test_ensure_str_with_non_string(self):
+        """_ensure_str JSON-serializes non-string values."""
+        from azurerbac.web.filters import _ensure_str
+
+        result = _ensure_str({"key": "value"})
+        assert '"key"' in result
+        assert '"value"' in result
+
 
 class TestFullJsonDiff:
     """Tests for the full_json_diff function."""

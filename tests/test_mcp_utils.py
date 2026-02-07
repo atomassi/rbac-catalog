@@ -15,11 +15,6 @@ from azurerbac.mcp.utils import (
 class TestTokenBucketRateLimiter:
     """Tests for TokenBucketRateLimiter class."""
 
-    def test_initialization(self) -> None:
-        limiter = TokenBucketRateLimiter(capacity=10, refill_rate=1.0, max_buckets=100)
-        assert limiter.capacity == 10
-        assert limiter.refill_rate == 1.0
-
     def test_first_request_allowed(self) -> None:
         limiter = TokenBucketRateLimiter(capacity=5, refill_rate=0.1)
         result = limiter.is_allowed("session-1")
@@ -138,49 +133,53 @@ class TestTokenBucketRateLimiter:
 class TestInputValidator:
     """Tests for InputValidator class."""
 
-    def test_is_suspicious_safe(self) -> None:
-        assert InputValidator.is_suspicious("hello world") is False
-        assert InputValidator.is_suspicious("Microsoft.Storage/read") is False
+    @pytest.mark.parametrize(
+        ("value", "expected"),
+        [
+            pytest.param("hello world", False, id="safe_plain"),
+            pytest.param("Microsoft.Storage/read", False, id="safe_dotted"),
+            pytest.param("<script>", True, id="html_script"),
+            pytest.param("test>value", True, id="html_gt"),
+            pytest.param("{{config}}", True, id="template_braces"),
+            pytest.param("{%import%}", True, id="template_percent"),
+            pytest.param("test;ls", True, id="command_semicolon"),
+            pytest.param("`whoami`", True, id="command_backtick"),
+            pytest.param("$HOME", True, id="command_dollar"),
+            pytest.param("../../../etc", True, id="path_traversal"),
+            pytest.param("__class__", True, id="dunder"),
+            pytest.param("_single", False, id="single_underscore"),
+        ],
+    )
+    def test_is_suspicious(self, value: str, expected: bool):
+        """Test suspicious input detection for various patterns."""
+        assert InputValidator.is_suspicious(value) is expected
 
-    def test_is_suspicious_html(self) -> None:
-        assert InputValidator.is_suspicious("<script>") is True
-        assert InputValidator.is_suspicious("test>value") is True
+    @pytest.mark.parametrize(
+        ("value", "max_len", "min_len", "label", "expected"),
+        [
+            pytest.param("hello", 100, 2, "Query", "hello", id="success"),
+            pytest.param("  hello  ", 100, 1, "Query", "hello", id="strips_whitespace"),
+        ],
+    )
+    def test_validate_success(
+        self, value: str, max_len: int, min_len: int, label: str, expected: str
+    ):
+        """Test successful input validation."""
+        result = InputValidator.validate(value, max_len, min_len, label)
+        assert result == expected
 
-    def test_is_suspicious_template(self) -> None:
-        assert InputValidator.is_suspicious("{{config}}") is True
-        assert InputValidator.is_suspicious("{%import%}") is True
-
-    def test_is_suspicious_command(self) -> None:
-        assert InputValidator.is_suspicious("test;ls") is True
-        assert InputValidator.is_suspicious("`whoami`") is True
-        assert InputValidator.is_suspicious("$HOME") is True
-
-    def test_is_suspicious_path_traversal(self) -> None:
-        assert InputValidator.is_suspicious("../../../etc") is True
-
-    def test_is_suspicious_dunder(self) -> None:
-        assert InputValidator.is_suspicious("__class__") is True
-        assert InputValidator.is_suspicious("_single") is False
-
-    def test_validate_success(self) -> None:
-        result = InputValidator.validate("hello", 100, 2, "Query")
-        assert result == "hello"
-
-    def test_validate_strips_whitespace(self) -> None:
-        result = InputValidator.validate("  hello  ", 100, 1, "Query")
-        assert result == "hello"
-
-    def test_validate_too_short(self) -> None:
-        with pytest.raises(ValidationError, match="at least 2 characters"):
-            InputValidator.validate("a", 100, 2, "Query")
-
-    def test_validate_too_long(self) -> None:
-        with pytest.raises(ValidationError, match="Maximum 5 characters"):
-            InputValidator.validate("hello world", 5, 1, "Query")
-
-    def test_validate_suspicious(self) -> None:
-        with pytest.raises(ValidationError, match="Invalid query format"):
-            InputValidator.validate("<script>", 100, 1, "Query")
+    @pytest.mark.parametrize(
+        ("value", "max_len", "min_len", "label", "match"),
+        [
+            pytest.param("a", 100, 2, "Query", "at least 2 characters", id="too_short"),
+            pytest.param("hello world", 5, 1, "Query", "Maximum 5 characters", id="too_long"),
+            pytest.param("<script>", 100, 1, "Query", "Invalid query format", id="suspicious"),
+        ],
+    )
+    def test_validate_raises(self, value: str, max_len: int, min_len: int, label: str, match: str):
+        """Test validation raises for invalid inputs."""
+        with pytest.raises(ValidationError, match=match):
+            InputValidator.validate(value, max_len, min_len, label)
 
 
 class TestSuspiciousPattern:

@@ -771,75 +771,56 @@ def _make_cached_role_full(
 class TestJaccard:
     """Tests for _jaccard similarity function."""
 
-    def test_both_empty(self):
+    @pytest.mark.parametrize(
+        ("set_a", "set_b", "expected"),
+        [
+            pytest.param(frozenset(), frozenset(), 1.0, id="both_empty"),
+            pytest.param(
+                frozenset({"a", "b", "c"}), frozenset({"a", "b", "c"}), 1.0, id="identical"
+            ),
+            pytest.param(frozenset({"a"}), frozenset({"b"}), 0.0, id="disjoint"),
+            pytest.param(
+                frozenset({"a", "b", "c"}), frozenset({"b", "c", "d"}), 0.5, id="partial_overlap"
+            ),
+            pytest.param(frozenset({"a"}), frozenset(), 0.0, id="one_empty"),
+            pytest.param(frozenset({"a", "b"}), frozenset({"a", "b", "c"}), 2 / 3, id="subset"),
+        ],
+    )
+    def test_jaccard_similarity(self, set_a: frozenset, set_b: frozenset, expected: float):
+        """Test Jaccard similarity for various set combinations."""
         from azurerbac.web.services.pages import _jaccard
 
-        assert _jaccard(frozenset(), frozenset()) == 1.0
-
-    def test_identical_sets(self):
-        from azurerbac.web.services.pages import _jaccard
-
-        s = frozenset({"a", "b", "c"})
-        assert _jaccard(s, s) == 1.0
-
-    def test_disjoint_sets(self):
-        from azurerbac.web.services.pages import _jaccard
-
-        assert _jaccard(frozenset({"a"}), frozenset({"b"})) == 0.0
-
-    def test_partial_overlap(self):
-        from azurerbac.web.services.pages import _jaccard
-
-        a = frozenset({"a", "b", "c"})
-        b = frozenset({"b", "c", "d"})
-        # intersection=2, union=4 → 0.5
-        assert _jaccard(a, b) == pytest.approx(0.5)
-
-    def test_one_empty(self):
-        from azurerbac.web.services.pages import _jaccard
-
-        assert _jaccard(frozenset({"a"}), frozenset()) == 0.0
-
-    def test_subset(self):
-        from azurerbac.web.services.pages import _jaccard
-
-        a = frozenset({"a", "b"})
-        b = frozenset({"a", "b", "c"})
-        # intersection=2, union=3
-        assert _jaccard(a, b) == pytest.approx(2 / 3)
+        assert _jaccard(set_a, set_b) == pytest.approx(expected)
 
 
 class TestConditionSimilarity:
     """Tests for _condition_similarity function."""
 
-    def test_both_empty_returns_one(self):
+    @pytest.mark.parametrize(
+        ("conds_a", "conds_b", "expected"),
+        [
+            pytest.param(frozenset(), frozenset(), 1.0, id="both_empty"),
+            pytest.param(frozenset(), frozenset({"cond1"}), 0.0, id="first_empty"),
+            pytest.param(frozenset({"cond1"}), frozenset(), 0.0, id="second_empty"),
+            pytest.param(
+                frozenset({"@Resource[Microsoft.Storage/storageAccounts/blobServices]"}),
+                frozenset({"@Resource[Microsoft.Storage/storageAccounts/blobServices]"}),
+                1.0,
+                id="identical",
+            ),
+            pytest.param(
+                frozenset({"condA", "condB"}),
+                frozenset({"condB", "condC"}),
+                1 / 3,
+                id="partial_overlap",
+            ),
+        ],
+    )
+    def test_condition_similarity(self, conds_a: frozenset, conds_b: frozenset, expected: float):
+        """Test condition similarity for various condition combinations."""
         from azurerbac.web.services.pages import _condition_similarity
 
-        assert _condition_similarity(frozenset(), frozenset()) == 1.0
-
-    def test_first_empty_second_not_returns_zero(self):
-        from azurerbac.web.services.pages import _condition_similarity
-
-        assert _condition_similarity(frozenset(), frozenset({"cond1"})) == 0.0
-
-    def test_first_not_empty_second_empty_returns_zero(self):
-        from azurerbac.web.services.pages import _condition_similarity
-
-        assert _condition_similarity(frozenset({"cond1"}), frozenset()) == 0.0
-
-    def test_identical_conditions(self):
-        from azurerbac.web.services.pages import _condition_similarity
-
-        c = frozenset({"@Resource[Microsoft.Storage/storageAccounts/blobServices]"})
-        assert _condition_similarity(c, c) == 1.0
-
-    def test_partial_overlap_conditions(self):
-        from azurerbac.web.services.pages import _condition_similarity
-
-        a = frozenset({"condA", "condB"})
-        b = frozenset({"condB", "condC"})
-        # Jaccard: intersection=1, union=3
-        assert _condition_similarity(a, b) == pytest.approx(1 / 3)
+        assert _condition_similarity(conds_a, conds_b) == pytest.approx(expected)
 
 
 class TestExtractRoleMetadata:
@@ -888,59 +869,60 @@ class TestExtractRoleMetadata:
 class TestScopesContain:
     """Tests for _scopes_contain function."""
 
-    def test_identical_scopes(self):
+    @pytest.mark.parametrize(
+        ("broader", "narrower", "expected"),
+        [
+            pytest.param(frozenset("/"), frozenset("/"), True, id="identical"),
+            pytest.param(
+                frozenset("/"),
+                frozenset(("/subscriptions/abc",)),
+                True,
+                id="root_contains_narrow",
+            ),
+            pytest.param(
+                frozenset(("/subscriptions/abc",)),
+                frozenset("/"),
+                False,
+                id="narrow_not_contains_root",
+            ),
+            pytest.param(
+                frozenset(("/subscriptions/abc",)),
+                frozenset(("/subscriptions/abc/resourceGroups/rg1",)),
+                True,
+                id="prefix_containment",
+            ),
+            pytest.param(
+                frozenset(("/subscriptions/abc/resourceGroups/rg1",)),
+                frozenset(("/subscriptions/abc",)),
+                False,
+                id="prefix_containment_reverse",
+            ),
+            pytest.param(
+                frozenset(("/subscriptions/abc",)),
+                frozenset(("/subscriptions/xyz",)),
+                False,
+                id="disjoint",
+            ),
+            pytest.param(
+                frozenset(("/Subscriptions/ABC",)),
+                frozenset(("/subscriptions/abc/resourceGroups/rg1",)),
+                True,
+                id="case_insensitive",
+            ),
+            pytest.param(
+                frozenset(("/subscriptions/abc", "/subscriptions/xyz")),
+                frozenset(("/subscriptions/abc/resourceGroups/rg1",)),
+                True,
+                id="multiple_broader",
+            ),
+            pytest.param(frozenset(), frozenset(), True, id="both_empty"),
+        ],
+    )
+    def test_scopes_contain(self, broader: frozenset, narrower: frozenset, expected: bool):
+        """Test scope containment for various scope combinations."""
         from azurerbac.web.services.pages import _scopes_contain
 
-        s = frozenset(("/",))
-        assert _scopes_contain(s, s) is True
-
-    def test_root_contains_everything(self):
-        from azurerbac.web.services.pages import _scopes_contain
-
-        root = frozenset(("/",))
-        narrow = frozenset(("/subscriptions/abc",))
-        assert _scopes_contain(root, narrow) is True
-
-    def test_narrow_does_not_contain_root(self):
-        from azurerbac.web.services.pages import _scopes_contain
-
-        root = frozenset(("/",))
-        narrow = frozenset(("/subscriptions/abc",))
-        assert _scopes_contain(narrow, root) is False
-
-    def test_prefix_containment(self):
-        from azurerbac.web.services.pages import _scopes_contain
-
-        broader = frozenset(("/subscriptions/abc",))
-        narrower = frozenset(("/subscriptions/abc/resourceGroups/rg1",))
-        assert _scopes_contain(broader, narrower) is True
-        assert _scopes_contain(narrower, broader) is False
-
-    def test_disjoint_scopes(self):
-        from azurerbac.web.services.pages import _scopes_contain
-
-        a = frozenset(("/subscriptions/abc",))
-        b = frozenset(("/subscriptions/xyz",))
-        assert _scopes_contain(a, b) is False
-
-    def test_case_insensitive(self):
-        from azurerbac.web.services.pages import _scopes_contain
-
-        a = frozenset(("/Subscriptions/ABC",))
-        b = frozenset(("/subscriptions/abc/resourceGroups/rg1",))
-        assert _scopes_contain(a, b) is True
-
-    def test_multiple_broader_scopes(self):
-        from azurerbac.web.services.pages import _scopes_contain
-
-        broader = frozenset(("/subscriptions/abc", "/subscriptions/xyz"))
-        narrower = frozenset(("/subscriptions/abc/resourceGroups/rg1",))
-        assert _scopes_contain(broader, narrower) is True
-
-    def test_both_empty(self):
-        from azurerbac.web.services.pages import _scopes_contain
-
-        assert _scopes_contain(frozenset(), frozenset()) is True
+        assert _scopes_contain(broader, narrower) is expected
 
 
 # =============================================================================

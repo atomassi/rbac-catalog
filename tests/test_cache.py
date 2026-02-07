@@ -1163,6 +1163,37 @@ class TestCacheLifecycle:
 class TestSeedPopularComparisons:
     """Tests for _seed_popular_comparisons warming the LRU cache at startup."""
 
+
+class TestRebuildInMemory:
+    """Tests for CacheService.rebuild_in_memory failure paths."""
+
+    async def test_returns_false_when_lock_held(self):
+        """rebuild_in_memory returns False when rebuild lock is already held."""
+
+        from azurerbac.cache.service import _REBUILD_LOCK
+
+        service = get_cache_service()
+        acquired = _REBUILD_LOCK.acquire(blocking=False)
+        assert acquired, "Failed to acquire _REBUILD_LOCK for test setup"
+        try:
+            result = await service.rebuild_in_memory(MagicMock())
+            assert result is False
+        finally:
+            _REBUILD_LOCK.release()
+
+    async def test_returns_false_on_build_exception(self):
+        """rebuild_in_memory returns False when build_from_db raises."""
+        from unittest.mock import AsyncMock, patch
+
+        from azurerbac.cache.service import CacheService
+
+        with patch.object(
+            CacheService, "build_from_db", new=AsyncMock(side_effect=RuntimeError("DB down"))
+        ):
+            service = get_cache_service()
+            result = await service.rebuild_in_memory(MagicMock())
+        assert result is False
+
     def test_seeds_comparisons_for_popular_pairs(self, sample_roles, sample_operations):
         """Popular pairs should be pre-computed and ready in the LRU cache."""
         from azurerbac.cache import precompute_all
@@ -1234,3 +1265,133 @@ class TestSeedPopularComparisons:
         service = get_cache_service()
         service.reset()
         service._seed_popular_comparisons()  # should not raise
+
+
+# =============================================================================
+# sitemap_url Tests
+# =============================================================================
+
+
+class TestSitemapUrl:
+    """Tests for the sitemap_url utility function."""
+
+    def test_generates_valid_xml(self):
+        from azurerbac.cache.utils import sitemap_url
+
+        result = sitemap_url("https://example.com/roles", "2026-01-15", "weekly", 0.8)
+        assert "<loc>https://example.com/roles</loc>" in result
+        assert "<lastmod>2026-01-15</lastmod>" in result
+        assert "<changefreq>weekly</changefreq>" in result
+        assert "<priority>0.8</priority>" in result
+
+    def test_uses_defaults(self):
+        from azurerbac.cache.utils import sitemap_url
+
+        result = sitemap_url("https://example.com", "2026-01-01")
+        assert "<changefreq>weekly</changefreq>" in result
+        assert "<priority>0.5</priority>" in result
+
+
+# =============================================================================
+# Sitemap.build Tests
+# =============================================================================
+
+
+class TestSitemapBuild:
+    """Tests for Sitemap.build classmethod."""
+
+    def test_build_contains_static_pages(self):
+        from azurerbac.cache.models import Sitemap
+
+        sitemap = Sitemap.build(
+            roles_by_id={},
+            all_operations=[],
+            site_url="https://test.dev",
+        )
+        assert '<?xml version="1.0"' in sitemap.content
+        assert "<urlset" in sitemap.content
+        assert "https://test.dev/roles" in sitemap.content
+        assert "https://test.dev/operations" in sitemap.content
+        assert "https://test.dev/compare" in sitemap.content
+        assert "https://test.dev/recommend" in sitemap.content
+        assert "https://test.dev/analytics" in sitemap.content
+        assert "https://test.dev/about" in sitemap.content
+
+    def test_build_includes_role_urls(self):
+        from azurerbac.cache.models import Sitemap
+
+        role = CachedRole(
+            definition=RoleDefinition(
+                name="test-guid",
+                id="/providers/Microsoft.Authorization/roleDefinitions/test-guid",
+                properties={
+                    "roleName": "Test Role",
+                    "description": "A test",
+                    "updatedOn": "2026-01-10T00:00:00+00:00",
+                },
+            ),
+            status=RoleStatus.ACTIVE,
+        )
+        sitemap = Sitemap.build(
+            roles_by_id={"test-guid": role},
+            all_operations=[],
+            site_url="https://test.dev",
+        )
+        assert "https://test.dev/roles/test-guid/test-role" in sitemap.content
+        assert "2026-01-10" in sitemap.content
+
+    def test_build_includes_operation_urls(self):
+        from azurerbac.cache.models import Sitemap
+
+        op = OperationData(
+            name="Microsoft.Compute/virtualMachines/read",
+            is_data_action=False,
+        )
+        sitemap = Sitemap.build(
+            roles_by_id={},
+            all_operations=[op],
+            site_url="https://test.dev",
+        )
+        assert "Microsoft.Compute%2FvirtualMachines%2Fread" in sitemap.content
+
+    def test_build_includes_popular_compare_pairs(self):
+        """Popular comparison URLs appear when both role IDs exist in cache."""
+
+        from azurerbac.cache.models import Sitemap
+        from azurerbac.core.constants import POPULAR_COMPARE_PAIRS
+
+        # Use the first popular pair from constants
+        id_a, id_b, _cat = POPULAR_COMPARE_PAIRS[0]
+        roles_by_id = {}
+        for rid in (id_a, id_b):
+            roles_by_id[rid] = CachedRole(
+                definition=RoleDefinition(
+                    name=rid,
+                    id=f"/providers/Microsoft.Authorization/roleDefinitions/{rid}",
+                    properties={
+                        "roleName": f"Role {rid[:8]}",
+                        "description": "test",
+                        "updatedOn": "2026-01-01T00:00:00+00:00",
+                    },
+                ),
+                status=RoleStatus.ACTIVE,
+            )
+
+        sitemap = Sitemap.build(
+            roles_by_id=roles_by_id,
+            all_operations=[],
+            site_url="https://test.dev",
+        )
+        assert f"/compare/{id_a}/{id_b}" in sitemap.content
+
+    def test_build_records_built_at(self):
+        import datetime as dt
+
+        from azurerbac.cache.models import Sitemap
+
+        sitemap = Sitemap.build(
+            roles_by_id={},
+            all_operations=[],
+            site_url="https://test.dev",
+        )
+        assert isinstance(sitemap.built_at, dt.datetime)

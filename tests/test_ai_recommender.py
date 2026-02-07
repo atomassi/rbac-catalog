@@ -198,33 +198,40 @@ class TestAIRoleRecommender:
         ]
         assert recommender._compute_roles_hash(roles_a) == recommender._compute_roles_hash(roles_b)
 
-    def test_compute_roles_hash_changes_with_different_roles(self):
-        """Test that hash changes when roles are different."""
+    @pytest.mark.parametrize(
+        ("roles_a", "roles_b"),
+        [
+            pytest.param(
+                [RoleDefinition(name="role-1")],
+                [RoleDefinition(name="role-2")],
+                id="different_roles",
+            ),
+            pytest.param(
+                [RoleDefinition(name="role-1")],
+                [RoleDefinition(name="role-1"), RoleDefinition(name="role-2")],
+                id="added_role",
+            ),
+        ],
+    )
+    def test_compute_roles_hash_changes_with_different_input(self, roles_a, roles_b):
+        """Test that hash changes when roles differ."""
         recommender = AIRoleRecommender()
-        roles_a = [RoleDefinition(name="role-1")]
-        roles_b = [RoleDefinition(name="role-2")]
         assert recommender._compute_roles_hash(roles_a) != recommender._compute_roles_hash(roles_b)
 
-    def test_compute_roles_hash_detects_added_role(self):
-        """Test that hash changes when a role is added."""
+    @pytest.mark.parametrize(
+        ("roles", "expected_len"),
+        [
+            pytest.param([], 32, id="empty_list"),
+            pytest.param(
+                [RoleDefinition(name=f"role-{i}") for i in range(100)], 32, id="many_roles"
+            ),
+        ],
+    )
+    def test_compute_roles_hash_format(self, roles, expected_len):
+        """Test that hash is exactly 32 alphanumeric characters (MD5)."""
         recommender = AIRoleRecommender()
-        roles_a = [RoleDefinition(name="role-1")]
-        roles_b = [RoleDefinition(name="role-1"), RoleDefinition(name="role-2")]
-        assert recommender._compute_roles_hash(roles_a) != recommender._compute_roles_hash(roles_b)
-
-    def test_compute_roles_hash_empty_list(self):
-        """Test hash of empty roles list."""
-        recommender = AIRoleRecommender()
-        hash_empty = recommender._compute_roles_hash([])
-        assert hash_empty is not None
-        assert len(hash_empty) == 32  # Full MD5 hash
-
-    def test_compute_roles_hash_length(self):
-        """Test that hash is exactly 32 characters (full MD5)."""
-        recommender = AIRoleRecommender()
-        roles = [RoleDefinition(name=f"role-{i}") for i in range(100)]
         hash_value = recommender._compute_roles_hash(roles)
-        assert len(hash_value) == 32
+        assert len(hash_value) == expected_len
         assert hash_value.isalnum()
 
     def test_initialize_creates_knowledge_base(self):

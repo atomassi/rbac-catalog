@@ -26,6 +26,12 @@ async def robots_txt() -> Response:
     body = "\n".join(
         [
             "User-agent: *",
+            "Allow: /roles/",
+            "Allow: /operations/",
+            "Allow: /compare/",
+            "Allow: /recommend",
+            "Allow: /analytics",
+            "Allow: /about",
             "Disallow: /api/",
             "",
             "User-agent: SemrushBot",
@@ -39,6 +45,8 @@ async def robots_txt() -> Response:
             "User-agent: SplitSignalBot",
             "User-agent: RyteBot",
             "User-agent: MJ12bot",
+            "User-agent: AhrefsBot",
+            "User-agent: DotBot",
             "Disallow: /",
             "",
             f"Sitemap: {SITE_URL}/sitemap.xml",

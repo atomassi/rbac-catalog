@@ -46,14 +46,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     {% include 'partials/darkmode_init.html' %}
     <meta name="google-site-verification" content="googleec37c4d2676ac205" />
+    <meta name="theme-color" content="#0078d4">
     {% if tab == 'recent' %}
-    <title>Azure RBAC Recent Changes - Monitor New, Updated, and Deleted Roles</title>
-    <meta name="description" content="Monitor recent changes to Azure built-in roles. Track new, updated, and deleted roles in the last {{ days }} days. Stay up to date with Azure RBAC permissions.">
+    <title>Azure RBAC Recent Changes - Track New, Updated & Deleted Built-in Roles | RBAC Catalog</title>
+    <meta name="description" content="Monitor recent changes to Azure RBAC built-in roles. Track{% if total_changes is defined %} {{ total_changes }}{% endif %} new, updated, and deleted role definitions in the last {{ days }} days. Stay current with Azure role-based access control permissions.">
     {% else %}
-    <title>Azure Built-in Roles - Azure RBAC | Complete List of {{ total_roles }} Role Definitions</title>
-    <meta name="description" content="Complete list of all {{ total_roles }} Azure built-in RBAC roles. Browse permissions, actions, and JSON definitions for Owner, Contributor, Reader, and every Azure role. Free reference updated daily.">
+    <title>Azure RBAC Built-in Roles - Complete List of All {{ total_roles }} Role Definitions & Permissions</title>
+    <meta name="description" content="Complete reference of all {{ total_roles }} Azure RBAC built-in roles. Search role definitions by name, ID, or permission. Browse actions, dataActions, and JSON for Owner, Contributor, Reader, and every Azure role. Updated daily.">
     {% endif %}
-    <meta name="keywords" content="Azure RBAC, Azure Built-in Roles, Azure RBAC Roles, Azure Permissions, Azure Role Based Access Control, Azure IAM, Azure Role Definitions, Azure Contributor Role, Azure Reader Role, Azure Owner Role, RBAC Permissions">
+    <meta name="keywords" content="Azure RBAC, Azure built-in roles, Azure role definitions, Azure RBAC roles list, Azure permissions, Azure role-based access control, Azure IAM, Azure role definition ID, RBAC permissions, Azure Contributor role, Azure Reader role, Azure Owner role, Azure security roles">
     <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
     <meta name="author" content="Azure RBAC Catalog">
     {# /recent is an alias for / - both should have canonical pointing to / #}
@@ -66,11 +67,11 @@
     
     <!-- Open Graph / Facebook -->
     {% if tab == 'recent' %}
-    <meta property="og:title" content="Azure RBAC Recent Changes - Monitor New, Updated, and Deleted Roles">
-    <meta property="og:description" content="Monitor recent changes to Azure built-in roles. Track new, updated, and deleted roles in the last {{ days }} days. Stay up to date with Azure RBAC permissions.">
+    <meta property="og:title" content="Azure RBAC Recent Changes - Track New, Updated & Deleted Built-in Roles">
+    <meta property="og:description" content="Monitor recent changes to Azure RBAC built-in roles. Track new, updated, and deleted role definitions in the last {{ days }} days. Stay current with Azure role-based access control permissions.">
     {% else %}
-    <meta property="og:title" content="Azure Built-in Roles - Complete List of {{ total_roles }} RBAC Roles">
-    <meta property="og:description" content="The complete reference for all {{ total_roles }} Azure built-in RBAC roles. Search permissions, view JSON definitions, and monitor role changes. Free tool for Azure security professionals.">
+    <meta property="og:title" content="Azure RBAC Built-in Roles - Complete List of All {{ total_roles }} Role Definitions & Permissions">
+    <meta property="og:description" content="Complete reference of all {{ total_roles }} Azure RBAC built-in roles. Search role definitions by name, ID, or permission. Browse actions, dataActions, and JSON for every Azure role. Updated daily.">
     {% endif %}
     <meta property="og:type" content="website">
     <meta property="og:url" content="{{ site_url }}{{ canonical_path }}">
@@ -85,11 +86,11 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     {% if tab == 'recent' %}
-    <meta name="twitter:title" content="Azure RBAC Recent Changes - Monitor New, Updated, and Deleted Roles">
-    <meta name="twitter:description" content="Monitor recent changes to Azure built-in roles. Track new, updated, and deleted roles in the last {{ days }} days. Stay up to date with Azure RBAC permissions.">
+    <meta name="twitter:title" content="Azure RBAC Recent Changes - Track New, Updated & Deleted Built-in Roles">
+    <meta name="twitter:description" content="Monitor recent changes to Azure RBAC built-in roles. Track new, updated, and deleted role definitions in the last {{ days }} days.">
     {% else %}
-    <meta name="twitter:title" content="Azure Built-in Roles - Complete List of {{ total_roles }} RBAC Roles">
-    <meta name="twitter:description" content="The complete reference for all {{ total_roles }} Azure built-in RBAC roles. Search permissions, view JSON definitions, and monitor role changes.">
+    <meta name="twitter:title" content="Azure RBAC Built-in Roles - Complete List of All {{ total_roles }} Role Definitions & Permissions">
+    <meta name="twitter:description" content="Complete reference of all {{ total_roles }} Azure RBAC built-in roles. Search role definitions by name, ID, or permission. Browse actions, dataActions, and JSON for every Azure role.">
     {% endif %}
     <meta name="twitter:image" content="{{ site_url }}/static/images/og-image.png">
     <meta name="twitter:image:alt" content="Azure Built-in Roles - RBAC Role Definitions Monitor">

@@ -118,12 +118,7 @@ def pattern_covers_pattern(role_pattern: str, requested_pattern: str) -> bool:
 
 def operation_matches_any_pattern(operation: OperationName, patterns: list[Pattern]) -> bool:
     """Check if an operation matches any of the given patterns."""
-    for pattern in patterns:
-        if pattern == "*":
-            return True
-        if matches_pattern(operation, pattern):
-            return True
-    return False
+    return any(p == "*" or matches_pattern(operation, p) for p in patterns)
 
 
 def check_operation_allowed(

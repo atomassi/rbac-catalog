@@ -23,7 +23,6 @@ __all__ = [
     "track_duration",
     "track_event",
     "track_gauge",
-    "track_metric",
     "track_operations_scan",
     "track_role_recommendation",
     "track_role_scan",
@@ -44,27 +43,6 @@ def flush_metrics(timeout_ms: int | None = None) -> bool:
 
         timeout_ms = TELEMETRY_FLUSH_TIMEOUT_MS
     return MetricsSender.flush(timeout_ms)
-
-
-def track_metric(
-    name: str,
-    value: float,
-    properties: dict[str, Any] | None = None,
-) -> None:
-    """Track a custom metric to Application Insights."""
-    # Always log locally (even when local, for debugging)
-    props_str = f" {properties}" if properties else ""
-    logger.debug("Metric: %s=%s%s", name, value, props_str)
-
-    if not _metrics_enabled():
-        return
-
-    try:
-        MetricsSender.send_gauge(name, value, properties)
-    except ImportError:
-        pass  # OpenTelemetry not available
-    except Exception as e:
-        logger.exception("Failed to track metric %s: %s", name, e)
 
 
 def track_gauge(name: str, value: float, properties: dict[str, Any] | None = None) -> None:

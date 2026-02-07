@@ -229,8 +229,3 @@ def _add_console_handler(
     for f in filters:
         handler.addFilter(f)
     logger.addHandler(handler)
-
-
-def get_logger(name: str) -> logging.Logger:
-    """Get a logger instance."""
-    return logging.getLogger(name)

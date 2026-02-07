@@ -157,7 +157,7 @@ class TestMetricsLocalMode:
     @pytest.mark.parametrize(
         "func_name,args",
         [
-            ("track_metric", ("test_metric", 42.0, {"dim": "value"})),
+            ("track_gauge", ("test_metric", 42.0, {"dim": "value"})),
             ("track_startup", (5.0, 100, 5000)),
             ("track_cache_refresh", (3.0, "startup", 100, 5000)),
             ("track_role_scan", (100, 5, 3, 2)),
@@ -259,10 +259,10 @@ class TestMetricsDimensions:
             {},
         ],
     )
-    def test_track_metric_with_properties(self, local_env, properties):
-        """track_metric should accept various property types."""
+    def test_track_gauge_with_properties(self, local_env, properties):
+        """track_gauge should accept various property types."""
         metrics_module = local_env
-        metrics_module.track_metric("test", 1.0, properties)
+        metrics_module.track_gauge("test", 1.0, properties)
 
     @pytest.mark.parametrize("source", ["startup", "worker", "periodic", "manual"])
     def test_track_cache_refresh_with_source_dimension(self, local_env, source):
@@ -279,10 +279,10 @@ class TestMetricsDimensions:
 class TestMetricsErrorHandling:
     """Test that metrics functions handle errors gracefully."""
 
-    def test_track_metric_with_negative_value(self, local_env):
-        """track_metric should accept negative values."""
+    def test_track_gauge_with_negative_value(self, local_env):
+        """track_gauge should accept negative values."""
         metrics_module = local_env
-        metrics_module.track_metric("test", -42.0)
+        metrics_module.track_gauge("test", -42.0)
 
 
 # =============================================================================

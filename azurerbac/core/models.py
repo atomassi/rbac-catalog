@@ -1,73 +1,11 @@
 """Azure RBAC Database Models.
 
-Schema Overview
----------------
-
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│                            ROLE TRACKING TABLES                                 │
-├─────────────────────────────────────────────────────────────────────────────────┤
-│                                                                                 │
-│  ┌───────────────┐      ┌──────────────────┐                                    │
-│  │     roles     │      │   role_history   │                                    │
-│  ├───────────────┤      ├──────────────────┤                                    │
-│  │ role_id (PK)  │◄─────│ role_id (FK)     │                                    │
-│  │ role_name     │      │ id (PK)          │                                    │
-│  │ status        │      │ version_number   │                                    │
-│  └───────────────┘      │ scan_id ─────────│────┐                               │
-│                         │ azure_updated    │    │                               │
-│                         │ role_name        │    │   ← created | initial_scan |  │
-│                         │ event_type       │    │     updated | deleted         │
-│                         │ role_json (JSONB)│    │   (NULL for deletes)          │
-│                         │ diff_json        │    │                               │
-│                         │ summary          │    │                               │
-│                         └──────────────────┘    │                               │
-│                                                 │                               │
-│  ┌────────────────────┐                         │                               │
-│  │  role_scan_status  │◄────────────────────────┘                               │
-│  ├────────────────────┤                                                         │
-│  │ id (PK)            │                                                         │
-│  │ scan_timestamp     │                                                         │
-│  │ roles_scanned      │                                                         │
-│  │ additions          │                                                         │
-│  │ updates            │                                                         │
-│  │ deletions          │                                                         │
-│  └────────────────────┘                                                         │
-│                                                                                 │
-├─────────────────────────────────────────────────────────────────────────────────┤
-│                             OPERATION TABLES                                    │
-├─────────────────────────────────────────────────────────────────────────────────┤
-│                                                                                 │
-│  ┌───────────────────────────────┐                                              │
-│  │          operations           │                                              │
-│  ├───────────────────────────────┤                                              │
-│  │ name (PK)                     │                                              │
-│  │ display_name                  │                                              │
-│  │ description                   │                                              │
-│  │ origin                        │                                              │
-│  │ provider_display_name         │                                              │
-│  │ resource_type                 │                                              │
-│  │ resource_type_display_name    │                                              │
-│  │ is_data_action                │                                              │
-│  │ first_seen_at                 │                                              │
-│  │ last_seen_at                  │                                              │
-│  └───────────────────────────────┘                                              │
-│                                                                                 │
-│  ┌─────────────────────────┐                                                    │
-│  │  operation_scan_status  │                                                    │
-│  ├─────────────────────────┤                                                    │
-│  │ id (PK)                 │                                                    │
-│  │ scan_timestamp          │                                                    │
-│  │ operations_scanned      │                                                    │
-│  │ providers_scanned       │                                                    │
-│  │ additions               │                                                    │
-│  │ updates                 │                                                    │
-│  │ deletions               │                                                    │
-│  └─────────────────────────┘                                                    │
-│                                                                                 │
-└─────────────────────────────────────────────────────────────────────────────────┘
-
-Relationships: Role 1:N RoleHistory (cascade delete), RoleHistory N:1 RoleScanStatus
-Event types: CREATED, INITIAL_SCAN, UPDATED, DELETED
+Tables:
+  roles           - Role identity and current state (1:N → role_history)
+  role_history    - Historical versions with role_json, diff_json, event_type
+  role_scan_status - Scan metadata (timestamp, additions, updates, deletions)
+  operations       - Resource provider operations
+  operation_scan_status - Operation scan metadata
 """
 
 from __future__ import annotations

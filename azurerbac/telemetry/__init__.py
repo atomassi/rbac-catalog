@@ -1,6 +1,6 @@
 """Telemetry: Application Insights metrics and logging."""
 
-from .logging import configure_logging, get_logger
+from .logging import configure_logging
 from .metrics import (
     flush_metrics,
     track_ai_recommendation,
@@ -8,12 +8,10 @@ from .metrics import (
     track_cache_hit,
     track_cache_refresh,
     track_cache_refresh_failure,
-    track_db_fallback,
     track_db_query,
     track_duration,
     track_event,
     track_gauge,
-    track_metric,
     track_operations_scan,
     track_role_recommendation,
     track_role_scan,
@@ -29,18 +27,15 @@ __all__ = [
     "WorkerOperationContext",
     "configure_logging",
     "flush_metrics",
-    "get_logger",
     "track_ai_recommendation",
     "track_cache_call",
     "track_cache_hit",
     "track_cache_refresh",
     "track_cache_refresh_failure",
-    "track_db_fallback",
     "track_db_query",
     "track_duration",
     "track_event",
     "track_gauge",
-    "track_metric",
     "track_operations_scan",
     "track_role_recommendation",
     "track_role_scan",

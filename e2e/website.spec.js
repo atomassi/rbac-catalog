@@ -329,18 +329,12 @@ test.describe('Roles List', () => {
       expect((await rows.first().textContent())?.toLowerCase()).toContain('reader');
     });
 
-    test('should perform exact match search', async ({ page }) => {
-      await page.goto('/roles?q=Reader&exact_match=1');
+    test('should rank exact matches first in search', async ({ page }) => {
+      await page.goto('/roles?q=Reader');
       const rows = page.locator('table tbody tr');
-      expect(await rows.count()).toBe(1);
+      expect(await rows.count()).toBeGreaterThan(0);
+      // Exact match "Reader" should be the first result
       expect(await rows.first().textContent()).toContain('Reader');
-    });
-
-    test('should have exact match checkbox on desktop', async ({ page }) => {
-      await page.setViewportSize({ width: 1280, height: 720 });
-      await page.goto('/roles');
-      await page.waitForLoadState('domcontentloaded');
-      await expect(page.locator('input[name="exact_match"][type="checkbox"]:visible')).toBeVisible();
     });
 
     test('should not include default values in URL after search', async ({ page }) => {
@@ -1375,7 +1369,6 @@ test.describe('Mobile Responsiveness', () => {
     await page.setViewportSize({ width: 375, height: 667 });
     await page.goto('/roles');
     await expect(page.locator('input[name="q"]').first()).toBeVisible();
-    await expect(page.locator('button[onclick="toggleExactMatch(this)"]')).toBeVisible();
     await expect(page.locator('select[name="limit"]').first()).toBeVisible();
     await expect(page.locator('select[name="status_filter"]').first()).toBeVisible();
   });

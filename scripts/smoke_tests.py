@@ -92,7 +92,7 @@ API_ENDPOINTS_JSON: Final = [
 # Search and filter parameter tests
 SEARCH_FILTER_TESTS: Final = [
     ("Roles search", "/roles?q=storage", ["storage"]),
-    ("Roles exact match", "/roles?q=Reader&exact_match=1", ["Reader"]),
+    ("Roles search Reader", "/roles?q=Reader", ["Reader"]),
     ("Roles sort by actions", "/roles?sort=actions&order=desc", ["Role Name"]),
     ("Roles limit 50", "/roles?limit=50", ["Role Name"]),
     ("Roles page 2", "/roles?page=2&limit=25", ["Role Name"]),

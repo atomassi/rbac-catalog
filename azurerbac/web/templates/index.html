@@ -3,7 +3,6 @@
 {% macro build_url(new_page) -%}
 {%- set params = [] -%}
 {%- if q %}{% set _ = params.append('q=' ~ q) %}{% endif -%}
-{%- if exact_match %}{% set _ = params.append('exact_match=1') %}{% endif -%}
 {%- if new_page != 1 %}{% set _ = params.append('page=' ~ new_page) %}{% endif -%}
 {%- if limit != 25 %}{% set _ = params.append('limit=' ~ limit) %}{% endif -%}
 {%- if sort != 'name' %}{% set _ = params.append('sort=' ~ sort) %}{% endif -%}
@@ -16,7 +15,6 @@
 {% macro sort_url(new_sort, new_order) -%}
 {%- set params = [] -%}
 {%- if q %}{% set _ = params.append('q=' ~ q) %}{% endif -%}
-{%- if exact_match %}{% set _ = params.append('exact_match=1') %}{% endif -%}
 {%- if limit != 25 %}{% set _ = params.append('limit=' ~ limit) %}{% endif -%}
 {%- if new_sort != 'name' %}{% set _ = params.append('sort=' ~ new_sort) %}{% endif -%}
 {%- if new_order != 'asc' %}{% set _ = params.append('order=' ~ new_order) %}{% endif -%}
@@ -329,16 +327,11 @@
     function cleanFormSubmit(form) {
         var limit = form.querySelector('[name="limit"]');
         var status = form.querySelector('[name="status_filter"]');
-        var exact = form.querySelector('[name="exact_match"]');
         var q = form.querySelector('[name="q"]');
         
         // Disable fields with default values so they don't submit
         if (limit && limit.value === '25') limit.disabled = true;
         if (status && status.value === 'active') status.disabled = true;
-        if (exact) {
-            if (exact.type === 'checkbox' && !exact.checked) exact.disabled = true;
-            else if (exact.type === 'select-one' && !exact.value) exact.disabled = true;
-        }
         if (q && !q.value.trim()) q.disabled = true;
         
         return true;
@@ -347,29 +340,6 @@
     function cleanSubmit(el) {
         cleanFormSubmit(el.form);
         el.form.submit();
-    }
-    // Toggle switch for exact match on mobile
-    function toggleExactMatch(btn) {
-        var isOn = btn.style.backgroundColor === 'rgb(0, 120, 212)';
-        var knob = btn.querySelector('span');
-        var hiddenInput = btn.parentElement.querySelector('input[name="exact_match"]');
-        
-        if (isOn) {
-            btn.style.backgroundColor = '#cbd5e1';
-            knob.style.transform = 'translateX(0)';
-            hiddenInput.value = '';
-            hiddenInput.disabled = true;
-        } else {
-            btn.style.backgroundColor = '#0078d4';
-            knob.style.transform = 'translateX(20px)';
-            hiddenInput.value = '1';
-            hiddenInput.disabled = false;
-        }
-        
-        // Submit the form
-        var form = btn.closest('form');
-        cleanFormSubmit(form);
-        form.submit();
     }
     </script>
 </head>
@@ -571,14 +541,6 @@
                                     </a>
                                     {% endif %}
                                 </div>
-                                <div class="flex items-center justify-between px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700">
-                                    <span class="text-sm text-slate-600 dark:text-slate-300">Exact match</span>
-                                    <button type="button" onclick="toggleExactMatch(this)" 
-                                            style="width: 44px; height: 24px; border-radius: 12px; padding: 2px; transition: background-color 0.2s; background-color: {% if exact_match %}#0078d4{% else %}#cbd5e1{% endif %};">
-                                        <span style="display: block; width: 20px; height: 20px; border-radius: 50%; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.2); transition: transform 0.2s; transform: translateX({% if exact_match %}20px{% else %}0{% endif %});"></span>
-                                    </button>
-                                    <input type="hidden" name="exact_match" value="{% if exact_match %}1{% endif %}" {% if not exact_match %}disabled{% endif %}>
-                                </div>
                                 <div class="flex gap-2">
                                     <select name="limit" onchange="cleanSubmit(this)" class="flex-1 px-3 py-2 text-sm text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700">
                                         <option value="25" {% if limit == 25 %}selected{% endif %}>25 rows</option>
@@ -605,10 +567,6 @@
                                     </div>
                                     <input type="text" name="q" value="{{ q or '' }}" placeholder="Search by Role Name or ID..." class="block w-full pl-9 pr-3 py-2.5 border border-slate-200 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-700 text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-azure-500 focus:ring-2 focus:ring-azure-500/20 transition-colors">
                                 </div>
-                                <label class="inline-flex items-center cursor-pointer">
-                                    <input type="checkbox" name="exact_match" value="1" {% if exact_match %}checked{% endif %} onchange="cleanSubmit(this)" class="w-4 h-4 text-azure-600 bg-slate-100 dark:bg-slate-700 border-slate-300 dark:border-slate-600 rounded focus:ring-azure-500 focus:ring-2">
-                                    <span class="ml-2 text-sm text-slate-600 dark:text-slate-300">Exact match</span>
-                                </label>
                                 <button type="submit" class="inline-flex items-center px-5 py-2.5 bg-gradient-to-r from-azure-500 to-azure-600 text-white text-sm font-medium rounded-lg shadow-md hover:shadow-lg hover:from-azure-600 hover:to-azure-700 transition-all">
                                     <svg class="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />

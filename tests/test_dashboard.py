@@ -159,15 +159,14 @@ class TestSearchRolesInCache:
                 order="asc",
                 page=1,
                 page_size=25,
-                exact_match=None,
             )
 
             assert result.total_count == 2
             assert len(result.items) == 2
             assert all("storage" in r.role_name.lower() for r in result.items)
 
-    def test_search_exact_match(self):
-        """Test exact match search."""
+    def test_search_ranks_exact_match_first(self):
+        """Test that exact matches are ranked first."""
         from azurerbac.web.services.dashboard import search_roles_in_cache
 
         cached_roles = {
@@ -186,11 +185,10 @@ class TestSearchRolesInCache:
                 order="asc",
                 page=1,
                 page_size=25,
-                exact_match="true",
             )
 
-            # Only exact match "Reader" should be returned
-            assert result.total_count == 1
+            # Both should be returned, but exact match "Reader" should be first
+            assert result.total_count == 2
             assert result.items[0].role_name == "Reader"
 
     def test_search_respects_status_filter(self):
@@ -214,7 +212,6 @@ class TestSearchRolesInCache:
                 order="asc",
                 page=1,
                 page_size=25,
-                exact_match=None,
             )
 
             assert result.total_count == 1
@@ -241,7 +238,6 @@ class TestSearchRolesInCache:
                 order="asc",
                 page=1,
                 page_size=25,
-                exact_match=None,
             )
 
             assert result.total_count == 1

@@ -146,28 +146,19 @@ class RoleChangeProcessor:
         return PartitionedRoleIds(new_ids, update_ids, deletion_ids)
 
     def _process_new(self, new_ids: set[str]) -> list[RoleHistory]:
-        entries: list[RoleHistory] = []
-        for role_id in new_ids:
-            entry = self._handle_new_role(self._fetched_by_id[role_id])
-            entries.append(entry)
-        return entries
+        return [self._handle_new_role(self._fetched_by_id[rid]) for rid in new_ids]
 
     def _process_updates(self, update_ids: set[str]) -> list[RoleHistory]:
-        entries: list[RoleHistory] = []
-        for role_id in update_ids:
-            if entry := self._handle_update(
-                self._existing_by_id[role_id],
-                self._fetched_by_id[role_id],
-            ):
-                entries.append(entry)
-        return entries
+        return [
+            entry
+            for rid in update_ids
+            if (entry := self._handle_update(self._existing_by_id[rid], self._fetched_by_id[rid]))
+        ]
 
     def _process_deletions(self, deletion_ids: set[str]) -> list[RoleHistory]:
-        entries: list[RoleHistory] = []
-        for role_id in deletion_ids:
-            entry = self._handle_deletion(self._existing_by_id[role_id])
+        entries = [self._handle_deletion(self._existing_by_id[rid]) for rid in deletion_ids]
+        for entry in entries:
             self._session.add(entry)
-            entries.append(entry)
         return entries
 
     def _create_history_entry(

@@ -98,7 +98,7 @@ async def redirect_old_domain(
 
     host = request.headers.get("x-forwarded-host", request.headers.get("host", "")).lower()
 
-    if any(old in host for old in OLD_DOMAINS):
+    if host in OLD_DOMAINS:
         new_url = f"https://{NEW_DOMAIN}{request.url.path}"
         if request.url.query:
             new_url += f"?{request.url.query}"

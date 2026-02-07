@@ -8,7 +8,6 @@ from .metrics import (
     track_cache_hit,
     track_cache_refresh,
     track_cache_refresh_failure,
-    track_db_query,
     track_duration,
     track_event,
     track_gauge,
@@ -18,12 +17,11 @@ from .metrics import (
     track_startup,
     track_worker_result,
 )
-from .timers import TimedDbQuery, TimedOperation
+from .timers import TimedDbQuery
 from .tracing import WorkerOperationContext
 
 __all__ = [
     "TimedDbQuery",
-    "TimedOperation",
     "WorkerOperationContext",
     "configure_logging",
     "flush_metrics",
@@ -32,7 +30,6 @@ __all__ = [
     "track_cache_hit",
     "track_cache_refresh",
     "track_cache_refresh_failure",
-    "track_db_query",
     "track_duration",
     "track_event",
     "track_gauge",

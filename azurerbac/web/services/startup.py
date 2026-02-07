@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import asyncio
-import concurrent.futures
 import logging
 import time
 from collections.abc import Callable
 
 import anyio
+from anyio import to_thread
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from azurerbac.cache import get_cache_service
@@ -101,42 +100,37 @@ async def ensure_db(engine: AsyncEngine) -> None:
 
 async def _run_in_thread(func: Callable[[], None]) -> None:
     """Run blocking function in thread pool."""
-    loop = asyncio.get_running_loop()
-    with concurrent.futures.ThreadPoolExecutor() as pool:
-        await loop.run_in_executor(pool, func)
+    await to_thread.run_sync(func)
+
+
+async def _warmup_engine(name: str, factory: Callable[[], object]) -> None:
+    """Pre-warm an AI engine in a background thread."""
+
+    def _warmup() -> None:
+        try:
+            logger.info("%s WARMUP: Starting...", name)
+            start = time.time()
+            result = factory()
+            # ColBERT returns bool from warmup(); others just need to be called
+            if result is False:
+                logger.warning("%s WARMUP: Skipped (no pre-built index)", name)
+            else:
+                logger.info("%s WARMUP: Initialized in %.2fs", name, time.time() - start)
+        except Exception as e:
+            logger.exception("%s WARMUP: Failed (non-fatal): %s", name, e)
+
+    await _run_in_thread(_warmup)
 
 
 async def warmup_colbert() -> None:
     """Pre-warm ColBERT engine."""
+    from azurerbac.airecommender.engines.colbert import get_colbert_index
 
-    def _warmup() -> None:
-        try:
-            logger.info("COLBERT WARMUP: Starting...")
-            start = time.time()
-            from azurerbac.airecommender.engines.colbert import get_colbert_index
-
-            if get_colbert_index().warmup():
-                logger.info("COLBERT WARMUP: Initialized in %.2fs", time.time() - start)
-            else:
-                logger.warning("COLBERT WARMUP: Skipped (no pre-built index)")
-        except Exception as e:
-            logger.exception("COLBERT WARMUP: Failed (non-fatal): %s", e)
-
-    await _run_in_thread(_warmup)
+    await _warmup_engine("COLBERT", lambda: get_colbert_index().warmup())
 
 
 async def warmup_crossencoder() -> None:
     """Pre-warm CrossEncoder model."""
+    from azurerbac.airecommender.engines.crossencoder import get_cross_encoder
 
-    def _warmup() -> None:
-        try:
-            logger.info("CROSSENCODER WARMUP: Starting...")
-            start = time.time()
-            from azurerbac.airecommender.engines.crossencoder import get_cross_encoder
-
-            get_cross_encoder()
-            logger.info("CROSSENCODER WARMUP: Initialized in %.2fs", time.time() - start)
-        except Exception as e:
-            logger.exception("CROSSENCODER WARMUP: Failed (non-fatal): %s", e)
-
-    await _run_in_thread(_warmup)
+    await _warmup_engine("CROSSENCODER", get_cross_encoder)

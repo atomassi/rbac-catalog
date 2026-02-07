@@ -13,7 +13,6 @@ LOGS_DIR: Final = Path(__file__).parent.parent.parent / "logs"
 _logger = logging.getLogger(__name__)
 _configured = False
 _configured_log_file: str | None = None
-_configured_component: str | None = None
 
 _SENSITIVE_PATTERNS: Final = (
     "Bearer ",
@@ -57,29 +56,17 @@ class _EnvironmentFilter(logging.Filter):
         return True
 
 
-def configure_logging(component: str = "app", level: int = logging.INFO) -> str | None:
-    """Configure logging based on environment.
-
-    Local: logs to azurerbac/logs/{component}.log
-    Production: logs to Application Insights (traces table)
-
-    Args:
-        component: Component name for log file ("ux" or "worker")
-        level: Logging level (default: INFO)
-
-    Returns:
-        Log file path if local, None if production
-    """
-    global _configured, _configured_component, _configured_log_file
+def configure_logging(component: str = "app") -> str | None:
+    """Configure logging. Local: file + console. Production: Application Insights."""
+    global _configured, _configured_log_file
     if _configured:
         return _configured_log_file
     _configured = True
-    _configured_component = component
 
     # Get log level from centralized settings
     settings = Settings.get()
     level_name = settings.log_level
-    level = getattr(logging, level_name, level)
+    level = getattr(logging, level_name, logging.INFO)
 
     root_logger = logging.getLogger()
     root_logger.setLevel(level)
@@ -136,7 +123,7 @@ def configure_logging(component: str = "app", level: int = logging.INFO) -> str 
         _configured_log_file = str(log_file_path)
         logging.getLogger(__name__).info("Logging to %s", log_file_path)
     # Production: Application Insights only (no files, no console)
-    elif connection_string := Settings.get().app_insights_connection_string:
+    elif connection_string := settings.app_insights_connection_string:
         try:
             from azure.monitor.opentelemetry import configure_azure_monitor
             from opentelemetry.instrumentation.logging import LoggingInstrumentor

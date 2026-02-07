@@ -344,7 +344,8 @@ def _role_matches_search(
 
 
 def _role_search_rank(
-    role: CachedRole,
+    role_name: str,
+    role_id: str,
     query_lower: str,
     normalized_guid: str | None,
 ) -> int:
@@ -355,9 +356,9 @@ def _role_search_rank(
       1 = name starts with query
       2 = name/ID contains query
     """
-    role_name_lower = role.role_name.lower()
-    role_id_lower = role.role_id.lower()
-    guid_match = normalized_guid is not None and role.role_id == normalized_guid
+    role_name_lower = role_name.lower()
+    role_id_lower = role_id.lower()
+    guid_match = normalized_guid is not None and role_id == normalized_guid
 
     if query_lower in {role_name_lower, role_id_lower} or guid_match:
         return 0
@@ -417,7 +418,7 @@ def search_roles_in_cache(
     secondary_key = _ROLE_SORT_KEYS.get(sort_field, _ROLE_SORT_KEYS[SortField.NAME])
     enriched_roles.sort(key=secondary_key, reverse=(order == SortOrder.DESC))
     enriched_roles.sort(
-        key=lambda r: _role_search_rank(cached_roles[r.role_id], query_lower, normalized_guid),
+        key=lambda r: _role_search_rank(r.role_name, r.role_id, query_lower, normalized_guid),
     )
 
     params = PaginationParams(page=page, page_size=page_size)

@@ -333,8 +333,9 @@ test.describe('Roles List', () => {
       await page.goto('/roles?q=Reader');
       const rows = page.locator('table tbody tr');
       expect(await rows.count()).toBeGreaterThan(0);
-      // Exact match "Reader" should be the first result
-      expect(await rows.first().textContent()).toContain('Reader');
+      // Exact match "Reader" should be the first result — assert on the role name link
+      const firstRoleName = rows.first().locator('td:first-child a').first();
+      await expect(firstRoleName).toHaveText('Reader');
     });
 
     test('should not include default values in URL after search', async ({ page }) => {

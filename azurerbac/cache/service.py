@@ -67,10 +67,10 @@ class CacheService:
     def cache(self) -> CacheData:
         return self._cache
 
-    def swap(self, new_cache: CacheData) -> None:
-        """Atomically swap the entire cache and clear request caches."""
+    def swap(self, new_cache: CacheData, request_caches: RequestCaches | None = None) -> None:
+        """Atomically swap the entire cache and request caches."""
         self._cache = new_cache
-        self._request_caches = RequestCaches()
+        self._request_caches = request_caches or RequestCaches()
         logger.debug("Cache swapped (data replaced, request caches cleared)")
 
     def reset(self) -> None:
@@ -82,14 +82,6 @@ class CacheService:
     # DB rebuild operations
     # -------------------------------------------------------------------------
 
-    async def build_from_db(self, session: AsyncSession) -> CacheData:
-        from azurerbac.cache.build import build_from_db
-
-        return await build_from_db(session)
-
-    def swap_in_memory(self, cache_data: CacheData) -> None:
-        self.swap(cache_data)
-
     async def rebuild_in_memory(self, session: AsyncSession) -> bool:
         """Build cache from DB and swap into memory. Skips if already in progress."""
         if _REBUILD_LOCK.locked():
@@ -98,10 +90,14 @@ class CacheService:
 
         async with _REBUILD_LOCK:
             try:
-                cache_data = await self.build_from_db(session)
+                from azurerbac.cache.build import build_from_db
+
+                cache_data = await build_from_db(session)
                 self._initialize_ai_recommender(cache_data)
-                self.swap(cache_data)
-                self._seed_popular_comparisons()
+                request_caches = self._seed_popular_comparisons(cache_data)
+
+                # Atomic swap — only now do readers see the new data
+                self.swap(cache_data, request_caches)
                 return True
             except Exception as e:
                 logger.exception("Failed to rebuild cache in memory: %s", e)
@@ -123,23 +119,41 @@ class CacheService:
         except Exception as e:
             logger.exception("Failed to re-initialize AI recommender: %s", e)
 
-    def _seed_popular_comparisons(self) -> None:
+    def _seed_popular_comparisons(self, cache_data: CacheData) -> RequestCaches:
         """Pre-compute comparison results for popular role pairs.
 
-        Warms the comparisons LRU cache so popular pairs are instant
-        on first request after startup or cache refresh.
+        Calls build_comparison directly against cache_data — no proxy needed.
+        Returns a pre-warmed RequestCaches to be swapped in atomically.
         """
-        from azurerbac.comparer import compute_role_comparison
+        from azurerbac.comparer import build_comparison
 
-        if not (popular := self._cache.popular_comparisons):
-            return
+        request_caches = RequestCaches()
+        popular = cache_data.popular_comparisons
+        if not popular:
+            return request_caches
 
+        ops_casing = cache_data.ops_lowered_to_orig
         seeded = 0
         for pair in popular:
-            if compute_role_comparison(pair.role_a_id, pair.role_b_id, cache=self) is not None:
-                seeded += 1
+            role_a = cache_data.roles_by_id.get(pair.role_a_id)
+            role_b = cache_data.roles_by_id.get(pair.role_b_id)
+            if not role_a or not role_b:
+                continue
+
+            result = build_comparison(
+                pair.role_a_id,
+                pair.role_b_id,
+                role_a,
+                role_b,
+                cache_data.role_coverage.get(pair.role_a_id),
+                cache_data.role_coverage.get(pair.role_b_id),
+                ops_casing,
+            )
+            request_caches.comparisons[f"{pair.role_a_id}:{pair.role_b_id}"] = result
+            seeded += 1
 
         logger.info("Seeded %d/%d popular comparisons into cache", seeded, len(popular))
+        return request_caches
 
     # -------------------------------------------------------------------------
     # Role accessors

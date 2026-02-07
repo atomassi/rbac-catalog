@@ -56,11 +56,6 @@ class RecommenderMode(StrEnum):
         except ValueError:
             return None
 
-    @classmethod
-    def is_valid(cls, value: str | None) -> bool:
-        """Check if a string is a valid recommender mode."""
-        return cls.from_string(value) is not None
-
     @property
     def requires_llm(self) -> bool:
         """Whether this mode requires an LLM connection."""

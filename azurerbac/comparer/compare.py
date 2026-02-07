@@ -9,13 +9,15 @@ boundaries.
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping
 from typing import TYPE_CHECKING
 
 from azurerbac.comparer.models import RoleComparison, RoleComparisonSide
 
 if TYPE_CHECKING:
-    from azurerbac.cache import CacheService
     from azurerbac.cache.models import CachedRole
+    from azurerbac.cache.service import CacheService
+    from azurerbac.matching.models import RoleCoverage
 
 logger = logging.getLogger(__name__)
 
@@ -23,15 +25,6 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-
-def _get_cache(cache: CacheService | None) -> CacheService:
-    """Get cache service."""
-    if cache is not None:
-        return cache
-    from azurerbac.cache import get_cache_service
-
-    return get_cache_service()
 
 
 def _extract_abac_conditions(role: CachedRole) -> list[str]:
@@ -50,44 +43,38 @@ def _extract_assignable_scopes(role: CachedRole) -> list[str]:
 # ---------------------------------------------------------------------------
 
 
-def compute_role_comparison(
+def build_comparison(
     role_a_id: str,
     role_b_id: str,
-    cache: CacheService | None = None,
-) -> RoleComparison | None:
-    """Compare effective operations between two roles.
+    role_a: CachedRole,
+    role_b: CachedRole,
+    cov_a: RoleCoverage | None,
+    cov_b: RoleCoverage | None,
+    ops_casing: Mapping[str, str],
+) -> RoleComparison:
+    """Pure computation of a three-way permission diff between two roles.
 
-    Returns RoleComparison with three-way split (only-A, shared, only-B),
-    or None if either role is not found or IDs are identical.
+    Args:
+        role_a_id: ID of the first role.
+        role_b_id: ID of the second role.
+        role_a: Cached data for the first role.
+        role_b: Cached data for the second role.
+        cov_a: Coverage (lowered operation sets) for role A, or None.
+        cov_b: Coverage (lowered operation sets) for role B, or None.
+        ops_casing: Mapping from lowered operation name to original casing.
+
+    Returns:
+        A RoleComparison with only-A, shared, and only-B operation sets.
     """
-    cache_resolved = _get_cache(cache)
-
-    # Reject comparing a role with itself
-    if role_a_id == role_b_id:
-        return None
-
-    # Cache key preserves argument order so role_a/role_b stay correct
-    cache_key = f"{role_a_id}:{role_b_id}"
-    if (cached := cache_resolved.get_comparison(cache_key)) is not None:
-        return cached
-
-    role_a = cache_resolved.get_role_by_id(role_a_id)
-    role_b = cache_resolved.get_role_by_id(role_b_id)
-    if not role_a or not role_b:
-        return None
-
-    cov_a = cache_resolved.get_role_coverage(role_a_id)
-    cov_b = cache_resolved.get_role_coverage(role_b_id)
-
     ctrl_a = cov_a.control if cov_a else set()
     ctrl_b = cov_b.control if cov_b else set()
     data_a = cov_a.data if cov_a else set()
     data_b = cov_b.data if cov_b else set()
 
-    # Restore original casing from the lowered coverage sets
-    restore = cache_resolved.restore_operation_casing
+    def restore(ops: set[str]) -> list[str]:
+        return [ops_casing.get(op, op) for op in ops]
 
-    result = RoleComparison(
+    return RoleComparison(
         role_a=RoleComparisonSide(
             role_id=role_a_id,
             role_name=role_a.definition.properties.role_name,
@@ -113,5 +100,39 @@ def compute_role_comparison(
         only_b_control=sorted(restore(ctrl_b - ctrl_a)),
         only_b_data=sorted(restore(data_b - data_a)),
     )
-    cache_resolved.set_comparison(cache_key, result)
+
+
+def compute_role_comparison(
+    role_a_id: str,
+    role_b_id: str,
+    cache: CacheService | None = None,
+) -> RoleComparison | None:
+    """Compare two roles with caching. Thin wrapper around build_comparison."""
+    if role_a_id == role_b_id:
+        return None
+
+    if cache is None:
+        from azurerbac.cache import get_cache_service
+
+        cache = get_cache_service()
+
+    cache_key = f"{role_a_id}:{role_b_id}"
+    if (cached := cache.get_comparison(cache_key)) is not None:
+        return cached
+
+    role_a = cache.get_role_by_id(role_a_id)
+    role_b = cache.get_role_by_id(role_b_id)
+    if not role_a or not role_b:
+        return None
+
+    result = build_comparison(
+        role_a_id,
+        role_b_id,
+        role_a,
+        role_b,
+        cache.get_role_coverage(role_a_id),
+        cache.get_role_coverage(role_b_id),
+        cache.cache.ops_lowered_to_orig,
+    )
+    cache.set_comparison(cache_key, result)
     return result

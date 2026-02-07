@@ -8,7 +8,8 @@ from collections.abc import Callable
 
 import anyio
 from anyio import to_thread
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession as _AsyncSession
 
 from azurerbac.cache import get_cache_service
 from azurerbac.settings import Settings
@@ -16,10 +17,10 @@ from azurerbac.settings import Settings
 logger = logging.getLogger(__name__)
 
 
-async def preload_cache(session_factory: async_sessionmaker[AsyncSession]) -> None:
+async def preload_cache(session_factory: async_sessionmaker[_AsyncSession]) -> None:
     """Preload cache with commonly accessed data."""
     logger.info("CACHE INITIALIZATION STARTED")
-    start = time.time()
+    start = time.perf_counter()
 
     service = get_cache_service()
 
@@ -41,16 +42,8 @@ async def preload_cache(session_factory: async_sessionmaker[AsyncSession]) -> No
     track_cache_refresh(elapsed, "startup", roles_count, operations_count)
 
 
-async def cache_refresh_task(session_factory: async_sessionmaker[AsyncSession]) -> None:
-    """Background task for periodic cache refresh from database.
-
-    Simple refresh flow:
-    - At startup: preload_cache() builds from database
-    - Every 2 hours: rebuild from database to ensure consistency
-
-    Args:
-        session_factory: Async session factory for database access
-    """
+async def cache_refresh_task(session_factory: async_sessionmaker[_AsyncSession]) -> None:
+    """Periodic cache refresh from database."""
     from azurerbac.telemetry import track_cache_refresh, track_cache_refresh_failure
 
     settings = Settings.get()
@@ -63,11 +56,11 @@ async def cache_refresh_task(session_factory: async_sessionmaker[AsyncSession]) 
 
             try:
                 logger.info("Background: periodic rebuild from database")
-                start_time = time.time()
+                start_time = time.perf_counter()
 
                 async with session_factory() as session:
                     if await service.rebuild_in_memory(session):
-                        elapsed = time.time() - start_time
+                        elapsed = time.perf_counter() - start_time
                         logger.info("Background: periodic rebuild completed in %.2fs", elapsed)
 
                         track_cache_refresh(
@@ -98,28 +91,22 @@ async def ensure_db(engine: AsyncEngine) -> None:
     await ensure_db_core(engine)
 
 
-async def _run_in_thread(func: Callable[[], None]) -> None:
-    """Run blocking function in thread pool."""
-    await to_thread.run_sync(func)
-
-
 async def _warmup_engine(name: str, factory: Callable[[], object]) -> None:
     """Pre-warm an AI engine in a background thread."""
 
     def _warmup() -> None:
         try:
             logger.info("%s WARMUP: Starting...", name)
-            start = time.time()
+            start = time.perf_counter()
             result = factory()
-            # ColBERT returns bool from warmup(); others just need to be called
             if result is False:
                 logger.warning("%s WARMUP: Skipped (no pre-built index)", name)
             else:
-                logger.info("%s WARMUP: Initialized in %.2fs", name, time.time() - start)
+                logger.info("%s WARMUP: Initialized in %.2fs", name, time.perf_counter() - start)
         except Exception as e:
             logger.exception("%s WARMUP: Failed (non-fatal): %s", name, e)
 
-    await _run_in_thread(_warmup)
+    await to_thread.run_sync(_warmup)
 
 
 async def warmup_colbert() -> None:

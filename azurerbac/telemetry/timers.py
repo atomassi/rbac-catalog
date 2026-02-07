@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 import time
 from abc import ABC, abstractmethod
 from types import TracebackType
@@ -14,8 +13,6 @@ from azurerbac.telemetry.metrics import (
     track_db_query_error,
 )
 
-logger = logging.getLogger(__name__)
-
 
 class BaseTimer(ABC):
     """Base class for timing context managers."""
@@ -26,7 +23,7 @@ class BaseTimer(ABC):
         self._start_time: float = 0
 
     def __enter__(self) -> Self:
-        self._start_time = time.time()
+        self._start_time = time.perf_counter()
         return self
 
     def __exit__(
@@ -35,10 +32,10 @@ class BaseTimer(ABC):
         exc_val: BaseException | None,
         _exc_tb: TracebackType | None,
     ) -> None:
-        self._on_exit(time.time() - self._start_time, exc_type)
+        self._on_exit(time.perf_counter() - self._start_time, exc_type)
 
     async def __aenter__(self) -> Self:
-        self._start_time = time.time()
+        self._start_time = time.perf_counter()
         return self
 
     async def __aexit__(
@@ -47,7 +44,7 @@ class BaseTimer(ABC):
         exc_val: BaseException | None,
         _exc_tb: TracebackType | None,
     ) -> None:
-        self._on_exit(time.time() - self._start_time, exc_type)
+        self._on_exit(time.perf_counter() - self._start_time, exc_type)
 
     @abstractmethod
     def _on_exit(self, elapsed: float, exc_type: type[BaseException] | None) -> None:
@@ -55,12 +52,7 @@ class BaseTimer(ABC):
 
 
 class TimedDbQuery(BaseTimer):
-    """Timer for database queries with metrics tracking.
-
-    Args:
-        query_name: Name of the query for metrics.
-        fallback_type: If set, also tracks this as a cache miss fallback.
-    """
+    """Timer for database queries with metrics tracking."""
 
     __slots__ = ("fallback_type", "query_name", "rows")
 
@@ -78,26 +70,3 @@ class TimedDbQuery(BaseTimer):
         track_db_query(self.query_name, elapsed, self.rows)
         if self.fallback_type:
             track_db_fallback(self.fallback_type, "cache_miss", self.query_name)
-
-
-class TimedOperation(BaseTimer):
-    """Timer for operations with debug logging."""
-
-    __slots__ = ("log", "operation_name")
-
-    def __init__(self, operation_name: str, log: logging.Logger | None = None) -> None:
-        super().__init__()
-        self.operation_name = operation_name
-        self.log = log or logger
-
-    def __enter__(self) -> Self:
-        self.log.debug("Starting: %s", self.operation_name)
-        return super().__enter__()
-
-    async def __aenter__(self) -> Self:
-        self.log.debug("Starting: %s", self.operation_name)
-        return await super().__aenter__()
-
-    def _on_exit(self, elapsed: float, exc_type: type[BaseException] | None) -> None:
-        status = "Failed" if exc_type else "Completed"
-        self.log.debug("%s: %s (%.3fs)", status, self.operation_name, elapsed)

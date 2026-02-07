@@ -1180,7 +1180,7 @@ class TestMaxResultsParameter:
 
         cache = get_cache_service()
         ops = list(cache.cache.all_operations)
-        cache.swap_in_memory(precompute_all(roles, ops))
+        cache.swap(precompute_all(roles, ops))
 
         result = recommend_roles(
             ["Microsoft.Storage/storageAccounts/read"],

@@ -5,16 +5,15 @@ from __future__ import annotations
 import datetime as dt
 import logging
 from collections import Counter
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from sqlalchemy import and_, case, distinct, func, select
 
-from azurerbac.analytics.constants import (
-    DAILY_CHANGES_DAYS,
-    TOP_N_PROVIDERS,
-    TOP_N_ROLES,
-    VOLATILE_THRESHOLD,
-)
+VOLATILE_THRESHOLD: Final = 3
+TOP_N_ROLES: Final = 10
+TOP_N_PROVIDERS: Final = 15
+DAILY_CHANGES_DAYS: Final = 180
+
 from azurerbac.analytics.models import (
     AllTimeStats,
     DailyChanges,

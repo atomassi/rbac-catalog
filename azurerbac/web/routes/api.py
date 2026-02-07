@@ -157,7 +157,7 @@ async def ai_recommend_endpoint(
 
     requested_mode = (
         body.recommender_mode
-        if RecommenderMode.is_valid(body.recommender_mode)
+        if RecommenderMode.from_string(body.recommender_mode) is not None
         else RecommenderMode.LLM.value
     )
     roles = deps.app_cache.get_all_roles()

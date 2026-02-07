@@ -287,10 +287,10 @@ def populated_cache(sample_operations: list[OperationData]) -> Generator[None, N
 
     # Create minimal cache with just the operations (no roles needed for op_sets)
     cache = precompute_all(roles=[], all_operations=sample_operations)
-    get_cache_service().swap_in_memory(cache)
+    get_cache_service().swap(cache)
     yield
     # Reset to empty cache after test (CacheData() is cheaper than precompute_all)
-    get_cache_service().swap_in_memory(CacheData())
+    get_cache_service().swap(CacheData())
 
 
 @pytest.fixture

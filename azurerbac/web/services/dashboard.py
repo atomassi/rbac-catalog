@@ -335,16 +335,36 @@ def _role_matches_search(
     role: CachedRole,
     query_lower: str,
     normalized_guid: str | None,
-    exact_match: bool,
 ) -> bool:
-    """Check if role matches search query."""
+    """Check if role matches search query (contains match)."""
     role_name_lower = role.role_name.lower()
     role_id_lower = role.role_id.lower()
     guid_match = normalized_guid is not None and role.role_id == normalized_guid
-
-    if exact_match:
-        return query_lower in {role_name_lower, role_id_lower} or guid_match
     return query_lower in role_name_lower or query_lower in role_id_lower or guid_match
+
+
+def _role_search_rank(
+    role_name: str,
+    role_id: str,
+    query_lower: str,
+    normalized_guid: str | None,
+) -> int:
+    """Return a relevance rank for sorting search results (lower = better match).
+
+    Ranking tiers (same logic as the compare page):
+      0 = exact name/ID match
+      1 = name starts with query
+      2 = name/ID contains query
+    """
+    role_name_lower = role_name.lower()
+    role_id_lower = role_id.lower()
+    guid_match = normalized_guid is not None and role_id == normalized_guid
+
+    if query_lower in {role_name_lower, role_id_lower} or guid_match:
+        return 0
+    if role_name_lower.startswith(query_lower):
+        return 1
+    return 2
 
 
 async def search_roles(
@@ -356,7 +376,6 @@ async def search_roles(
     order: str | SortOrder,
     page: int,
     page_size: int,
-    exact_match: str | None,
 ) -> PaginatedResult[RoleWithCounts]:
     """Search roles in cache."""
     cached_roles = deps.app_cache.cache.roles_by_id
@@ -364,9 +383,7 @@ async def search_roles(
     if not cached_roles:
         raise RuntimeError("Role cache is empty - application not initialized")
 
-    return search_roles_in_cache(
-        cached_roles, q, status_filter, sort, order, page, page_size, exact_match
-    )
+    return search_roles_in_cache(cached_roles, q, status_filter, sort, order, page, page_size)
 
 
 def search_roles_in_cache(
@@ -377,22 +394,32 @@ def search_roles_in_cache(
     order: str | SortOrder,
     page: int,
     page_size: int,
-    exact_match: str | None,
 ) -> PaginatedResult[RoleWithCounts]:
-    """Search roles in memory cache."""
+    """Search roles in memory cache with relevance ranking.
+
+    Results are ranked: exact match → starts with → contains.
+    Within each tier, the user's chosen sort/order is applied.
+    """
     query_lower = q.strip().lower()
     normalized_guid = normalize_uuid_or_none(q)
-    is_exact = exact_match is not None
 
     matching_roles = [
         role
         for role in cached_roles.values()
         if _matches_status(role.status, status_filter)
-        and _role_matches_search(role, query_lower, normalized_guid, is_exact)
+        and _role_matches_search(role, query_lower, normalized_guid)
     ]
 
     enriched_roles = [enrich_role_with_counts(r) for r in matching_roles]
-    _sort_enriched_roles(enriched_roles, sort=sort, order=order)
+
+    # Two-pass stable sort: secondary sort first, then primary (relevance rank).
+    # Python's stable sort preserves secondary order within each rank tier.
+    sort_field = SortField.from_string(str(sort))
+    secondary_key = _ROLE_SORT_KEYS.get(sort_field, _ROLE_SORT_KEYS[SortField.NAME])
+    enriched_roles.sort(key=secondary_key, reverse=(order == SortOrder.DESC))
+    enriched_roles.sort(
+        key=lambda r: _role_search_rank(r.role_name, r.role_id, query_lower, normalized_guid),
+    )
 
     params = PaginationParams(page=page, page_size=page_size)
     return _paginate_list(enriched_roles, params)

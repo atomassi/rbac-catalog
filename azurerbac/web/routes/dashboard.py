@@ -53,7 +53,6 @@ class DashboardContext:
     status_filter: str = StatusFilter.ACTIVE
     event_type: str = "all"
     ai: int | None = None
-    exact_match: str | None = None
     # Data
     events: list = field(default_factory=list)
     total_events: int = 0
@@ -143,7 +142,6 @@ async def roles_list(
     order: str = SortOrder.ASC,
     status_filter: str = StatusFilter.ACTIVE,
     ai: int | None = None,
-    exact_match: str | None = None,
 ) -> Response:
     """Roles list page."""
     logger.info(
@@ -166,7 +164,6 @@ async def roles_list(
                 order,
                 page,
                 limit,
-                exact_match,
             )
 
         scan_meta = await ensure_scan_metadata(session, deps, common.last_scan, common.first_scan)
@@ -181,7 +178,6 @@ async def roles_list(
         order=order,
         status_filter=status_filter,
         ai=ai,
-        exact_match=exact_match,
         roles=result.items,
         total_roles=common.total_roles or 0,
         total_operations=common.total_operations or 0,

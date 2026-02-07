@@ -8,6 +8,7 @@ achieving 10-15% higher accuracy than bi-encoders alone.
 from __future__ import annotations
 
 import logging
+import math
 from typing import Any, Final, override
 
 from azurerbac.airecommender.engines.base import BaseRecommenderEngine, RankedRole
@@ -114,7 +115,7 @@ class CrossEncoderEngine(BaseRecommenderEngine):
                 # Cross-encoder scores can be negative, normalize to 0-1
                 raw_score = float(ce_scores[i])
                 # Sigmoid-like normalization for cross-encoder scores
-                normalized = 1 / (1 + 2.718 ** (-raw_score))
+                normalized = 1 / (1 + math.exp(-raw_score))
                 candidate.llm_score = normalized  # Reuse llm_score field for CE score
                 # Combine bi-encoder and cross-encoder scores
                 # Weight cross-encoder higher as it's more accurate

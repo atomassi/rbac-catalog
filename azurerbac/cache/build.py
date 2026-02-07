@@ -218,7 +218,7 @@ def precompute_all(
     analytics: AnalyticsData | None = None,
 ) -> CacheData:
     """Pre-compute all caches and return complete CacheData."""
-    start = time.time()
+    start = time.perf_counter()
     logger.debug(
         "Precomputing caches for %d roles, %d operations...",
         len(roles),
@@ -327,7 +327,7 @@ def precompute_all(
         ),
     )
 
-    elapsed = time.time() - start
+    elapsed = time.perf_counter() - start
     logger.info(
         "Precomputed all caches in %.2fs: %d patterns, %d roles, %d pattern matches",
         elapsed,
@@ -453,11 +453,10 @@ async def build_from_db(session: AsyncSession) -> CacheData:
     )
 
     # Build analytics data (now we have role_net_permissions available)
-    from azurerbac.analytics.service import AnalyticsService
+    from azurerbac.analytics.service import build_analytics_from_db
 
-    analytics_service = AnalyticsService()
     all_ops_lower = {op.name.lower() for op in all_operations}
-    analytics_data = await analytics_service.build_from_db(
+    analytics_data = await build_analytics_from_db(
         session,
         all_ops_lower,
         roles_by_id=roles_by_id,

@@ -22,7 +22,7 @@ from azurerbac.analytics.models import (
     RollingStats,
     TopRoleByPermissions,
 )
-from azurerbac.analytics.service import AnalyticsService
+from azurerbac.analytics.service import build_analytics_from_db
 
 # =============================================================================
 # Fixtures
@@ -278,22 +278,11 @@ class TestAnalyticsData:
 # =============================================================================
 
 
-class TestAnalyticsService:
-    """Tests for AnalyticsService."""
-
-    def test_init_no_data(self) -> None:
-        service = AnalyticsService()
-        assert service._analytics_data.computed_at is None
-
-    def test_init_with_data(self, sample_datetime: dt.datetime) -> None:
-        data = AnalyticsData(total_operations=5000, computed_at=sample_datetime)
-        service = AnalyticsService(analytics_data=data)
-        assert service._analytics_data.total_operations == 5000
+class TestBuildAnalyticsFromDb:
+    """Tests for build_analytics_from_db."""
 
     @pytest.mark.asyncio
     async def test_build_from_db(self) -> None:
-        service = AnalyticsService()
-
         with (
             patch(
                 "azurerbac.analytics.service.fetch_all_time_stats",
@@ -368,7 +357,7 @@ class TestAnalyticsService:
                 ),
             ),
         ):
-            result = await service.build_from_db(AsyncMock(), {"op1", "op2"})
+            result = await build_analytics_from_db(AsyncMock(), {"op1", "op2"})
 
         assert result.all_time.total_additions == 100
         assert result.total_operations == 5000
@@ -529,15 +518,15 @@ class TestDailyChangesSerialization:
     """Tests for DailyChanges dataclass serialization."""
 
     @pytest.mark.parametrize(
-        ("date_value", "expected_iso"),
+        "date_value",
         [
-            pytest.param(dt.date(2024, 6, 15), "2024-06-15", id="mid-year"),
-            pytest.param(dt.date(2024, 1, 1), "2024-01-01", id="year-start"),
-            pytest.param(dt.date(2024, 12, 31), "2024-12-31", id="year-end"),
+            pytest.param(dt.date(2024, 6, 15), id="mid-year"),
+            pytest.param(dt.date(2024, 1, 1), id="year-start"),
+            pytest.param(dt.date(2024, 12, 31), id="year-end"),
         ],
     )
-    def test_date_serialization(self, date_value: dt.date, expected_iso: str) -> None:
-        """Verify date fields serialize to ISO format strings."""
+    def test_date_preserved_in_asdict(self, date_value: dt.date) -> None:
+        """Verify date fields are preserved as date objects in asdict output."""
         from dataclasses import asdict
 
         dc = DailyChanges(date=date_value, additions=5, updates=3, deletions=1)

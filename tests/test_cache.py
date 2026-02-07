@@ -1166,9 +1166,8 @@ class TestSeedPopularComparisons:
 class TestRebuildInMemory:
     """Tests for CacheService.rebuild_in_memory failure paths."""
 
-    async def test_returns_false_when_lock_held(self):
-        """rebuild_in_memory returns False when rebuild lock is already held."""
-
+    async def test_returns_false_when_rebuild_in_progress(self):
+        """rebuild_in_memory returns False when a rebuild is already in progress."""
         from azurerbac.cache.service import _REBUILD_LOCK
 
         service = get_cache_service()

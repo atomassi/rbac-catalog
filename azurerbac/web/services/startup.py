@@ -29,7 +29,7 @@ async def preload_cache(session_factory: async_sessionmaker[_AsyncSession]) -> N
         if not await service.rebuild_in_memory(session):
             raise RuntimeError("Cache initialization failed - cannot start without cache")
 
-    elapsed = time.time() - start
+    elapsed = time.perf_counter() - start
     roles_count = service.cache.metadata.roles_count
     operations_count = service.cache.metadata.operations_count
     logger.info("CACHE INITIALIZATION COMPLETE in %.2fs", elapsed)

@@ -8,7 +8,7 @@ import logging
 from collections.abc import Iterable
 from dataclasses import replace
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Final
+from typing import TYPE_CHECKING, Any
 
 from azurerbac.cache.models import (
     CacheData,
@@ -33,8 +33,10 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Lock to prevent concurrent cache rebuilds (async-safe)
-_REBUILD_LOCK: Final[asyncio.Lock] = asyncio.Lock()
+# asyncio.Lock with locked() pre-check for skip-if-busy semantics.
+# Atomic in a single-threaded event loop: no await between the locked()
+# check and the async-with acquire, so no task can interleave.
+_REBUILD_LOCK = asyncio.Lock()
 
 # Type alias for the allowing_roles_cache value type
 RoleAllowingOperationList = list["RoleAllowingOperation"]

@@ -9,11 +9,6 @@ from typing import TYPE_CHECKING, Final
 
 from sqlalchemy import and_, case, distinct, func, select
 
-VOLATILE_THRESHOLD: Final = 3
-TOP_N_ROLES: Final = 10
-TOP_N_PROVIDERS: Final = 15
-DAILY_CHANGES_DAYS: Final = 180
-
 from azurerbac.analytics.models import (
     AllTimeStats,
     DailyChanges,
@@ -39,6 +34,11 @@ if TYPE_CHECKING:
     from azurerbac.matching.models import RoleNetPermissions
 
 logger = logging.getLogger(__name__)
+
+VOLATILE_THRESHOLD: Final = 3
+TOP_N_ROLES: Final = 10
+TOP_N_PROVIDERS: Final = 15
+DAILY_CHANGES_DAYS: Final = 180
 
 
 async def fetch_all_time_stats(session: AsyncSession) -> AllTimeStats:

@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import heapq
+import json
 import logging
 from typing import TYPE_CHECKING, Any, Final
 
 from azurerbac.azure.models import OperationData, RoleDefinition
 from azurerbac.cache.models import CachedChangeEvent, CachedRole
 from azurerbac.core.constants import DEFAULT_ROLE_TYPE
+from azurerbac.core.diffing import RoleDiff
 from azurerbac.core.enums import SortOrder
 from azurerbac.core.utils import truncate_microseconds
 from azurerbac.web.services.models import (
@@ -21,6 +23,7 @@ from azurerbac.web.services.models import (
     RoleEffectivePermissions,
     RolePermissionAnalyzer,
 )
+from azurerbac.web.utils import role_json_pretty
 
 if TYPE_CHECKING:
     from fastapi import Request
@@ -172,20 +175,8 @@ def compute_related_roles(
 ) -> list[RelatedRole]:
     """Compute roles with highest operation overlap using inverted index.
 
-    Uses the precomputed operation_to_roles index for efficient co-occurrence
-    counting, then computes composite similarity for top candidates based on:
-
-    - Operation overlap (Jaccard, 90% weight)
-    - Assignable scope match (binary equality, 5% weight)
-    - Condition similarity (Jaccard on condition strings, 5% weight)
-
-    Args:
-        role_id: The role ID to find related roles for.
-        limit: Maximum number of related roles to return.
-        cache: Optional cache service override.
-
-    Returns:
-        List of related roles sorted by similarity (descending).
+    Uses composite similarity: Jaccard overlap (90%), scope match (5%),
+    condition similarity (5%).
     """
     from azurerbac.core.constants import RoleStatus
 
@@ -470,7 +461,7 @@ def build_role_redirect_url(
     *,
     default_page: int = 1,
     default_limit: int = 25,
-    default_days: int = 15,
+    default_days: int = 30,
 ) -> str:
     """Build redirect URL with canonical slug for role detail page."""
     from urllib.parse import urlencode
@@ -496,23 +487,13 @@ def build_role_redirect_url(
 
 def enrich_event_with_diff(ev: CachedChangeEvent) -> EnrichedChangeEvent:
     """Enrich a role change event with processed diff_json."""
-    import json
-
-    from azurerbac.azure.models import RoleDefinition
-    from azurerbac.core.diffing import RoleDiff
-    from azurerbac.web.utils import role_json_pretty
-
-    def parse_role(role_json: dict | None) -> RoleDefinition | None:
-        """Parse role JSON to RoleDefinition model."""
-        return RoleDefinition.model_validate(role_json) if role_json else None
-
     diff: RoleDiff | None = RoleDiff.from_dict(ev.diff_json)
 
     # Only process before_json/after_json if diff exists and at least one side is present
     # (delete events only have "changes", not the full JSON)
     if diff is not None and (diff.before_json is not None or diff.after_json is not None):
-        before_role = parse_role(diff.before_json)
-        after_role = parse_role(diff.after_json)
+        before_role = RoleDefinition.model_validate(diff.before_json) if diff.before_json else None
+        after_role = RoleDefinition.model_validate(diff.after_json) if diff.after_json else None
 
         # Normalize createdOn to avoid showing it as a diff
         created_on = next(
@@ -533,7 +514,8 @@ def enrich_event_with_diff(ev: CachedChangeEvent) -> EnrichedChangeEvent:
 
     # Process role_json for created/initial_scan events
     role_json_pretty_str = ""
-    if (role_json := ev.role_json) and (parsed := parse_role(role_json)):
+    if (role_json := ev.role_json) and role_json:
+        parsed = RoleDefinition.model_validate(role_json)
         role_json_pretty_str = role_json_pretty(parsed.to_dict())
 
     diff_dict = diff.to_dict() if diff else None

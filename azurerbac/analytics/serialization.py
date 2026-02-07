@@ -7,7 +7,6 @@ from dataclasses import fields
 from typing import Any
 
 from azurerbac.core.types import JsonDict
-from azurerbac.core.utils import format_datetime
 
 
 class SerializableMixin:
@@ -27,9 +26,15 @@ class SerializableMixin:
 
     @staticmethod
     def _serialize_value(value: Any) -> Any:
-        """Serialize a single value (handles datetime)."""
+        """Serialize a single value (handles datetime and nested dataclasses)."""
         if isinstance(value, dt.datetime):
-            return format_datetime(value)
+            return value.isoformat()
         if isinstance(value, dt.date):
             return value.isoformat()
+        if isinstance(value, SerializableMixin):
+            return value.to_dict()
+        if isinstance(value, list):
+            return [
+                item.to_dict() if isinstance(item, SerializableMixin) else item for item in value
+            ]
         return value

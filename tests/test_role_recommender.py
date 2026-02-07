@@ -1360,8 +1360,8 @@ class TestIntraRequestCacheConsistency:
         )
 
         # Verify it uses our custom cache, not global
-        assert svc._caches is custom_cache
-        assert "test-role-id" in svc._caches.role_coverage
+        assert svc._cache is custom_cache
+        assert "test-role-id" in svc._cache.role_coverage
 
     def test_service_captures_cache_eagerly_when_none_provided(self, populated_cache):
         """When no cache provided, service captures global cache at construction."""
@@ -1391,14 +1391,14 @@ class TestIntraRequestCacheConsistency:
             svc = RoleRecommendationService()
 
             # Verify it captured cache_v1
-            assert "v1-marker" in svc._caches.role_coverage
+            assert "v1-marker" in svc._cache.role_coverage
 
             # Now swap the global cache to v2
             current_cache[0] = cache_v2
 
             # Service should STILL use cache_v1 (captured at construction)
-            assert "v1-marker" in svc._caches.role_coverage
-            assert "v2-marker" not in svc._caches.role_coverage
+            assert "v1-marker" in svc._cache.role_coverage
+            assert "v2-marker" not in svc._cache.role_coverage
 
     def test_new_service_gets_fresh_cache(self, populated_cache):
         """Each new service instance captures the current cache state."""
@@ -1424,17 +1424,17 @@ class TestIntraRequestCacheConsistency:
         ):
             # First service gets v1
             svc1 = RoleRecommendationService()
-            assert "v1-marker" in svc1._caches.role_coverage
+            assert "v1-marker" in svc1._cache.role_coverage
 
             # Swap cache
             current_cache[0] = cache_v2
 
             # Second service gets v2 (fresh)
             svc2 = RoleRecommendationService()
-            assert "v2-marker" in svc2._caches.role_coverage
+            assert "v2-marker" in svc2._cache.role_coverage
 
             # First service still has v1
-            assert "v1-marker" in svc1._caches.role_coverage
+            assert "v1-marker" in svc1._cache.role_coverage
 
 
 # =============================================================================

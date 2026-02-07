@@ -23,11 +23,6 @@ def _json_to_str(value: Any) -> str:
     return json.dumps(value, indent=2, sort_keys=True, default=str)
 
 
-def _ensure_str(item: Any) -> str:
-    """Convert item to string via JSON if needed."""
-    return item if isinstance(item, str) else _json_to_str(item)
-
-
 def _process_ndiff(diff_lines_iter: list[str]) -> list[dict]:
     """Process ndiff output into {type, text} dicts."""
     result = []

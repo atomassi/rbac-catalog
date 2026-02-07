@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field, fields
 from enum import Enum
 from typing import TYPE_CHECKING, NamedTuple
 
@@ -64,16 +64,6 @@ class ExpandedMissing(NamedTuple):
 
     operations: list[str]
     total: int
-
-
-class RoleInfo(NamedTuple):
-    """Basic role information."""
-
-    role_id: str
-    role_name: str
-    description: str
-    permissions: list[Permission]
-    assignable_scope: str = "/"
 
 
 class PatternCacheKey(NamedTuple):
@@ -144,17 +134,6 @@ class OperationSets:
         return cls(all_control=cache.control_ops_lowered, all_data=cache.data_ops_lowered)
 
 
-@dataclass(frozen=True, slots=True)
-class WildcardCoverage:
-    """Coverage information for a wildcard pattern."""
-
-    pattern: str
-    plane: str
-    covered_count: int
-    total_count: int
-    uncovered_samples: tuple[str, ...] = field(default_factory=tuple)
-
-
 @dataclass(slots=True)
 class RoleEvaluationContext:
     """Context for evaluating a role's coverage."""
@@ -215,6 +194,6 @@ class RoleMatch:
         return len(self.missing_operations) == 0
 
     def to_dict(self) -> JsonDict:
-        result = asdict(self)
+        result = {f.name: getattr(self, f.name) for f in fields(self)}
         result["is_full_match"] = self.is_full_match
         return result

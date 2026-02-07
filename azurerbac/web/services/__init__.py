@@ -8,7 +8,6 @@ from azurerbac.web.services.dashboard import (
     fetch_roles_paginated,
     filter_cached_events,
     get_common_dashboard_data,
-    search_roles,
     search_roles_in_cache,
 )
 from azurerbac.web.services.models import (
@@ -72,6 +71,5 @@ __all__ = [
     "get_common_dashboard_data",
     "get_roles_allowing_operation",
     "preload_cache",
-    "search_roles",
     "search_roles_in_cache",
 ]

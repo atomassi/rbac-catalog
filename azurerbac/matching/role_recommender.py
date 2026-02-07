@@ -86,24 +86,24 @@ def recommend_roles(
     roles_evaluated = roles_with_matches = 0
 
     for role in roles:
-        if not svc.is_builtin_role(role):
+        if not role.is_builtin:
             continue
 
         roles_evaluated += 1
-        role_info = svc.extract_role_info(role)
-        cached_coverage = svc.get_cached_coverage(role_info.role_id)
+        scopes = role.properties.assignable_scopes
+        cached_coverage = svc.get_cached_coverage(role.role_id)
 
         # Cache must be available (built at startup)
         if not cached_coverage:
-            raise RuntimeError(f"RoleCoverage cache unavailable for role {role_info.role_id}")
+            raise RuntimeError(f"RoleCoverage cache unavailable for role {role.role_id}")
 
         # Create evaluation context
         ctx = RoleEvaluationContext(
-            role_id=role_info.role_id,
-            role_name=role_info.role_name,
-            description=role_info.description,
-            permissions=role_info.permissions,
-            assignable_scope=role_info.assignable_scope,
+            role_id=role.role_id,
+            role_name=role.role_name,
+            description=role.description,
+            permissions=role.properties.permissions,
+            assignable_scope=scopes[0] if scopes else "/",
         )
 
         # Evaluate role coverage using cached data

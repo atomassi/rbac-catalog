@@ -27,7 +27,7 @@ from azurerbac.web.services.dashboard import (
     fetch_roles_paginated,
     filter_cached_events,
     get_common_dashboard_data,
-    search_roles,
+    search_roles_in_cache,
 )
 from azurerbac.web.services.models import PaginationInfo, SortField
 
@@ -153,9 +153,11 @@ async def roles_list(
         if not q:
             result = await fetch_roles_paginated(deps, status_filter, sort, order, page, limit)
         else:
-            result = await search_roles(
-                session,
-                deps,
+            cached_roles = deps.app_cache.cache.roles_by_id
+            if not cached_roles:
+                raise RuntimeError("Role cache is empty - application not initialized")
+            result = search_roles_in_cache(
+                cached_roles,
                 q,
                 status_filter,
                 sort,

@@ -193,15 +193,7 @@ class AnalyticsData:
     recent_operations: list[RecentOperation] = field(default_factory=list)
 
     # Monitoring health
-    health: MonitoringHealth = field(
-        default_factory=lambda: MonitoringHealth(
-            last_scan=None,
-            days_since_last_change=None,
-            total_roles_tracked=0,
-            active_roles=0,
-            deleted_roles=0,
-        )
-    )
+    health: MonitoringHealth = field(default_factory=MonitoringHealth)
 
     # Cache metadata
     computed_at: dt.datetime | None = None

@@ -8,7 +8,6 @@ from azurerbac.matching.models import (
     PlaneContext,
     RoleEvaluationContext,
     RoleMatch,
-    WildcardCoverage,
     WildcardKey,
 )
 from azurerbac.matching.recommendation_service import RoleRecommendationService
@@ -33,7 +32,6 @@ __all__ = [
     "RoleEvaluationContext",
     "RoleMatch",
     "RoleRecommendationService",
-    "WildcardCoverage",
     "WildcardKey",
     "check_operation_allowed",
     "check_wildcard_operation_allowed",

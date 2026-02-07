@@ -5,7 +5,8 @@ from __future__ import annotations
 import datetime as dt
 import math
 from dataclasses import replace
-from typing import TYPE_CHECKING, Any, Final, Protocol
+from enum import Enum
+from typing import TYPE_CHECKING, Any, Final
 
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.sql.elements import ColumnElement
@@ -19,7 +20,6 @@ from azurerbac.core.utils import (
     normalize_uuid_or_none,
     truncate_microseconds,
 )
-from azurerbac.matching.models import RoleNetPermissions
 from azurerbac.telemetry import TimedDbQuery
 from azurerbac.web.services.models import (
     DashboardSummary,
@@ -35,6 +35,7 @@ if TYPE_CHECKING:
 
     from sqlalchemy.ext.asyncio import AsyncSession
 
+    from azurerbac.cache.service import CacheService
     from azurerbac.core.models import Role, RoleHistory
     from azurerbac.web.dependencies import DashboardDeps
 
@@ -50,12 +51,6 @@ _ROLE_SORT_KEYS: Final[dict[SortField, Callable[[RoleWithCounts], Any]]] = {
 }
 
 
-class PermissionsCacheProtocol(Protocol):
-    """Protocol for cache providing role net permissions."""
-
-    def get_role_net_permissions(self, role_id: str) -> RoleNetPermissions | None: ...
-
-
 def _calculate_total_pages(total_count: int, page_size: int) -> int:
     return max(1, math.ceil(total_count / page_size))
 
@@ -68,7 +63,7 @@ def _paginate_list[T](items: list[T], params: PaginationParams) -> PaginatedResu
     return PaginatedResult(items=page_items, total_count=total_count, total_pages=total_pages)
 
 
-def _get_default_cache() -> PermissionsCacheProtocol:
+def _get_default_cache() -> CacheService:
     """Get the default cache singleton."""
     from azurerbac.cache import get_cache_service
 
@@ -77,7 +72,7 @@ def _get_default_cache() -> PermissionsCacheProtocol:
 
 def enrich_role_with_counts(
     role: Role | Any,
-    cache: PermissionsCacheProtocol | None = None,
+    cache: CacheService | None = None,
 ) -> RoleWithCounts:
     """Enrich role with action counts from cache."""
     if cache is None:
@@ -87,8 +82,7 @@ def enrich_role_with_counts(
     actions_count = net_perms.control_count if net_perms else 0
     data_actions_count = net_perms.data_count if net_perms else 0
 
-    # Normalize status (handles both enum and string)
-    status_value = role.status.value if hasattr(role.status, "value") else str(role.status)
+    status_value = role.status.value if isinstance(role.status, Enum) else str(role.status)
 
     return RoleWithCounts(
         role_id=role.role_id,
@@ -364,25 +358,6 @@ def _role_search_rank(
     if role_name_lower.startswith(query_lower):
         return 1
     return 2
-
-
-async def search_roles(
-    session: AsyncSession,
-    deps: DashboardDeps,
-    q: str,
-    status_filter: str | StatusFilter,
-    sort: str | SortField,
-    order: str | SortOrder,
-    page: int,
-    page_size: int,
-) -> PaginatedResult[RoleWithCounts]:
-    """Search roles in cache."""
-    cached_roles = deps.app_cache.cache.roles_by_id
-
-    if not cached_roles:
-        raise RuntimeError("Role cache is empty - application not initialized")
-
-    return search_roles_in_cache(cached_roles, q, status_filter, sort, order, page, page_size)
 
 
 def search_roles_in_cache(

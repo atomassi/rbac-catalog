@@ -62,8 +62,3 @@ def format_iso_z(d: dt.datetime | None) -> str | None:
     if d.tzinfo is None:
         d = d.replace(tzinfo=dt.UTC)
     return d.isoformat(timespec="milliseconds").replace("+00:00", "Z")
-
-
-def format_datetime(val: dt.datetime | None) -> str | None:
-    """Format datetime to ISO string."""
-    return val.isoformat() if val else None

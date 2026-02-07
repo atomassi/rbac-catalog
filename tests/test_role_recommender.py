@@ -1180,21 +1180,23 @@ class TestRecommendationService:
 
         # Get a role that partially covers Microsoft.Storage/*
         pattern_ops = svc.control_wildcard_ops.get("Microsoft.Storage/*", set())
-        if len(pattern_ops) >= 2:
-            partial_ops = frozenset(list(pattern_ops)[:1])  # Just 1 op
-            ctx = RoleEvaluationContext(
-                role_id="test", role_name="Test", description="", permissions=[]
-            )
-            plane = PlaneContext(
-                cached_ops=partial_ops,
-                wildcards=frozenset({"Microsoft.Storage/*"}),
-                wildcard_ops_map=svc.control_wildcard_ops,
-                plane=Plane.CONTROL,
-                all_ops=svc.op_sets.all_control,
-            )
-            svc._evaluate_wildcards_fast(ctx, plane)
-            # Should have partial coverage recorded
-            assert len(ctx.wildcard_partial_coverage) > 0
+        if len(pattern_ops) < 2:
+            pytest.skip("Not enough operations for Microsoft.Storage/* to test partial coverage.")
+
+        partial_ops = frozenset(list(pattern_ops)[:1])  # Just 1 op
+        ctx = RoleEvaluationContext(
+            role_id="test", role_name="Test", description="", permissions=[]
+        )
+        plane = PlaneContext(
+            cached_ops=partial_ops,
+            wildcards=frozenset({"Microsoft.Storage/*"}),
+            wildcard_ops_map=svc.control_wildcard_ops,
+            plane=Plane.CONTROL,
+            all_ops=svc.op_sets.all_control,
+        )
+        svc._evaluate_wildcards_fast(ctx, plane)
+        # Should have partial coverage recorded
+        assert len(ctx.wildcard_partial_coverage) > 0
 
 
 # =============================================================================

@@ -1173,7 +1173,8 @@ class TestRebuildInMemory:
         from azurerbac.cache.service import _REBUILD_LOCK
 
         service = get_cache_service()
-        _REBUILD_LOCK.acquire()
+        acquired = _REBUILD_LOCK.acquire(blocking=False)
+        assert acquired, "Failed to acquire _REBUILD_LOCK for test setup"
         try:
             result = await service.rebuild_in_memory(MagicMock())
             assert result is False

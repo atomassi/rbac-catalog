@@ -872,16 +872,16 @@ class TestScopesContain:
     @pytest.mark.parametrize(
         ("broader", "narrower", "expected"),
         [
-            pytest.param(frozenset("/"), frozenset("/"), True, id="identical"),
+            pytest.param(frozenset(("/",)), frozenset(("/",)), True, id="identical"),
             pytest.param(
-                frozenset("/"),
+                frozenset(("/",)),
                 frozenset(("/subscriptions/abc",)),
                 True,
                 id="root_contains_narrow",
             ),
             pytest.param(
                 frozenset(("/subscriptions/abc",)),
-                frozenset("/"),
+                frozenset(("/",)),
                 False,
                 id="narrow_not_contains_root",
             ),

@@ -11,7 +11,6 @@ from azurerbac.cache.models import (
     compute_roles_hash,
 )
 from azurerbac.cache.service import CacheService, get_cache_service
-from azurerbac.matching.models import Plane
 
 __all__ = [
     "CacheData",
@@ -20,7 +19,6 @@ __all__ = [
     "CachedChangeEvent",
     "CachedRole",
     "PatternCacheKey",
-    "Plane",
     "compute_operations_hash",
     "compute_roles_hash",
     "get_cache_service",

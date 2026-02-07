@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
 from fastapi import Request
@@ -44,21 +44,24 @@ class PagesDeps(BaseDeps):
     templates: Jinja2Templates
 
 
-def _patch_session_local[T: BaseDeps](request: Request, deps: T) -> T:
-    deps.SessionLocal = request.app.state.session_local
-    return deps
+def _with_session_local[T: BaseDeps](request: Request, deps: T) -> T:
+    """Return deps with the current SessionLocal (tests may override app.state.session_local)."""
+    current = request.app.state.session_local
+    if deps.SessionLocal is current:
+        return deps
+    return replace(deps, SessionLocal=current)
 
 
 def get_api_deps(request: Request) -> BaseDeps:
     """Get API dependencies from request."""
-    return _patch_session_local(request, request.app.state.api_deps)
+    return _with_session_local(request, request.app.state.api_deps)
 
 
 def get_dashboard_deps(request: Request) -> DashboardDeps:
     """Get dashboard dependencies from request."""
-    return _patch_session_local(request, request.app.state.dashboard_deps)
+    return _with_session_local(request, request.app.state.dashboard_deps)
 
 
 def get_pages_deps(request: Request) -> PagesDeps:
     """Get pages dependencies from request."""
-    return _patch_session_local(request, request.app.state.pages_deps)
+    return _with_session_local(request, request.app.state.pages_deps)

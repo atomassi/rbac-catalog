@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from functools import partial
 from typing import Annotated
 
+from anyio import to_thread
 from fastapi import APIRouter, Depends, Query, Request
 
 from azurerbac.airecommender import (
@@ -110,14 +110,12 @@ async def api_recommend_roles(
     requested_ops, data_flags = request.parse_operations()
 
     # Run CPU-bound recommendation in thread pool to avoid blocking event loop
-    loop = asyncio.get_running_loop()
-    matches = await loop.run_in_executor(
-        None,
+    matches = await to_thread.run_sync(
         partial(
             recommend_roles,
             requested_ops,
             requested_ops_data_flags=data_flags,
-        ),
+        )
     )
 
     # Get expanded count from first match, or fall back to raw count
@@ -165,16 +163,14 @@ async def ai_recommend_endpoint(
     roles = deps.app_cache.get_all_roles()
 
     try:
-        loop = asyncio.get_running_loop()
-        recommendations, actual_mode = await loop.run_in_executor(
-            None,
+        recommendations, actual_mode = await to_thread.run_sync(
             partial(
                 ai_recommend_roles,
                 query=query,
                 roles=roles,
                 top_k=body.top_k,
                 requested_mode=requested_mode,
-            ),
+            )
         )
     except EngineNotAvailableError as e:
         logger.warning("Engine not available: mode=%s missing=%s", e.mode, e.missing_components)

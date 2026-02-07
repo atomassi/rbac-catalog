@@ -113,6 +113,14 @@ class CachedChangeEvent:
     diff_json: JsonDict | None = None
     role_json: JsonDict | None = None
 
+    @property
+    def effective_timestamp(self) -> dt.datetime:
+        """Best available timestamp (azure_updated_on > scan_timestamp > UTC min)."""
+        ts = self.azure_updated_on or self.scan_timestamp
+        if ts is None:
+            return dt.datetime.min.replace(tzinfo=dt.UTC)
+        return ts if ts.tzinfo else ts.replace(tzinfo=dt.UTC)
+
 
 @dataclass(slots=True)
 class Sitemap:
@@ -463,6 +471,14 @@ class CacheData:
     @property
     def role_coverage(self) -> dict[str, RoleCoverage]:
         return self.analysis.role_coverage
+
+    @cached_property
+    def events_by_role(self) -> dict[str, list[CachedChangeEvent]]:
+        """Index of change events keyed by role_id (populated lazily)."""
+        index: dict[str, list[CachedChangeEvent]] = {}
+        for event in self.all_change_events:
+            index.setdefault(event.role_id, []).append(event)
+        return index
 
     @cached_property
     def role_net_permissions(self) -> dict[str, RoleNetPermissions]:

@@ -15,7 +15,6 @@ from azurerbac.core.constants import DEFAULT_ROLE_TYPE, EventType
 from azurerbac.core.enums import EventTypeFilter, SortOrder, StatusFilter
 from azurerbac.core.utils import (
     ensure_utc,
-    ensure_utc_or_min,
     normalize_uuid_or_none,
     truncate_microseconds,
 )
@@ -36,7 +35,7 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from azurerbac.cache.service import CacheService
-    from azurerbac.core.models import Role, RoleHistory
+    from azurerbac.core.models import RoleHistory
     from azurerbac.web.dependencies import DashboardDeps
 
 
@@ -67,7 +66,7 @@ def _get_default_cache() -> CacheService:
 
 
 def enrich_role_with_counts(
-    role: Role | Any,
+    role: CachedRole,
     cache: CacheService | None = None,
 ) -> RoleWithCounts:
     """Enrich role with action counts from cache."""
@@ -78,13 +77,11 @@ def enrich_role_with_counts(
     actions_count = net_perms.control_count if net_perms else 0
     data_actions_count = net_perms.data_count if net_perms else 0
 
-    status_value = role.status.value if isinstance(role.status, Enum) else str(role.status)
-
     return RoleWithCounts(
         role_id=role.role_id,
         role_name=role.role_name,
         role_type=role.role_type or DEFAULT_ROLE_TYPE,
-        status=status_value,
+        status=role.status.value if isinstance(role.status, Enum) else str(role.status),
         updated_on=role.updated_on,
         actions_count=actions_count,
         data_actions_count=data_actions_count,
@@ -139,7 +136,7 @@ def _event_matches_filter(
 
 def _get_event_sort_key(e: CachedChangeEvent) -> dt.datetime:
     """Sort key for events."""
-    return ensure_utc_or_min(e.azure_updated_on or e.scan_timestamp)
+    return e.effective_timestamp
 
 
 def filter_cached_events(

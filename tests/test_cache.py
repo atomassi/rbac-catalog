@@ -13,7 +13,6 @@ from azurerbac.cache import (
     CacheMetadata,
     CacheService,
     PatternCacheKey,
-    Plane,
     compute_operations_hash,
     compute_roles_hash,
     get_cache_service,
@@ -25,7 +24,7 @@ from azurerbac.cache.build import (
 )
 from azurerbac.cache.models import PopularComparison
 from azurerbac.core.constants import EventType, RoleStatus
-from azurerbac.matching.models import RoleCoverage
+from azurerbac.matching.models import Plane, RoleCoverage
 
 
 def make_cached_roles_by_id(roles: list[RoleDefinition]) -> dict[str, CachedRole]:
@@ -1173,8 +1172,7 @@ class TestRebuildInMemory:
         from azurerbac.cache.service import _REBUILD_LOCK
 
         service = get_cache_service()
-        acquired = _REBUILD_LOCK.acquire(blocking=False)
-        assert acquired, "Failed to acquire _REBUILD_LOCK for test setup"
+        await _REBUILD_LOCK.acquire()
         try:
             result = await service.rebuild_in_memory(MagicMock())
             assert result is False

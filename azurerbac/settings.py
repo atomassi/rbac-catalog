@@ -55,14 +55,19 @@ def is_running_in_pytest() -> bool:
     return bool(os.getenv(EnvVars.PYTEST_CURRENT_TEST))
 
 
-def _get_bool(name: str, default: bool) -> bool:
-    value = os.getenv(name)
-    return value.strip().lower() in _BOOL_TRUE_VALUES if value else default
+def _set_bool(kwargs: dict[str, object], key: str, env_var: str) -> None:
+    if (value := os.getenv(env_var)) is not None:
+        kwargs[key] = value.strip().lower() in _BOOL_TRUE_VALUES
 
 
-def _get_int(name: str, default: int) -> int:
-    value = os.getenv(name)
-    return int(value) if value else default
+def _set_int(kwargs: dict[str, object], key: str, env_var: str) -> None:
+    if (value := os.getenv(env_var)) is not None:
+        kwargs[key] = int(value)
+
+
+def _set_str(kwargs: dict[str, object], key: str, env_var: str) -> None:
+    if (value := os.getenv(env_var)) is not None:
+        kwargs[key] = value
 
 
 class Settings(BaseModel):
@@ -111,31 +116,38 @@ def _load_settings() -> Settings:
         if env_name in _VALID_ENVIRONMENTS
         else ""
     )
-    return Settings(
-        roles_poll_interval_seconds=_get_int(EnvVars.ROLES_POLL_INTERVAL_SECONDS, 7200),
-        operations_poll_interval_seconds=_get_int(EnvVars.OPERATIONS_POLL_INTERVAL_SECONDS, 86400),
-        role_scan_enabled=_get_bool(EnvVars.ROLE_SCAN_ENABLED, True),
-        operations_scan_enabled=_get_bool(EnvVars.OPERATIONS_SCAN_ENABLED, True),
-        run_roles_scan_on_startup=_get_bool(EnvVars.RUN_SCAN_ON_STARTUP, True),
-        run_operations_scan_on_startup=_get_bool(EnvVars.RUN_OPERATIONS_SCAN_ON_STARTUP, True),
-        db_connection_string=os.getenv(
-            EnvVars.DB_CONNECTION_STRING, "sqlite+aiosqlite:///./azurerbac.db"
-        ),
-        use_managed_identity=_get_bool(EnvVars.USE_MANAGED_IDENTITY, False),
-        msi_db_host=os.getenv(EnvVars.MSI_DB_HOST, ""),
-        msi_db_port=_get_int(EnvVars.MSI_DB_PORT, 5432),
-        msi_db_name=os.getenv(EnvVars.MSI_DB_NAME, ""),
-        msi_db_user=os.getenv(EnvVars.MSI_DB_USER, ""),
-        ollama_base_url=os.getenv(EnvVars.OLLAMA_BASE_URL, "http://localhost:11434"),
-        ollama_model=os.getenv(EnvVars.OLLAMA_MODEL, "qwen-rbac-v5"),
-        log_level=os.getenv(EnvVars.LOG_LEVEL, "INFO").upper(),
-        db_rebuild_interval_seconds=_get_int(EnvVars.DB_REBUILD_INTERVAL_SECONDS, 21600),
-        enable_embeddings_in_tests=_get_bool(EnvVars.AZURERBAC_ENABLE_EMBEDDINGS_IN_TESTS, False),
-        app_insights_connection_string=app_insights,
-        environment_name=env_name,
-        use_rbac_api=_get_bool(EnvVars.USE_RBAC_API, True),
-        mcp_server_enabled=_get_bool(EnvVars.MCP_SERVER_ENABLED, True),
-    )
+
+    # Build kwargs only for env vars that are actually set, letting
+    # the Settings model defaults handle everything else (single source of truth).
+    kwargs: dict[str, object] = {
+        "environment_name": env_name,
+        "app_insights_connection_string": app_insights,
+    }
+
+    _set_int(kwargs, "roles_poll_interval_seconds", EnvVars.ROLES_POLL_INTERVAL_SECONDS)
+    _set_int(kwargs, "operations_poll_interval_seconds", EnvVars.OPERATIONS_POLL_INTERVAL_SECONDS)
+    _set_bool(kwargs, "role_scan_enabled", EnvVars.ROLE_SCAN_ENABLED)
+    _set_bool(kwargs, "operations_scan_enabled", EnvVars.OPERATIONS_SCAN_ENABLED)
+    _set_bool(kwargs, "run_roles_scan_on_startup", EnvVars.RUN_SCAN_ON_STARTUP)
+    _set_bool(kwargs, "run_operations_scan_on_startup", EnvVars.RUN_OPERATIONS_SCAN_ON_STARTUP)
+    _set_str(kwargs, "db_connection_string", EnvVars.DB_CONNECTION_STRING)
+    _set_bool(kwargs, "use_managed_identity", EnvVars.USE_MANAGED_IDENTITY)
+    _set_str(kwargs, "msi_db_host", EnvVars.MSI_DB_HOST)
+    _set_int(kwargs, "msi_db_port", EnvVars.MSI_DB_PORT)
+    _set_str(kwargs, "msi_db_name", EnvVars.MSI_DB_NAME)
+    _set_str(kwargs, "msi_db_user", EnvVars.MSI_DB_USER)
+    _set_str(kwargs, "ollama_base_url", EnvVars.OLLAMA_BASE_URL)
+    _set_str(kwargs, "ollama_model", EnvVars.OLLAMA_MODEL)
+    _set_int(kwargs, "db_rebuild_interval_seconds", EnvVars.DB_REBUILD_INTERVAL_SECONDS)
+    _set_bool(kwargs, "enable_embeddings_in_tests", EnvVars.AZURERBAC_ENABLE_EMBEDDINGS_IN_TESTS)
+    _set_bool(kwargs, "use_rbac_api", EnvVars.USE_RBAC_API)
+    _set_bool(kwargs, "mcp_server_enabled", EnvVars.MCP_SERVER_ENABLED)
+
+    log_level = os.getenv(EnvVars.LOG_LEVEL)
+    if log_level:
+        kwargs["log_level"] = log_level.upper()
+
+    return Settings(**kwargs)  # type: ignore[arg-type]
 
 
 _settings: ThreadSafeSingleton[Settings] = ThreadSafeSingleton(factory=_load_settings)

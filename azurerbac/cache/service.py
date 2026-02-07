@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import fnmatch
 import logging
-import threading
 from collections.abc import Iterable
 from dataclasses import replace
 from datetime import datetime
@@ -33,8 +33,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Lock to prevent concurrent cache rebuilds
-_REBUILD_LOCK: Final[threading.Lock] = threading.Lock()
+# Lock to prevent concurrent cache rebuilds (async-safe)
+_REBUILD_LOCK: Final[asyncio.Lock] = asyncio.Lock()
 
 # Type alias for the allowing_roles_cache value type
 RoleAllowingOperationList = list["RoleAllowingOperation"]
@@ -65,14 +65,10 @@ class CacheService:
 
     @property
     def cache(self) -> CacheData:
-        """Current cache data."""
         return self._cache
 
     def swap(self, new_cache: CacheData) -> None:
-        """Atomically swap the entire cache.
-
-        CacheData is replaced and RequestCaches are cleared.
-        """
+        """Atomically swap the entire cache and clear request caches."""
         self._cache = new_cache
         self._request_caches = RequestCaches()
         logger.debug("Cache swapped (data replaced, request caches cleared)")
@@ -87,32 +83,34 @@ class CacheService:
     # -------------------------------------------------------------------------
 
     async def build_from_db(self, session: AsyncSession) -> CacheData:
-        """Build complete cache data from database."""
         from azurerbac.cache.build import build_from_db
 
         return await build_from_db(session)
 
     def swap_in_memory(self, cache_data: CacheData) -> None:
-        """Swap cache data into memory."""
         self.swap(cache_data)
 
     async def rebuild_in_memory(self, session: AsyncSession) -> bool:
-        """Build cache from DB and swap into memory. Thread-safe via lock."""
-        if not _REBUILD_LOCK.acquire(blocking=False):
+        """Build cache from DB and swap into memory. Async-safe via lock."""
+        if _REBUILD_LOCK.locked():
             logger.warning("Cache rebuild already in progress, skipping")
             return False
 
-        try:
-            cache_data = await self.build_from_db(session)
-            self.swap_in_memory(cache_data)
-            self._initialize_ai_recommender(cache_data)
-            self._seed_popular_comparisons()
-            return True
-        except Exception as e:
-            logger.exception("Failed to rebuild cache in memory: %s", e)
-            return False
-        finally:
-            _REBUILD_LOCK.release()
+        async with _REBUILD_LOCK:
+            try:
+                # Build everything on detached data first
+                cache_data = await self.build_from_db(session)
+                self._initialize_ai_recommender(cache_data)
+
+                # Atomic swap — only now do readers see the new data
+                self.swap_in_memory(cache_data)
+
+                # Seed caches that need the live data in self._cache
+                self._seed_popular_comparisons()
+                return True
+            except Exception as e:
+                logger.exception("Failed to rebuild cache in memory: %s", e)
+                return False
 
     def _initialize_ai_recommender(self, cache_data: CacheData) -> None:
         """Re-initialize AI recommender with updated role data."""
@@ -153,7 +151,6 @@ class CacheService:
     # -------------------------------------------------------------------------
 
     def get_role_by_id(self, role_id: str) -> CachedRole | None:
-        """Get cached role by ID."""
         result = self._cache.roles_by_id.get(role_id)
         track_cache_hit("role_by_id", result is not None, role_id)
         return result
@@ -164,26 +161,22 @@ class CacheService:
         return result
 
     def get_role_coverage(self, role_id: str) -> RoleCoverage | None:
-        """Get cached role coverage or None if not cached."""
         result = self._cache.role_coverage.get(role_id)
         track_cache_hit("role_coverage", result is not None, role_id)
         return result
 
     def get_role_net_permissions(self, role_id: str) -> RoleNetPermissions | None:
-        """Get cached role net permissions or None if not cached."""
         result = self._cache.role_net_permissions.get(role_id)
         track_cache_hit("role_net_permissions", result is not None, role_id)
         return result
 
     def get_roles_for_operation(self, operation_name: str) -> list[str]:
-        """Get role IDs that grant an operation."""
         key = operation_name.lower()
         result = self._cache.operation_to_roles.get(key)
         track_cache_hit("operation_to_roles", result is not None, key)
         return result if result is not None else []
 
     def get_operation_role_count(self, operation_name: str) -> int:
-        """Get cached count of roles granting an operation."""
         key = operation_name.lower()
         return len(self._cache.operation_to_roles.get(key, []))
 
@@ -253,17 +246,15 @@ class CacheService:
         return self._cache.all_change_events
 
     def get_events_for_role(self, role_id: str) -> list[CachedChangeEvent]:
-        """Get change events for a specific role."""
-        return [e for e in self._cache.all_change_events if e.role_id == role_id]
+        """Get change events for a specific role (O(1) via index)."""
+        return self._cache.events_by_role.get(role_id, [])
 
     def get_filtered_events(self, cache_key: str) -> list[CachedChangeEvent] | None:
-        """Get cached filtered events by key (days:event_type)."""
         result = self._request_caches.filtered_events.get(cache_key)
         track_cache_hit("filtered_events", result is not None, cache_key)
         return result
 
     def set_filtered_events(self, cache_key: str, events: list[CachedChangeEvent]) -> None:
-        """Cache filtered events by key."""
         self._request_caches.filtered_events[cache_key] = events
 
     # -------------------------------------------------------------------------
@@ -271,11 +262,9 @@ class CacheService:
     # -------------------------------------------------------------------------
 
     def get_sitemap(self) -> Sitemap | None:
-        """Get pre-built sitemap or None if cache not loaded."""
         return self._cache.sitemap
 
     def get_popular_comparisons(self) -> list[PopularComparison]:
-        """Get pre-built popular comparison pairs."""
         return self._cache.popular_comparisons
 
     # -------------------------------------------------------------------------
@@ -283,23 +272,19 @@ class CacheService:
     # -------------------------------------------------------------------------
 
     def get_role_page(self, page_key: str) -> Any:
-        """Get a cached role page or count value."""
         result = self._request_caches.role_pages.get(page_key)
         track_cache_hit("role_page", result is not None, page_key)
         return result
 
     def set_role_page(self, page_key: str, roles: Any) -> None:
-        """Cache a role page or count value."""
         self._request_caches.role_pages[page_key] = roles
 
     def get_operation_page(self, page_key: str) -> Any:
-        """Get a cached operation page or count value."""
         result = self._request_caches.operation_pages.get(page_key)
         track_cache_hit("operation_page", result is not None, page_key)
         return result
 
     def set_operation_page(self, page_key: str, value: Any) -> None:
-        """Cache an operation page or count value."""
         self._request_caches.operation_pages[page_key] = value
 
     def get_allowing_roles(self, key: str) -> RoleAllowingOperationList | None:
@@ -311,23 +296,19 @@ class CacheService:
         self._request_caches.allowing_roles[key] = value
 
     def get_related_roles(self, key: str) -> RelatedRoleList | None:
-        """Get cached related roles for a role ID."""
         result = self._request_caches.related_roles.get(key)
         track_cache_hit("related_roles", result is not None, key)
         return result
 
     def set_related_roles(self, key: str, value: RelatedRoleList) -> None:
-        """Cache related roles for a role ID."""
         self._request_caches.related_roles[key] = value
 
     def get_comparison(self, key: str) -> RoleComparison | None:
-        """Get cached role comparison result."""
         result = self._request_caches.comparisons.get(key)
         track_cache_hit("comparisons", result is not None, key)
         return result
 
     def set_comparison(self, key: str, value: RoleComparison) -> None:
-        """Cache role comparison result."""
         self._request_caches.comparisons[key] = value
 
     # -------------------------------------------------------------------------

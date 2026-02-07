@@ -196,49 +196,42 @@ def configure_logging(component: str = "app", level: int = logging.INFO) -> str 
                 __version__,
             )
         except ImportError:
-            # Fallback to console if azure-monitor-opentelemetry not available
-            console_handler = logging.StreamHandler()
-            console_handler.setLevel(level)
-            console_handler.setFormatter(formatter)
-            console_handler.addFilter(credential_filter)
-            console_handler.addFilter(environment_filter)
-            root_logger.addHandler(console_handler)
-
+            _add_console_handler(
+                root_logger, level, formatter, credential_filter, environment_filter
+            )
             logging.getLogger(__name__).warning(
                 "azure-monitor-opentelemetry not installed, using console logging"
             )
         except Exception as e:
-            # Fallback to console on any error
-            console_handler = logging.StreamHandler()
-            console_handler.setLevel(level)
-            console_handler.setFormatter(formatter)
-            console_handler.addFilter(credential_filter)
-            console_handler.addFilter(environment_filter)
-            root_logger.addHandler(console_handler)
-
+            _add_console_handler(
+                root_logger, level, formatter, credential_filter, environment_filter
+            )
             logging.getLogger(__name__).warning(
                 "Failed to configure App Insights: %s, using console logging",
                 e,
             )
     else:
         # No connection string - console only
-        console_handler = logging.StreamHandler()
-        console_handler.setLevel(level)
-        console_handler.setFormatter(formatter)
-        console_handler.addFilter(credential_filter)
-        console_handler.addFilter(environment_filter)
-        root_logger.addHandler(console_handler)
+        _add_console_handler(root_logger, level, formatter, credential_filter, environment_filter)
 
     return _configured_log_file
 
 
+def _add_console_handler(
+    logger: logging.Logger,
+    level: int,
+    formatter: logging.Formatter,
+    *filters: logging.Filter,
+) -> None:
+    """Add a console handler with the given formatter and filters."""
+    handler = logging.StreamHandler()
+    handler.setLevel(level)
+    handler.setFormatter(formatter)
+    for f in filters:
+        handler.addFilter(f)
+    logger.addHandler(handler)
+
+
 def get_logger(name: str) -> logging.Logger:
-    """Get a logger instance.
-
-    Args:
-        name: Logger name (typically __name__)
-
-    Returns:
-        Logger instance
-    """
+    """Get a logger instance."""
     return logging.getLogger(name)

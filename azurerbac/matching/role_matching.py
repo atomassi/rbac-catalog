@@ -324,32 +324,7 @@ def count_wildcard_partial_coverage(
     *,
     caches: CacheData | None = None,
 ) -> CoverageResult:
-    """Count operations matching a wildcard pattern granted by the actions.
-
-    Args:
-        requested_pattern: Wildcard operation pattern to evaluate coverage for,
-            for example ``"Microsoft.Storage/*"`` or ``"*/read"``.
-        actions: Action patterns granted by the role (the role's ``actions``).
-        not_actions: Exclusion patterns that remove operations from the granted
-            set (the role's ``notActions``).
-        all_operations: Full set of known operation names used to expand
-            wildcard patterns.
-        plane: Optional plane filter that restricts matching to a specific
-            plane (for example, control or data). If ``None``, all planes are
-            considered.
-        max_uncovered_sample: Maximum number of uncovered operations to include
-            in the sample list for the result. This does not affect counts,
-            only how many example operation names are returned.
-        caches: Optional cache data override. When provided, it is used for
-            operation and partial coverage caching instead of the global cache
-            service.
-
-    Returns:
-        CoverageResult: Coverage statistics for the requested pattern,
-        including the number of covered operations, total matching operations,
-        number of uncovered operations, and a sample list of uncovered
-        operation names (up to ``max_uncovered_sample``).
-    """
+    """Count operations matching a wildcard pattern that are granted by the given actions."""
     cache = _get_cache(caches)
     partial_cache_key = PartialCoverageCacheKey.build(
         requested_pattern, plane, actions, not_actions
@@ -435,18 +410,7 @@ def count_net_permissions(
     *,
     caches: CacheData | None = None,
 ) -> int:
-    """Count the net number of operations granted (actions minus notActions).
-
-    Args:
-        actions: List of action patterns that grant access.
-        not_actions: List of notAction patterns that deny access.
-        all_operations: Set of all valid operations.
-        plane: Optional plane for cache lookups (CONTROL or DATA).
-        caches: Optional cache container.
-
-    Returns:
-        Net count of granted operations.
-    """
+    """Count the net number of operations granted (actions minus notActions)."""
     if not actions:
         return 0
 
@@ -479,16 +443,7 @@ def count_net_permissions(
 def is_high_privilege_role(role: RoleDefinition) -> bool:
     """Check if a role is high-privilege based on its ID or effective permissions.
 
-    A role is high-privilege if:
-    1. It's a well-known high-privilege role (Owner, Contributor, User Access Administrator)
-    2. OR it grants Microsoft.Authorization/roleAssignments/write in any permission block
-       WITHOUT a condition that constrains roleAssignments.
-
-    Args:
-        role: RoleDefinition object to check.
-
-    Returns:
-        True if the role can assign ANY role without restriction.
+    High-privilege: well-known role IDs OR grants roleAssignments/write without ABAC condition.
     """
     from azurerbac.core.constants import HIGH_PRIVILEGE_OPERATION, HIGH_PRIVILEGE_ROLE_IDS
 

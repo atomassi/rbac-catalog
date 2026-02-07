@@ -301,7 +301,6 @@ def _fetch_roles_from_cache(
 
 
 async def fetch_roles_paginated(
-    _session: AsyncSession,  # unused - kept for API compatibility
     deps: DashboardDeps,
     status_filter: str | StatusFilter,
     sort: str | SortField,

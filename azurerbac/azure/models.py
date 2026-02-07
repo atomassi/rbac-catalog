@@ -170,6 +170,23 @@ class RoleDefinition(BaseModel):
         """Normalize field names to lowercase for case-insensitive matching."""
         return _normalize_dict_keys(data, _ROLE_DEFINITION_FIELD_MAP)
 
+    @staticmethod
+    def _build_properties(props: dict[str, Any]) -> RoleProperties:
+        """Build RoleProperties from a raw properties dict."""
+        return RoleProperties.model_validate(
+            {
+                "roleName": props.get("roleName", ""),
+                "type": props.get("type", ""),
+                "description": props.get("description", ""),
+                "assignableScopes": props.get("assignableScopes", []),
+                "permissions": [Permission.model_validate(p) for p in props.get("permissions", [])],
+                "createdOn": props.get("createdOn", ""),
+                "updatedOn": props.get("updatedOn", ""),
+                "createdBy": props.get("createdBy"),
+                "updatedBy": props.get("updatedBy"),
+            }
+        )
+
     @classmethod
     def from_resource_graph(cls, item: dict[str, Any]) -> RoleDefinition:
         """Transform a Resource Graph role definition to normalized format."""
@@ -189,57 +206,17 @@ class RoleDefinition(BaseModel):
             id=normalized_id,
             name=name,
             type=ROLE_DEFINITION_TYPE,
-            properties=RoleProperties.model_validate(
-                {
-                    "roleName": props.get("roleName", ""),
-                    "type": props.get("type", ""),
-                    "description": props.get("description", ""),
-                    "assignableScopes": props.get("assignableScopes", []),
-                    "permissions": [
-                        Permission.model_validate(p) for p in props.get("permissions", [])
-                    ],
-                    "createdOn": props.get("createdOn", ""),
-                    "updatedOn": props.get("updatedOn", ""),
-                    "createdBy": props.get("createdBy"),
-                    "updatedBy": props.get("updatedBy"),
-                    # isServiceRole intentionally excluded
-                }
-            ),
+            properties=cls._build_properties(props),
         )
 
     @classmethod
     def from_rbac_api(cls, item: dict[str, Any]) -> RoleDefinition:
-        """Transform an RBAC API role definition response to normalized format.
-
-        The RBAC API returns roles in the standard ARM format:
-        {
-            "id": "/providers/Microsoft.Authorization/roleDefinitions/{guid}",
-            "name": "{guid}",
-            "type": "Microsoft.Authorization/roleDefinitions",
-            "properties": { ... }
-        }
-        """
-        props = item.get("properties", {})
-
+        """Transform an RBAC API role definition response to normalized format."""
         return cls(
             id=item.get("id", ""),
             name=item.get("name", ""),
             type=item.get("type", ROLE_DEFINITION_TYPE),
-            properties=RoleProperties.model_validate(
-                {
-                    "roleName": props.get("roleName", ""),
-                    "type": props.get("type", ""),
-                    "description": props.get("description", ""),
-                    "assignableScopes": props.get("assignableScopes", []),
-                    "permissions": [
-                        Permission.model_validate(p) for p in props.get("permissions", [])
-                    ],
-                    "createdOn": props.get("createdOn", ""),
-                    "updatedOn": props.get("updatedOn", ""),
-                    "createdBy": props.get("createdBy"),
-                    "updatedBy": props.get("updatedBy"),
-                }
-            ),
+            properties=cls._build_properties(item.get("properties", {})),
         )
 
     def to_dict(self) -> JsonDict:

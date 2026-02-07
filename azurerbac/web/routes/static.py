@@ -56,7 +56,7 @@ async def robots_txt() -> Response:
     return Response(
         content=body,
         media_type="text/plain",
-        headers={"Cache-Control": "public, max-age=86400"},
+        headers=_CACHE_1D,
     )
 
 
@@ -66,7 +66,7 @@ async def google_site_verification() -> Response:
     return Response(
         content="google-site-verification: googleec37c4d2676ac205.html",
         media_type="text/html",
-        headers={"Cache-Control": "public, max-age=86400"},
+        headers=_CACHE_1D,
     )
 
 
@@ -76,22 +76,25 @@ async def indexnow_key() -> Response:
     return Response(
         content=INDEXNOW_KEY,
         media_type="text/plain",
-        headers={"Cache-Control": "public, max-age=86400"},
+        headers=_CACHE_1D,
     )
 
 
-def _get_static_images_path() -> Path:
-    """Get static/images directory path."""
-    return Path(__file__).parent.parent / "static" / "images"
+_STATIC_IMAGES_DIR: Final = Path(__file__).parent.parent / "static" / "images"
+
+# Pre-read favicon files once at import time to avoid disk I/O per request.
+_FAVICON_ICO: Final = (_STATIC_IMAGES_DIR / "favicon.ico").read_bytes()
+_FAVICON_SVG: Final = (_STATIC_IMAGES_DIR / "favicon.svg").read_text()
+_FAVICON_48: Final = (_STATIC_IMAGES_DIR / "favicon-48.png").read_bytes()
+_FAVICON_192: Final = (_STATIC_IMAGES_DIR / "favicon-192.png").read_bytes()
+_APPLE_TOUCH_ICON: Final = (_STATIC_IMAGES_DIR / "apple-touch-icon.png").read_bytes()
+
+_CACHE_1D: Final = {"Cache-Control": "public, max-age=86400"}
 
 
 def _static_response(content: bytes | str, media_type: str) -> Response:
     """Create cached static response."""
-    return Response(
-        content=content,
-        media_type=media_type,
-        headers={"Cache-Control": "public, max-age=86400"},
-    )
+    return Response(content=content, media_type=media_type, headers=_CACHE_1D)
 
 
 @router.get(
@@ -101,10 +104,7 @@ def _static_response(content: bytes | str, media_type: str) -> Response:
 )
 async def favicon_ico() -> Response:
     """Serve favicon.ico."""
-    return _static_response(
-        (_get_static_images_path() / "favicon.ico").read_bytes(),
-        "image/x-icon",
-    )
+    return _static_response(_FAVICON_ICO, "image/x-icon")
 
 
 @router.get(
@@ -114,38 +114,26 @@ async def favicon_ico() -> Response:
 )
 async def favicon_svg() -> Response:
     """Serve favicon.svg."""
-    return _static_response(
-        (_get_static_images_path() / "favicon.svg").read_text(),
-        "image/svg+xml",
-    )
+    return _static_response(_FAVICON_SVG, "image/svg+xml")
 
 
 @router.get("/favicon-48.png")
 async def favicon_png_48() -> Response:
     """Serve 48x48 PNG favicon."""
-    return _static_response(
-        (_get_static_images_path() / "favicon-48.png").read_bytes(),
-        "image/png",
-    )
+    return _static_response(_FAVICON_48, "image/png")
 
 
 @router.get("/favicon-192.png")
 async def favicon_png_192() -> Response:
     """Serve 192x192 PNG favicon for Android/PWA."""
-    return _static_response(
-        (_get_static_images_path() / "favicon-192.png").read_bytes(),
-        "image/png",
-    )
+    return _static_response(_FAVICON_192, "image/png")
 
 
 @router.get("/apple-touch-icon.png")
 @router.get("/apple-touch-icon-precomposed.png")
 async def apple_touch_icon() -> Response:
     """Serve Apple touch icon (180x180)."""
-    return _static_response(
-        (_get_static_images_path() / "apple-touch-icon.png").read_bytes(),
-        "image/png",
-    )
+    return _static_response(_APPLE_TOUCH_ICON, "image/png")
 
 
 @router.api_route(

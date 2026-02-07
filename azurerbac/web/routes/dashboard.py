@@ -151,9 +151,7 @@ async def roles_list(
 
     async with deps.SessionLocal() as session:
         if not q:
-            result = await fetch_roles_paginated(
-                session, deps, status_filter, sort, order, page, limit
-            )
+            result = await fetch_roles_paginated(deps, status_filter, sort, order, page, limit)
         else:
             result = await search_roles(
                 session,

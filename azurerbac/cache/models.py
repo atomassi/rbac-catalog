@@ -29,7 +29,6 @@ from urllib.parse import quote
 
 from cachetools import LRUCache
 
-from azurerbac.cache.utils import create_lru_cache, sitemap_url
 from azurerbac.core.constants import POPULAR_COMPARE_PAIRS, RoleStatus
 from azurerbac.core.types import JsonDict
 from azurerbac.matching.models import (
@@ -44,6 +43,22 @@ from azurerbac.matching.models import (
 if TYPE_CHECKING:
     from azurerbac.analytics.models import AnalyticsData
     from azurerbac.azure.models import OperationData, RoleDefinition
+
+
+def sitemap_url(
+    loc: str,
+    lastmod: str,
+    changefreq: str = "weekly",
+    priority: float = 0.5,
+) -> str:
+    """Generate a sitemap URL XML entry."""
+    return f"""  <url>
+    <loc>{loc}</loc>
+    <lastmod>{lastmod}</lastmod>
+    <changefreq>{changefreq}</changefreq>
+    <priority>{priority}</priority>
+  </url>"""
+
 
 logger = logging.getLogger(__name__)
 
@@ -283,22 +298,22 @@ class RequestCaches:
     """
 
     role_pages: LRUCache[str, Any] = field(
-        default_factory=lambda: create_lru_cache(_ROLE_PAGES_CACHE_MAX_SIZE)
+        default_factory=lambda: LRUCache(maxsize=_ROLE_PAGES_CACHE_MAX_SIZE)
     )
     operation_pages: LRUCache[str, Any] = field(
-        default_factory=lambda: create_lru_cache(_OPERATION_PAGES_CACHE_MAX_SIZE)
+        default_factory=lambda: LRUCache(maxsize=_OPERATION_PAGES_CACHE_MAX_SIZE)
     )
     allowing_roles: LRUCache[str, Any] = field(
-        default_factory=lambda: create_lru_cache(_ALLOWING_ROLES_CACHE_MAX_SIZE)
+        default_factory=lambda: LRUCache(maxsize=_ALLOWING_ROLES_CACHE_MAX_SIZE)
     )
     filtered_events: LRUCache[str, Any] = field(
-        default_factory=lambda: create_lru_cache(_FILTERED_EVENTS_CACHE_MAX_SIZE)
+        default_factory=lambda: LRUCache(maxsize=_FILTERED_EVENTS_CACHE_MAX_SIZE)
     )
     related_roles: LRUCache[str, Any] = field(
-        default_factory=lambda: create_lru_cache(_RELATED_ROLES_CACHE_MAX_SIZE)
+        default_factory=lambda: LRUCache(maxsize=_RELATED_ROLES_CACHE_MAX_SIZE)
     )
     comparisons: LRUCache[str, Any] = field(
-        default_factory=lambda: create_lru_cache(_COMPARISON_CACHE_MAX_SIZE)
+        default_factory=lambda: LRUCache(maxsize=_COMPARISON_CACHE_MAX_SIZE)
     )
 
 

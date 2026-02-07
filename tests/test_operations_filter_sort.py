@@ -10,7 +10,6 @@ from azurerbac.azure.models import OperationData
 from azurerbac.web.services.pages import (
     OperationSearchParams,
     filter_operations,
-    operation_matches_search,
     sort_operations,
 )
 from tests.helpers import make_operation
@@ -101,13 +100,13 @@ class TestOperationMatchesSearch:
     ):
         """Test operation matching against various search queries."""
         op = sample_operations[0]  # Microsoft.Compute/virtualMachines/read
-        assert operation_matches_search(op, query) is expected
+        assert op.matches_search(query) is expected
 
     def test_handles_none_fields(self):
         """Test that None fields don't cause errors."""
         op = make_operation(name="test/operation")
-        assert operation_matches_search(op, "test") is True
-        assert operation_matches_search(op, "display") is False
+        assert op.matches_search("test") is True
+        assert op.matches_search("display") is False
 
 
 # =============================================================================

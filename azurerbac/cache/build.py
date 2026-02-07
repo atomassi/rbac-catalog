@@ -214,28 +214,7 @@ def precompute_all(
     first_scan: datetime | None = None,
     analytics: AnalyticsData | None = None,
 ) -> CacheData:
-    """Pre-compute ALL caches and return complete CacheData.
-
-    Precomputes:
-    1. Common wildcard pattern matches (*/read, */write, etc.)
-    2. All unique action patterns found in roles
-    3. Role coverage data (which operations each role grants)
-    4. Role net permission counts
-    5. Prefix indexes for fast lookup
-
-    Args:
-        roles: List of RoleDefinition Pydantic models
-        all_operations: List of OperationData models
-        metadata: Optional CacheMetadata for versioning/invalidation.
-        roles_by_id: Optional dict of roles by ID.
-        all_change_events: Optional list of change events.
-        last_scan: Optional timestamp.
-        first_scan: Optional timestamp.
-        analytics: Optional pre-computed analytics data.
-
-    Returns:
-        Complete CacheData with all computed fields.
-    """
+    """Pre-compute all caches and return complete CacheData."""
     start = time.time()
     logger.debug(
         "Precomputing caches for %d roles, %d operations...",
@@ -376,7 +355,9 @@ async def build_from_db(session: AsyncSession) -> CacheData:
 
     # Fetch active roles for role_jsons (used by recommender)
     active_roles = [r for r in all_role_snapshots if r.status == RoleStatus.ACTIVE]
-    logger.debug(f"Found {len(active_roles)} active roles out of {len(all_role_snapshots)} total")
+    logger.debug(
+        "Found %d active roles out of %d total", len(active_roles), len(all_role_snapshots)
+    )
 
     # Fetch all operations
     async with TimedDbQuery("fetch_all_operations") as timer:

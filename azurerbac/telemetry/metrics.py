@@ -38,18 +38,7 @@ def _metrics_enabled() -> bool:
 
 
 def flush_metrics(timeout_ms: int | None = None) -> bool:
-    """Force flush all pending metrics to Azure Monitor.
-
-    Call this before process exit or when you need metrics exported immediately.
-    For long-running web apps, this is typically not needed.
-
-    Args:
-        timeout_ms: Timeout in milliseconds for the flush operation.
-                   Defaults to TELEMETRY_FLUSH_TIMEOUT_MS (10000ms).
-
-    Returns:
-        True if flush succeeded, False otherwise.
-    """
+    """Force flush all pending metrics to Azure Monitor. Call before process exit."""
     if timeout_ms is None:
         from azurerbac.telemetry.sender import TELEMETRY_FLUSH_TIMEOUT_MS
 
@@ -134,13 +123,7 @@ def track_event(name: str, properties: dict[str, Any] | None = None) -> None:
 
 
 def track_db_fallback(fallback_type: str, reason: str, key: str | None = None) -> None:
-    """Track when the application falls back to database due to cache miss.
-
-    Args:
-        fallback_type: Type of data being fetched (e.g., "role_detail", "role_history")
-        reason: Reason for fallback (e.g., "cache_miss", "not_in_cache")
-        key: Optional identifier (e.g., role_id) for local debugging only
-    """
+    """Track database fallback due to cache miss."""
     key_str = f" key={key}" if key else ""
     logger.debug("DB fallback: type=%s reason=%s%s", fallback_type, reason, key_str)
 
@@ -155,12 +138,7 @@ def track_db_fallback(fallback_type: str, reason: str, key: str | None = None) -
 
 
 def track_cache_call(method: str, **kwargs: Any) -> None:
-    """Track cache method calls for dashboard analytics.
-
-    Args:
-        method: Cache method name (e.g., "get_role_by_id", "search_operations")
-        **kwargs: Additional context (e.g., role_id, query)
-    """
+    """Track cache method calls for dashboard analytics."""
     if kwargs:
         details = ", ".join(f"{k}={v!r}" for k, v in kwargs.items())
         logger.debug("Cache call: %s (%s)", method, details)
@@ -182,13 +160,7 @@ def track_ai_recommendation(
     result_count: int,
     is_error: bool = False,
 ) -> None:
-    """Track AI recommendation requests for dashboard analytics.
-
-    Args:
-        mode: Recommender mode used (tfidf, semantic, colbert, llm, etc.)
-        result_count: Number of recommendations returned
-        is_error: Whether the request failed
-    """
+    """Track AI recommendation requests for dashboard analytics."""
     status = "error" if is_error else "success"
     logger.info(
         "AI recommendation: mode=%s results=%d status=%s",
@@ -217,14 +189,7 @@ def track_role_recommendation(
     result_count: int,
     duration_seconds: float | None = None,
 ) -> None:
-    """Track operation-based role recommendations for dashboard analytics.
-
-    Args:
-        operations_count: Number of operations requested by user
-        expanded_count: Number of operations after wildcard expansion
-        result_count: Number of matching roles returned
-        duration_seconds: Optional execution time
-    """
+    """Track operation-based role recommendations for dashboard analytics."""
     logger.info(
         "Role recommendation: ops=%d expanded=%d results=%d",
         operations_count,
@@ -249,13 +214,7 @@ def track_role_recommendation(
 
 
 def track_startup(duration_seconds: float, roles_count: int, operations_count: int) -> None:
-    """Track application startup metrics.
-
-    Args:
-        duration_seconds: Total startup time in seconds
-        roles_count: Number of roles loaded
-        operations_count: Number of operations loaded
-    """
+    """Track application startup metrics."""
     if not _metrics_enabled():
         logger.debug("Skipping track_startup: metrics disabled")
         return
@@ -266,8 +225,10 @@ def track_startup(duration_seconds: float, roles_count: int, operations_count: i
         track_gauge("startup_operations_count", operations_count)
         track_event("startup_event")
         logger.info(
-            f"Tracked startup: {duration_seconds:.2f}s, "
-            f"{roles_count} roles, {operations_count} operations"
+            "Tracked startup: %.2fs, %d roles, %d operations",
+            duration_seconds,
+            roles_count,
+            operations_count,
         )
     except Exception as e:
         logger.exception("Failed to track startup metric: %s", e)
@@ -279,14 +240,7 @@ def track_cache_refresh(
     roles_count: int,
     operations_count: int,
 ) -> None:
-    """Track cache refresh metrics.
-
-    Args:
-        duration_seconds: Time taken to refresh cache
-        source: What triggered the refresh ("startup", "worker", "periodic", "manual")
-        roles_count: Number of roles after refresh
-        operations_count: Number of operations after refresh
-    """
+    """Track cache refresh metrics."""
     if not _metrics_enabled():
         logger.debug("Skipping track_cache_refresh: metrics disabled")
         return
@@ -297,8 +251,11 @@ def track_cache_refresh(
         track_gauge("cache_refresh_operations_count", operations_count, {"source": source})
         track_event("cache_refresh_event", {"source": source})
         logger.info(
-            f"Tracked cache refresh ({source}): {duration_seconds:.2f}s, "
-            f"{roles_count} roles, {operations_count} operations"
+            "Tracked cache refresh (%s): %.2fs, %d roles, %d operations",
+            source,
+            duration_seconds,
+            roles_count,
+            operations_count,
         )
     except Exception as e:
         logger.exception("Failed to track cache refresh metric: %s", e)
@@ -310,16 +267,7 @@ def track_role_scan(
     roles_updated: int,
     roles_deleted: int,
 ) -> None:
-    """Track role scan metrics.
-
-    Duration is tracked separately by the worker via track_worker_result.
-
-    Args:
-        roles_fetched: Total roles fetched from Azure
-        roles_added: New roles added
-        roles_updated: Existing roles updated
-        roles_deleted: Roles marked as deleted
-    """
+    """Track role scan metrics. Duration tracked separately via track_worker_result."""
     if not _metrics_enabled():
         logger.debug("Skipping track_role_scan: metrics disabled")
         return
@@ -333,21 +281,18 @@ def track_role_scan(
         track_gauge("role_scan_total_changes", total_changes)
         track_event("role_scan_event")
         logger.info(
-            f"Tracked role scan: fetched={roles_fetched}, added={roles_added}, "
-            f"updated={roles_updated}, deleted={roles_deleted}"
+            "Tracked role scan: fetched=%d, added=%d, updated=%d, deleted=%d",
+            roles_fetched,
+            roles_added,
+            roles_updated,
+            roles_deleted,
         )
     except Exception as e:
         logger.exception("Failed to track role scan metric: %s", e)
 
 
 def track_operations_scan(operations_count: int) -> None:
-    """Track operations scan metrics.
-
-    Duration is tracked separately by the worker via track_worker_result.
-
-    Args:
-        operations_count: Total operations fetched
-    """
+    """Track operations scan metrics. Duration tracked separately via track_worker_result."""
     if not _metrics_enabled():
         logger.debug("Skipping track_operations_scan: metrics disabled")
         return
@@ -355,7 +300,7 @@ def track_operations_scan(operations_count: int) -> None:
     try:
         track_gauge("operations_scan_count", operations_count)
         track_event("operations_scan_event")
-        logger.info(f"Tracked operations scan: {operations_count} operations")
+        logger.info("Tracked operations scan: %d operations", operations_count)
     except Exception as e:
         logger.exception("Failed to track operations scan metric: %s", e)
 
@@ -366,14 +311,7 @@ def track_worker_result(
     duration_seconds: float | None = None,
     error_message: str | None = None,
 ) -> None:
-    """Track the result of a worker operation (success/failure).
-
-    Args:
-        operation_name: Name of the operation (e.g., "role-scan", "operations-scan")
-        result: "success" or "failure"
-        duration_seconds: Optional duration of the operation
-        error_message: Optional error message if result is "failure"
-    """
+    """Track the result of a worker operation (success/failure)."""
     props = {"operation": operation_name, "result": result}
 
     parts = [f"Worker op={operation_name} result={result}"]
@@ -412,13 +350,7 @@ def track_db_query(
     duration_seconds: float,
     rows_affected: int | None = None,
 ) -> None:
-    """Track database query metrics.
-
-    Args:
-        query_name: Name of the query (e.g., "fetch_roles", "fetch_operations")
-        duration_seconds: Time taken to execute the query in seconds
-        rows_affected: Optional number of rows returned/affected
-    """
+    """Track database query metrics."""
     props: dict[str, Any] = {"query": query_name}
     if rows_affected is not None:
         props["rows"] = rows_affected
@@ -441,13 +373,7 @@ def track_db_query_error(
     duration_seconds: float,
     error_type: str,
 ) -> None:
-    """Track failed database query metrics.
-
-    Args:
-        query_name: Name of the query that failed
-        duration_seconds: Time taken before failure
-        error_type: Type/class name of the exception
-    """
+    """Track failed database query metrics."""
     props: dict[str, Any] = {"query": query_name, "error_type": error_type}
 
     logger.warning("DB query failed: %s (%.3fs) error=%s", query_name, duration_seconds, error_type)
@@ -467,13 +393,7 @@ def track_cache_hit(
     hit: bool,
     key: str | None = None,
 ) -> None:
-    """Track cache hit/miss events.
-
-    Args:
-        cache_type: Type of cache (e.g., "role", "operation", "role_page")
-        hit: True if cache hit, False if cache miss
-        key: Optional key being looked up (for debugging)
-    """
+    """Track cache hit/miss events."""
     key_str = f" key={key}" if key else ""
     logger.debug("Cache %s: %s%s", "hit" if hit else "miss", cache_type, key_str)
 
@@ -492,12 +412,7 @@ def track_cache_refresh_failure(
     source: str,
     reason: str,
 ) -> None:
-    """Track cache refresh failure.
-
-    Args:
-        source: What triggered the refresh ("worker", "periodic")
-        reason: Reason for failure
-    """
+    """Track cache refresh failure."""
     logger.warning("Cache refresh failed (%s): %s", source, reason)
 
     if not _metrics_enabled():

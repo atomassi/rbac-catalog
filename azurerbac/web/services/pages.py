@@ -32,11 +32,6 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def operation_matches_search(op: OperationData, query_lower: str) -> bool:
-    """Check if operation matches search query."""
-    return op.matches_search(query_lower)
-
-
 def filter_operations(
     operations: list[OperationData],
     params: OperationSearchParams,
@@ -55,7 +50,7 @@ def filter_operations(
     return [
         op
         for op in operations
-        if (q_lower is None or operation_matches_search(op, q_lower))
+        if (q_lower is None or op.matches_search(q_lower))
         and (filter_data_action is None or op.is_data_action == filter_data_action)
         and (not filter_provider or op.provider_display_name == filter_provider)
     ]
@@ -144,18 +139,9 @@ def _condition_similarity(a: frozenset[str], b: frozenset[str]) -> float:
 
 
 def _scopes_contain(broader: frozenset[str], narrower: frozenset[str]) -> bool:
-    """Check if the broader scope set contains all narrower scopes.
+    """Check if every scope in narrower is contained by at least one scope in broader.
 
-    A scope of "/" (root) contains every other scope. Otherwise a scope
-    contains another if it is a case-insensitive prefix of it.
-
-    Args:
-        broader: The scopes that should be broader (container).
-        narrower: The scopes that should be contained.
-
-    Returns:
-        True if every scope in narrower is contained by at least one
-        scope in broader.
+    "/" (root) contains everything; otherwise uses case-insensitive prefix matching.
     """
     if broader == narrower:
         return True
@@ -172,14 +158,7 @@ def _scopes_contain(broader: frozenset[str], narrower: frozenset[str]) -> bool:
 def _extract_role_metadata(
     cached_role: CachedRole,
 ) -> tuple[frozenset[str], frozenset[str]]:
-    """Extract assignable scopes and condition strings from a cached role.
-
-    Args:
-        cached_role: The cached role to extract metadata from.
-
-    Returns:
-        Tuple of (scopes frozenset, conditions frozenset).
-    """
+    """Extract assignable scopes and condition strings from a cached role."""
     props = cached_role.definition.properties
     scopes = frozenset(props.assignable_scopes) if props.assignable_scopes else frozenset(("/",))
     conditions = frozenset(p.condition for p in props.permissions if p.condition)
@@ -493,23 +472,7 @@ def build_role_redirect_url(
     default_limit: int = 25,
     default_days: int = 15,
 ) -> str:
-    """Build redirect URL with canonical slug for role detail page.
-
-    Args:
-        request: FastAPI Request object.
-        role_id: The role ID.
-        expected_slug: The canonical URL slug.
-        q: Search query parameter.
-        page: Current page number.
-        limit: Page size.
-        days: Days filter.
-        default_page: Default page number for omission check.
-        default_limit: Default page size for omission check.
-        default_days: Default days filter for omission check.
-
-    Returns:
-        Fully qualified redirect URL string.
-    """
+    """Build redirect URL with canonical slug for role detail page."""
     from urllib.parse import urlencode
 
     # Build params dict, omitting defaults
@@ -532,14 +495,7 @@ def build_role_redirect_url(
 
 
 def enrich_event_with_diff(ev: CachedChangeEvent) -> EnrichedChangeEvent:
-    """Enrich a role change event with processed diff_json.
-
-    Args:
-        ev: CachedChangeEvent instance with diff_json field.
-
-    Returns:
-        EnrichedChangeEvent with processed diff and formatted JSON.
-    """
+    """Enrich a role change event with processed diff_json."""
     import json
 
     from azurerbac.azure.models import RoleDefinition

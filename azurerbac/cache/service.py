@@ -98,16 +98,7 @@ class CacheService:
         logger.debug("Cache swapped into memory")
 
     async def rebuild_in_memory(self, session: AsyncSession) -> bool:
-        """Build cache from DB and swap into memory.
-
-        Thread-safe: Uses lock to prevent concurrent rebuilds.
-
-        Args:
-            session: SQLAlchemy async session
-
-        Returns:
-            True if successful, False if rebuild in progress or failed
-        """
+        """Build cache from DB and swap into memory. Thread-safe via lock."""
         if not _REBUILD_LOCK.acquire(blocking=False):
             logger.warning("Cache rebuild already in progress, skipping")
             return False
@@ -174,21 +165,13 @@ class CacheService:
         return result
 
     def get_role_coverage(self, role_id: str) -> RoleCoverage | None:
-        """Get cached role coverage (control_ops, data_ops) or None if not cached.
-
-        Returns a RoleCoverage NamedTuple with control and data operation sets
-        that the role grants, after applying notActions/notDataActions exclusions.
-        """
+        """Get cached role coverage or None if not cached."""
         result = self._cache.role_coverage.get(role_id)
         track_cache_hit("role_coverage", result is not None, role_id)
         return result
 
     def get_role_net_permissions(self, role_id: str) -> RoleNetPermissions | None:
-        """Get cached role net permissions (control_count, data_count) or None if not cached.
-
-        Returns a RoleNetPermissions NamedTuple with the count of actual operations
-        the role grants after applying notActions/notDataActions exclusions.
-        """
+        """Get cached role net permissions or None if not cached."""
         result = self._cache.role_net_permissions.get(role_id)
         track_cache_hit("role_net_permissions", result is not None, role_id)
         return result

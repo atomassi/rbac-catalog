@@ -139,8 +139,3 @@ def _load_settings() -> Settings:
 
 
 _settings: ThreadSafeSingleton[Settings] = ThreadSafeSingleton(factory=_load_settings)
-
-
-def get_settings() -> Settings:
-    """Get the global settings instance."""
-    return _settings.get()  # type: ignore[return-value]

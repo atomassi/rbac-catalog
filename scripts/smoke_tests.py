@@ -51,7 +51,7 @@ PAGES_WITH_CONTENT: Final = [
     ("Analytics page", "/analytics", ["Analytics"]),
     (
         "Compare page",
-        "/roles/compare",
+        "/compare",
         ["Choose Two Roles to Compare", "How Role Comparison Works"],
     ),
     (

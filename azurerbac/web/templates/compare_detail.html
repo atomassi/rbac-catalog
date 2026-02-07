@@ -9,7 +9,7 @@
     <meta name="keywords" content="{{ comparison.role_a.role_name }}, {{ comparison.role_b.role_name }}, compare Azure roles, RBAC comparison, Azure permissions, role difference, IAM, least privilege">
     <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
     <meta name="author" content="Azure RBAC Catalog">
-    <link rel="canonical" href="{{ site_url }}/roles/compare/{{ comparison.role_a.role_id }}/{{ comparison.role_b.role_id }}">
+    <link rel="canonical" href="{{ site_url }}/compare/{{ comparison.role_a.role_id }}/{{ comparison.role_b.role_id }}">
 
     <!-- RSS/Atom Feed Autodiscovery -->
     <link rel="alternate" type="application/atom+xml" title="Azure RBAC Role Changes (Atom)" href="{{ site_url }}/feeds/changelog.atom">
@@ -19,7 +19,7 @@
     <meta property="og:title" content="{{ comparison.role_a.role_name }} vs {{ comparison.role_b.role_name }} - Compare Azure Roles">
     <meta property="og:description" content="Side-by-side comparison of {{ comparison.role_a.role_name }} and {{ comparison.role_b.role_name }} Azure RBAC roles. See shared and unique permissions at a glance.">
     <meta property="og:type" content="article">
-    <meta property="og:url" content="{{ site_url }}/roles/compare/{{ comparison.role_a.role_id }}/{{ comparison.role_b.role_id }}">
+    <meta property="og:url" content="{{ site_url }}/compare/{{ comparison.role_a.role_id }}/{{ comparison.role_b.role_id }}">
     <meta property="og:site_name" content="Azure RBAC Catalog">
     <meta property="og:image" content="{{ site_url }}/static/images/og-image.png">
     <meta property="og:image:type" content="image/png">
@@ -42,7 +42,7 @@
         "@type": "WebPage",
         "name": "{{ comparison.role_a.role_name }} vs {{ comparison.role_b.role_name }} - Compare Azure Roles",
         "description": "Side-by-side comparison of {{ comparison.role_a.role_name }} and {{ comparison.role_b.role_name }} Azure RBAC built-in roles showing shared and unique permissions.",
-        "url": "{{ site_url }}/roles/compare/{{ comparison.role_a.role_id }}/{{ comparison.role_b.role_id }}",
+        "url": "{{ site_url }}/compare/{{ comparison.role_a.role_id }}/{{ comparison.role_b.role_id }}",
         "isPartOf": {
             "@type": "WebSite",
             "name": "Azure RBAC Catalog",
@@ -52,7 +52,7 @@
             "@type": "BreadcrumbList",
             "itemListElement": [
                 {"@type": "ListItem", "position": 1, "name": "Home", "item": "{{ site_url }}/"},
-                {"@type": "ListItem", "position": 2, "name": "Compare Roles", "item": "{{ site_url }}/roles/compare"},
+                {"@type": "ListItem", "position": 2, "name": "Compare Roles", "item": "{{ site_url }}/compare"},
                 {"@type": "ListItem", "position": 3, "name": "{{ comparison.role_a.role_name }} vs {{ comparison.role_b.role_name }}"}
             ]
         },
@@ -183,7 +183,7 @@
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
                             </svg>
                         </a>
-                        <a id="back-button" href="/roles/compare" class="inline-flex items-center px-3 py-2 text-sm font-medium text-white/70 hover:text-white hover:bg-white/10 transition-colors">
+                        <a id="back-button" href="/compare" class="inline-flex items-center px-3 py-2 text-sm font-medium text-white/70 hover:text-white hover:bg-white/10 transition-colors">
                             <svg class="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                             </svg>
@@ -628,7 +628,7 @@
                 <a href="/roles/{{ comparison.role_b.role_id }}/{{ comparison.role_b.role_name | slugify }}" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-white dark:bg-slate-800 shadow border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-orange-300 dark:hover:border-orange-600 transition-colors">
                     <span class="w-2 h-2 rounded-full bg-orange-500"></span> {{ comparison.role_b.role_name }} details
                 </a>
-                <a href="/roles/compare" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-white dark:bg-slate-800 shadow border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-emerald-300 dark:hover:border-emerald-600 transition-colors">
+                <a href="/compare" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-white dark:bg-slate-800 shadow border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-emerald-300 dark:hover:border-emerald-600 transition-colors">
                     <svg class="w-4 h-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
                     Compare other roles
                 </a>
@@ -649,7 +649,7 @@
                         <a href="/recent" class="ai-nav-link text-slate-600 dark:text-slate-400 hover:text-azure-600 dark:hover:text-azure-400 transition-colors">Recent Changes</a>
                         <a href="/roles" class="ai-nav-link text-slate-600 dark:text-slate-400 hover:text-azure-600 dark:hover:text-azure-400 transition-colors">Browse Roles</a>
                         <a href="/operations" class="ai-nav-link text-slate-600 dark:text-slate-400 hover:text-azure-600 dark:hover:text-azure-400 transition-colors">Browse Operations</a>
-                        <a href="/roles/compare" class="text-slate-600 dark:text-slate-400 hover:text-azure-600 dark:hover:text-azure-400 transition-colors">Compare Roles</a>
+                        <a href="/compare" class="text-slate-600 dark:text-slate-400 hover:text-azure-600 dark:hover:text-azure-400 transition-colors">Compare Roles</a>
                         <a href="/recommend" class="ai-nav-link text-slate-600 dark:text-slate-400 hover:text-azure-600 dark:hover:text-azure-400 transition-colors">Role Recommender</a>
                         <a href="/analytics" class="ai-nav-link text-slate-600 dark:text-slate-400 hover:text-azure-600 dark:hover:text-azure-400 transition-colors">Analytics</a>
                         <a href="/about" class="ai-nav-link text-slate-600 dark:text-slate-400 hover:text-azure-600 dark:hover:text-azure-400 transition-colors">About</a>

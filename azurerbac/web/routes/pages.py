@@ -54,7 +54,7 @@ router = APIRouter(tags=["pages"])
 
 
 @router.api_route(
-    "/roles/compare",
+    "/compare",
     methods=["GET", "HEAD"],
     response_class=HTMLResponse,
     name="compare",
@@ -84,7 +84,7 @@ async def compare(
 
 
 @router.api_route(
-    "/roles/compare/{role_a_id}/{role_b_id}",
+    "/compare/{role_a_id}/{role_b_id}",
     methods=["GET", "HEAD"],
     response_class=HTMLResponse,
     name="compare_roles",

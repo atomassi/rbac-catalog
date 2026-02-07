@@ -50,6 +50,10 @@ def mock_cached_role() -> MagicMock:
             not_data_actions=[],
         )
     ]
+    # Expose CachedRole-level properties used by search_roles
+    cached.role_name = "Test Role"
+    cached.role_id = "test-role-id"
+    cached.description = "A test role"
     return cached
 
 
@@ -63,6 +67,10 @@ def mock_cache(
     cache.search_operations.return_value = [mock_operation]
     cache.get_all_operations.return_value = [mock_operation]
     cache.get_role_by_id.return_value = mock_cached_role
+
+    # Expose roles_by_id on the inner .cache for search_roles
+    cache.cache.roles_by_id = {"test-role-id": mock_cached_role}
+    cache.cache.role_name_to_id = {"test role": "test-role-id"}
 
     coverage = MagicMock()
     coverage.control = {"Microsoft.Test/resources/read"}
@@ -202,12 +210,14 @@ class TestMCPServerFindRole:
         mcp_server._cache.get_role_by_id.side_effect = (  # type: ignore[union-attr]
             lambda x: mock_cached_role if x == "test-role-id" else None
         )
+        # Set up the role_name_to_id index on the cache data
+        mcp_server._cache.cache.role_name_to_id = {"test role": "test-role-id"}  # type: ignore[union-attr]
         result = mcp_server._find_role("TEST ROLE")
         assert result == mock_cached_role
 
     def test_find_role_returns_none_when_not_found(self, mcp_server: MCPServer) -> None:
         mcp_server._cache.get_role_by_id.return_value = None  # type: ignore[union-attr]
-        mcp_server._cache.get_all_roles.return_value = []  # type: ignore[union-attr]
+        mcp_server._cache.cache.role_name_to_id = {}  # type: ignore[union-attr]
         result = mcp_server._find_role("nonexistent")
         assert result is None
 
@@ -414,14 +424,16 @@ class TestSearchRolesTool:
         assert "test-role-id" in result
 
     def test_no_matching_roles(self, mcp_server: MCPServer) -> None:
-        mcp_server._cache.get_all_roles.return_value = []  # type: ignore[union-attr]
+        mcp_server._cache.cache.roles_by_id = {}  # type: ignore[union-attr]
         result = _call_tool(mcp_server, "search_roles", query="nonexistent", limit=10, ctx=None)
         assert "No roles found" in result
 
-    def test_matches_by_description(self, mcp_server: MCPServer, mock_role: MagicMock) -> None:
+    def test_matches_by_description(
+        self, mcp_server: MCPServer, mock_cached_role: MagicMock
+    ) -> None:
         """Roles matching by description are included."""
-        mock_role.role_name = "Something Else"
-        mock_role.description = "unit testing description"
+        mock_cached_role.role_name = "Something Else"
+        mock_cached_role.description = "unit testing description"
         result = _call_tool(mcp_server, "search_roles", query="unit testing", limit=10, ctx=None)
         assert "Something Else" in result
 
@@ -429,8 +441,10 @@ class TestSearchRolesTool:
         result = _call_tool(mcp_server, "search_roles", query="x", limit=10, ctx=None)
         assert "at least" in result.lower()
 
-    def test_long_description_truncated(self, mcp_server: MCPServer, mock_role: MagicMock) -> None:
-        mock_role.description = "A" * 200
+    def test_long_description_truncated(
+        self, mcp_server: MCPServer, mock_cached_role: MagicMock
+    ) -> None:
+        mock_cached_role.description = "A" * 200
         result = _call_tool(mcp_server, "search_roles", query="test", limit=10, ctx=None)
         assert "..." in result
 

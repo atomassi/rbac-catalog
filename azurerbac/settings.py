@@ -56,17 +56,17 @@ def is_running_in_pytest() -> bool:
 
 
 def _set_bool(kwargs: dict[str, object], key: str, env_var: str) -> None:
-    if (value := os.getenv(env_var)) is not None:
-        kwargs[key] = value.strip().lower() in _BOOL_TRUE_VALUES
+    if (value := os.getenv(env_var)) is not None and (stripped := value.strip()):
+        kwargs[key] = stripped.lower() in _BOOL_TRUE_VALUES
 
 
 def _set_int(kwargs: dict[str, object], key: str, env_var: str) -> None:
-    if (value := os.getenv(env_var)) is not None:
-        kwargs[key] = int(value)
+    if (value := os.getenv(env_var)) is not None and (stripped := value.strip()):
+        kwargs[key] = int(stripped)
 
 
 def _set_str(kwargs: dict[str, object], key: str, env_var: str) -> None:
-    if (value := os.getenv(env_var)) is not None:
+    if (value := os.getenv(env_var)) is not None and value.strip():
         kwargs[key] = value
 
 

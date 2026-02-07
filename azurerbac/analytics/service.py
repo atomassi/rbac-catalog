@@ -42,14 +42,6 @@ class AnalyticsService:
     def __init__(self, analytics_data: AnalyticsData | None = None) -> None:
         self._analytics_data: AnalyticsData = analytics_data or AnalyticsData()
 
-    @property
-    def analytics_data(self) -> AnalyticsData:
-        return self._analytics_data
-
-    @property
-    def computed_at(self) -> dt.datetime | None:
-        return self._analytics_data.computed_at
-
     async def build_from_db(
         self,
         session: AsyncSession,
@@ -143,7 +135,3 @@ class AnalyticsService:
         )
 
         return self._analytics_data
-
-    def swap(self, analytics_data: AnalyticsData) -> None:
-        """Swap in new analytics data atomically."""
-        self._analytics_data = analytics_data

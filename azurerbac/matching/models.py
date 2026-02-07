@@ -134,7 +134,7 @@ class OperationSets:
 
     @classmethod
     def from_cache(cls, cache: CacheData) -> OperationSets:
-        """Build from cached frozensets (fast - O(1))."""
+        """Build from cached frozensets."""
         return cls(all_control=cache.control_ops_lowered, all_data=cache.data_ops_lowered)
 
 

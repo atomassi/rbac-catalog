@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING
@@ -14,7 +14,6 @@ from azurerbac.core.patterns import (
     is_wildcard_pattern,
     matches_pattern,
 )
-from azurerbac.core.types import JsonDict
 from azurerbac.matching.models import RoleCoverage
 
 if TYPE_CHECKING:
@@ -370,10 +369,6 @@ class PermissionBlockView:
         """Check if block has data plane permissions."""
         return bool(self.data_actions or self.not_data_actions)
 
-    def to_dict(self) -> JsonDict:
-        """Convert to dict for template rendering."""
-        return asdict(self)
-
 
 @dataclass(slots=True)
 class RoleEffectivePermissions:
@@ -390,12 +385,6 @@ class RoleEffectivePermissions:
     raw_data_actions: list[str]
     permission_blocks: list[PermissionBlockView]
 
-    def to_dict(self) -> JsonDict:
-        """Convert to dict for template rendering."""
-        result = asdict(self)
-        result["permission_blocks"] = [b.to_dict() for b in self.permission_blocks]
-        return result
-
 
 @dataclass(slots=True)
 class EnrichedChangeEvent:
@@ -408,19 +397,6 @@ class EnrichedChangeEvent:
     diff: RoleDiff | None
     diff_pretty: str
     role_json_pretty: str
-
-    def to_dict(self) -> JsonDict:
-        """Convert to dict for template rendering."""
-        result: JsonDict = {
-            "scan_timestamp": self.scan_timestamp,
-            "azure_updated_on": self.azure_updated_on,
-            "event_type": self.event_type,
-            "summary": self.summary,
-            "diff": self.diff.to_dict() if self.diff else None,
-            "diff_pretty": self.diff_pretty,
-            "role_json_pretty": self.role_json_pretty,
-        }
-        return result
 
 
 @dataclass(slots=True)
@@ -458,10 +434,6 @@ class RoleAllowingOperation:
             condition_text=match_result.condition_text,
         )
 
-    def to_dict(self) -> JsonDict:
-        """Convert to dict for template rendering."""
-        return asdict(self)
-
 
 @dataclass(frozen=True, slots=True)
 class RelatedRole:
@@ -492,10 +464,6 @@ class RoleWithCounts:
     actions_count: int
     data_actions_count: int
 
-    def to_dict(self) -> JsonDict:
-        """Convert to dict for template rendering."""
-        return asdict(self)
-
 
 @dataclass(slots=True)
 class DashboardSummary:
@@ -505,10 +473,6 @@ class DashboardSummary:
     total_operations: int
     last_scan: datetime | None
     first_scan: datetime | None
-
-    def to_dict(self) -> JsonDict:
-        """Convert to dict for template rendering."""
-        return asdict(self)
 
 
 @dataclass(slots=True)

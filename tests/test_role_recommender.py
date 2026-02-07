@@ -12,10 +12,8 @@ from azurerbac.matching.role_matching import (
     _segment_pattern_covers,
     _suffix_pattern_covers,
     check_operation_allowed,
-    check_wildcard_operation_allowed,
     count_net_permissions,
     count_wildcard_partial_coverage,
-    has_any_wildcard_coverage,
     is_high_privilege_role,
     operation_matches_any_pattern,
     pattern_covers_pattern,
@@ -179,50 +177,8 @@ class TestPatternCoverage:
 
 
 # =============================================================================
-# Wildcard Operation Tests
+# Wildcard Partial Coverage Tests
 # =============================================================================
-
-
-class TestWildcardOperations:
-    """Tests for wildcard operation allowed and coverage functions."""
-
-    @pytest.mark.parametrize(
-        "requested_pattern,actions,not_actions,expected",
-        [
-            # Universal wildcard covers everything
-            ("Microsoft.Storage/*", ["*"], [], True),
-            # Prefix pattern covers prefix request
-            ("Microsoft.Storage/*", ["Microsoft.Storage/*"], [], True),
-            # Suffix pattern covers suffix request
-            ("*/read", ["*/read"], [], True),
-            # Broader action covers narrower request
-            ("Microsoft.Storage/storageAccounts/*", ["Microsoft.Storage/*"], [], True),
-            # notAction excludes
-            ("Microsoft.Storage/*", ["*"], ["Microsoft.Storage/*"], False),
-            # notAction overlaps with wildcard request (conservative: returns False)
-            ("*/read", ["*"], ["Microsoft.Authorization/*/read"], False),
-            # notAction doesn't overlap (different suffix)
-            ("*/read", ["*"], ["Microsoft.Authorization/*/delete"], True),
-            # Action doesn't cover request
-            ("Microsoft.Storage/*", ["Microsoft.Compute/*"], [], False),
-            # Complex: notAction prefix/suffix don't overlap with request
-            (
-                "Microsoft.Storage/*/read",
-                ["*"],
-                ["Microsoft.Authorization/*/delete"],
-                True,
-            ),
-        ],
-    )
-    def test_wildcard_operation_allowed(
-        self,
-        requested_pattern: str,
-        actions: list[str],
-        not_actions: list[str],
-        expected: bool,
-    ):
-        """Test wildcard operation allowed logic."""
-        assert check_wildcard_operation_allowed(requested_pattern, actions, not_actions) == expected
 
 
 class TestCountWildcardPartialCoverage:
@@ -475,21 +431,6 @@ class TestRemoveExcludedOperations:
         covered = {"op1", "op2", "op3"}
         result = _remove_excluded_operations(covered, ["op2"], frozenset(), None, cache)
         assert result == {"op1", "op3"}
-
-
-# =============================================================================
-# has_any_wildcard_coverage Tests
-# =============================================================================
-
-
-class TestHasAnyWildcardCoverage:
-    """Tests for has_any_wildcard_coverage function."""
-
-    def test_returns_false_when_pattern_matches_nothing(self):
-        """Pattern that matches zero operations returns False."""
-        all_ops: frozenset[str] = frozenset({"microsoft.compute/read", "microsoft.compute/write"})
-        result = has_any_wildcard_coverage("Microsoft.Fake/*/read", ["*"], [], all_ops)
-        assert result is False
 
 
 # =============================================================================

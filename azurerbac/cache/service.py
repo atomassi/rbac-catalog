@@ -91,21 +91,16 @@ class CacheService:
         self.swap(cache_data)
 
     async def rebuild_in_memory(self, session: AsyncSession) -> bool:
-        """Build cache from DB and swap into memory. Async-safe via lock."""
+        """Build cache from DB and swap into memory. Skips if already in progress."""
         if _REBUILD_LOCK.locked():
             logger.warning("Cache rebuild already in progress, skipping")
             return False
 
         async with _REBUILD_LOCK:
             try:
-                # Build everything on detached data first
                 cache_data = await self.build_from_db(session)
                 self._initialize_ai_recommender(cache_data)
-
-                # Atomic swap — only now do readers see the new data
-                self.swap_in_memory(cache_data)
-
-                # Seed caches that need the live data in self._cache
+                self.swap(cache_data)
                 self._seed_popular_comparisons()
                 return True
             except Exception as e:
@@ -230,7 +225,7 @@ class CacheService:
         if not cache.all_operations:
             return 0
 
-        # Use cached pattern compilation for O(1) regex lookup
+        # Use cached pattern compilation for regex lookup
         from azurerbac.core.patterns import pattern_to_regex
 
         regex = pattern_to_regex(pattern)
@@ -246,7 +241,7 @@ class CacheService:
         return self._cache.all_change_events
 
     def get_events_for_role(self, role_id: str) -> list[CachedChangeEvent]:
-        """Get change events for a specific role (O(1) via index)."""
+        """Get change events for a specific role."""
         return self._cache.events_by_role.get(role_id, [])
 
     def get_filtered_events(self, cache_key: str) -> list[CachedChangeEvent] | None:

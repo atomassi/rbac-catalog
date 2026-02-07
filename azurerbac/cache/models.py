@@ -481,6 +481,15 @@ class CacheData:
         return index
 
     @cached_property
+    def role_name_to_id(self) -> dict[str, str]:
+        """Index of lowered role_name -> role_id."""
+        return {
+            role.role_name.lower(): role_id
+            for role_id, role in self.source.roles_by_id.items()
+            if role.role_name
+        }
+
+    @cached_property
     def role_net_permissions(self) -> dict[str, RoleNetPermissions]:
         """Derived from role_coverage: count of control/data ops per role."""
         return {

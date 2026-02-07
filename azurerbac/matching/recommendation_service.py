@@ -67,7 +67,6 @@ class RoleRecommendationService:
         # Capture cache eagerly to ensure op_sets and _cache are always in sync.
         self._cache = cache if cache is not None else _get_default_cache()
 
-        # Use cached frozensets (O(1)) instead of rebuilding from operations (O(n))
         self.op_sets = OperationSets.from_cache(self._cache)
         self.requested_ops_data_flags = requested_ops_data_flags or {}
 
@@ -432,7 +431,7 @@ class RoleRecommendationService:
         return self._cache.role_coverage.get(role_id)
 
     def is_high_privilege(self, role_id: str) -> bool:
-        """Check if a role is high-privilege (O(1) cache lookup).
+        """Check if a role is high-privilege.
 
         A role is high-privilege if it can assign ANY role without condition.
         Returns False for roles not in cache (ad-hoc/test roles).

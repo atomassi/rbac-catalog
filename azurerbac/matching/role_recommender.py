@@ -57,7 +57,6 @@ def recommend_roles(
     if not requested_operations:
         return []
 
-    # Initialize service (uses cached frozensets, O(1))
     svc = RoleRecommendationService(requested_ops_data_flags=requested_ops_data_flags)
 
     # Use provided roles or get from cache

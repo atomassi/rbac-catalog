@@ -2,29 +2,55 @@
 
 from __future__ import annotations
 
+import logging
 from http import HTTPStatus
 from pathlib import Path
 from typing import Final
 
+import anyio
 from fastapi import APIRouter, Request
 from fastapi.responses import Response
 
 from azurerbac.core.constants import SITE_URL
+
+logger = logging.getLogger(__name__)
 
 INDEXNOW_KEY: Final = "4484caab4dbc472ca61ac1141d812336"
 
 _STATIC_IMAGES_DIR: Final = Path(__file__).parent.parent / "static" / "images"
 _CACHE_1D: Final = {"Cache-Control": "public, max-age=86400"}
 
-# Eagerly load small favicon files at import time to avoid blocking the
-# event loop on first request. Total payload is <100 KB.
-_STATIC_BYTES: Final[dict[str, bytes]] = {
-    name: (_STATIC_IMAGES_DIR / name).read_bytes()
-    for name in ("favicon.ico", "favicon-48.png", "favicon-192.png", "apple-touch-icon.png")
-}
-_STATIC_TEXT: Final[dict[str, str]] = {
-    "favicon.svg": (_STATIC_IMAGES_DIR / "favicon.svg").read_text(encoding="utf-8"),
-}
+_FAVICON_BINARY: Final = (
+    "favicon.ico",
+    "favicon-48.png",
+    "favicon-192.png",
+    "apple-touch-icon.png",
+)
+
+# Populated during app startup via load_static_assets()
+_STATIC_BYTES: dict[str, bytes] = {}
+_STATIC_TEXT: dict[str, str] = {}
+
+
+async def load_static_assets() -> None:
+    """Load favicon assets during app startup with error handling.
+
+    Missing files are logged as warnings; the app continues to serve
+    other routes and returns 404 for absent assets.
+    """
+    for name in _FAVICON_BINARY:
+        path = _STATIC_IMAGES_DIR / name
+        try:
+            _STATIC_BYTES[name] = await anyio.Path(path).read_bytes()
+        except OSError:
+            logger.warning("Static asset missing: %s", path)
+    try:
+        _STATIC_TEXT["favicon.svg"] = await anyio.Path(
+            _STATIC_IMAGES_DIR / "favicon.svg"
+        ).read_text(encoding="utf-8")
+    except OSError:
+        logger.warning("Static asset missing: %s/favicon.svg", _STATIC_IMAGES_DIR)
+
 
 router = APIRouter(tags=["static"])
 
@@ -104,7 +130,9 @@ def _static_response(content: bytes | str, media_type: str) -> Response:
 )
 async def favicon_ico() -> Response:
     """Serve favicon.ico."""
-    return _static_response(_STATIC_BYTES["favicon.ico"], "image/x-icon")
+    if data := _STATIC_BYTES.get("favicon.ico"):
+        return _static_response(data, "image/x-icon")
+    return Response(status_code=HTTPStatus.NOT_FOUND)
 
 
 @router.get(
@@ -114,26 +142,34 @@ async def favicon_ico() -> Response:
 )
 async def favicon_svg() -> Response:
     """Serve favicon.svg."""
-    return _static_response(_STATIC_TEXT["favicon.svg"], "image/svg+xml")
+    if data := _STATIC_TEXT.get("favicon.svg"):
+        return _static_response(data, "image/svg+xml")
+    return Response(status_code=HTTPStatus.NOT_FOUND)
 
 
 @router.get("/favicon-48.png")
 async def favicon_png_48() -> Response:
     """Serve 48x48 favicon."""
-    return _static_response(_STATIC_BYTES["favicon-48.png"], "image/png")
+    if data := _STATIC_BYTES.get("favicon-48.png"):
+        return _static_response(data, "image/png")
+    return Response(status_code=HTTPStatus.NOT_FOUND)
 
 
 @router.get("/favicon-192.png")
 async def favicon_png_192() -> Response:
     """Serve 192x192 favicon."""
-    return _static_response(_STATIC_BYTES["favicon-192.png"], "image/png")
+    if data := _STATIC_BYTES.get("favicon-192.png"):
+        return _static_response(data, "image/png")
+    return Response(status_code=HTTPStatus.NOT_FOUND)
 
 
 @router.get("/apple-touch-icon.png")
 @router.get("/apple-touch-icon-precomposed.png")
 async def apple_touch_icon() -> Response:
     """Serve Apple touch icon."""
-    return _static_response(_STATIC_BYTES["apple-touch-icon.png"], "image/png")
+    if data := _STATIC_BYTES.get("apple-touch-icon.png"):
+        return _static_response(data, "image/png")
+    return Response(status_code=HTTPStatus.NOT_FOUND)
 
 
 @router.api_route(

@@ -1,18 +1,13 @@
-"""Analytics data models.
-
-All models use SerializableMixin for automatic to_dict serialization.
-"""
+"""Analytics data models."""
 
 from __future__ import annotations
 
 import datetime as dt
 from dataclasses import dataclass, field
 
-from azurerbac.analytics.serialization import SerializableMixin
-
 
 @dataclass(frozen=True, slots=True)
-class AllTimeStats(SerializableMixin):
+class AllTimeStats:
     """Aggregate statistics across all scans."""
 
     total_additions: int = 0
@@ -28,7 +23,7 @@ class AllTimeStats(SerializableMixin):
 
 
 @dataclass(frozen=True, slots=True)
-class RollingStats(SerializableMixin):
+class RollingStats:
     """Rolling window statistics (e.g., last 30/90 days)."""
 
     window_days: int = 0
@@ -46,7 +41,7 @@ class RollingStats(SerializableMixin):
 
 
 @dataclass(frozen=True, slots=True)
-class DailyChanges(SerializableMixin):
+class DailyChanges:
     """Changes aggregated by day."""
 
     date: dt.date | str = ""  # May be string depending on DB driver
@@ -60,7 +55,7 @@ class DailyChanges(SerializableMixin):
 
 
 @dataclass(frozen=True, slots=True)
-class FrequentlyUpdatedRole(SerializableMixin):
+class FrequentlyUpdatedRole:
     """Role with update frequency."""
 
     role_id: str
@@ -70,7 +65,7 @@ class FrequentlyUpdatedRole(SerializableMixin):
 
 
 @dataclass(frozen=True, slots=True)
-class RecentlyCreatedRole(SerializableMixin):
+class RecentlyCreatedRole:
     """Recently created role."""
 
     role_id: str
@@ -79,7 +74,7 @@ class RecentlyCreatedRole(SerializableMixin):
 
 
 @dataclass(frozen=True, slots=True)
-class RecentlyUpdatedRole(SerializableMixin):
+class RecentlyUpdatedRole:
     """Recently updated role (sorted by date)."""
 
     role_id: str
@@ -88,7 +83,7 @@ class RecentlyUpdatedRole(SerializableMixin):
 
 
 @dataclass(frozen=True, slots=True)
-class DeletedRole(SerializableMixin):
+class DeletedRole:
     """Deleted role with timeline info."""
 
     role_id: str
@@ -98,7 +93,7 @@ class DeletedRole(SerializableMixin):
 
 
 @dataclass(frozen=True, slots=True)
-class ProviderStats(SerializableMixin):
+class ProviderStats:
     """Statistics by resource provider."""
 
     provider: str
@@ -107,7 +102,7 @@ class ProviderStats(SerializableMixin):
 
 
 @dataclass(frozen=True, slots=True)
-class TopRoleByPermissions(SerializableMixin):
+class TopRoleByPermissions:
     """Role ranked by permission count (actions or data actions)."""
 
     role_id: str
@@ -116,7 +111,7 @@ class TopRoleByPermissions(SerializableMixin):
 
 
 @dataclass(frozen=True, slots=True)
-class RecentOperation(SerializableMixin):
+class RecentOperation:
     """Recently added operation."""
 
     name: str
@@ -126,7 +121,7 @@ class RecentOperation(SerializableMixin):
 
 
 @dataclass(frozen=True, slots=True)
-class MonitoringHealth(SerializableMixin):
+class MonitoringHealth:
     """Monitoring system health metrics."""
 
     last_scan: dt.datetime | None = None
@@ -137,7 +132,7 @@ class MonitoringHealth(SerializableMixin):
 
 
 @dataclass(frozen=True, slots=True)
-class PermissionChangeStats(SerializableMixin):
+class PermissionChangeStats:
     """Statistics about permission changes."""
 
     total_actions_added: int = 0

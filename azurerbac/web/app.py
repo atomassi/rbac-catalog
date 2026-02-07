@@ -63,6 +63,7 @@ from azurerbac.web.routes import feeds as feeds_routes
 from azurerbac.web.routes import health as health_routes
 from azurerbac.web.routes import pages as pages_routes
 from azurerbac.web.routes import static as static_routes
+from azurerbac.web.routes.static import load_static_assets
 from azurerbac.web.services.startup import (
     cache_refresh_task,
     ensure_db,
@@ -146,10 +147,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:  # pylint: disable=unus
     await preload_cache(SessionLocal)
 
     # Warmup AI models BEFORE accepting requests
-    logger.info("Warming up AI models...")
+    logger.info("Warming up AI models and loading static assets...")
     async with anyio.create_task_group() as warmup_tg:
         warmup_tg.start_soon(warmup_colbert, name="colbert-warmup")
         warmup_tg.start_soon(warmup_crossencoder, name="crossencoder-warmup")
+        warmup_tg.start_soon(load_static_assets, name="static-assets")
 
     logger.info("Application startup complete, starting background tasks...")
 

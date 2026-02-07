@@ -6,8 +6,7 @@ import heapq
 import logging
 from collections.abc import Set as AbstractSet
 from functools import lru_cache
-from itertools import islice
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING
 
 from azurerbac.core.constants import (
     HIGH_PRIVILEGE_OPERATION,
@@ -30,8 +29,6 @@ logger = logging.getLogger(__name__)
 
 type OperationName = str
 type Pattern = str
-
-_EXTENDED_SAMPLE_SIZE: Final[int] = 100
 
 
 def _get_cache(caches: CacheData | None = None) -> CacheData:
@@ -152,7 +149,7 @@ def get_matching_operations(
     This is the core optimization - we cache the result of pattern matching
     so subsequent calls with the same pattern are instant.
 
-    Note: Returns lowered operation names for O(1) membership tests.
+    Note: Returns lowered operation names.
     Expects all_operations to contain lowered names.
 
     Args:
@@ -174,101 +171,6 @@ def get_matching_operations(
         cache.pattern_match[key] = matching
 
     return matching
-
-
-def has_any_wildcard_coverage(
-    requested_pattern: str,
-    actions: list[str],
-    not_actions: list[str],
-    all_operations: AbstractSet[str],
-    plane: Plane | None = None,
-    *,
-    caches: CacheData | None = None,
-) -> bool:
-    """Fast check if actions provide ANY coverage for a wildcard pattern."""
-    matching_ops = get_matching_operations(requested_pattern, all_operations, plane, caches=caches)
-    if not matching_ops:
-        return False
-
-    # Check extended sample for any allowed operation (islice avoids list conversion)
-    sample = islice(matching_ops, _EXTENDED_SAMPLE_SIZE)
-    return any(check_operation_allowed(op, actions, not_actions) for op in sample)
-
-
-def check_wildcard_operation_allowed(
-    requested_pattern: str,
-    actions: list[str],
-    not_actions: list[str],
-) -> bool:
-    """Check if a wildcard pattern is fully covered by the given actions/notActions.
-
-    A wildcard pattern is covered if:
-    1. At least one action pattern covers the entire requested pattern
-    2. No notAction pattern excludes any part of the requested pattern
-
-    This is more conservative - we only say it's covered if the role
-    definitely grants all operations matching the requested pattern.
-    """
-    # Check if any action pattern covers the requested pattern
-    if not any(pattern_covers_pattern(action, requested_pattern) for action in actions):
-        return False
-
-    # Check if any notAction might exclude parts of the requested pattern
-    # If a notAction overlaps with the requested pattern, we can't guarantee full coverage
-
-    # Pre-compute requested pattern parts for overlap check (avoid repeated work in loop)
-    req_is_wildcard = is_wildcard_pattern(requested_pattern)
-    req_suffix = ""
-    req_prefix = ""
-    if req_is_wildcard:
-        req_parts = requested_pattern.split("*")
-        req_suffix = req_parts[-1].lower()  # e.g., "/read"
-        req_prefix = req_parts[0].lower()
-
-    for not_action in not_actions:
-        # If notAction covers the requested pattern, it's excluded
-        if pattern_covers_pattern(not_action, requested_pattern):
-            return False
-        # If notAction could match some operations in the requested pattern
-        # we're conservative and say it's not fully covered
-        if req_is_wildcard and is_wildcard_pattern(not_action):
-            # Check if patterns could possibly overlap (match same operations)
-            # For patterns like */read and Microsoft.Authorization/*/Delete:
-            # - */read matches anything ending in /read
-            # - Microsoft.Authorization/*/Delete matches Authorization resources with /Delete
-            # These don't overlap because the suffixes are different
-
-            # Get the suffix after the last wildcard and prefix before first wildcard
-            not_parts = not_action.split("*")
-            not_suffix = not_parts[-1].lower()  # e.g., "/delete"
-            not_prefix = not_parts[0].lower()
-
-            # Patterns overlap if:
-            # 1. One suffix is empty OR suffixes are compatible (one could match the other)
-            # 2. AND one prefix is empty OR prefixes are compatible
-
-            # Check suffix compatibility
-            suffixes_compatible = (
-                not req_suffix
-                or not not_suffix  # One is empty (like * pattern)
-                or req_suffix == not_suffix  # Same suffix
-                or req_suffix.endswith(not_suffix)
-                or not_suffix.endswith(req_suffix)
-            )
-
-            # Check prefix compatibility
-            prefixes_compatible = (
-                not req_prefix
-                or not not_prefix  # One is empty
-                or req_prefix.startswith(not_prefix)
-                or not_prefix.startswith(req_prefix)
-            )
-
-            # Only consider patterns overlapping if BOTH prefix and suffix are compatible
-            if suffixes_compatible and prefixes_compatible:
-                return False
-
-    return True
 
 
 def _compute_covered_operations(

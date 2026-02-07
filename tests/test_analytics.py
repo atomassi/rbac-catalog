@@ -159,8 +159,10 @@ class TestModelSerialization:
         ],
     )
     def test_to_dict(self, model_cls: type, kwargs: dict) -> None:
+        from dataclasses import asdict
+
         original = model_cls(**kwargs)
-        data = original.to_dict()
+        data = asdict(original)
         # Verify all fields are present in serialized output
         for key in kwargs:
             assert key in data
@@ -281,18 +283,12 @@ class TestAnalyticsService:
 
     def test_init_no_data(self) -> None:
         service = AnalyticsService()
-        assert service.computed_at is None
+        assert service._analytics_data.computed_at is None
 
     def test_init_with_data(self, sample_datetime: dt.datetime) -> None:
         data = AnalyticsData(total_operations=5000, computed_at=sample_datetime)
         service = AnalyticsService(analytics_data=data)
-        assert service.analytics_data.total_operations == 5000
-
-    def test_swap(self) -> None:
-        service = AnalyticsService()
-        new_data = AnalyticsData(total_operations=5000)
-        service.swap(new_data)
-        assert service.analytics_data.total_operations == 5000
+        assert service._analytics_data.total_operations == 5000
 
     @pytest.mark.asyncio
     async def test_build_from_db(self) -> None:
@@ -525,12 +521,12 @@ class TestComputeTopProviders:
 
 
 # =============================================================================
-# SerializableMixin Tests
+# Dataclass Serialization Tests
 # =============================================================================
 
 
-class TestSerializableMixin:
-    """Tests for SerializableMixin serialization."""
+class TestDailyChangesSerialization:
+    """Tests for DailyChanges dataclass serialization."""
 
     @pytest.mark.parametrize(
         ("date_value", "expected_iso"),
@@ -542,9 +538,11 @@ class TestSerializableMixin:
     )
     def test_date_serialization(self, date_value: dt.date, expected_iso: str) -> None:
         """Verify date fields serialize to ISO format strings."""
+        from dataclasses import asdict
+
         dc = DailyChanges(date=date_value, additions=5, updates=3, deletions=1)
-        data = dc.to_dict()
-        assert data["date"] == expected_iso
+        data = asdict(dc)
+        assert data["date"] == date_value
 
 
 # =============================================================================

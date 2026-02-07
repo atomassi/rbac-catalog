@@ -4,6 +4,7 @@ import heapq
 import logging
 import time
 from collections import OrderedDict
+from itertools import islice
 
 from mcp.server.fastmcp import Context, FastMCP
 from starlette.applications import Starlette
@@ -196,9 +197,8 @@ class MCPServer:
         """Find role by ID or name."""
         if cached := self._cache.get_role_by_id(role_id_or_name):
             return cached
-        for role in self._cache.get_all_roles():
-            if role.role_name and role.role_name.lower() == role_id_or_name.lower():
-                return self._cache.get_role_by_id(role.name)
+        if role_id := self._cache.cache.role_name_to_id.get(role_id_or_name.lower()):
+            return self._cache.get_role_by_id(role_id)
         return None
 
     @staticmethod
@@ -278,12 +278,18 @@ class MCPServer:
                     return str(e)
 
                 query_lower = query.lower()
-                matching = [
-                    r
-                    for r in self._cache.get_all_roles()
-                    if query_lower in (r.role_name or "").lower()
-                    or query_lower in (r.description or "").lower()
-                ][: min(limit, MAX_ROLES_LIMIT)]
+                effective_limit = min(limit, MAX_ROLES_LIMIT)
+                matching = list(
+                    islice(
+                        (
+                            r
+                            for r in self._cache.cache.roles_by_id.values()
+                            if query_lower in (r.role_name or "").lower()
+                            or query_lower in (r.description or "").lower()
+                        ),
+                        effective_limit,
+                    )
+                )
                 timer.result_count = len(matching)
 
             if not matching:
@@ -294,7 +300,7 @@ class MCPServer:
                 desc = (role.description or "")[:100]
                 if len(role.description or "") > 100:
                     desc += "..."
-                lines.append(f"• **{role.role_name}** (ID: {role.name})")
+                lines.append(f"• **{role.role_name}** (ID: {role.role_id})")
                 if desc:
                     lines.append(f"  {desc}")
             return "\n".join(lines)

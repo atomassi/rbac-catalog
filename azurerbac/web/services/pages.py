@@ -333,8 +333,6 @@ def get_roles_allowing_operation(
 
         role = cached_role.definition
 
-        # TODO: cache match_result in the index during build time
-        # to avoid analyzer call per role at query time
         analyzer = RolePermissionAnalyzer(role, cache=cache_resolved)
         match_result = analyzer.find_matching_pattern(operation_name, is_data_action=is_data_action)
 

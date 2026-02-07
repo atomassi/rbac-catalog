@@ -38,13 +38,6 @@ def ensure_utc(d: dt.datetime | None) -> dt.datetime | None:
     return d if d.tzinfo else d.replace(tzinfo=dt.UTC)
 
 
-def ensure_utc_or_min(d: dt.datetime | None) -> dt.datetime:
-    """Ensure datetime is UTC-aware, defaulting to datetime.min."""
-    if d is None:
-        return dt.datetime.min.replace(tzinfo=dt.UTC)
-    return d if d.tzinfo else d.replace(tzinfo=dt.UTC)
-
-
 def utcnow() -> dt.datetime:
     """Current UTC datetime with timezone."""
     return dt.datetime.now(dt.UTC)

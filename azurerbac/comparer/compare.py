@@ -57,17 +57,8 @@ def compute_role_comparison(
 ) -> RoleComparison | None:
     """Compare effective operations between two roles.
 
-    Uses precomputed role coverage sets to compute three-way split:
-    operations only in A, shared, and operations only in B.
-
-    Args:
-        role_a_id: The first role's ID.
-        role_b_id: The second role's ID.
-        cache: Optional cache service override (for testing).
-
-    Returns:
-        RoleComparison with the three-way operation split, or None if
-        either role is not found.
+    Returns RoleComparison with three-way split (only-A, shared, only-B),
+    or None if either role is not found or IDs are identical.
     """
     cache_resolved = _get_cache(cache)
 

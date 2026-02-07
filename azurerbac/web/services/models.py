@@ -9,6 +9,11 @@ from typing import TYPE_CHECKING
 
 from azurerbac.core.diffing import RoleDiff
 from azurerbac.core.enums import SortOrder
+from azurerbac.core.patterns import (
+    expand_patterns_to_operations,
+    is_wildcard_pattern,
+    matches_pattern,
+)
 from azurerbac.core.types import JsonDict
 from azurerbac.matching.models import RoleCoverage
 
@@ -135,8 +140,6 @@ class RawPermissions:
     @property
     def has_wildcards(self) -> bool:
         """Check if any patterns contain wildcards."""
-        from azurerbac.core.patterns import is_wildcard_pattern
-
         return any(is_wildcard_pattern(p) or p == "*" for p in self.all_patterns)
 
     @property
@@ -154,8 +157,6 @@ class RawPermissions:
 
         This matters when one block excludes an action that another block grants.
         """
-        from azurerbac.core.patterns import expand_patterns_to_operations
-
         control_effective: set[str] = set()
         data_effective: set[str] = set()
 
@@ -283,8 +284,6 @@ class RolePermissionAnalyzer:
         self, operation_name: str, *, is_data_action: bool
     ) -> PatternMatchResult:
         """Find pattern granting an operation."""
-        from azurerbac.core.patterns import matches_pattern
-
         operation_lower = operation_name.lower()
 
         for perm in self.permissions:
@@ -311,15 +310,19 @@ class PaginationInfo:
     end_idx: int
 
     @staticmethod
+    def count_pages(total_items: int, page_size: int) -> int:
+        """Compute total page count."""
+        return max(1, (total_items + page_size - 1) // page_size)
+
+    @staticmethod
     def compute(total_items: int, page: int, page_size: int) -> PaginationInfo:
         """Compute pagination values."""
-        total_pages = max(1, (total_items + page_size - 1) // page_size)
-        # Clamp page to available pages
-        clamped_page = min(page, total_pages)
+        tp = PaginationInfo.count_pages(total_items, page_size)
+        clamped_page = min(page, tp)
         start_idx = (clamped_page - 1) * page_size
         end_idx = start_idx + page_size
         return PaginationInfo(
-            total_pages=total_pages,
+            total_pages=tp,
             start_idx=start_idx,
             end_idx=end_idx,
         )

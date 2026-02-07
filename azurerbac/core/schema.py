@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from .models import Base
 
 
-async def ensure_db(engine: AsyncEngine, *, sentinel_table: str = "role_snapshots") -> None:
+async def ensure_db(engine: AsyncEngine, *, sentinel_table: str = "roles") -> None:
     """Ensure database tables exist (safe for concurrent calls)."""
     try:
         async with engine.begin() as conn:

@@ -107,10 +107,14 @@ class ClassifiedOperations:
     data: frozenset[str] = field(default_factory=frozenset)
     control_wildcards: frozenset[str] = field(default_factory=frozenset)
     data_wildcards: frozenset[str] = field(default_factory=frozenset)
+    all_requested: frozenset[str] = field(init=False, repr=False)
 
-    @property
-    def all_requested(self) -> frozenset[str]:
-        return self.control | self.data | self.control_wildcards | self.data_wildcards
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "all_requested",
+            self.control | self.data | self.control_wildcards | self.data_wildcards,
+        )
 
     def __len__(self) -> int:
         return (

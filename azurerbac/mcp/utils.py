@@ -6,6 +6,8 @@ from collections import OrderedDict
 from dataclasses import dataclass
 from typing import Final
 
+from azurerbac.telemetry import track_duration, track_event, track_gauge
+
 _SUSPICIOUS_PATTERN: Final = re.compile(
     r"[<>{}\\;`$]"  # HTML, template, shell metacharacters
     r"|(\.\./)"  # Path traversal
@@ -136,8 +138,6 @@ class ToolTimer:
         self._success = False
 
     def _record(self) -> None:
-        from azurerbac.telemetry import track_duration, track_event, track_gauge
-
         duration = time.perf_counter() - self.start
         props = {
             "tool": self.tool_name,

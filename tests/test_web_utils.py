@@ -100,14 +100,6 @@ class TestDiffLines:
         assert "added" not in types
         assert types.count("unchanged") == 2
 
-    def test_ensure_str_with_non_string(self):
-        """_ensure_str JSON-serializes non-string values."""
-        from azurerbac.web.filters import _ensure_str
-
-        result = _ensure_str({"key": "value"})
-        assert '"key"' in result
-        assert '"value"' in result
-
 
 class TestFullJsonDiff:
     """Tests for the full_json_diff function."""

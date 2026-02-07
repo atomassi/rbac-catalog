@@ -1276,7 +1276,7 @@ class TestSitemapUrl:
     """Tests for the sitemap_url utility function."""
 
     def test_generates_valid_xml(self):
-        from azurerbac.cache.utils import sitemap_url
+        from azurerbac.cache.models import sitemap_url
 
         result = sitemap_url("https://example.com/roles", "2026-01-15", "weekly", 0.8)
         assert "<loc>https://example.com/roles</loc>" in result
@@ -1285,7 +1285,7 @@ class TestSitemapUrl:
         assert "<priority>0.8</priority>" in result
 
     def test_uses_defaults(self):
-        from azurerbac.cache.utils import sitemap_url
+        from azurerbac.cache.models import sitemap_url
 
         result = sitemap_url("https://example.com", "2026-01-01")
         assert "<changefreq>weekly</changefreq>" in result

@@ -111,7 +111,6 @@ def configure_logging(component: str = "app", level: int = logging.INFO) -> str 
     formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
     log_file_path = None
-    settings = Settings.get()
 
     if not settings.is_deployed:
         # Local: console + file logging

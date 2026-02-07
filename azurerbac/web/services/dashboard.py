@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import datetime as dt
-import math
 from dataclasses import replace
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Final
@@ -24,6 +23,7 @@ from azurerbac.telemetry import TimedDbQuery
 from azurerbac.web.services.models import (
     DashboardSummary,
     PaginatedResult,
+    PaginationInfo,
     PaginationParams,
     RoleWithCounts,
     ScanMetadata,
@@ -51,14 +51,10 @@ _ROLE_SORT_KEYS: Final[dict[SortField, Callable[[RoleWithCounts], Any]]] = {
 }
 
 
-def _calculate_total_pages(total_count: int, page_size: int) -> int:
-    return max(1, math.ceil(total_count / page_size))
-
-
 def _paginate_list[T](items: list[T], params: PaginationParams) -> PaginatedResult[T]:
     """Apply pagination to a list."""
     total_count = len(items)
-    total_pages = _calculate_total_pages(total_count, params.page_size)
+    total_pages = PaginationInfo.count_pages(total_count, params.page_size)
     page_items = items[params.offset : params.offset + params.page_size]
     return PaginatedResult(items=page_items, total_count=total_count, total_pages=total_pages)
 
@@ -228,7 +224,7 @@ async def fetch_events_from_db(
         return list(result.scalars().all())
 
 
-async def get_common_dashboard_data(deps: DashboardDeps) -> DashboardSummary:
+def get_common_dashboard_data(deps: DashboardDeps) -> DashboardSummary:
     """Get summary data for dashboard pages."""
     return DashboardSummary(
         total_roles=deps.app_cache.cache.active_roles_count,
@@ -311,7 +307,7 @@ async def fetch_roles_paginated(
 
     # Full cache hit - return immediately
     if cached_roles is not None and cached_count is not None:
-        total_pages = _calculate_total_pages(int(cached_count), page_size)
+        total_pages = PaginationInfo.count_pages(int(cached_count), page_size)
         return PaginatedResult(cached_roles, int(cached_count), total_pages)
 
     # Build from in-memory cache

@@ -9,7 +9,11 @@ from functools import lru_cache
 from itertools import islice
 from typing import TYPE_CHECKING, Final
 
-from azurerbac.core.constants import MAX_UNCOVERED_SAMPLE
+from azurerbac.core.constants import (
+    HIGH_PRIVILEGE_OPERATION,
+    HIGH_PRIVILEGE_ROLE_IDS,
+    MAX_UNCOVERED_SAMPLE,
+)
 from azurerbac.core.patterns import is_wildcard_pattern, matches_pattern
 from azurerbac.matching.models import (
     CoverageResult,
@@ -445,8 +449,6 @@ def is_high_privilege_role(role: RoleDefinition) -> bool:
 
     High-privilege: well-known role IDs OR grants roleAssignments/write without ABAC condition.
     """
-    from azurerbac.core.constants import HIGH_PRIVILEGE_OPERATION, HIGH_PRIVILEGE_ROLE_IDS
-
     # Fast path: check well-known high-privilege role IDs
     if role.role_id in HIGH_PRIVILEGE_ROLE_IDS:
         return True

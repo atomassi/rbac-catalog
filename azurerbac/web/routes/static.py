@@ -21,7 +21,7 @@ router = APIRouter(tags=["static"])
     response_class=Response,
     responses={200: {"content": {"text/plain": {}}}},
 )
-async def robots_txt() -> Response:
+def robots_txt() -> Response:
     """Serve robots.txt."""
     body = "\n".join(
         [
@@ -61,7 +61,7 @@ async def robots_txt() -> Response:
 
 
 @router.get("/googleec37c4d2676ac205.html")
-async def google_site_verification() -> Response:
+def google_site_verification() -> Response:
     """Google Search Console verification."""
     return Response(
         content="google-site-verification: googleec37c4d2676ac205.html",
@@ -71,7 +71,7 @@ async def google_site_verification() -> Response:
 
 
 @router.get(f"/{INDEXNOW_KEY}.txt")
-async def indexnow_key() -> Response:
+def indexnow_key() -> Response:
     """IndexNow key verification."""
     return Response(
         content=INDEXNOW_KEY,
@@ -102,7 +102,7 @@ def _static_response(content: bytes | str, media_type: str) -> Response:
     response_class=Response,
     responses={200: {"content": {"image/x-icon": {}}}},
 )
-async def favicon_ico() -> Response:
+def favicon_ico() -> Response:
     """Serve favicon.ico."""
     return _static_response(_FAVICON_ICO, "image/x-icon")
 
@@ -112,26 +112,26 @@ async def favicon_ico() -> Response:
     response_class=Response,
     responses={200: {"content": {"image/svg+xml": {}}}},
 )
-async def favicon_svg() -> Response:
+def favicon_svg() -> Response:
     """Serve favicon.svg."""
     return _static_response(_FAVICON_SVG, "image/svg+xml")
 
 
 @router.get("/favicon-48.png")
-async def favicon_png_48() -> Response:
+def favicon_png_48() -> Response:
     """Serve 48x48 PNG favicon."""
     return _static_response(_FAVICON_48, "image/png")
 
 
 @router.get("/favicon-192.png")
-async def favicon_png_192() -> Response:
+def favicon_png_192() -> Response:
     """Serve 192x192 PNG favicon for Android/PWA."""
     return _static_response(_FAVICON_192, "image/png")
 
 
 @router.get("/apple-touch-icon.png")
 @router.get("/apple-touch-icon-precomposed.png")
-async def apple_touch_icon() -> Response:
+def apple_touch_icon() -> Response:
     """Serve Apple touch icon (180x180)."""
     return _static_response(_APPLE_TOUCH_ICON, "image/png")
 

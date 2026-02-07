@@ -31,6 +31,7 @@ from cachetools import LRUCache
 
 from azurerbac.core.constants import POPULAR_COMPARE_PAIRS, RoleStatus
 from azurerbac.core.types import JsonDict
+from azurerbac.core.utils import content_hash
 from azurerbac.matching.models import (
     CoverageResult,
     PartialCoverageCacheKey,
@@ -200,9 +201,9 @@ class Sitemap:
 </urlset>"""
 
         logger.debug(
-            "Sitemap built: %d URLs, %d bytes",
+            "Sitemap built: %d URLs, %d chars",
             len(urls),
-            len(content.encode("utf-8")),
+            len(content),
         )
 
         return cls(content=content, built_at=dt.datetime.now(dt.UTC))
@@ -535,7 +536,6 @@ class CacheData:
 
 def compute_roles_hash(roles: list[RoleDefinition]) -> str:
     """Compute hash of role data for change detection."""
-    from azurerbac.core.utils import content_hash
 
     def role_key(role: RoleDefinition) -> str:
         updated = role.properties.updated_on.isoformat() if role.properties.updated_on else ""
@@ -546,8 +546,6 @@ def compute_roles_hash(roles: list[RoleDefinition]) -> str:
 
 def compute_operations_hash(operations: list[OperationData]) -> str:
     """Compute hash of operation data for change detection."""
-    from azurerbac.core.utils import content_hash
-
     return content_hash("|".join(sorted(op.name for op in operations)))
 
 

@@ -101,7 +101,7 @@ async def ensure_db(engine: AsyncEngine) -> None:
 
 async def _run_in_thread(func: Callable[[], None]) -> None:
     """Run blocking function in thread pool."""
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     with concurrent.futures.ThreadPoolExecutor() as pool:
         await loop.run_in_executor(pool, func)
 

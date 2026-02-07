@@ -32,8 +32,6 @@ from azurerbac.core.constants import POPULAR_COMPARE_PAIRS, RoleStatus
 from azurerbac.core.patterns import is_wildcard_pattern, matches_pattern
 from azurerbac.core.utils import truncate_microseconds
 from azurerbac.matching.models import (
-    CoverageResult,
-    PartialCoverageCacheKey,
     Plane,
     RoleCoverage,
 )
@@ -229,10 +227,8 @@ def precompute_all(
 
     # Build computed data into temporary dicts
     pattern_match: dict[PatternCacheKey, set[str]] = {}
-    wildcard_count: dict[PatternCacheKey, int] = {}
     operations_by_prefix_computed: dict[Plane, dict[str, set[str]]] = {}
     role_coverage: dict[str, RoleCoverage] = {}
-    partial_coverage: dict[PartialCoverageCacheKey, CoverageResult] = {}
 
     # Separate control and data plane operations
     all_control_ops = {op.name for op in all_operations if not op.is_data_action}
@@ -320,8 +316,6 @@ def precompute_all(
         ),
         computed=ComputedCaches(
             pattern_match=pattern_match,
-            partial_coverage=partial_coverage,
-            wildcard_count=wildcard_count,
         ),
         content=PrerenderedContent(
             analytics=analytics,
@@ -330,9 +324,11 @@ def precompute_all(
 
     elapsed = time.time() - start
     logger.info(
-        f"Precomputed all caches in {elapsed:.2f}s: "
-        f"{len(all_action_patterns)} patterns, {len(role_coverage)} roles, "
-        f"{len(pattern_match)} pattern matches"
+        "Precomputed all caches in %.2fs: %d patterns, %d roles, %d pattern matches",
+        elapsed,
+        len(all_action_patterns),
+        len(role_coverage),
+        len(pattern_match),
     )
 
     return new_cache
@@ -350,14 +346,12 @@ async def build_from_db(session: AsyncSession) -> CacheData:
     # Fetch ALL roles (active and deleted) for roles_by_id index
     async with TimedDbQuery("fetch_all_roles") as timer:
         all_roles_result = await session.execute(select(Role))
-        all_role_snapshots = list(all_roles_result.scalars().all())
-        timer.rows = len(all_role_snapshots)
+        all_roles = list(all_roles_result.scalars().all())
+        timer.rows = len(all_roles)
 
     # Fetch active roles for role_jsons (used by recommender)
-    active_roles = [r for r in all_role_snapshots if r.status == RoleStatus.ACTIVE]
-    logger.debug(
-        "Found %d active roles out of %d total", len(active_roles), len(all_role_snapshots)
-    )
+    active_roles = [r for r in all_roles if r.status == RoleStatus.ACTIVE]
+    logger.debug("Found %d active roles out of %d total", len(active_roles), len(all_roles))
 
     # Fetch all operations
     async with TimedDbQuery("fetch_all_operations") as timer:
@@ -402,7 +396,7 @@ async def build_from_db(session: AsyncSession) -> CacheData:
 
     # Build roles_by_id index with CachedRole objects
     roles_by_id: dict[str, CachedRole] = {}
-    for role in all_role_snapshots:
+    for role in all_roles:
         role_def = role.last_known_definition
         if role_def:
             roles_by_id[role.role_id] = CachedRole(
@@ -484,8 +478,11 @@ async def build_from_db(session: AsyncSession) -> CacheData:
     )
 
     logger.info(
-        f"Cache built: {len(active_roles)} roles, {len(all_operations)} operations, "
-        f"{len(roles_by_id)} indexed, {len(all_change_events)} events"
+        "Cache built: %d roles, %d operations, %d indexed, %d events",
+        len(active_roles),
+        len(all_operations),
+        len(roles_by_id),
+        len(all_change_events),
     )
 
     return cache_data

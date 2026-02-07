@@ -5,7 +5,7 @@ from __future__ import annotations
 import datetime as dt
 import logging
 from dataclasses import asdict, dataclass, field
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
@@ -54,9 +54,9 @@ class DashboardContext:
     event_type: str = "all"
     ai: int | None = None
     # Data
-    events: list = field(default_factory=list)
+    events: list[Any] = field(default_factory=list)
     total_events: int = 0
-    roles: list = field(default_factory=list)
+    roles: list[Any] = field(default_factory=list)
     total_roles: int = 0
     total_operations: int = 0
     last_scan: dt.datetime | None = None
@@ -88,9 +88,9 @@ async def recent_changes(
             params["ai"] = ai
         return RedirectResponse(url=f"/roles?{urlencode(params)}", status_code=302)
 
-    common = await get_common_dashboard_data(deps)
+    common = get_common_dashboard_data(deps)
 
-    events: list = []
+    events: list[Any] = []
     cutoff = dt.datetime.now(dt.UTC) - dt.timedelta(days=days)
 
     # Build cache key for filtered events (days + event_type)
@@ -147,7 +147,7 @@ async def roles_list(
     logger.info(
         "Dashboard /roles: q='%s' page=%d sort=%s status=%s", q or "", page, sort, status_filter
     )
-    common = await get_common_dashboard_data(deps)
+    common = get_common_dashboard_data(deps)
 
     async with deps.SessionLocal() as session:
         if not q:

@@ -121,7 +121,7 @@ class Sitemap:
         Args:
             roles_by_id: Dict of role_id -> CachedRole.
             all_operations: List of all operations.
-            site_url: Base URL for the site (e.g. https://azurerbac.com).
+            site_url: Base URL for the site (e.g. https://rbac-catalog.dev).
 
         Returns:
             Sitemap instance with pre-built XML content.
@@ -160,13 +160,17 @@ class Sitemap:
                     )
                 )
 
-        # Add role pages (sorted by role name) - include all roles (active + deleted)
-        roles = [(role.role_id, role.role_name) for role in roles_by_id.values()]
+        # Add role pages (sorted by role name) with real lastmod dates
+        roles = [
+            (role.role_id, role.role_name, role.updated_on or role.last_seen_at)
+            for role in roles_by_id.values()
+        ]
         roles.sort(key=lambda x: x[1].lower())
 
-        for role_id, role_name in roles:
+        for role_id, role_name, last_modified in roles:
             slug = slugify(role_name)
-            urls.append(sitemap_url(f"{site_url}/roles/{role_id}/{slug}", today, "weekly", 0.8))
+            lastmod = last_modified.date().isoformat() if last_modified else today
+            urls.append(sitemap_url(f"{site_url}/roles/{role_id}/{slug}", lastmod, "weekly", 0.8))
 
         # Add operation pages
         for op in all_operations:

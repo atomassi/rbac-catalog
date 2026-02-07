@@ -4,8 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     {% include 'partials/darkmode_init.html' %}
-    <title>Azure Role Recommender - Find Least Privilege Built-in Roles | Azure RBAC Tool</title>
-    <meta name="description" content="Free Azure role finder tool. Select the operations you need and get recommendations for the most appropriate Azure built-in RBAC role with minimal permissions. Implement least privilege access for Azure security.">
+    <meta name="theme-color" content="#0078d4">
+    <title>Azure RBAC Role Recommender - Find Least Privilege Built-in Roles | Permissions Finder</title>
+    <meta name="description" content="Free Azure RBAC role finder. Describe what you need or select specific operations to find the least-privilege Azure built-in role. AI-powered recommendations for implementing least privilege access control in Azure.">
     <meta name="keywords" content="Azure Role Recommender, Azure Least Privilege, Azure RBAC Tool, Azure Permissions Finder, Azure Role Finder, Azure Security, IAM Tool, Azure Built-in Roles, Azure Role Selector">
     <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
     <meta name="author" content="Azure RBAC Catalog">
@@ -317,7 +318,7 @@
                         <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
                     </svg>
                     <div>
-                        <h3 class="font-semibold text-amber-800 dark:text-yellow-400">Operations Not Yet Loaded</h3>
+                        <p class="font-semibold text-amber-800 dark:text-yellow-400">Operations Not Yet Loaded</p>
                         <p class="text-amber-700 dark:text-yellow-400 text-sm">The operations database has not been populated yet. The daily scan will load operations automatically, or an administrator can trigger a manual scan.</p>
                     </div>
                 </div>
@@ -336,12 +337,12 @@
                             </svg>
                         </div>
                         <!-- Mobile only: Title next to icon -->
-                        <h3 class="sm:hidden font-bold text-purple-900 dark:text-purple-300 text-lg">AI Assistant</h3>
+                        <p class="sm:hidden font-bold text-purple-900 dark:text-purple-300 text-lg">AI Assistant</p>
                     </div>
                     <div class="flex-1">
                         <!-- Desktop: Title and toggle on same row -->
                         <div class="hidden sm:flex items-center justify-between mb-1">
-                            <h3 class="font-bold text-purple-900 dark:text-purple-300 text-lg">AI Assistant</h3>
+                            <p class="font-bold text-purple-900 dark:text-purple-300 text-lg">AI Assistant</p>
                             <!-- Recommender Mode Toggle -->
                             <div class="flex items-center gap-2 text-sm">
                                 <span class="text-purple-600 dark:text-purple-400 font-medium">Engine:</span>
@@ -501,7 +502,7 @@
                 <!-- AI Results -->
                 <div id="ai-results" class="hidden mt-4 pt-4 border-t border-purple-200 dark:border-slate-700">
                     <div class="flex items-center justify-between mb-3">
-                        <h4 class="font-semibold text-purple-800 dark:text-purple-300">Recommended Roles</h4>
+                        <p class="font-semibold text-purple-800 dark:text-purple-300">Recommended Roles</p>
                         <button id="ai-clear-btn" class="text-xs text-purple-600 dark:text-purple-400 hover:text-purple-800 dark:hover:text-purple-300">Clear results</button>
                     </div>
                     <div id="ai-results-list" class="space-y-2">

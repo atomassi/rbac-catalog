@@ -4,8 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     {% include 'partials/darkmode_init.html' %}
-    <title>{{ comparison.role_a.role_name }} vs {{ comparison.role_b.role_name }} - Compare Azure Roles | RBAC Catalog</title>
-    <meta name="description" content="Compare {{ comparison.role_a.role_name }} and {{ comparison.role_b.role_name }} Azure RBAC roles side by side. {{ (comparison.shared_control + comparison.shared_data) | length }} shared permissions, {{ (comparison.only_a_control + comparison.only_a_data) | length }} unique to {{ comparison.role_a.role_name }}, {{ (comparison.only_b_control + comparison.only_b_data) | length }} unique to {{ comparison.role_b.role_name }}.">
+    <meta name="theme-color" content="#0078d4">
+    <title>{{ comparison.role_a.role_name }} vs {{ comparison.role_b.role_name }} - Azure RBAC Role Comparison | Permissions Diff</title>
+    <meta name="description" content="Compare {{ comparison.role_a.role_name }} vs {{ comparison.role_b.role_name }} Azure RBAC roles side by side. {{ (comparison.shared_control + comparison.shared_data) | length }} shared permissions, {{ (comparison.only_a_control + comparison.only_a_data) | length }} unique to {{ comparison.role_a.role_name }}, {{ (comparison.only_b_control + comparison.only_b_data) | length }} unique to {{ comparison.role_b.role_name }}. Includes control plane and data plane diff.">
     <meta name="keywords" content="{{ comparison.role_a.role_name }}, {{ comparison.role_b.role_name }}, compare Azure roles, RBAC comparison, Azure permissions, role difference, IAM, least privilege">
     <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
     <meta name="author" content="Azure RBAC Catalog">
@@ -308,7 +309,7 @@
                     <div class="px-5 py-4 h-[5.5rem] border-b border-slate-100 dark:border-slate-700 bg-azure-50 dark:bg-azure-900/20">
                         <div class="flex items-center gap-2">
                             <div class="w-6 h-6 rounded-full bg-azure-100 dark:bg-azure-900/40 flex items-center justify-center text-xs font-bold text-azure-700 dark:text-azure-300">A</div>
-                            <h3 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Only in {{ comparison.role_a.role_name }}</h3>
+                            <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Only in {{ comparison.role_a.role_name }}</h2>
                         </div>
                         <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">{{ only_a_total }} operations</p>
                     </div>
@@ -363,7 +364,7 @@
                             <svg class="w-5 h-5 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
                             </svg>
-                            <h3 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Shared</h3>
+                            <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Shared</h2>
                         </div>
                         <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">{{ shared_total }} operations in both roles</p>
                     </div>
@@ -416,7 +417,7 @@
                     <div class="px-5 py-4 h-[5.5rem] border-b border-slate-100 dark:border-slate-700 bg-orange-50 dark:bg-orange-900/20">
                         <div class="flex items-center gap-2">
                             <div class="w-6 h-6 rounded-full bg-orange-100 dark:bg-orange-900/40 flex items-center justify-center text-xs font-bold text-orange-700 dark:text-orange-300">B</div>
-                            <h3 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Only in {{ comparison.role_b.role_name }}</h3>
+                            <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Only in {{ comparison.role_b.role_name }}</h2>
                         </div>
                         <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">{{ only_b_total }} operations</p>
                     </div>
@@ -474,7 +475,7 @@
                         <svg class="w-5 h-5 text-amber-600 dark:text-amber-400" fill="currentColor" viewBox="0 0 20 20">
                             <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"/>
                         </svg>
-                        <h3 class="text-sm font-semibold text-slate-900 dark:text-slate-100">ABAC Conditions</h3>
+                        <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">ABAC Conditions</h2>
                     </div>
                     <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Attribute-based access control conditions that restrict effective permissions</p>
                 </div>
@@ -593,7 +594,7 @@
                         <svg class="w-5 h-5 text-azure-600 dark:text-azure-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21" />
                         </svg>
-                        <h3 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Assignable Scopes</h3>
+                        <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Assignable Scopes</h2>
                     </div>
                     <p class="text-xs text-slate-600 dark:text-slate-400 mt-1">These roles have different assignable scopes, which determines where they can be assigned</p>
                 </div>

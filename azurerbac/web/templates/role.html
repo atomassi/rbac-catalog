@@ -4,9 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     {% include 'partials/darkmode_init.html' %}
-    <title>{{ role.role_name }} ({{ role.role_id }}) - Azure Built-in Role | RBAC Permissions</title>
-    <meta name="description" content="{{ role.role_name }} role definition ID {{ role.role_id }}. {{ role.description[:130] if role.description else 'Azure built-in RBAC role' }}. Complete permissions list with actions, dataActions, and JSON.{% if effective_perms and effective_perms.has_conditions %} Includes human-readable ABAC condition explanations.{% endif %}">
-    <meta name="keywords" content="{{ role.role_id }}, {{ role.role_id | replace('-', '') }}, {{ role.role_name }}, {{ role.role_name }} role, {{ role.role_name }} permissions, Azure RBAC, role definition id, Azure IAM{% if effective_perms and effective_perms.has_conditions %}, ABAC, attribute-based access control, condition explanation{% endif %}">
+    <meta name="theme-color" content="#0078d4">
+    <title>{{ role.role_name }} - Azure RBAC Built-in Role {{ role.role_id }} | Permissions & Definition</title>
+    <meta name="description" content="{{ role.role_name }} ({{ role.role_id }}) Azure RBAC built-in role definition. {{ role.description[:120] if role.description else 'View complete permissions' }}. {{ effective_perms.control_plane_actions | length if effective_perms and effective_perms.control_plane_actions else 0 }} actions, {{ effective_perms.data_plane_actions | length if effective_perms and effective_perms.data_plane_actions else 0 }} dataActions. Full JSON definition.{% if effective_perms and effective_perms.has_conditions %} ABAC conditions explained.{% endif %}">
+    <meta name="keywords" content="{{ role.role_id }}, {{ role.role_id | replace('-', '') }}, {{ role.role_name }}, {{ role.role_name }} role, {{ role.role_name }} permissions, {{ role.role_name }} role definition, Azure RBAC, Azure built-in role, role definition ID, Azure IAM, Azure role {{ role.role_id }}{% if effective_perms and effective_perms.has_conditions %}, ABAC, attribute-based access control{% endif %}">
     <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
     <meta name="author" content="Azure RBAC Catalog">
     <link rel="canonical" href="{{ site_url }}/roles/{{ role.role_id }}/{{ role.role_name | slugify }}">
@@ -269,7 +270,10 @@
                 </div>
 
                 <h1 class="text-3xl sm:text-4xl font-bold text-white mb-2">{{ role.role_name }}</h1>
-                <p class="text-azure-200 text-sm font-mono" id="role-definition-id" aria-label="Role Definition ID: {{ role.role_id }}">Role ID: <span>{{ role.role_id }}</span></p>
+                <p class="text-azure-200 text-sm font-mono mb-2" id="role-definition-id" aria-label="Role Definition ID: {{ role.role_id }}">Role ID: <span>{{ role.role_id }}</span></p>
+                {% if role.description %}
+                <p class="text-azure-100 text-base max-w-3xl">{{ role.description }}</p>
+                {% endif %}
             </div>
         </div>
 
@@ -300,7 +304,7 @@
                             </svg>
                         </div>
                         <div class="ml-4">
-                            <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Role Information</h3>
+                            <h2 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Role Information</h2>
                             <p class="text-sm text-slate-500 dark:text-slate-400">Details and metadata</p>
                         </div>
                     </div>
@@ -422,7 +426,7 @@
                             </svg>
                         </div>
                         <div class="ml-4">
-                            <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Change History</h3>
+                            <h2 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Change History</h2>
                             <p class="text-sm text-slate-500 dark:text-slate-400">Track all modifications to this role{% if first_scan %} since {{ first_scan }}{% endif %}</p>
                         </div>
                     </div>
@@ -684,7 +688,7 @@
                                 </svg>
                             </div>
                             <div class="ml-4">
-                                <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Latest Role JSON</h3>
+                                <h2 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Latest Role JSON</h2>
                                 <p class="text-sm text-slate-500 dark:text-slate-400">Raw definition from Azure</p>
                             </div>
                         </div>
@@ -751,7 +755,7 @@
                                 </svg>
                             </div>
                             <div class="ml-4">
-                                <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Effective Permissions</h3>
+                                <h2 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Effective Permissions</h2>
                                 <p class="text-sm text-slate-500 dark:text-slate-400">Operations granted by this role ({{ effective_perms.control_plane_count + effective_perms.data_plane_count }} total)</p>
                             </div>
                         </div>
@@ -1057,7 +1061,7 @@
                             </svg>
                         </div>
                         <div class="ml-4">
-                            <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Related Roles</h3>
+                            <h2 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Related Roles</h2>
                             <p class="text-sm text-slate-500 dark:text-slate-400">Roles sharing the most operations with {{ role.role_name }}</p>
                         </div>
                     </div>

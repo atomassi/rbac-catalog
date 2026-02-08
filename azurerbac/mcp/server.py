@@ -48,6 +48,7 @@ from azurerbac.mcp.constants import (
     SEARCH_ROLES_DESC,
 )
 from azurerbac.mcp.utils import TokenBucketRateLimiter, ToolTimer, ValidationError, validate_input
+from azurerbac.settings import Settings
 from azurerbac.telemetry import track_event
 
 logger = logging.getLogger(__name__)
@@ -503,11 +504,19 @@ class MCPServer:
                 top_k = min(top_k, MAX_AI_RECOMMEND_LIMIT)
 
                 try:
+                    enabled = Settings.get().enabled_ai_engines
+                    mcp_mode = (
+                        RecommenderMode.CROSSENCODER.value
+                        if RecommenderMode.CROSSENCODER.value in enabled
+                        else enabled[0]
+                        if enabled
+                        else RecommenderMode.TFIDF.value
+                    )
                     recommendations, mode = ai_recommend_roles(
                         query=query,
                         roles=self._cache.get_all_roles(),
                         top_k=top_k,
-                        requested_mode=RecommenderMode.COLBERT.value,
+                        requested_mode=mcp_mode,
                     )
                 except Exception as e:
                     logger.exception("AI recommendation failed")

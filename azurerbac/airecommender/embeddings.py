@@ -45,7 +45,13 @@ class EmbeddingModel:
         """Load the sentence transformer model. Returns False if skipped or failed."""
         if self._should_skip_in_tests():
             return False
-        return self._load_model()
+        try:
+            return self._load_model()
+        except ImportError:
+            logger.warning("sentence-transformers not installed; embedding model unavailable.")
+        except Exception as e:
+            logger.exception("Failed to load embedding model: %s", e)
+        return False
 
     def _should_skip_in_tests(self) -> bool:
         settings = Settings.get()
@@ -58,24 +64,18 @@ class EmbeddingModel:
         return False
 
     def _load_model(self) -> bool:
-        try:
-            from sentence_transformers import SentenceTransformer
+        from sentence_transformers import SentenceTransformer
 
-            if _MODEL_PATH.exists():
-                self._model = SentenceTransformer(str(_MODEL_PATH))
-            else:
-                logger.info("Downloading MiniLM embedding model (first time only)...")
-                self._model = SentenceTransformer(_MODEL_NAME)
-                _MODELS_DIR.mkdir(parents=True, exist_ok=True)
-                self._model.save(str(_MODEL_PATH))
+        if _MODEL_PATH.exists():
+            self._model = SentenceTransformer(str(_MODEL_PATH))
+        else:
+            logger.info("Downloading MiniLM embedding model (first time only)...")
+            self._model = SentenceTransformer(_MODEL_NAME)
+            _MODELS_DIR.mkdir(parents=True, exist_ok=True)
+            self._model.save(str(_MODEL_PATH))
 
-            logger.info("Loaded sentence embedding model (MiniLM)")
-            return True
-        except ImportError:
-            logger.warning("sentence-transformers not installed. Using TF-IDF fallback.")
-        except Exception as e:
-            logger.exception("Failed to load embedding model: %s. Using TF-IDF fallback.", e)
-        return False
+        logger.info("Loaded sentence embedding model (MiniLM)")
+        return True
 
     def _require_model(self) -> SentenceTransformer:
         if not self._model:

@@ -127,21 +127,21 @@ INPUT_VALIDATION_TESTS: Final = [
     ("API search: query too long", "/api/operations/search?q=" + "A" * 200, (400,)),
 ]
 
-# AI Recommender POST endpoint tests (different modes)
+# AI Recommender POST endpoint tests (default enabled modes only)
 AI_RECOMMENDER_TESTS: Final = [
     ("AI: TFIDF mode", {"query": "read storage blobs", "top_k": 3, "recommender_mode": "tfidf"}),
     (
         "AI: Semantic mode",
         {"query": "manage virtual machines", "top_k": 3, "recommender_mode": "semantic"},
     ),
-    ("AI: ColBERT mode", {"query": "backup databases", "top_k": 3, "recommender_mode": "colbert"}),
     (
         "AI: CrossEncoder mode",
-        {"query": "manage kubernetes", "top_k": 3, "recommender_mode": "crossencoder"},
+        {"query": "manage security policies", "top_k": 3, "recommender_mode": "crossencoder"},
     ),
+    ("AI: ColBERT mode", {"query": "backup databases", "top_k": 3, "recommender_mode": "colbert"}),
     ("AI: RAG mode", {"query": "deploy applications", "top_k": 3, "recommender_mode": "rag"}),
-    ("AI: Hybrid mode", {"query": "monitor resources", "top_k": 3, "recommender_mode": "hybrid"}),
     ("AI: LLM mode", {"query": "manage clusters", "top_k": 3, "recommender_mode": "llm"}),
+    ("AI: HyDE mode", {"query": "monitor network traffic", "top_k": 3, "recommender_mode": "hyde"}),
 ]
 
 # Role recommend API tests

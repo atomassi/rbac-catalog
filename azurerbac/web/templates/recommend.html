@@ -313,108 +313,37 @@
                             <div class="flex items-center gap-2 text-sm">
                                 <span class="text-purple-600 dark:text-purple-400 font-medium">Engine:</span>
                                 <div class="flex bg-purple-100 dark:bg-slate-700 rounded-lg p-0.5">
+                                    {% set engine_labels = {"llm": "LLM", "rag": "RAG", "hybrid": "Hybrid", "semantic": "Semantic", "crossencoder": "Rerank", "colbert": "ColBERT", "hyde": "HyDE", "tfidf": "TF-IDF"} %}
+                                    {% set engine_titles = {"llm": "Fine-tuned Qwen model (~1s)", "rag": "Embeddings + LLM reranking", "hybrid": "TF-IDF → Embeddings → LLM", "semantic": "Embeddings only (~200ms)", "crossencoder": "Neural reranking (~300ms)", "colbert": "Token-level matching (~150ms)", "hyde": "Hypothetical docs (~1.5s)", "tfidf": "Keywords only (~50ms)"} %}
+                                    {% for engine in enabled_engines %}
                                     <button 
-                                        id="mode-llm-btn"
-                                        class="px-3 py-1 rounded-md text-xs font-medium transition-all bg-purple-600 text-white"
-                                        title="Fine-tuned Qwen model (~1s)"
+                                        id="mode-{{ engine }}-btn"
+                                        class="px-3 py-1 rounded-md text-xs font-medium transition-all {% if loop.first %}bg-purple-600 text-white{% else %}text-purple-600 dark:text-purple-400 hover:bg-purple-200 dark:hover:bg-slate-600{% endif %}"
+                                        title="{{ engine_titles.get(engine, '') }}"
                                     >
-                                        LLM
+                                        {{ engine_labels.get(engine, engine) }}
                                     </button>
-                                    <button 
-                                        id="mode-rag-btn"
-                                        class="px-3 py-1 rounded-md text-xs font-medium transition-all text-purple-600 dark:text-purple-400 hover:bg-purple-200 dark:hover:bg-slate-600"
-                                        title="Embeddings + LLM reranking"
-                                    >
-                                        RAG
-                                    </button>
-                                    <button 
-                                        id="mode-hybrid-btn"
-                                        class="px-3 py-1 rounded-md text-xs font-medium transition-all text-purple-600 dark:text-purple-400 hover:bg-purple-200 dark:hover:bg-slate-600"
-                                        title="TF-IDF → Embeddings → LLM"
-                                    >
-                                        Hybrid
-                                    </button>
-                                    <button 
-                                        id="mode-semantic-btn"
-                                        class="px-3 py-1 rounded-md text-xs font-medium transition-all text-purple-600 dark:text-purple-400 hover:bg-purple-200 dark:hover:bg-slate-600"
-                                        title="Embeddings only (~200ms)"
-                                    >
-                                        Semantic
-                                    </button>
-                                    <button 
-                                        id="mode-crossencoder-btn"
-                                        class="px-3 py-1 rounded-md text-xs font-medium transition-all text-purple-600 dark:text-purple-400 hover:bg-purple-200 dark:hover:bg-slate-600"
-                                        title="Neural reranking (~300ms)"
-                                    >
-                                        Rerank
-                                    </button>
-                                    <button 
-                                        id="mode-colbert-btn"
-                                        class="px-3 py-1 rounded-md text-xs font-medium transition-all text-purple-600 dark:text-purple-400 hover:bg-purple-200 dark:hover:bg-slate-600"
-                                        title="Token-level matching (~150ms)"
-                                    >
-                                        ColBERT
-                                    </button>
-                                    <button 
-                                        id="mode-hyde-btn"
-                                        class="px-3 py-1 rounded-md text-xs font-medium transition-all text-purple-600 dark:text-purple-400 hover:bg-purple-200 dark:hover:bg-slate-600"
-                                        title="Hypothetical docs (~1.5s)"
-                                    >
-                                        HyDE
-                                    </button>
-                                    <button 
-                                        id="mode-tfidf-btn"
-                                        class="px-3 py-1 rounded-md text-xs font-medium transition-all text-purple-600 dark:text-purple-400 hover:bg-purple-200 dark:hover:bg-slate-600"
-                                        title="Keywords only (~50ms)"
-                                    >
-                                        TF-IDF
-                                    </button>
+                                    {% endfor %}
                                 </div>
                             </div>
                         </div>
                         <!-- Desktop: Engine description below buttons -->
-                        <p id="engine-desc-desktop" class="hidden sm:block text-xs text-slate-500 dark:text-slate-400 text-right mb-2">Fine-tuned Qwen model (~1s)</p>
+                        <p id="engine-desc-desktop" class="hidden sm:block text-xs text-slate-500 dark:text-slate-400 text-right mb-2">{{ engine_titles.get(enabled_engines[0], '') }}</p>
                         <!-- Mobile: Engine toggle below title -->
                         <div class="sm:hidden mb-3">
                             <div class="flex items-start gap-2 text-sm mb-1">
                                 <span class="text-purple-600 dark:text-purple-400 font-medium shrink-0 pt-1">Engine:</span>
                                 <div class="flex bg-purple-100 dark:bg-slate-700 rounded-lg p-1 flex-wrap gap-1">
+                                    {% for engine in enabled_engines %}
                                     <button 
-                                        id="mode-llm-btn-mobile"
-                                        class="px-2 py-1 rounded-md text-xs font-medium transition-all bg-purple-600 text-white"
-                                    >LLM</button>
-                                    <button 
-                                        id="mode-rag-btn-mobile"
-                                        class="px-2 py-1 rounded-md text-xs font-medium transition-all text-purple-600 dark:text-purple-400 hover:bg-purple-200 dark:hover:bg-slate-600"
-                                    >RAG</button>
-                                    <button 
-                                        id="mode-hybrid-btn-mobile"
-                                        class="px-2 py-1 rounded-md text-xs font-medium transition-all text-purple-600 dark:text-purple-400 hover:bg-purple-200 dark:hover:bg-slate-600"
-                                    >Hybrid</button>
-                                    <button 
-                                        id="mode-semantic-btn-mobile"
-                                        class="px-2 py-1 rounded-md text-xs font-medium transition-all text-purple-600 dark:text-purple-400 hover:bg-purple-200 dark:hover:bg-slate-600"
-                                    >Semantic</button>
-                                    <button 
-                                        id="mode-crossencoder-btn-mobile"
-                                        class="px-2 py-1 rounded-md text-xs font-medium transition-all text-purple-600 dark:text-purple-400 hover:bg-purple-200 dark:hover:bg-slate-600"
-                                    >Rerank</button>
-                                    <button 
-                                        id="mode-colbert-btn-mobile"
-                                        class="px-2 py-1 rounded-md text-xs font-medium transition-all text-purple-600 dark:text-purple-400 hover:bg-purple-200 dark:hover:bg-slate-600"
-                                    >ColBERT</button>
-                                    <button 
-                                        id="mode-hyde-btn-mobile"
-                                        class="px-2 py-1 rounded-md text-xs font-medium transition-all text-purple-600 dark:text-purple-400 hover:bg-purple-200 dark:hover:bg-slate-600"
-                                    >HyDE</button>
-                                    <button 
-                                        id="mode-tfidf-btn-mobile"
-                                        class="px-2 py-1 rounded-md text-xs font-medium transition-all text-purple-600 dark:text-purple-400 hover:bg-purple-200 dark:hover:bg-slate-600"
-                                    >TF-IDF</button>
+                                        id="mode-{{ engine }}-btn-mobile"
+                                        class="px-2 py-1 rounded-md text-xs font-medium transition-all {% if loop.first %}bg-purple-600 text-white{% else %}text-purple-600 dark:text-purple-400 hover:bg-purple-200 dark:hover:bg-slate-600{% endif %}"
+                                    >{{ engine_labels.get(engine, engine) }}</button>
+                                    {% endfor %}
                                 </div>
                             </div>
                             <!-- Mobile engine description -->
-                            <p id="engine-desc-mobile" class="text-xs text-slate-500 dark:text-slate-400 italic mt-1">Fine-tuned Qwen model (~1s)</p>
+                            <p id="engine-desc-mobile" class="text-xs text-slate-500 dark:text-slate-400 italic mt-1">{{ engine_titles.get(enabled_engines[0], '') }}</p>
                         </div>
                         <p class="text-purple-700 dark:text-purple-300 text-sm mb-3">Describe what you need in plain English, and I'll recommend the best roles.</p>
                         <!-- Mobile layout -->
@@ -714,22 +643,6 @@
         const aiClearBtn = document.getElementById('ai-clear-btn');
         const aiHint = document.getElementById('ai-hint');
         const aiEngineInfo = document.getElementById('ai-engine-info');
-        const modeLLMBtn = document.getElementById('mode-llm-btn');
-        const modeRAGBtn = document.getElementById('mode-rag-btn');
-        const modeHybridBtn = document.getElementById('mode-hybrid-btn');
-        const modeSemanticBtn = document.getElementById('mode-semantic-btn');
-        const modeCrossEncoderBtn = document.getElementById('mode-crossencoder-btn');
-        const modeColBERTBtn = document.getElementById('mode-colbert-btn');
-        const modeHyDEBtn = document.getElementById('mode-hyde-btn');
-        const modeTFIDFBtn = document.getElementById('mode-tfidf-btn');
-        const modeLLMBtnMobile = document.getElementById('mode-llm-btn-mobile');
-        const modeRAGBtnMobile = document.getElementById('mode-rag-btn-mobile');
-        const modeHybridBtnMobile = document.getElementById('mode-hybrid-btn-mobile');
-        const modeSemanticBtnMobile = document.getElementById('mode-semantic-btn-mobile');
-        const modeCrossEncoderBtnMobile = document.getElementById('mode-crossencoder-btn-mobile');
-        const modeColBERTBtnMobile = document.getElementById('mode-colbert-btn-mobile');
-        const modeHyDEBtnMobile = document.getElementById('mode-hyde-btn-mobile');
-        const modeTFIDFBtnMobile = document.getElementById('mode-tfidf-btn-mobile');
         
         // Helper to get current input value (from whichever is visible)
         function getAIQueryValue() {
@@ -789,6 +702,10 @@
         const STORAGE_KEY_AI_RESULTS = 'roleRecommender_aiResults';
         const STORAGE_KEY_MODE = 'roleRecommender_mode';
         
+        // Enabled engines from server config
+        const enabledEngines = {{ enabled_engines | tojson }};
+        const defaultEngine = enabledEngines[0] || 'tfidf';
+        
         // Engine descriptions with links
         const engineDescriptions = {
             llm: {
@@ -838,25 +755,29 @@
         // Initialize mode from storage
         function initRecommenderMode() {
             const savedMode = sessionStorage.getItem(STORAGE_KEY_MODE);
-            const validModes = ['llm', 'rag', 'hybrid', 'semantic', 'crossencoder', 'colbert', 'hyde', 'tfidf'];
-            if (savedMode && validModes.includes(savedMode)) {
+            if (savedMode && enabledEngines.includes(savedMode)) {
                 currentRecommenderMode = savedMode;
+            } else {
+                currentRecommenderMode = defaultEngine;
             }
             updateModeButtons();
         }
         
+        // Build button map dynamically from enabled engines
+        function getModeBtnMap() {
+            const map = {};
+            enabledEngines.forEach(mode => {
+                map[mode] = [
+                    document.getElementById(`mode-${mode}-btn`),
+                    document.getElementById(`mode-${mode}-btn-mobile`)
+                ].filter(Boolean);
+            });
+            return map;
+        }
+        
         // Update mode button styles
         function updateModeButtons() {
-            const allBtns = {
-                llm: [modeLLMBtn, modeLLMBtnMobile].filter(Boolean),
-                rag: [modeRAGBtn, modeRAGBtnMobile].filter(Boolean),
-                hybrid: [modeHybridBtn, modeHybridBtnMobile].filter(Boolean),
-                semantic: [modeSemanticBtn, modeSemanticBtnMobile].filter(Boolean),
-                crossencoder: [modeCrossEncoderBtn, modeCrossEncoderBtnMobile].filter(Boolean),
-                colbert: [modeColBERTBtn, modeColBERTBtnMobile].filter(Boolean),
-                hyde: [modeHyDEBtn, modeHyDEBtnMobile].filter(Boolean),
-                tfidf: [modeTFIDFBtn, modeTFIDFBtnMobile].filter(Boolean)
-            };
+            const allBtns = getModeBtnMap();
             
             // Reset all buttons to inactive state
             Object.values(allBtns).flat().forEach(btn => {
@@ -881,7 +802,7 @@
             }
         }
         
-        // Mode toggle event listeners
+        // Mode toggle event listeners — set up dynamically
         function setupModeButton(btns, mode) {
             btns.filter(Boolean).forEach(btn => {
                 btn.addEventListener('click', () => {
@@ -891,14 +812,12 @@
                 });
             });
         }
-        setupModeButton([modeLLMBtn, modeLLMBtnMobile], 'llm');
-        setupModeButton([modeRAGBtn, modeRAGBtnMobile], 'rag');
-        setupModeButton([modeHybridBtn, modeHybridBtnMobile], 'hybrid');
-        setupModeButton([modeSemanticBtn, modeSemanticBtnMobile], 'semantic');
-        setupModeButton([modeCrossEncoderBtn, modeCrossEncoderBtnMobile], 'crossencoder');
-        setupModeButton([modeColBERTBtn, modeColBERTBtnMobile], 'colbert');
-        setupModeButton([modeHyDEBtn, modeHyDEBtnMobile], 'hyde');
-        setupModeButton([modeTFIDFBtn, modeTFIDFBtnMobile], 'tfidf');
+        {
+            const btnMap = getModeBtnMap();
+            enabledEngines.forEach(mode => {
+                setupModeButton(btnMap[mode], mode);
+            });
+        }
         
         // Save state to sessionStorage
         function saveState() {

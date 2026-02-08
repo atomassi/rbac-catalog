@@ -17,6 +17,7 @@ from azurerbac.core.utils import (
     normalize_uuid_or_none,
     truncate_microseconds,
 )
+from azurerbac.matching.models import RoleNetPermissions
 from azurerbac.telemetry import TimedDbQuery
 from azurerbac.web.services.models import (
     DashboardSummary,
@@ -40,9 +41,19 @@ if TYPE_CHECKING:
 
 _MIN_DATETIME: Final[dt.datetime] = dt.datetime.min.replace(tzinfo=dt.UTC)
 
+# Sentinel for roles with no net permissions in cache
+_ZERO_PERMS: Final[RoleNetPermissions] = RoleNetPermissions(0, 0)
+
 _ROLE_SORT_KEYS: Final[dict[SortField, Callable[[RoleWithCounts], Any]]] = {
     SortField.ACTIONS: lambda r: r.actions_count,
     SortField.DATA_ACTIONS: lambda r: r.data_actions_count,
+    SortField.ID: lambda r: r.role_id.lower(),
+    SortField.UPDATED: lambda r: r.updated_on or _MIN_DATETIME,
+    SortField.NAME: lambda r: r.role_name.lower(),
+}
+
+# Sort key functions for CachedRole (pre-enrichment sorting)
+_CACHED_ROLE_SORT_KEYS: Final[dict[SortField, Callable[[CachedRole], Any]]] = {
     SortField.ID: lambda r: r.role_id.lower(),
     SortField.UPDATED: lambda r: r.updated_on or _MIN_DATETIME,
     SortField.NAME: lambda r: r.role_name.lower(),
@@ -267,7 +278,8 @@ def _fetch_roles_from_cache(
     """Fetch paginated roles from cache.
 
     Returns None if cache is empty, otherwise returns paginated result.
-    This avoids DB queries since all role data is already cached.
+    Sorts CachedRole objects directly and enriches only the paginated page
+    (~25 items) instead of all ~800 roles.
     """
     cached_roles = deps.app_cache.cache.roles_by_id
     if not cached_roles:
@@ -278,12 +290,34 @@ def _fetch_roles_from_cache(
         role for role in cached_roles.values() if _matches_status(role.status, status_filter)
     ]
 
-    # Enrich, sort, and paginate
-    enriched_roles = [enrich_role_with_counts(r) for r in matching_roles]
-    _sort_enriched_roles(enriched_roles, sort=sort, order=order)
+    # Sort CachedRole objects directly (avoids enriching all ~800 roles)
+    sort_field = SortField.from_string(str(sort))
+    reverse = order == SortOrder.DESC
 
+    if sort_field == SortField.ACTIONS:
+        cache = deps.app_cache
+        matching_roles.sort(
+            key=lambda r: (cache.get_role_net_permissions(r.role_id) or _ZERO_PERMS).control_count,
+            reverse=reverse,
+        )
+    elif sort_field == SortField.DATA_ACTIONS:
+        cache = deps.app_cache
+        matching_roles.sort(
+            key=lambda r: (cache.get_role_net_permissions(r.role_id) or _ZERO_PERMS).data_count,
+            reverse=reverse,
+        )
+    else:
+        key_func = _CACHED_ROLE_SORT_KEYS.get(sort_field, _CACHED_ROLE_SORT_KEYS[SortField.NAME])
+        matching_roles.sort(key=key_func, reverse=reverse)
+
+    # Paginate first, then enrich only the page (25 items vs 800+)
     params = PaginationParams(page=page, page_size=page_size)
-    return _paginate_list(enriched_roles, params)
+    total_count = len(matching_roles)
+    total_pages = PaginationInfo.count_pages(total_count, page_size)
+    page_items = matching_roles[params.offset : params.offset + page_size]
+    enriched_page = [enrich_role_with_counts(r, deps.app_cache) for r in page_items]
+
+    return PaginatedResult(items=enriched_page, total_count=total_count, total_pages=total_pages)
 
 
 async def fetch_roles_paginated(
@@ -363,8 +397,9 @@ def search_roles_in_cache(
 ) -> PaginatedResult[RoleWithCounts]:
     """Search roles in memory cache with relevance ranking.
 
-    Results are ranked: exact match → starts with → contains.
+    Results are ranked: exact match -> starts with -> contains.
     Within each tier, the user's chosen sort/order is applied.
+    Sorts CachedRole objects directly and enriches only the paginated page.
     """
     query_lower = q.strip().lower()
     normalized_guid = normalize_uuid_or_none(q)
@@ -376,16 +411,38 @@ def search_roles_in_cache(
         and _role_matches_search(role, query_lower, normalized_guid)
     ]
 
-    enriched_roles = [enrich_role_with_counts(r) for r in matching_roles]
-
-    # Two-pass stable sort: secondary sort first, then primary (relevance rank).
-    # Python's stable sort preserves secondary order within each rank tier.
+    # Two-pass stable sort on CachedRole directly (avoids enriching all matches).
+    # Secondary sort first, then primary (relevance rank).
     sort_field = SortField.from_string(str(sort))
-    secondary_key = _ROLE_SORT_KEYS.get(sort_field, _ROLE_SORT_KEYS[SortField.NAME])
-    enriched_roles.sort(key=secondary_key, reverse=(order == SortOrder.DESC))
-    enriched_roles.sort(
+    reverse = order == SortOrder.DESC
+
+    if sort_field == SortField.ACTIONS:
+        _cache = _get_default_cache()
+        matching_roles.sort(
+            key=lambda r: (_cache.get_role_net_permissions(r.role_id) or _ZERO_PERMS).control_count,
+            reverse=reverse,
+        )
+    elif sort_field == SortField.DATA_ACTIONS:
+        _cache = _get_default_cache()
+        matching_roles.sort(
+            key=lambda r: (_cache.get_role_net_permissions(r.role_id) or _ZERO_PERMS).data_count,
+            reverse=reverse,
+        )
+    else:
+        secondary_key = _CACHED_ROLE_SORT_KEYS.get(
+            sort_field, _CACHED_ROLE_SORT_KEYS[SortField.NAME]
+        )
+        matching_roles.sort(key=secondary_key, reverse=reverse)
+
+    matching_roles.sort(
         key=lambda r: _role_search_rank(r.role_name, r.role_id, query_lower, normalized_guid),
     )
 
+    # Paginate first, then enrich only the page
     params = PaginationParams(page=page, page_size=page_size)
-    return _paginate_list(enriched_roles, params)
+    total_count = len(matching_roles)
+    total_pages = PaginationInfo.count_pages(total_count, page_size)
+    page_items = matching_roles[params.offset : params.offset + page_size]
+    enriched_page = [enrich_role_with_counts(r) for r in page_items]
+
+    return PaginatedResult(items=enriched_page, total_count=total_count, total_pages=total_pages)

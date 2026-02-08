@@ -22,6 +22,7 @@ from __future__ import annotations
 import datetime as dt
 import logging
 import time
+from collections import defaultdict
 from dataclasses import dataclass, field
 from functools import cached_property
 from typing import TYPE_CHECKING, Any, Final
@@ -44,6 +45,15 @@ from azurerbac.matching.models import (
 if TYPE_CHECKING:
     from azurerbac.analytics.models import AnalyticsData
     from azurerbac.azure.models import OperationData, RoleDefinition
+
+
+@dataclass(frozen=True, slots=True)
+class ClassifiedOps:
+    """Single-pass classification of operations by plane."""
+
+    lowered_to_orig: dict[str, str]
+    control: frozenset[str]
+    data: frozenset[str]
 
 
 def sitemap_url(
@@ -475,10 +485,10 @@ class CacheData:
     @cached_property
     def events_by_role(self) -> dict[str, list[CachedChangeEvent]]:
         """Index of change events keyed by role_id (populated lazily)."""
-        index: dict[str, list[CachedChangeEvent]] = {}
+        index: defaultdict[str, list[CachedChangeEvent]] = defaultdict(list)
         for event in self.all_change_events:
-            index.setdefault(event.role_id, []).append(event)
-        return index
+            index[event.role_id].append(event)
+        return dict(index)
 
     @cached_property
     def role_name_to_id(self) -> dict[str, str]:
@@ -534,19 +544,38 @@ class CacheData:
     # =========================================================================
 
     @cached_property
+    def _classified_ops(self) -> ClassifiedOps:
+        """Single-pass classification of operations by plane.
+
+        Combines ops_lowered_to_orig, control_ops_lowered, and data_ops_lowered
+        into one iteration over 21K+ operations (3x fewer iterations).
+        """
+        lowered_to_orig: dict[str, str] = {}
+        control: list[str] = []
+        data: list[str] = []
+        for op in self.all_operations:
+            name_lower = op.name.lower()
+            lowered_to_orig[name_lower] = op.name
+            if op.is_data_action:
+                data.append(name_lower)
+            else:
+                control.append(name_lower)
+        return ClassifiedOps(lowered_to_orig, frozenset(control), frozenset(data))
+
+    @cached_property
     def ops_lowered_to_orig(self) -> dict[str, str]:
         """Mapping from lowered operation name to original casing."""
-        return {op.name.lower(): op.name for op in self.all_operations}
+        return self._classified_ops.lowered_to_orig
 
     @cached_property
     def control_ops_lowered(self) -> frozenset[str]:
         """Frozenset of control plane operation names (lowered)."""
-        return frozenset(op.name.lower() for op in self.all_operations if not op.is_data_action)
+        return self._classified_ops.control
 
     @cached_property
     def data_ops_lowered(self) -> frozenset[str]:
         """Frozenset of data plane operation names (lowered)."""
-        return frozenset(op.name.lower() for op in self.all_operations if op.is_data_action)
+        return self._classified_ops.data
 
     @cached_property
     def role_definitions(self) -> list[RoleDefinition]:
@@ -584,12 +613,12 @@ def build_indexes(
     """
     ops_by_name_lower = {op.name.lower(): op for op in operations}
 
-    ops_by_prefix: dict[str, list[OperationData]] = {}
+    ops_by_prefix: defaultdict[str, list[OperationData]] = defaultdict(list)
     for op in operations:
         name_lower = op.name.lower()
         slash_idx = name_lower.find("/")
         if slash_idx > 0:
             prefix = name_lower[:slash_idx]
-            ops_by_prefix.setdefault(prefix, []).append(op)
+            ops_by_prefix[prefix].append(op)
 
-    return ops_by_name_lower, ops_by_prefix
+    return ops_by_name_lower, dict(ops_by_prefix)

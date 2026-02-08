@@ -198,8 +198,13 @@ def compute_related_roles(
     if not coverage:
         return []
 
-    current_ops = coverage.control | coverage.data
-    if not current_ops:
+    # Separate control/data sets to avoid creating unions per candidate.
+    # Since control and data ops are disjoint:
+    #   |current ∩ other| = |current_ctrl ∩ other_ctrl| + |current_data ∩ other_data|
+    current_control = coverage.control
+    current_data = coverage.data
+    current_len = len(current_control) + len(current_data)
+    if current_len == 0:
         return []
 
     current_scopes, current_conditions = _extract_role_metadata(current_cached)
@@ -207,10 +212,11 @@ def compute_related_roles(
     # Use inverted index to count co-occurring roles efficiently
     co_occurrence: dict[str, int] = {}
     op_to_roles = cache_resolved.cache.operation_to_roles
-    for op in current_ops:
-        for rid in op_to_roles.get(op, []):
-            if rid != role_id:
-                co_occurrence[rid] = co_occurrence.get(rid, 0) + 1
+    for ops_set in (current_control, current_data):
+        for op in ops_set:
+            for rid in op_to_roles.get(op, []):
+                if rid != role_id:
+                    co_occurrence[rid] = co_occurrence.get(rid, 0) + 1
 
     if not co_occurrence:
         return []
@@ -221,7 +227,6 @@ def compute_related_roles(
         co_occurrence.items(),
         key=lambda x: (x[1], x[0]),
     )
-    current_len = len(current_ops)
 
     results: list[RelatedRole] = []
     for rid, _ in top_candidates:
@@ -233,12 +238,16 @@ def compute_related_roles(
         if not other_coverage:
             continue
 
-        other_ops = other_coverage.control | other_coverage.data
-        other_len = len(other_ops)
+        # Compute intersection directly from separate sets (avoids set union per candidate)
+        other_control_len = len(other_coverage.control)
+        other_data_len = len(other_coverage.data)
+        other_len = other_control_len + other_data_len
         if other_len == 0:
             continue
 
-        intersection = len(current_ops & other_ops)
+        intersection = len(current_control & other_coverage.control) + len(
+            current_data & other_coverage.data
+        )
         union = current_len + other_len - intersection
         ops_sim = intersection / union if union > 0 else 0.0
 
@@ -436,7 +445,7 @@ async def get_role_from_cache_or_db(
                 azure_updated_on=ev.azure_updated_on,
                 summary=ev.summary,
                 diff_json=ev.diff_json,
-                role_json=ev.role_definition.to_dict() if ev.role_definition else None,
+                role_json=ev.role_json,
             )
             for ev in db_events
         ]

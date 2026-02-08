@@ -246,10 +246,14 @@ class OperationData(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     name: str = Field(default="")
-    display_name: str | None = Field(default=None, serialization_alias="displayName")
+    display_name: str | None = Field(
+        default=None, validation_alias="displayName", serialization_alias="displayName"
+    )
     description: str | None = Field(default=None)
     origin: str | None = Field(default=None)
-    is_data_action: bool = Field(default=False, serialization_alias="isDataAction")
+    is_data_action: bool = Field(
+        default=False, validation_alias="isDataAction", serialization_alias="isDataAction"
+    )
 
     # Context from parent provider/resource type
     provider_display_name: str = Field(default="")

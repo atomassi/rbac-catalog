@@ -516,8 +516,8 @@ def compute_top_roles_by_permissions(
         if net_perms.data_count > 0:
             data_action_counts.append((role_id, role_name, net_perms.data_count))
 
-    top_actions = heapq.nlargest(limit, action_counts, key=lambda x: x[2])
-    top_data = heapq.nlargest(limit, data_action_counts, key=lambda x: x[2])
+    top_actions = heapq.nlargest(limit, action_counts, key=lambda x: (x[2], x[1]))
+    top_data = heapq.nlargest(limit, data_action_counts, key=lambda x: (x[2], x[1]))
 
     top_by_actions = [
         TopRoleByPermissions(role_id=rid, role_name=rname, count=cnt)

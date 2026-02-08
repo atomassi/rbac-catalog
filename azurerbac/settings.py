@@ -99,16 +99,21 @@ class Settings(BaseModel):
     use_rbac_api: bool = True
     mcp_server_enabled: bool = True
     enabled_ai_engines: list[str] = Field(
-        default=["colbert", "semantic", "llm", "rag", "hyde", "tfidf"],
+        default=["crossencoder", "colbert", "semantic", "llm", "rag", "hyde", "tfidf"],
         description="AI recommendation engines to expose in the UI.",
     )
 
     @field_validator("enabled_ai_engines")
     @classmethod
     def _validate_engines(cls, v: list[str]) -> list[str]:
+        seen: set[str] = set()
         valid: list[str] = []
         invalid: list[str] = []
-        for e in v:
+        for raw in v:
+            e = raw.strip().lower()
+            if not e or e in seen:
+                continue
+            seen.add(e)
             (valid if e in _VALID_AI_ENGINES else invalid).append(e)
         if invalid:
             logger.warning("Ignoring unknown AI engine(s): %s", ", ".join(invalid))

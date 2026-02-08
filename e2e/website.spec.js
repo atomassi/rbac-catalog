@@ -1009,7 +1009,7 @@ test.describe('Role Recommender', () => {
     await page.waitForLoadState('domcontentloaded');
     // Click the AI toggle label to enable AI mode
     await page.locator('label[for="ai-toggle"]').first().click();
-    const modeButtons = page.locator('#mode-llm-btn, #mode-tfidf-btn, #mode-llm-btn-mobile, #mode-tfidf-btn-mobile');
+    const modeButtons = page.locator('[id^="mode-"][id$="-btn"]');
     expect(await modeButtons.count()).toBeGreaterThan(0);
   });
 

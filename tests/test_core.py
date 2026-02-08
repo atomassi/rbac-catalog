@@ -64,6 +64,12 @@ class TestSettings:
             pytest.param(["llm", "bogus", "tfidf", "nope"], ["llm", "tfidf"], id="filters_invalid"),
             pytest.param(["fake", "invalid"], ["tfidf"], id="all_invalid_fallback"),
             pytest.param([], ["tfidf"], id="empty_fallback"),
+            pytest.param(
+                ["LLM", " Semantic ", "TFIDF"],
+                ["llm", "semantic", "tfidf"],
+                id="normalizes_case_whitespace",
+            ),
+            pytest.param(["tfidf", "llm", "tfidf", "llm"], ["tfidf", "llm"], id="deduplicates"),
         ],
     )
     def test_enabled_ai_engines_validation(self, engines_in: list[str], expected: list[str]):

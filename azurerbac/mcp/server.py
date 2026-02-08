@@ -506,8 +506,8 @@ class MCPServer:
                 try:
                     enabled = Settings.get().enabled_ai_engines
                     mcp_mode = (
-                        RecommenderMode.COLBERT.value
-                        if RecommenderMode.COLBERT.value in enabled
+                        RecommenderMode.CROSSENCODER.value
+                        if RecommenderMode.CROSSENCODER.value in enabled
                         else enabled[0]
                         if enabled
                         else RecommenderMode.TFIDF.value

@@ -45,7 +45,13 @@ class EmbeddingModel:
         """Load the sentence transformer model. Returns False if skipped or failed."""
         if self._should_skip_in_tests():
             return False
-        return self._load_model()
+        try:
+            return self._load_model()
+        except ImportError:
+            logger.warning("sentence-transformers not installed; embedding model unavailable.")
+        except Exception as e:
+            logger.exception("Failed to load embedding model: %s", e)
+        return False
 
     def _should_skip_in_tests(self) -> bool:
         settings = Settings.get()

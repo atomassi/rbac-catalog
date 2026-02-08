@@ -76,6 +76,7 @@ async def compare(
         request,
         "compare.html",
         {
+            "tab": "compare",
             "popular_comparisons": popular,
             "all_roles": all_roles,
             "total_roles": len(all_roles),
@@ -272,6 +273,7 @@ async def operations_list(
         request,
         "operations.html",
         {
+            "tab": "operations",
             "request": request,
             "operations": page_operations,
             "total_operations": total_operations,
@@ -351,6 +353,7 @@ async def recommend_page(
         request,
         "recommend.html",
         {
+            "tab": "recommend",
             "operations_loaded": ops_count > 0,
             "operations_count": ops_count,
         },
@@ -374,6 +377,7 @@ async def about_page(
         request,
         "about.html",
         {
+            "tab": "about",
             "total_roles": roles_count,
             "total_operations": ops_count,
             "ai_mode": ai_mode,

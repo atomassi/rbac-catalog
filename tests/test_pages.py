@@ -1700,3 +1700,395 @@ class TestBuildPopularComparisons:
         if result:
             with pytest.raises(AttributeError):
                 result[0].category = "modified"  # type: ignore[misc]
+
+
+# =============================================================================
+# Tests for build_permission_timeline
+# =============================================================================
+
+
+class TestBuildPermissionTimeline:
+    """Tests for build_permission_timeline function."""
+
+    def _make_event(
+        self,
+        event_type: str,
+        role_json: dict | None = None,
+        scan_timestamp: str = "2025-06-01T00:00:00+00:00",
+        azure_updated_on: str | None = None,
+    ) -> CachedChangeEvent:
+        """Create a CachedChangeEvent for testing."""
+        import datetime as dt
+
+        ts = dt.datetime.fromisoformat(scan_timestamp)
+        azure_ts = dt.datetime.fromisoformat(azure_updated_on) if azure_updated_on else None
+        return CachedChangeEvent(
+            id=1,
+            role_id="test-id",
+            role_name="Test Role",
+            event_type=event_type,
+            scan_timestamp=ts,
+            azure_updated_on=azure_ts,
+            summary="test",
+            diff_json=None,
+            role_json=role_json,
+        )
+
+    def _make_role_json(
+        self,
+        actions: list[str] | None = None,
+        data_actions: list[str] | None = None,
+    ) -> dict:
+        """Create a minimal role_json with given permission patterns."""
+        return {
+            "id": "test-id",
+            "name": "test-guid",
+            "type": "Microsoft.Authorization/roleDefinitions",
+            "properties": {
+                "roleName": "Test Role",
+                "type": "BuiltInRole",
+                "permissions": [
+                    {
+                        "actions": actions or [],
+                        "notActions": [],
+                        "dataActions": data_actions or [],
+                        "notDataActions": [],
+                    }
+                ],
+                "assignableScopes": ["/"],
+            },
+        }
+
+    def test_empty_events_returns_empty(self):
+        """No events should produce an empty timeline."""
+        from azurerbac.web.services.pages import build_permission_timeline
+
+        assert build_permission_timeline([]) == []
+
+    def test_single_event_returns_single_point(self):
+        """A single created event should produce one timeline point."""
+        from azurerbac.web.services.pages import build_permission_timeline
+
+        events = [
+            self._make_event(
+                "created",
+                self._make_role_json(actions=["Microsoft.Compute/*/read"]),
+                scan_timestamp="2025-01-15T10:00:00+00:00",
+            ),
+        ]
+
+        result = build_permission_timeline(events)
+        assert len(result) == 1
+        assert result[0].actions == 1
+        assert result[0].data_actions == 0
+        assert result[0].total == 1
+        assert result[0].event_type == "created"
+        assert result[0].date == "2025-01-15"
+
+    def test_multiple_versions_chronological_order(self):
+        """Events are reversed to chronological order (oldest first)."""
+        from azurerbac.web.services.pages import build_permission_timeline
+
+        # Events come newest-first from the cache
+        events = [
+            self._make_event(
+                "updated",
+                self._make_role_json(actions=["a", "b", "c"]),
+                azure_updated_on="2025-03-01T00:00:00+00:00",
+                scan_timestamp="2025-03-02T00:00:00+00:00",
+            ),
+            self._make_event(
+                "created",
+                self._make_role_json(actions=["a"]),
+                azure_updated_on="2025-01-01T00:00:00+00:00",
+                scan_timestamp="2025-01-02T00:00:00+00:00",
+            ),
+        ]
+
+        result = build_permission_timeline(events)
+        assert len(result) == 2
+        # First point should be the oldest (created)
+        assert result[0].event_type == "created"
+        assert result[0].actions == 1
+        # Second point should be the newer (updated)
+        assert result[1].event_type == "updated"
+        assert result[1].actions == 3
+
+    def test_tracks_actions_and_data_actions_separately(self):
+        """Actions and data actions should be counted separately."""
+        from azurerbac.web.services.pages import build_permission_timeline
+
+        events = [
+            self._make_event(
+                "created",
+                self._make_role_json(
+                    actions=["Microsoft.Storage/*/read", "Microsoft.Storage/*/write"],
+                    data_actions=["Microsoft.Storage/storageAccounts/blobServices/*/read"],
+                ),
+            ),
+        ]
+
+        result = build_permission_timeline(events)
+        assert len(result) == 1
+        assert result[0].actions == 2
+        assert result[0].data_actions == 1
+        assert result[0].total == 3
+
+    def test_delete_event_adds_zero_point(self):
+        """Delete events should add a zero-point to show the drop-off."""
+        from azurerbac.web.services.pages import build_permission_timeline
+
+        events = [
+            self._make_event(
+                "deleted",
+                role_json=None,
+                scan_timestamp="2025-06-01T00:00:00+00:00",
+            ),
+            self._make_event(
+                "created",
+                self._make_role_json(actions=["a", "b"]),
+                scan_timestamp="2025-01-01T00:00:00+00:00",
+            ),
+        ]
+
+        result = build_permission_timeline(events)
+        assert len(result) == 2
+        assert result[0].actions == 2  # created
+        assert result[1].total == 0  # deleted zero-point
+        assert result[1].label == "Deleted"
+
+    def test_skips_events_without_timestamp(self):
+        """Events with no timestamp at all are skipped."""
+        from azurerbac.web.services.pages import build_permission_timeline
+
+        event = CachedChangeEvent(
+            id=1,
+            role_id="test-id",
+            role_name="Test Role",
+            event_type="created",
+            scan_timestamp=None,
+            azure_updated_on=None,
+            summary="test",
+            diff_json=None,
+            role_json=self._make_role_json(actions=["a"]),
+        )
+
+        result = build_permission_timeline([event])
+        assert len(result) == 0
+
+    def test_prefers_azure_updated_on_for_date(self):
+        """azure_updated_on should be preferred over scan_timestamp."""
+        from azurerbac.web.services.pages import build_permission_timeline
+
+        events = [
+            self._make_event(
+                "updated",
+                self._make_role_json(actions=["a"]),
+                azure_updated_on="2025-05-15T00:00:00+00:00",
+                scan_timestamp="2025-05-16T00:00:00+00:00",
+            ),
+        ]
+
+        result = build_permission_timeline(events)
+        assert result[0].date == "2025-05-15"
+
+    def test_version_numbers_are_sequential(self):
+        """Version numbers should be sequential starting from 1."""
+        from azurerbac.web.services.pages import build_permission_timeline
+
+        events = [
+            self._make_event(
+                "updated",
+                self._make_role_json(actions=["a", "b", "c"]),
+                scan_timestamp="2025-03-01T00:00:00+00:00",
+            ),
+            self._make_event(
+                "updated",
+                self._make_role_json(actions=["a", "b"]),
+                scan_timestamp="2025-02-01T00:00:00+00:00",
+            ),
+            self._make_event(
+                "created",
+                self._make_role_json(actions=["a"]),
+                scan_timestamp="2025-01-01T00:00:00+00:00",
+            ),
+        ]
+
+        result = build_permission_timeline(events)
+        assert [pt.version for pt in result] == [1, 2, 3]
+
+    def test_to_dict_serialization(self):
+        """to_dict should produce a JSON-safe dictionary."""
+        from azurerbac.web.services.models import PermissionTimelinePoint
+
+        pt = PermissionTimelinePoint(
+            date="2025-01-15",
+            version=1,
+            event_type="created",
+            actions=5,
+            data_actions=3,
+            total=8,
+            effective_actions=50,
+            effective_data_actions=30,
+            effective_total=80,
+            label="Created",
+        )
+
+        d = pt.to_dict()
+        assert d == {
+            "date": "2025-01-15",
+            "version": 1,
+            "event_type": "created",
+            "actions": 5,
+            "data_actions": 3,
+            "total": 8,
+            "effective_actions": 50,
+            "effective_data_actions": 30,
+            "effective_total": 80,
+            "label": "Created",
+        }
+
+    def test_initial_scan_label(self):
+        """Initial scan events should get the correct label."""
+        from azurerbac.web.services.pages import build_permission_timeline
+
+        events = [
+            self._make_event(
+                "initial_scan",
+                self._make_role_json(actions=["a"]),
+            ),
+        ]
+
+        result = build_permission_timeline(events)
+        assert result[0].label == "Initial scan"
+
+    def test_multiple_permission_blocks(self):
+        """Roles with multiple permission blocks should sum all actions."""
+        from azurerbac.web.services.pages import build_permission_timeline
+
+        role_json = {
+            "id": "test-id",
+            "name": "test-guid",
+            "type": "Microsoft.Authorization/roleDefinitions",
+            "properties": {
+                "roleName": "Test Role",
+                "permissions": [
+                    {"actions": ["a", "b"], "dataActions": ["d1"]},
+                    {"actions": ["c"], "dataActions": ["d2", "d3"]},
+                ],
+                "assignableScopes": ["/"],
+            },
+        }
+
+        events = [self._make_event("created", role_json)]
+
+        result = build_permission_timeline(events)
+        assert result[0].actions == 3
+        assert result[0].data_actions == 3
+        assert result[0].total == 6
+
+    def test_effective_counts_fallback_without_operations(self):
+        """Without operations catalog, effective counts equal pattern counts."""
+        from azurerbac.web.services.pages import build_permission_timeline
+
+        events = [
+            self._make_event(
+                "created",
+                self._make_role_json(
+                    actions=["Microsoft.Compute/*/read"],
+                    data_actions=["Microsoft.Storage/storageAccounts/blobServices/*/read"],
+                ),
+            ),
+        ]
+
+        result = build_permission_timeline(events, all_operations=None)
+        assert result[0].actions == 1
+        assert result[0].effective_actions == 1  # Falls back to pattern count
+        assert result[0].data_actions == 1
+        assert result[0].effective_data_actions == 1  # Falls back to pattern count
+        assert result[0].effective_total == 2
+
+    def test_effective_counts_with_operations_expand_wildcards(self):
+        """With operations catalog, wildcards expand to effective counts."""
+        from azurerbac.azure.models import OperationData
+        from azurerbac.web.services.pages import build_permission_timeline
+
+        # Create a small operations catalog
+        ops = [
+            OperationData(name="Microsoft.Compute/virtualMachines/read", is_data_action=False),
+            OperationData(name="Microsoft.Compute/virtualMachines/write", is_data_action=False),
+            OperationData(name="Microsoft.Compute/disks/read", is_data_action=False),
+            OperationData(name="Microsoft.Storage/storageAccounts/read", is_data_action=False),
+            OperationData(name="Microsoft.Storage/storageAccounts/blobServices/containers/blobs/read", is_data_action=True),
+            OperationData(name="Microsoft.Storage/storageAccounts/blobServices/containers/blobs/write", is_data_action=True),
+        ]
+
+        events = [
+            self._make_event(
+                "created",
+                self._make_role_json(
+                    actions=["Microsoft.Compute/*/read"],  # 1 pattern → 2 effective (VMs + disks)
+                    data_actions=["Microsoft.Storage/storageAccounts/blobServices/*/read"],  # 1 pattern → 1 effective
+                ),
+            ),
+        ]
+
+        result = build_permission_timeline(events, all_operations=ops)
+        assert result[0].actions == 1  # pattern count unchanged
+        assert result[0].effective_actions == 2  # Wildcard expanded: VMs/read + disks/read
+        assert result[0].data_actions == 1  # pattern count unchanged
+        assert result[0].effective_data_actions == 1  # blobs/read matches
+        assert result[0].effective_total == 3
+
+    def test_effective_counts_with_not_actions(self):
+        """NotActions should subtract from effective counts."""
+        from azurerbac.azure.models import OperationData
+        from azurerbac.web.services.pages import build_permission_timeline
+
+        ops = [
+            OperationData(name="Microsoft.Compute/virtualMachines/read", is_data_action=False),
+            OperationData(name="Microsoft.Compute/virtualMachines/write", is_data_action=False),
+            OperationData(name="Microsoft.Compute/virtualMachines/delete", is_data_action=False),
+        ]
+
+        role_json = {
+            "id": "test-id",
+            "name": "test-guid",
+            "type": "Microsoft.Authorization/roleDefinitions",
+            "properties": {
+                "roleName": "Test Role",
+                "permissions": [
+                    {
+                        "actions": ["Microsoft.Compute/virtualMachines/*"],  # 1 pattern → 3 ops
+                        "notActions": ["Microsoft.Compute/virtualMachines/delete"],  # Subtract 1
+                        "dataActions": [],
+                        "notDataActions": [],
+                    }
+                ],
+                "assignableScopes": ["/"],
+            },
+        }
+
+        events = [self._make_event("created", role_json)]
+
+        result = build_permission_timeline(events, all_operations=ops)
+        assert result[0].actions == 1  # 1 pattern
+        assert result[0].effective_actions == 2  # 3 expanded - 1 notActions = 2
+
+    def test_delete_event_has_zero_effective_counts(self):
+        """Delete events should also have zero effective counts."""
+        from azurerbac.web.services.pages import build_permission_timeline
+
+        events = [
+            self._make_event(
+                "deleted",
+                role_json=None,
+                scan_timestamp="2025-06-01T00:00:00+00:00",
+            ),
+        ]
+
+        result = build_permission_timeline(events)
+        assert len(result) == 1
+        assert result[0].effective_actions == 0
+        assert result[0].effective_data_actions == 0
+        assert result[0].effective_total == 0

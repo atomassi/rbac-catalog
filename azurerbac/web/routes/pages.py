@@ -33,6 +33,7 @@ from azurerbac.web.services.models import (
 )
 from azurerbac.web.services.pages import (
     add_role_counts,
+    build_permission_timeline,
     build_role_redirect_url,
     compute_related_roles,
     compute_role_effective_permissions,
@@ -172,9 +173,13 @@ async def role_detail(
     # Enrich events with processed diff_json
     enriched = [enrich_event_with_diff(ev) for ev in result.events]
 
+    # Build permission timeline from version history (with effective expansion)
+    all_ops = deps.app_cache.get_all_operations()
+    permission_timeline = build_permission_timeline(result.events, all_ops)
+    permission_timeline_json = [pt.to_dict() for pt in permission_timeline]
+
     # Use RoleDefinition for clean output (excludes isServiceRole)
     display_json = role_def.to_dict() if role_def else {}
-    all_ops = deps.app_cache.get_all_operations()
     effective_perms = compute_role_effective_permissions(role_def, all_ops) if role_def else None
     related_roles = compute_related_roles(role_id_str, cache=deps.app_cache) if role_def else []
 
@@ -185,6 +190,8 @@ async def role_detail(
             "role": role,
             "events": enriched,
             "first_scan": result.first_scan,
+            "permission_timeline": permission_timeline,
+            "permission_timeline_json": permission_timeline_json,
             "role_json_pretty": role_json_pretty(display_json),
             "effective_perms": effective_perms,
             "related_roles": related_roles,

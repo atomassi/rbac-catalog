@@ -673,6 +673,282 @@
                 </div>
             </div>
 
+            <!-- Permission Timeline -->
+            {% if permission_timeline and permission_timeline | length > 1 %}
+            <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-lg overflow-hidden mb-8">
+                <div class="px-6 py-5 border-b border-slate-100 dark:border-slate-700">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-xl p-3">
+                            <svg class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+                            </svg>
+                        </div>
+                        <div class="ml-4">
+                            <h2 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Permission Timeline</h2>
+                            <p class="text-sm text-slate-500 dark:text-slate-400">How permissions changed across {{ permission_timeline | length }} versions</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="p-6">
+                    <!-- View toggle -->
+                    <div x-data="{ view: 'effective' }" class="space-y-0.5">
+                        <div class="flex items-center justify-end gap-2">
+                            <span class="text-xs font-medium text-slate-500 dark:text-slate-400">View:</span>
+                            <button @click="view = 'patterns'; $dispatch('timeline-view', { view: 'patterns' })"
+                                    :class="view === 'patterns' ? 'bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'"
+                                    class="px-3 py-1 text-xs font-medium rounded-lg transition-colors">
+                                Patterns
+                            </button>
+                            <button @click="view = 'effective'; $dispatch('timeline-view', { view: 'effective' })"
+                                    :class="view === 'effective' ? 'bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'"
+                                    class="px-3 py-1 text-xs font-medium rounded-lg transition-colors">
+                                Effective
+                            </button>
+                        </div>
+                        <div class="relative" style="height: 300px;">
+                            <canvas id="permissionTimelineChart"></canvas>
+                        </div>
+                        <!-- Summary stats -->
+                        {% set first_pt = permission_timeline[0] %}
+                        {% set last_pt = permission_timeline[-1] %}
+                        {% set eff_delta = last_pt.effective_total - first_pt.effective_total %}
+                        {% set eff_actions_delta = last_pt.effective_actions - first_pt.effective_actions %}
+                        {% set eff_data_delta = last_pt.effective_data_actions - first_pt.effective_data_actions %}
+                        {% set pat_delta = last_pt.total - first_pt.total %}
+                        {% set pat_actions_delta = last_pt.actions - first_pt.actions %}
+                        {% set pat_data_delta = last_pt.data_actions - first_pt.data_actions %}
+                        <div class="grid grid-cols-3 gap-3">
+                            <div class="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-3 text-center">
+                                <div class="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Effective Permissions</div>
+                                <div class="text-lg font-bold text-slate-900 dark:text-slate-100">{{ last_pt.effective_total | default(0) }}</div>
+                                <div class="text-xs text-slate-400 dark:text-slate-500">
+                                    <span class="text-blue-500">{{ last_pt.effective_actions }}</span> control + <span class="text-orange-500">{{ last_pt.effective_data_actions }}</span> data &middot; {{ last_pt.total }} patterns
+                                </div>
+                            </div>
+                            <div class="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-3 text-center">
+                                <div class="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Effective Change</div>
+                                <div class="text-lg font-bold {% if eff_delta > 0 %}text-emerald-600 dark:text-emerald-400{% elif eff_delta < 0 %}text-red-600 dark:text-red-400{% else %}text-slate-500 dark:text-slate-400{% endif %}">
+                                    {% if eff_delta > 0 %}+{% endif %}{{ eff_delta }}
+                                </div>
+                                <div class="text-xs text-slate-400 dark:text-slate-500">
+                                    <span class="text-blue-500">{% if eff_actions_delta > 0 %}+{% endif %}{{ eff_actions_delta }}</span> control + <span class="text-orange-500">{% if eff_data_delta > 0 %}+{% endif %}{{ eff_data_delta }}</span> data
+                                </div>
+                            </div>
+                            <div class="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-3 text-center">
+                                <div class="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Pattern Change</div>
+                                <div class="text-lg font-bold {% if pat_delta > 0 %}text-emerald-600 dark:text-emerald-400{% elif pat_delta < 0 %}text-red-600 dark:text-red-400{% else %}text-slate-500 dark:text-slate-400{% endif %}">
+                                    {% if pat_delta > 0 %}+{% endif %}{{ pat_delta }}
+                                </div>
+                                <div class="text-xs text-slate-400 dark:text-slate-500">
+                                    <span class="text-blue-500">{% if pat_actions_delta > 0 %}+{% endif %}{{ pat_actions_delta }}</span> control + <span class="text-orange-500">{% if pat_data_delta > 0 %}+{% endif %}{{ pat_data_delta }}</span> data
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+            <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                const isDark = document.documentElement.classList.contains('dark');
+                const textColor = isDark ? '#94a3b8' : '#64748b';
+                const gridColor = isDark ? 'rgba(51, 65, 85, 0.5)' : 'rgba(148, 163, 184, 0.35)';
+
+                const timelineData = {{ permission_timeline_json | tojson }};
+                const labels = timelineData.map(p => p.date);
+
+                // Pattern data
+                const actionsData = timelineData.map(p => p.actions);
+                const dataActionsData = timelineData.map(p => p.data_actions);
+
+                // Effective (expanded) data
+                const effActionsData = timelineData.map(p => p.effective_actions);
+                const effDataActionsData = timelineData.map(p => p.effective_data_actions);
+
+                // Point colors by event type
+                const pointColors = timelineData.map(p => {
+                    switch(p.event_type) {
+                        case 'created': return '#10b981';
+                        case 'initial_scan': return '#eab308';
+                        case 'updated': return '#3b82f6';
+                        case 'deleted': return '#ef4444';
+                        default: return '#64748b';
+                    }
+                });
+
+                // Dataset definitions
+                const patternDatasets = [
+                    {
+                        label: 'Action Patterns',
+                        data: actionsData,
+                        borderColor: 'rgb(59, 130, 246)',
+                        backgroundColor: 'rgb(59, 130, 246)',
+                        borderWidth: 2,
+                        fill: false,
+                        tension: 0.1,
+                        pointRadius: 5,
+                        pointHoverRadius: 7,
+                        pointBackgroundColor: 'rgb(59, 130, 246)',
+                        pointBorderColor: 'rgb(59, 130, 246)',
+                    },
+                    {
+                        label: 'Data Action Patterns',
+                        data: dataActionsData,
+                        borderColor: 'rgb(249, 115, 22)',
+                        backgroundColor: 'rgb(249, 115, 22)',
+                        borderWidth: 2,
+                        fill: false,
+                        tension: 0.1,
+                        pointRadius: 5,
+                        pointHoverRadius: 7,
+                        pointBackgroundColor: 'rgb(249, 115, 22)',
+                        pointBorderColor: 'rgb(249, 115, 22)',
+                    }
+                ];
+
+                const effectiveDatasets = [
+                    {
+                        label: 'Effective Actions',
+                        data: effActionsData,
+                        borderColor: 'rgb(59, 130, 246)',
+                        backgroundColor: 'rgb(59, 130, 246)',
+                        borderWidth: 2.5,
+                        fill: false,
+                        tension: 0.1,
+                        pointRadius: 5,
+                        pointHoverRadius: 7,
+                        pointBackgroundColor: 'rgb(59, 130, 246)',
+                        pointBorderColor: 'rgb(59, 130, 246)',
+                    },
+                    {
+                        label: 'Effective Data Actions',
+                        data: effDataActionsData,
+                        borderColor: 'rgb(249, 115, 22)',
+                        backgroundColor: 'rgb(249, 115, 22)',
+                        borderWidth: 2.5,
+                        fill: false,
+                        tension: 0.1,
+                        pointRadius: 5,
+                        pointHoverRadius: 7,
+                        pointBackgroundColor: 'rgb(249, 115, 22)',
+                        pointBorderColor: 'rgb(249, 115, 22)',
+                    }
+                ];
+
+                const ctx = document.getElementById('permissionTimelineChart').getContext('2d');
+                const chart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [...effectiveDatasets]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        interaction: {
+                            intersect: false,
+                            mode: 'index'
+                        },
+                        layout: {
+                            padding: { top: 4, bottom: 4 }
+                        },
+                        scales: {
+                            x: {
+                                ticks: {
+                                    color: textColor,
+                                    maxTicksLimit: 10,
+                                    callback: function(value, index) {
+                                        const d = new Date(labels[index]);
+                                        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' });
+                                    }
+                                },
+                                grid: { color: gridColor }
+                            },
+                            y: {
+                                grace: '5%',
+                                ticks: {
+                                    color: textColor,
+                                    callback: function(value) {
+                                        if (Number.isInteger(value)) return value;
+                                        return null;
+                                    }
+                                },
+                                grid: { color: gridColor },
+                                title: {
+                                    display: true,
+                                    text: 'Permissions',
+                                    color: textColor,
+                                    font: { size: 11 }
+                                }
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                position: 'top',
+                                labels: {
+                                    color: textColor,
+                                    boxWidth: 12,
+                                    padding: 16,
+                                    useBorderWidth: true,
+                                    generateLabels: function(chart) {
+                                        return chart.data.datasets.map(function(ds, i) {
+                                            return {
+                                                text: ds.label,
+                                                fontColor: textColor,
+                                                fillStyle: ds.borderColor,
+                                                strokeStyle: ds.borderColor,
+                                                lineWidth: 2,
+                                                hidden: !chart.isDatasetVisible(i),
+                                                datasetIndex: i,
+                                            };
+                                        });
+                                    }
+                                }
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    labelColor: function(context) {
+                                        return {
+                                            borderColor: context.dataset.borderColor,
+                                            backgroundColor: context.dataset.borderColor,
+                                        };
+                                    },
+                                    title: function(items) {
+                                        const idx = items[0].dataIndex;
+                                        const pt = timelineData[idx];
+                                        const d = new Date(pt.date);
+                                        return pt.label + ' — ' + d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+                                    },
+                                    afterBody: function(items) {
+                                        const idx = items[0].dataIndex;
+                                        const pt = timelineData[idx];
+                                        return [
+                                            'Patterns: ' + pt.total + ' (' + pt.actions + ' actions + ' + pt.data_actions + ' data)',
+                                            'Effective: ' + pt.effective_total + ' (' + pt.effective_actions + ' actions + ' + pt.effective_data_actions + ' data)',
+                                        ];
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+
+                // Toggle view listener (dispatched from Alpine.js buttons)
+                document.addEventListener('timeline-view', function(e) {
+                    const view = e.detail.view;
+                    if (view === 'patterns') {
+                        chart.data.datasets = [...patternDatasets];
+                        chart.options.scales.y.title.text = 'Permission patterns';
+                    } else {
+                        chart.data.datasets = [...effectiveDatasets];
+                        chart.options.scales.y.title.text = 'Effective permissions';
+                    }
+                    chart.update();
+                });
+            });
+            </script>
+            {% endif %}
+
             <!-- Latest JSON -->
             <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-lg overflow-hidden mb-8">
                 <div class="px-6 py-5 border-b border-slate-100 dark:border-slate-700">

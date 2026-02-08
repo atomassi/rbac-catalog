@@ -399,6 +399,41 @@ class EnrichedChangeEvent:
     role_json_pretty: str
 
 
+@dataclass(frozen=True, slots=True)
+class PermissionTimelinePoint:
+    """A single point on the permission timeline chart.
+
+    Represents both pattern counts (raw) and effective (expanded) permission
+    counts at a specific role version.
+    """
+
+    date: str  # ISO date string for Chart.js
+    version: int
+    event_type: str
+    actions: int  # Number of control-plane action patterns
+    data_actions: int  # Number of data-plane action patterns
+    total: int  # actions + data_actions (patterns)
+    effective_actions: int  # Expanded control-plane operations
+    effective_data_actions: int  # Expanded data-plane operations
+    effective_total: int  # effective_actions + effective_data_actions
+    label: str  # Human-readable label for tooltips
+
+    def to_dict(self) -> dict[str, str | int]:
+        """Serialize to a JSON-safe dict for Chart.js."""
+        return {
+            "date": self.date,
+            "version": self.version,
+            "event_type": self.event_type,
+            "actions": self.actions,
+            "data_actions": self.data_actions,
+            "total": self.total,
+            "effective_actions": self.effective_actions,
+            "effective_data_actions": self.effective_data_actions,
+            "effective_total": self.effective_total,
+            "label": self.label,
+        }
+
+
 @dataclass(slots=True)
 class RoleAllowingOperation:
     """Role that allows a specific operation."""

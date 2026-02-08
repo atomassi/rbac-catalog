@@ -17,6 +17,8 @@ from azurerbac.web.services.models import (
     EnrichedChangeEvent,
     OperationSearchParams,
     OperationSortField,
+    PermissionTimelinePoint,
+    RawPermissions,
     RelatedRole,
     RoleAllowingOperation,
     RoleDetailResult,
@@ -490,6 +492,139 @@ def build_role_redirect_url(
     if query_params:
         url = f"{url}?{urlencode(query_params)}"
     return str(url)
+
+
+def _count_permission_patterns(role_json: dict) -> tuple[int, int]:
+    """Count action and data action patterns from a role_json dict.
+
+    Returns:
+        Tuple of (actions_count, data_actions_count).
+    """
+    props = role_json.get("properties", {})
+    permissions = props.get("permissions", [])
+    actions = 0
+    data_actions = 0
+    for perm in permissions:
+        if isinstance(perm, dict):
+            actions += len(perm.get("actions", []))
+            data_actions += len(perm.get("dataActions", []))
+    return actions, data_actions
+
+
+_EVENT_LABELS: Final[dict[str, str]] = {
+    "created": "Created",
+    "initial_scan": "Initial scan",
+    "updated": "Updated",
+}
+
+
+def _compute_effective_counts(
+    role_json: dict,
+    all_control_ops: set[str],
+    all_data_ops: set[str],
+) -> tuple[int, int]:
+    """Compute effective (expanded) permission counts for a historical role version.
+
+    Parses role_json into a RoleDefinition, then uses RawPermissions to expand
+    wildcards and apply NotActions/NotDataActions subtraction.
+
+    Args:
+        role_json: Historical role JSON from RoleHistory.
+        all_control_ops: Lowered set of all known control-plane operations.
+        all_data_ops: Lowered set of all known data-plane operations.
+
+    Returns:
+        Tuple of (effective_control_count, effective_data_count).
+    """
+    role_def = RoleDefinition.model_validate(role_json)
+    raw = RawPermissions.from_permissions(role_def.properties.permissions)
+    coverage = raw.compute_effective(all_control_ops, all_data_ops)
+    return len(coverage.control), len(coverage.data)
+
+
+def build_permission_timeline(
+    events: list[CachedChangeEvent],
+    all_operations: list[OperationData] | None = None,
+) -> list[PermissionTimelinePoint]:
+    """Build a permission timeline from role history events.
+
+    Walks the event list (newest-first) and extracts both raw pattern counts
+    and effective (wildcard-expanded) permission counts from role_json at each
+    version. Returns points in chronological order (oldest first) for charting.
+
+    Args:
+        events: Role change events, ordered newest-first.
+        all_operations: All known operations for wildcard expansion.
+            When None, effective counts fall back to pattern counts.
+
+    Returns:
+        List of timeline points in chronological order.
+    """
+    # Pre-compute operation sets once for all versions
+    all_control_ops: set[str] = set()
+    all_data_ops: set[str] = set()
+    if all_operations:
+        all_control_ops = {op.name.lower() for op in all_operations if not op.is_data_action}
+        all_data_ops = {op.name.lower() for op in all_operations if op.is_data_action}
+
+    points: list[PermissionTimelinePoint] = []
+
+    for ev in reversed(events):
+        # Skip events without role JSON (e.g. delete events)
+        if not ev.role_json:
+            # For delete events, add a zero-point to show the drop-off
+            if ev.event_type == "deleted":
+                ts = ev.scan_timestamp or ev.azure_updated_on
+                if ts:
+                    points.append(
+                        PermissionTimelinePoint(
+                            date=ts.strftime("%Y-%m-%d"),
+                            version=0,
+                            event_type=ev.event_type,
+                            actions=0,
+                            data_actions=0,
+                            total=0,
+                            effective_actions=0,
+                            effective_data_actions=0,
+                            effective_total=0,
+                            label="Deleted",
+                        )
+                    )
+            continue
+
+        ts = ev.azure_updated_on or ev.scan_timestamp
+        if ts is None:
+            continue
+
+        actions, data_actions = _count_permission_patterns(ev.role_json)
+        total = actions + data_actions
+
+        # Compute effective (expanded) counts when operations are available
+        if all_control_ops or all_data_ops:
+            eff_actions, eff_data = _compute_effective_counts(
+                ev.role_json, all_control_ops, all_data_ops
+            )
+        else:
+            eff_actions, eff_data = actions, data_actions
+
+        label = _EVENT_LABELS.get(ev.event_type, ev.event_type.replace("_", " ").title())
+
+        points.append(
+            PermissionTimelinePoint(
+                date=ts.strftime("%Y-%m-%d"),
+                version=len(points) + 1,
+                event_type=ev.event_type,
+                actions=actions,
+                data_actions=data_actions,
+                total=total,
+                effective_actions=eff_actions,
+                effective_data_actions=eff_data,
+                effective_total=eff_actions + eff_data,
+                label=label,
+            )
+        )
+
+    return points
 
 
 def enrich_event_with_diff(ev: CachedChangeEvent) -> EnrichedChangeEvent:

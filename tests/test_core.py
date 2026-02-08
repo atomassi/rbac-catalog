@@ -38,6 +38,39 @@ class TestSettings:
         with pytest.raises(ValidationError):
             Settings(roles_poll_interval_seconds="not-a-number")
 
+    def test_enabled_ai_engines_defaults(self):
+        """Test enabled_ai_engines defaults are non-empty, valid, and include the fallback."""
+        from azurerbac.settings import _VALID_AI_ENGINES
+
+        settings = Settings()
+        assert len(settings.enabled_ai_engines) > 0, "defaults must not be empty"
+        assert all(e in _VALID_AI_ENGINES for e in settings.enabled_ai_engines), (
+            "all defaults must be valid engine names"
+        )
+        assert len(settings.enabled_ai_engines) == len(set(settings.enabled_ai_engines)), (
+            "defaults must not contain duplicates"
+        )
+        assert "tfidf" in settings.enabled_ai_engines, "fallback engine must be in defaults"
+
+    @pytest.mark.parametrize(
+        "engines_in, expected",
+        [
+            pytest.param(["rag", "hybrid", "tfidf"], ["rag", "hybrid", "tfidf"], id="custom_valid"),
+            pytest.param(
+                ["tfidf", "llm", "rag", "hybrid", "semantic", "crossencoder", "colbert", "hyde"],
+                ["tfidf", "llm", "rag", "hybrid", "semantic", "crossencoder", "colbert", "hyde"],
+                id="all_eight_valid",
+            ),
+            pytest.param(["llm", "bogus", "tfidf", "nope"], ["llm", "tfidf"], id="filters_invalid"),
+            pytest.param(["fake", "invalid"], ["tfidf"], id="all_invalid_fallback"),
+            pytest.param([], ["tfidf"], id="empty_fallback"),
+        ],
+    )
+    def test_enabled_ai_engines_validation(self, engines_in: list[str], expected: list[str]):
+        """Test enabled_ai_engines validator filters and falls back correctly."""
+        settings = Settings(enabled_ai_engines=engines_in)
+        assert settings.enabled_ai_engines == expected
+
 
 class TestGetSettings:
     """Tests for get_settings function."""
@@ -83,6 +116,38 @@ class TestGetSettings:
             assert settings.operations_scan_enabled is False
             assert settings.run_roles_scan_on_startup is True
             assert settings.mcp_server_enabled is True
+
+    @pytest.mark.parametrize(
+        "env_value, expected",
+        [
+            pytest.param("rag,hybrid,tfidf", ["rag", "hybrid", "tfidf"], id="comma_separated"),
+            pytest.param(
+                "llm;semantic;colbert", ["llm", "semantic", "colbert"], id="semicolon_separated"
+            ),
+            pytest.param(
+                "llm,semantic;colbert,tfidf",
+                ["llm", "semantic", "colbert", "tfidf"],
+                id="mixed_delimiters",
+            ),
+            pytest.param(
+                " llm , semantic , tfidf ", ["llm", "semantic", "tfidf"], id="with_whitespace"
+            ),
+            pytest.param("llm,invalid,tfidf", ["llm", "tfidf"], id="filters_invalid"),
+            pytest.param("LLM,Semantic,TFIDF", ["llm", "semantic", "tfidf"], id="case_insensitive"),
+        ],
+    )
+    def test_get_settings_enabled_ai_engines_from_env(self, env_value: str, expected: list[str]):
+        """Test ENABLED_AI_ENGINES env var parsing with various formats."""
+        with patch.dict(os.environ, {"ENABLED_AI_ENGINES": env_value}, clear=True):
+            settings = Settings.get()
+            assert settings.enabled_ai_engines == expected
+
+    def test_get_settings_enabled_ai_engines_defaults_when_unset(self):
+        """Test enabled_ai_engines uses defaults when env var is not set."""
+        expected = Settings.model_fields["enabled_ai_engines"].default
+        with patch.dict(os.environ, {}, clear=True):
+            settings = Settings.get()
+            assert settings.enabled_ai_engines == expected
 
 
 class TestDatabaseEngine:

@@ -13,6 +13,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from azurerbac.comparer import compute_role_comparison
 from azurerbac.core.enums import SortOrder
 from azurerbac.core.utils import slugify
+from azurerbac.settings import Settings
 from azurerbac.web.constants import (
     DEFAULT_DAYS,
     DEFAULT_LIMIT,
@@ -356,6 +357,7 @@ async def recommend_page(
             "tab": "recommend",
             "operations_loaded": ops_count > 0,
             "operations_count": ops_count,
+            "enabled_engines": Settings.get().enabled_ai_engines,
         },
     )
 

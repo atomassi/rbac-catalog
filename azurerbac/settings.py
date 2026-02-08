@@ -6,7 +6,7 @@ import logging
 import os
 from typing import Final
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from azurerbac.core.singleton import ThreadSafeSingleton
 
@@ -38,10 +38,14 @@ class EnvVars:
     PYTEST_CURRENT_TEST: Final = "PYTEST_CURRENT_TEST"
     USE_RBAC_API: Final = "USE_RBAC_API"
     MCP_SERVER_ENABLED: Final = "MCP_SERVER_ENABLED"
+    ENABLED_AI_ENGINES: Final = "ENABLED_AI_ENGINES"
 
 
 _BOOL_TRUE_VALUES: Final = frozenset({"1", "true", "yes", "y", "on"})
 _VALID_ENVIRONMENTS: Final = frozenset({"production", "staging", "ppe"})
+_VALID_AI_ENGINES: Final = frozenset(
+    {"tfidf", "llm", "rag", "hybrid", "semantic", "crossencoder", "colbert", "hyde"}
+)
 
 
 def _get_environment_name() -> str:
@@ -94,6 +98,21 @@ class Settings(BaseModel):
     environment_name: str = "local"
     use_rbac_api: bool = True
     mcp_server_enabled: bool = True
+    enabled_ai_engines: list[str] = Field(
+        default=["colbert", "semantic", "llm", "rag", "hyde", "tfidf"],
+        description="AI recommendation engines to expose in the UI.",
+    )
+
+    @field_validator("enabled_ai_engines")
+    @classmethod
+    def _validate_engines(cls, v: list[str]) -> list[str]:
+        valid: list[str] = []
+        invalid: list[str] = []
+        for e in v:
+            (valid if e in _VALID_AI_ENGINES else invalid).append(e)
+        if invalid:
+            logger.warning("Ignoring unknown AI engine(s): %s", ", ".join(invalid))
+        return valid or ["tfidf"]
 
     @property
     def is_deployed(self) -> bool:
@@ -142,6 +161,13 @@ def _load_settings() -> Settings:
     _set_bool(kwargs, "enable_embeddings_in_tests", EnvVars.AZURERBAC_ENABLE_EMBEDDINGS_IN_TESTS)
     _set_bool(kwargs, "use_rbac_api", EnvVars.USE_RBAC_API)
     _set_bool(kwargs, "mcp_server_enabled", EnvVars.MCP_SERVER_ENABLED)
+
+    if (engines_raw := os.getenv(EnvVars.ENABLED_AI_ENGINES)) is not None:
+        import re
+
+        kwargs["enabled_ai_engines"] = [
+            e.strip().lower() for e in re.split(r"[,;]", engines_raw) if e.strip()
+        ]
 
     log_level = os.getenv(EnvVars.LOG_LEVEL)
     if log_level:

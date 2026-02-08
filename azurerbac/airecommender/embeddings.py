@@ -58,24 +58,18 @@ class EmbeddingModel:
         return False
 
     def _load_model(self) -> bool:
-        try:
-            from sentence_transformers import SentenceTransformer
+        from sentence_transformers import SentenceTransformer
 
-            if _MODEL_PATH.exists():
-                self._model = SentenceTransformer(str(_MODEL_PATH))
-            else:
-                logger.info("Downloading MiniLM embedding model (first time only)...")
-                self._model = SentenceTransformer(_MODEL_NAME)
-                _MODELS_DIR.mkdir(parents=True, exist_ok=True)
-                self._model.save(str(_MODEL_PATH))
+        if _MODEL_PATH.exists():
+            self._model = SentenceTransformer(str(_MODEL_PATH))
+        else:
+            logger.info("Downloading MiniLM embedding model (first time only)...")
+            self._model = SentenceTransformer(_MODEL_NAME)
+            _MODELS_DIR.mkdir(parents=True, exist_ok=True)
+            self._model.save(str(_MODEL_PATH))
 
-            logger.info("Loaded sentence embedding model (MiniLM)")
-            return True
-        except ImportError:
-            logger.warning("sentence-transformers not installed. Using TF-IDF fallback.")
-        except Exception as e:
-            logger.exception("Failed to load embedding model: %s. Using TF-IDF fallback.", e)
-        return False
+        logger.info("Loaded sentence embedding model (MiniLM)")
+        return True
 
     def _require_model(self) -> SentenceTransformer:
         if not self._model:

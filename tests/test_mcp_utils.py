@@ -6,9 +6,10 @@ import pytest
 
 from azurerbac.mcp.utils import (
     _SUSPICIOUS_PATTERN,
-    InputValidator,
     TokenBucketRateLimiter,
     ValidationError,
+    is_suspicious,
+    validate_input,
 )
 
 
@@ -130,8 +131,8 @@ class TestTokenBucketRateLimiter:
         assert result.remaining == 4  # Capped at 5, minus 1 for this request
 
 
-class TestInputValidator:
-    """Tests for InputValidator class."""
+class TestInputValidation:
+    """Tests for input validation functions."""
 
     @pytest.mark.parametrize(
         ("value", "expected"),
@@ -152,7 +153,7 @@ class TestInputValidator:
     )
     def test_is_suspicious(self, value: str, expected: bool):
         """Test suspicious input detection for various patterns."""
-        assert InputValidator.is_suspicious(value) is expected
+        assert is_suspicious(value) is expected
 
     @pytest.mark.parametrize(
         ("value", "max_len", "min_len", "label", "expected"),
@@ -165,7 +166,7 @@ class TestInputValidator:
         self, value: str, max_len: int, min_len: int, label: str, expected: str
     ):
         """Test successful input validation."""
-        result = InputValidator.validate(value, max_len, min_len, label)
+        result = validate_input(value, max_len, min_len, label)
         assert result == expected
 
     @pytest.mark.parametrize(
@@ -179,7 +180,7 @@ class TestInputValidator:
     def test_validate_raises(self, value: str, max_len: int, min_len: int, label: str, match: str):
         """Test validation raises for invalid inputs."""
         with pytest.raises(ValidationError, match=match):
-            InputValidator.validate(value, max_len, min_len, label)
+            validate_input(value, max_len, min_len, label)
 
 
 class TestSuspiciousPattern:

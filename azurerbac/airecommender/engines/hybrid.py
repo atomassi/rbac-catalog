@@ -11,7 +11,7 @@ import logging
 from typing import Final, override
 
 from azurerbac.airecommender.engines.base import BaseRecommenderEngine, RankedRole
-from azurerbac.airecommender.engines.common import ScoreNormalizer, cosine_similarity
+from azurerbac.airecommender.engines.common import cosine_similarity, normalize_candidates
 from azurerbac.airecommender.engines.config import HYBRID_WEIGHTS
 from azurerbac.airecommender.engines.registry import EngineRegistry
 from azurerbac.airecommender.knowledge import extract_keywords
@@ -80,7 +80,7 @@ class HybridEngine(BaseRecommenderEngine):
                 c.final_score = (c.tfidf_score + c.embedding_score) / 2
             final = heapq.nlargest(top_k, embedding_candidates, key=lambda r: r.final_score)
 
-        final = ScoreNormalizer.normalize_candidates(final)
+        final = normalize_candidates(final)
 
         self._log_complete(final)
         return final

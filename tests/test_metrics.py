@@ -634,10 +634,8 @@ class TestTrackDbQueryError:
             mock_duration.assert_not_called()
             mock_event.assert_not_called()
 
-    def test_handles_metric_tracking_failure_gracefully(self, local_env, caplog):
-        """Test exception handling when metric tracking fails."""
-        import logging
-
+    def test_propagates_metric_tracking_failure(self, local_env):
+        """Metric failures propagate — MetricsSender handles them internally."""
         metrics_module = local_env
 
         with (
@@ -645,12 +643,9 @@ class TestTrackDbQueryError:
             patch.object(
                 metrics_module, "track_duration", side_effect=Exception("Tracking failed")
             ),
-            caplog.at_level(logging.WARNING, logger="azurerbac.telemetry.metrics"),
+            pytest.raises(Exception, match="Tracking failed"),
         ):
-            # Should not raise
             metrics_module.track_db_query_error("query", 1.0, "Error")
-
-            assert "Failed to track db query error" in caplog.text
 
 
 # =============================================================================

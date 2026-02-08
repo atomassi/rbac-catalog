@@ -141,9 +141,9 @@ class BaseRecommenderEngine(ABC):
         if normalizer is not None:
             candidates = normalizer(candidates)
         else:
-            from azurerbac.airecommender.engines.common import ScoreNormalizer
+            from azurerbac.airecommender.engines.common import normalize_candidates
 
-            candidates = ScoreNormalizer.normalize_candidates(candidates)
+            candidates = normalize_candidates(candidates)
 
         return candidates
 

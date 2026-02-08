@@ -44,7 +44,7 @@ class RollingStats:
 class DailyChanges:
     """Changes aggregated by day."""
 
-    date: dt.date | str = ""  # May be string depending on DB driver
+    date: str = ""
     additions: int = 0
     updates: int = 0
     deletions: int = 0
@@ -97,7 +97,6 @@ class ProviderStats:
     """Statistics by resource provider."""
 
     provider: str
-    role_count: int
     operation_count: int
 
 

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import datetime as dt
 from dataclasses import replace
-from enum import Enum
 from typing import TYPE_CHECKING, Any, Final
 
 from sqlalchemy import and_, func, or_, select
@@ -81,7 +80,7 @@ def enrich_role_with_counts(
         role_id=role.role_id,
         role_name=role.role_name,
         role_type=role.role_type or DEFAULT_ROLE_TYPE,
-        status=role.status.value if isinstance(role.status, Enum) else str(role.status),
+        status=role.status.value,
         updated_on=role.updated_on,
         actions_count=actions_count,
         data_actions_count=data_actions_count,

@@ -383,7 +383,6 @@ def compute_top_providers(
     result = [
         ProviderStats(
             provider=provider or "Unknown",
-            role_count=0,
             operation_count=count,
         )
         for provider, count in provider_counts.most_common(limit)

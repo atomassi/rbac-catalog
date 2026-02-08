@@ -7,7 +7,7 @@ import logging
 from typing import Final, override
 
 from azurerbac.airecommender.engines.base import BaseRecommenderEngine, RankedRole
-from azurerbac.airecommender.engines.common import ScoreNormalizer
+from azurerbac.airecommender.engines.common import normalize_candidates
 from azurerbac.airecommender.engines.registry import EngineRegistry
 from azurerbac.airecommender.modes import RecommenderMode
 
@@ -65,6 +65,6 @@ class RAGEngine(BaseRecommenderEngine):
             for c in candidates:
                 c.final_score = c.embedding_score
 
-        candidates = ScoreNormalizer.normalize_candidates(candidates)
+        candidates = normalize_candidates(candidates)
         self._log_complete(candidates)
         return candidates

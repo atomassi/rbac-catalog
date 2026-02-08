@@ -12,7 +12,7 @@ import math
 from typing import Any, Final, override
 
 from azurerbac.airecommender.engines.base import BaseRecommenderEngine, RankedRole
-from azurerbac.airecommender.engines.common import ScoreNormalizer
+from azurerbac.airecommender.engines.common import normalize_candidates
 from azurerbac.airecommender.engines.config import CROSSENCODER_THRESHOLDS, CROSSENCODER_WEIGHTS
 from azurerbac.airecommender.engines.registry import EngineRegistry
 from azurerbac.airecommender.modes import RecommenderMode
@@ -77,7 +77,7 @@ class CrossEncoderEngine(BaseRecommenderEngine):
         candidates = self._filter_min_confidence(
             candidates, threshold=CROSSENCODER_THRESHOLDS.min_confidence
         )
-        candidates = ScoreNormalizer.normalize_candidates(candidates[:top_k])
+        candidates = normalize_candidates(candidates[:top_k])
 
         self._log_complete(candidates, show_top=6)
         return candidates

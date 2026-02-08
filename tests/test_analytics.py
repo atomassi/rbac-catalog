@@ -112,7 +112,7 @@ class TestModelSerialization:
             ),
             pytest.param(
                 ProviderStats,
-                {"provider": "Microsoft.Storage", "role_count": 10, "operation_count": 500},
+                {"provider": "Microsoft.Storage", "operation_count": 500},
                 id="ProviderStats",
             ),
             pytest.param(

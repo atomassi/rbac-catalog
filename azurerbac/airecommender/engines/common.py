@@ -23,69 +23,48 @@ logger = logging.getLogger(__name__)
 _SCORE_RANGE = SCORE_CEILING - SCORE_FLOOR
 
 
-class ScoreNormalizer:
-    """Unified score normalization utilities.
-
-    Provides multiple normalization strategies:
-    - normalize_candidates: Scale RankedRole scores to [floor, ceiling] range
-    - sigmoid: Non-linear transform for bell-curve distributions
-    - dict_min_max: Normalize a dict of scores (for BM25 etc.)
-
-    All methods are stateless and can be called as class methods.
-    """
-
-    @staticmethod
-    def normalize_candidates(
-        candidates: list[RankedRole],
-        floor: float = SCORE_FLOOR,
-        ceiling: float = SCORE_CEILING,
-    ) -> list[RankedRole]:
-        """Min-max normalize candidate scores to [floor, ceiling] range.
-
-        Mutates candidates in-place and returns them for chaining.
-        """
-        if not candidates:
-            return candidates
-
-        scores = [c.final_score for c in candidates]
-        min_score = min(scores)
-        max_score = max(scores)
-        score_range = max_score - min_score if max_score > min_score else 1.0
-        output_range = ceiling - floor
-
-        for c in candidates:
-            normalized = (c.final_score - min_score) / score_range if score_range > 0 else 1.0
-            c.final_score = floor + (normalized * output_range)
-
-        logger.debug(
-            "Normalized %d scores (min-max): [%s]",
-            len(candidates),
-            ", ".join(f"{c.role_name}({c.final_score:.0%})" for c in candidates[:3]),
-        )
+def normalize_candidates(
+    candidates: list[RankedRole],
+    floor: float = SCORE_FLOOR,
+    ceiling: float = SCORE_CEILING,
+) -> list[RankedRole]:
+    """Min-max normalize candidate scores to [floor, ceiling]. Mutates in-place."""
+    if not candidates:
         return candidates
 
-    @staticmethod
-    def sigmoid_normalize(
-        candidates: list[RankedRole],
-        params: SigmoidParams,
-    ) -> list[RankedRole]:
-        """Normalize scores using a sigmoid transform.
+    scores = [c.final_score for c in candidates]
+    min_score = min(scores)
+    max_score = max(scores)
+    score_range = max_score - min_score if max_score > min_score else 1.0
+    output_range = ceiling - floor
 
-        Useful when raw scores have a bell-curve distribution and you want
-        to spread them across the output range with smooth transitions.
+    for c in candidates:
+        normalized = (c.final_score - min_score) / score_range if score_range > 0 else 1.0
+        c.final_score = floor + (normalized * output_range)
 
-        Mutates candidates in-place and returns them for chaining.
-        """
-        if not candidates:
-            return candidates
+    logger.debug(
+        "Normalized %d scores (min-max): [%s]",
+        len(candidates),
+        ", ".join(f"{c.role_name}({c.final_score:.0%})" for c in candidates[:3]),
+    )
+    return candidates
 
-        output_range = params.output_max - params.output_min
-        for candidate in candidates:
-            raw = candidate.final_score
-            sigmoid = 1 / (1 + math.exp(-params.steepness * (raw - params.midpoint)))
-            candidate.final_score = params.output_min + (sigmoid * output_range)
 
+def sigmoid_normalize(
+    candidates: list[RankedRole],
+    params: SigmoidParams,
+) -> list[RankedRole]:
+    """Sigmoid-transform candidate scores. Mutates in-place."""
+    if not candidates:
         return candidates
+
+    output_range = params.output_max - params.output_min
+    for candidate in candidates:
+        raw = candidate.final_score
+        sigmoid = 1 / (1 + math.exp(-params.steepness * (raw - params.midpoint)))
+        candidate.final_score = params.output_min + (sigmoid * output_range)
+
+    return candidates
 
 
 def cosine_similarity(vec1: list[float], vec2: list[float]) -> float:

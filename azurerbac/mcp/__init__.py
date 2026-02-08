@@ -2,15 +2,15 @@
 
 from azurerbac.mcp.server import MCPServer, create_disabled_mcp_app, create_mcp_server
 from azurerbac.mcp.utils import (
-    InputValidator,
     RateLimitResult,
     TokenBucketRateLimiter,
     ToolTimer,
     ValidationError,
+    is_suspicious,
+    validate_input,
 )
 
 __all__ = [
-    "InputValidator",
     "MCPServer",
     "RateLimitResult",
     "TokenBucketRateLimiter",
@@ -18,4 +18,6 @@ __all__ = [
     "ValidationError",
     "create_disabled_mcp_app",
     "create_mcp_server",
+    "is_suspicious",
+    "validate_input",
 ]

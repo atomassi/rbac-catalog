@@ -47,7 +47,7 @@ from azurerbac.mcp.constants import (
     SEARCH_OPERATIONS_DESC,
     SEARCH_ROLES_DESC,
 )
-from azurerbac.mcp.utils import InputValidator, TokenBucketRateLimiter, ToolTimer, ValidationError
+from azurerbac.mcp.utils import TokenBucketRateLimiter, ToolTimer, ValidationError, validate_input
 from azurerbac.telemetry import track_event
 
 logger = logging.getLogger(__name__)
@@ -229,9 +229,7 @@ class MCPServer:
 
             with self._timer("search_operations", session_id) as timer:
                 try:
-                    query = InputValidator.validate(
-                        query, MAX_QUERY_LENGTH, MIN_QUERY_LENGTH, "Query"
-                    )
+                    query = validate_input(query, MAX_QUERY_LENGTH, MIN_QUERY_LENGTH, "Query")
                 except ValidationError as e:
                     timer.fail()
                     return str(e)
@@ -270,9 +268,7 @@ class MCPServer:
 
             with self._timer("search_roles", session_id) as timer:
                 try:
-                    query = InputValidator.validate(
-                        query, MAX_QUERY_LENGTH, MIN_QUERY_LENGTH, "Query"
-                    )
+                    query = validate_input(query, MAX_QUERY_LENGTH, MIN_QUERY_LENGTH, "Query")
                 except ValidationError as e:
                     timer.fail()
                     return str(e)
@@ -318,7 +314,7 @@ class MCPServer:
 
             with self._timer("get_role", session_id) as timer:
                 try:
-                    role_id_or_name = InputValidator.validate(
+                    role_id_or_name = validate_input(
                         role_id_or_name, MAX_ROLE_ID_LENGTH, 1, "Role identifier"
                     )
                 except ValidationError as e:
@@ -373,7 +369,7 @@ class MCPServer:
 
             with self._timer("get_role_permissions", session_id) as timer:
                 try:
-                    role_id_or_name = InputValidator.validate(
+                    role_id_or_name = validate_input(
                         role_id_or_name, MAX_ROLE_ID_LENGTH, 1, "Role identifier"
                     )
                 except ValidationError as e:
@@ -443,18 +439,18 @@ class MCPServer:
                     # Explicit operations - auto-detect plane
                     for op in operations or []:
                         sanitized_ops.append(
-                            InputValidator.validate(op, MAX_OPERATION_LENGTH, 1, "Operation")
+                            validate_input(op, MAX_OPERATION_LENGTH, 1, "Operation")
                         )
 
                     # Control-plane wildcards
                     for op in wildcards_control or []:
-                        clean = InputValidator.validate(op, MAX_OPERATION_LENGTH, 1, "Operation")
+                        clean = validate_input(op, MAX_OPERATION_LENGTH, 1, "Operation")
                         sanitized_ops.append(clean)
                         data_flags[clean] = False
 
                     # Data-plane wildcards
                     for op in wildcards_data or []:
-                        clean = InputValidator.validate(op, MAX_OPERATION_LENGTH, 1, "Operation")
+                        clean = validate_input(op, MAX_OPERATION_LENGTH, 1, "Operation")
                         sanitized_ops.append(clean)
                         data_flags[clean] = True
                 except ValidationError as e:
@@ -499,9 +495,7 @@ class MCPServer:
 
             with self._timer("ai_recommend", session_id) as timer:
                 try:
-                    query = InputValidator.validate(
-                        query, MAX_AI_QUERY_LENGTH, MIN_AI_QUERY_LENGTH, "Query"
-                    )
+                    query = validate_input(query, MAX_AI_QUERY_LENGTH, MIN_AI_QUERY_LENGTH, "Query")
                 except ValidationError as e:
                     timer.fail()
                     return str(e)

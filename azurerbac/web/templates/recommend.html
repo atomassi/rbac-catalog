@@ -200,16 +200,23 @@
 </head>
 <body class="h-full bg-slate-50 dark:bg-slate-900 transition-colors duration-200">
     <!-- Navigation state handler - must load before content -->
-    <script src="/static/js/nav-state.js?v=5"></script>
+    <script src="/static/js/nav-state.js?v=6"></script>
     <script>
-        // Persist AI mode from URL to localStorage
-        NavState.initAiModeFromUrl();
-        
-        // Show AI section when DOM is ready if AI mode is active
+        // Show AI section when DOM is ready if AI mode is active (from toggle)
         document.addEventListener('DOMContentLoaded', function() {
             if (NavState.isAiMode()) {
                 var aiSection = document.getElementById('ai-assistant-section');
                 if (aiSection) aiSection.classList.remove('hidden');
+                var toggle = document.getElementById('ai-toggle');
+                if (toggle) toggle.checked = true;
+                document.querySelectorAll('.ai-toggle-label').forEach(function(el) {
+                    el.textContent = 'Hide AI Tools';
+                });
+                var ml = document.getElementById('ai-toggle-mobile-label');
+                if (ml) {
+                    ml.classList.add('bg-gradient-to-r', 'from-purple-600', 'to-indigo-600', 'shadow-lg', 'shadow-purple-500/25', 'border-purple-400');
+                    ml.classList.remove('bg-white/10', 'border-purple-400/50');
+                }
             }
         });
     </script>
@@ -225,9 +232,42 @@
                         Azure RBAC Role Recommender
                     </h1>
                 </div>
-                <p class="text-azure-200 text-lg">
-                    Find the least-privilege Azure built-in role for your specific permission requirements
-                </p>
+                <div class="relative">
+                    <p class="text-azure-200 text-lg sm:pr-44">
+                        Find the least-privilege Azure built-in role for your specific permission requirements
+                    </p>
+                    <!-- AI Tools Toggle (desktop: absolutely positioned to avoid affecting height) -->
+                    <div class="hidden sm:block absolute right-0 top-1/2 -translate-y-1/2">
+                        <input type="checkbox" id="ai-toggle" class="sr-only peer">
+                        <label for="ai-toggle" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg cursor-pointer select-none
+                            border border-purple-400/50
+                            bg-white/10 backdrop-blur-sm
+                            text-white
+                            hover:bg-white/20 hover:border-purple-300
+                            peer-checked:bg-gradient-to-r peer-checked:from-purple-600 peer-checked:to-indigo-600
+                            peer-checked:border-purple-400 peer-checked:shadow-lg peer-checked:shadow-purple-500/25
+                            transition-all duration-300 font-semibold text-sm whitespace-nowrap">
+                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" />
+                            </svg>
+                            <span class="ai-toggle-label">Show AI Tools</span>
+                        </label>
+                    </div>
+                </div>
+                <!-- AI Tools Toggle (mobile: below subtitle) -->
+                <div class="sm:hidden mt-3 text-center">
+                    <label id="ai-toggle-mobile-label" for="ai-toggle" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg cursor-pointer select-none
+                        border border-purple-400/50
+                        bg-white/10 backdrop-blur-sm
+                        text-white
+                        hover:bg-white/20 hover:border-purple-300
+                        transition-all duration-300 font-semibold text-sm whitespace-nowrap">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" />
+                        </svg>
+                        <span class="ai-toggle-label">Show AI Tools</span>
+                    </label>
+                </div>
             </div>
         </div>
 
@@ -247,7 +287,7 @@
             </div>
             {% else %}
             
-            <!-- AI Assistant Section (hidden by default, shown by JavaScript if AI mode is active) -->
+            <!-- AI Assistant Section (hidden by default, shown by toggle) -->
             <div id="ai-assistant-section" class="hidden bg-gradient-to-r from-purple-50 to-indigo-50 dark:bg-none dark:bg-slate-800 border border-purple-200 dark:border-slate-700 rounded-2xl p-4 sm:p-6 mb-6">
                 <!-- Mobile: Stack icon above content -->
                 <div class="flex flex-col sm:flex-row sm:items-start gap-3 sm:gap-4">
@@ -607,7 +647,33 @@
         let lastSearchResults = []; // Store last search results for re-rendering
         let lastPatternMatchCount = 0; // Store last pattern match count
         let currentRecommenderMode = 'llm'; // 'llm' (Qwen-Curated) or 'tfidf' (Enhanced TF-IDF)
-        const aiEnabled = NavState.isAiMode(); // Use sessionStorage for AI mode
+        
+        // AI toggle handler
+        const aiToggle = document.getElementById('ai-toggle');
+        const aiSection = document.getElementById('ai-assistant-section');
+        const aiToggleLabels = document.querySelectorAll('.ai-toggle-label');
+        const mobileLabel = document.getElementById('ai-toggle-mobile-label');
+        function updateMobileLabel(checked) {
+            if (!mobileLabel) return;
+            if (checked) {
+                mobileLabel.classList.add('bg-gradient-to-r', 'from-purple-600', 'to-indigo-600', 'shadow-lg', 'shadow-purple-500/25', 'border-purple-400');
+                mobileLabel.classList.remove('bg-white/10', 'border-purple-400/50');
+            } else {
+                mobileLabel.classList.remove('bg-gradient-to-r', 'from-purple-600', 'to-indigo-600', 'shadow-lg', 'shadow-purple-500/25', 'border-purple-400');
+                mobileLabel.classList.add('bg-white/10', 'border-purple-400/50');
+            }
+        }
+        aiToggle?.addEventListener('change', function() {
+            NavState.setAiMode(this.checked);
+            const text = this.checked ? 'Hide AI Tools' : 'Show AI Tools';
+            aiToggleLabels.forEach(el => el.textContent = text);
+            updateMobileLabel(this.checked);
+            if (this.checked) {
+                aiSection?.classList.remove('hidden');
+            } else {
+                aiSection?.classList.add('hidden');
+            }
+        });
         
         // DOM elements
         const searchInput = document.getElementById('operation-search');
@@ -1450,7 +1516,7 @@
                                     ${matchLabel}
                                     ${role.is_high_privilege ? '<span class="inline-flex items-center px-2 py-0.5 text-xs font-semibold bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-300 rounded">⚠️ High Privilege</span>' : ''}
                                 </div>
-                                <a href="/roles/${encodeURIComponent(role.role_id)}" onclick="NavState.setBackContext('recommend', { ai: aiEnabled })" class="text-lg font-semibold text-azure-600 dark:text-azure-400 hover:text-azure-700 dark:hover:text-azure-300 hover:underline mt-1 block">
+                                <a href="/roles/${encodeURIComponent(role.role_id)}" onclick="NavState.setBackContext('recommend')" class="text-lg font-semibold text-azure-600 dark:text-azure-400 hover:text-azure-700 dark:hover:text-azure-300 hover:underline mt-1 block">
                                     ${escapeHtml(role.role_name)}
                                 </a>
                                 <div class="flex items-center gap-4 mt-2 text-sm text-slate-500 dark:text-slate-400 flex-wrap">
@@ -1716,7 +1782,7 @@
                             <div class="flex items-start justify-between mb-2">
                                 <span class="px-2 py-0.5 text-xs font-medium rounded ${scoreColor}">${scorePercent}% match</span>
                                 <a href="${roleUrl}" 
-                                   onclick="NavState.setBackContext('recommend', { ai: aiEnabled })"
+                                   onclick="NavState.setBackContext('recommend')"
                                    class="p-1 rounded hover:bg-purple-100 dark:hover:bg-slate-700 transition-colors"
                                    title="View role details">
                                     <svg class="w-5 h-5 text-purple-500 dark:text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -1725,7 +1791,7 @@
                                 </a>
                             </div>
                             <a href="${roleUrl}" 
-                               onclick="NavState.setBackContext('recommend', { ai: aiEnabled })"
+                               onclick="NavState.setBackContext('recommend')"
                                class="text-base font-semibold text-purple-900 dark:text-purple-300 hover:text-purple-700 dark:hover:text-purple-200 hover:underline block mb-1">
                                 ${escapeHtml(rec.role_name)}
                             </a>
@@ -1737,7 +1803,7 @@
                             <div class="flex-1 min-w-0">
                                 <div class="flex items-center gap-2">
                                     <a href="${roleUrl}" 
-                                       onclick="NavState.setBackContext('recommend', { ai: aiEnabled })"
+                                       onclick="NavState.setBackContext('recommend')"
                                        class="text-sm font-semibold text-purple-900 dark:text-purple-300 hover:text-purple-700 dark:hover:text-purple-200 hover:underline">
                                         ${escapeHtml(rec.role_name)}
                                     </a>
@@ -1747,7 +1813,7 @@
                                 ${rec.explanation ? `<p class="text-xs text-purple-600 dark:text-purple-400 mt-1 italic">"${escapeHtml(rec.explanation)}"</p>` : ''}
                             </div>
                             <a href="${roleUrl}" 
-                               onclick="NavState.setBackContext('recommend', { ai: aiEnabled })"
+                               onclick="NavState.setBackContext('recommend')"
                                class="flex-shrink-0 ml-2 p-1 rounded hover:bg-purple-100 dark:hover:bg-slate-700 transition-colors"
                                title="View role details">
                                 <svg class="w-4 h-4 text-purple-400 hover:text-purple-600 dark:hover:text-purple-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">

@@ -1005,7 +1005,10 @@ test.describe('Role Recommender', () => {
   });
 
   test('should have AI mode toggle when enabled', async ({ page }) => {
-    await page.goto('/recommend?ai=1');
+    await page.goto('/recommend');
+    await page.waitForLoadState('domcontentloaded');
+    // Click the AI toggle label to enable AI mode
+    await page.locator('label[for="ai-toggle"]').first().click();
     const modeButtons = page.locator('#mode-llm-btn, #mode-rag-btn, #mode-llm-btn-mobile, #mode-rag-btn-mobile');
     expect(await modeButtons.count()).toBeGreaterThan(0);
   });
@@ -1048,14 +1051,14 @@ test.describe('Role Recommender', () => {
 
   test('should have mode selection buttons in AI mode', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 720 });
-    await page.goto('/recommend?ai=1');
+    await page.goto('/recommend');
     await page.waitForLoadState('domcontentloaded');
+    // Enable AI mode via toggle label
+    await page.locator('label[for="ai-toggle"]').first().click();
 
-    // Check for mode buttons
-    const modeContainer = page.locator('#ai-mode-selector, .mode-selector');
-    if (await modeContainer.count() > 0) {
-      expect(await modeContainer.first().isVisible()).toBe(true);
-    }
+    // Check that AI section is visible
+    const aiSection = page.locator('#ai-assistant-section');
+    await expect(aiSection).toBeVisible();
   });
 
   test('should submit recommendation request via API', async ({ page, request }) => {
@@ -1073,38 +1076,44 @@ test.describe('Role Recommender', () => {
 });
 
 // =============================================================================
-// AI MODE PRESERVATION
+// AI MODE TOGGLE
 // =============================================================================
-test.describe('AI Mode Preservation', () => {
-  test('should store and preserve ai mode in sessionStorage', async ({ page }) => {
-    await page.goto('/recommend?ai=1');
+test.describe('AI Mode Toggle', () => {
+  test('should show AI section when toggle is enabled', async ({ page }) => {
+    await page.goto('/recommend');
     await page.waitForLoadState('domcontentloaded');
-    expect(await page.evaluate(() => sessionStorage.getItem('azurerbac_ai_mode'))).toBe('1');
+    // AI section should be hidden by default
+    const aiSection = page.locator('#ai-assistant-section');
+    await expect(aiSection).toBeHidden();
 
-    await page.goto('/about');
-    await page.waitForLoadState('domcontentloaded');
+    // Enable via toggle label
+    await page.locator('label[for="ai-toggle"]').first().click();
+    await expect(aiSection).toBeVisible();
     expect(await page.evaluate(() => sessionStorage.getItem('azurerbac_ai_mode'))).toBe('1');
   });
 
-  test('should not have ai mode without parameter', async ({ page }) => {
+  test('should persist AI mode across page loads', async ({ page }) => {
+    await page.goto('/recommend');
+    await page.waitForLoadState('domcontentloaded');
+    // Enable via toggle label
+    await page.locator('label[for="ai-toggle"]').first().click();
+
+    // Navigate away and back
+    await page.goto('/recommend');
+    await page.waitForLoadState('domcontentloaded');
+    expect(await page.evaluate(() => sessionStorage.getItem('azurerbac_ai_mode'))).toBe('1');
+    const aiSection = page.locator('#ai-assistant-section');
+    await expect(aiSection).toBeVisible();
+  });
+
+  test('should not have ai mode by default', async ({ page }) => {
     await page.goto('/recommend');
     await page.evaluate(() => sessionStorage.clear());
-    await page.goto('/about');
+    await page.goto('/recommend');
     await page.waitForLoadState('domcontentloaded');
     expect(await page.evaluate(() => sessionStorage.getItem('azurerbac_ai_mode'))).toBeNull();
-  });
-
-  test('should store ai mode from analytics page', async ({ page }) => {
-    await page.goto('/analytics');
-    await page.evaluate(() => sessionStorage.clear());
-    await page.goto('/analytics?ai=1');
-    await page.waitForLoadState('domcontentloaded');
-    expect(await page.evaluate(() => sessionStorage.getItem('azurerbac_ai_mode'))).toBe('1');
-
-    // Navigate to another page and verify persistence
-    await page.goto('/about');
-    await page.waitForLoadState('domcontentloaded');
-    expect(await page.evaluate(() => sessionStorage.getItem('azurerbac_ai_mode'))).toBe('1');
+    const aiSection = page.locator('#ai-assistant-section');
+    await expect(aiSection).toBeHidden();
   });
 });
 
@@ -1124,12 +1133,6 @@ test.describe('About Page', () => {
     // Should show FAQ or about content
     const hasContent = await page.getByText(/Azure|RBAC|Role|FAQ|Question/i).first().isVisible();
     expect(hasContent).toBe(true);
-  });
-
-  test('should preserve AI mode parameter', async ({ page }) => {
-    await page.goto('/about?ai=1');
-    await page.waitForLoadState('domcontentloaded');
-    expect(page.url()).toContain('ai=1');
   });
 });
 

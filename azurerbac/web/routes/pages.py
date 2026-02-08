@@ -367,8 +367,6 @@ async def about_page(
 ) -> Response:
     """About page."""
     logger.debug("About page loaded")
-    # Preserve ai=1 parameter if set
-    ai_mode = request.query_params.get("ai") == "1"
 
     roles_count = deps.app_cache.cache.active_roles_count
     ops_count = deps.app_cache.cache.metadata.operations_count
@@ -380,6 +378,5 @@ async def about_page(
             "tab": "about",
             "total_roles": roles_count,
             "total_operations": ops_count,
-            "ai_mode": ai_mode,
         },
     )

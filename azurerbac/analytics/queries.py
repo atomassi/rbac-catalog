@@ -495,10 +495,13 @@ def compute_top_roles_by_permissions(
     """Compute roles with the most allowed actions and data actions.
 
     Uses precomputed role_net_permissions from cache (already expanded, exclusions applied).
+    Uses heapq.nlargest for O(n log k) instead of O(n log n) full sort.
 
     Returns:
         Tuple of (top_by_actions, top_by_data_actions) lists.
     """
+    import heapq
+
     action_counts: list[tuple[str, str, int]] = []
     data_action_counts: list[tuple[str, str, int]] = []
 
@@ -513,16 +516,16 @@ def compute_top_roles_by_permissions(
         if net_perms.data_count > 0:
             data_action_counts.append((role_id, role_name, net_perms.data_count))
 
-    action_counts.sort(key=lambda x: x[2], reverse=True)
-    data_action_counts.sort(key=lambda x: x[2], reverse=True)
+    top_actions = heapq.nlargest(limit, action_counts, key=lambda x: (x[2], x[1]))
+    top_data = heapq.nlargest(limit, data_action_counts, key=lambda x: (x[2], x[1]))
 
     top_by_actions = [
         TopRoleByPermissions(role_id=rid, role_name=rname, count=cnt)
-        for rid, rname, cnt in action_counts[:limit]
+        for rid, rname, cnt in top_actions
     ]
     top_by_data_actions = [
         TopRoleByPermissions(role_id=rid, role_name=rname, count=cnt)
-        for rid, rname, cnt in data_action_counts[:limit]
+        for rid, rname, cnt in top_data
     ]
 
     logger.debug(

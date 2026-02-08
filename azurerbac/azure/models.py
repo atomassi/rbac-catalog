@@ -246,10 +246,14 @@ class OperationData(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     name: str = Field(default="")
-    display_name: str | None = Field(default=None, alias="displayName")
+    display_name: str | None = Field(
+        default=None, validation_alias="displayName", serialization_alias="displayName"
+    )
     description: str | None = Field(default=None)
     origin: str | None = Field(default=None)
-    is_data_action: bool = Field(default=False, alias="isDataAction")
+    is_data_action: bool = Field(
+        default=False, validation_alias="isDataAction", serialization_alias="isDataAction"
+    )
 
     # Context from parent provider/resource type
     provider_display_name: str = Field(default="")
@@ -287,10 +291,10 @@ class OperationData(BaseModel):
         return cls.model_validate(
             {
                 "name": op.get("name", ""),
-                "displayName": op.get("displayName"),
+                "display_name": op.get("displayName"),
                 "description": op.get("description"),
                 "origin": op.get("origin"),
-                "isDataAction": op.get("isDataAction", False),
+                "is_data_action": op.get("isDataAction", False),
                 "provider_display_name": provider_display_name,
                 "resource_type": resource_type,
                 "resource_type_display_name": resource_type_display_name,

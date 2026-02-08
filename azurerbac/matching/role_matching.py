@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import heapq
 import logging
+from collections.abc import Iterable
 from collections.abc import Set as AbstractSet
 from functools import lru_cache
 from typing import TYPE_CHECKING
@@ -113,15 +114,15 @@ def pattern_covers_pattern(role_pattern: str, requested_pattern: str) -> bool:
     )
 
 
-def operation_matches_any_pattern(operation: OperationName, patterns: list[Pattern]) -> bool:
+def operation_matches_any_pattern(operation: OperationName, patterns: Iterable[Pattern]) -> bool:
     """Check if an operation matches any of the given patterns."""
     return any(p == "*" or matches_pattern(operation, p) for p in patterns)
 
 
 def check_operation_allowed(
     operation: str,
-    actions: list[str],
-    not_actions: list[str],
+    actions: Iterable[str],
+    not_actions: Iterable[str],
 ) -> bool:
     """Check if a specific operation is allowed by the given actions/notActions.
 
@@ -356,10 +357,13 @@ def is_high_privilege_role(role: RoleDefinition) -> bool:
             continue
 
         # Check if this block allows roleAssignments/write
+        # Use generator expressions to avoid allocating temporary lists
+        actions_lower = (a.lower() for a in perm.actions)
+        not_actions_lower = (a.lower() for a in perm.not_actions)
         if check_operation_allowed(
             HIGH_PRIVILEGE_OPERATION,
-            [a.lower() for a in perm.actions],
-            [a.lower() for a in perm.not_actions],
+            actions_lower,
+            not_actions_lower,
         ):
             return True
 

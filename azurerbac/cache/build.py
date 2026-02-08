@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import logging
 import time
+from collections import defaultdict
 from dataclasses import replace
 from datetime import datetime
+from itertools import chain
 from typing import TYPE_CHECKING
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -68,15 +70,16 @@ def build_operations_prefix_index(
     if plane in prefix_cache:
         return prefix_cache[plane]
 
-    index: dict[str, set[str]] = {}
+    index: defaultdict[str, set[str]] = defaultdict(set)
     for op in ops:
         slash_idx = op.find("/")
         if slash_idx > 0:
             prefix = op[: slash_idx + 1].lower()
-            index.setdefault(prefix, set()).add(op)
+            index[prefix].add(op)
 
-    prefix_cache[plane] = index
-    return index
+    result = dict(index)
+    prefix_cache[plane] = result
+    return result
 
 
 def _add_operations_for_patterns(
@@ -117,10 +120,9 @@ def _collect_role_patterns(roles: list[RoleDefinition]) -> set[str]:
     patterns: set[str] = set()
     for role in roles:
         for perm in role.properties.permissions:
-            all_actions = (
-                perm.actions + perm.not_actions + perm.data_actions + perm.not_data_actions
-            )
-            for action in all_actions:
+            for action in chain(
+                perm.actions, perm.not_actions, perm.data_actions, perm.not_data_actions
+            ):
                 if is_wildcard_pattern(action):
                     patterns.add(action.lower())
     return patterns
@@ -197,13 +199,13 @@ def _build_operation_to_roles(
     role_coverage: dict[str, RoleCoverage],
 ) -> dict[str, list[str]]:
     """Build inverted index: operation (lowered) -> list of role_ids."""
-    index: dict[str, list[str]] = {}
+    index: defaultdict[str, list[str]] = defaultdict(list)
     for role_id, cov in role_coverage.items():
         for op in cov.control:
-            index.setdefault(op, []).append(role_id)
+            index[op].append(role_id)
         for op in cov.data:
-            index.setdefault(op, []).append(role_id)
-    return index
+            index[op].append(role_id)
+    return dict(index)
 
 
 def precompute_all(
@@ -354,9 +356,7 @@ async def build_from_db(session: AsyncSession) -> CacheData:
         all_roles = list(all_roles_result.scalars().all())
         timer.rows = len(all_roles)
 
-    # Fetch active roles for role_jsons (used by recommender)
-    active_roles = [r for r in all_roles if r.status == RoleStatus.ACTIVE]
-    logger.debug("Found %d active roles out of %d total", len(active_roles), len(all_roles))
+    logger.debug("Loaded %d roles from database", len(all_roles))
 
     # Fetch all operations
     async with TimedDbQuery("fetch_all_operations") as timer:
@@ -381,36 +381,44 @@ async def build_from_db(session: AsyncSession) -> CacheData:
         )
         first_scan = await session.scalar(select(func.min(RoleScanStatus.scan_timestamp)))
 
-    # Collect RoleDefinition objects
-    role_definitions = [role.role_definition for role in active_roles if role.role_definition]
+    # Build roles_by_id and role_definitions in a single pass.
+    # For active roles, current_version == last_known_version (has role_json),
+    # so a single model_validate per role replaces the previous 2 separate calls.
+    role_definitions: list[RoleDefinition] = []
+    roles_by_id: dict[str, CachedRole] = {}
+    for role in all_roles:
+        lkv = role.last_known_version
+        if lkv is None or lkv.role_json is None:
+            continue
+        role_def = lkv.role_definition
+        if role_def is None:
+            continue
+        roles_by_id[role.role_id] = CachedRole(
+            definition=role_def,
+            status=role.status,
+            last_seen_at=role.last_seen_at,
+        )
+        if role.status == RoleStatus.ACTIVE:
+            role_definitions.append(role_def)
 
-    # Convert DB Operation models to OperationData Pydantic models
+    # Convert DB Operation models to OperationData Pydantic models.
+    # Direct construction avoids 21K intermediate dict allocations.
     all_operations = [
-        OperationData.model_validate(
-            {
-                "name": op.name,
-                "displayName": op.display_name,
-                "description": op.description,
-                "provider_display_name": op.provider_display_name or "",
-                "resource_type_display_name": op.resource_type_display_name,
-                "isDataAction": op.is_data_action,
-            }
+        OperationData(
+            name=op.name,
+            display_name=op.display_name,
+            description=op.description,
+            provider_display_name=op.provider_display_name or "",
+            resource_type_display_name=op.resource_type_display_name,
+            is_data_action=op.is_data_action,
         )
         for op in all_ops
     ]
 
-    # Build roles_by_id index with CachedRole objects
-    roles_by_id: dict[str, CachedRole] = {}
-    for role in all_roles:
-        role_def = role.last_known_definition
-        if role_def:
-            roles_by_id[role.role_id] = CachedRole(
-                definition=role_def,
-                status=role.status,
-                last_seen_at=role.last_seen_at,
-            )
-
-    # Build change events list
+    # Build change events list.
+    # Use ev.role_json directly instead of ev.role_definition.to_dict() to avoid
+    # a model_validate + to_dict() roundtrip per event. The consumer
+    # (enrich_event_with_diff) re-parses via model_validate when needed.
     all_change_events: list[CachedChangeEvent] = []
     for ev in all_events:
         cached_role = roles_by_id.get(ev.role_id)
@@ -425,7 +433,7 @@ async def build_from_db(session: AsyncSession) -> CacheData:
                 azure_updated_on=ev.azure_updated_on,
                 summary=ev.summary,
                 diff_json=ev.diff_json,
-                role_json=ev.role_definition.to_dict() if ev.role_definition else None,
+                role_json=ev.role_json,
             )
         )
 
@@ -435,7 +443,7 @@ async def build_from_db(session: AsyncSession) -> CacheData:
 
     # Create metadata
     metadata = CacheMetadata(
-        roles_count=len(active_roles),
+        roles_count=len(role_definitions),
         operations_count=len(all_operations),
         roles_hash=roles_hash,
         operations_hash=operations_hash,
@@ -455,7 +463,8 @@ async def build_from_db(session: AsyncSession) -> CacheData:
     # Build analytics data (now we have role_net_permissions available)
     from azurerbac.analytics.service import build_analytics_from_db
 
-    all_ops_lower = {op.name.lower() for op in all_operations}
+    # Reuse already-lowered operation names from cache instead of lowering 21K+ ops again
+    all_ops_lower = set(cache_data.ops_lowered_to_orig)
     analytics_data = await build_analytics_from_db(
         session,
         all_ops_lower,
@@ -483,7 +492,7 @@ async def build_from_db(session: AsyncSession) -> CacheData:
 
     logger.info(
         "Cache built: %d roles, %d operations, %d indexed, %d events",
-        len(active_roles),
+        len(role_definitions),
         len(all_operations),
         len(roles_by_id),
         len(all_change_events),

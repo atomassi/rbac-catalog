@@ -1061,7 +1061,7 @@ test.describe('Role Recommender', () => {
     await expect(aiSection).toBeVisible();
   });
 
-  test('should submit recommendation request via API', async ({ page, request }) => {
+  test('should submit recommendation request via API', async ({ request }) => {
     // Test the API directly
     const response = await request.post('/api/recommend-roles', {
       data: {

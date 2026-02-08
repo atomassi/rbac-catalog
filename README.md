@@ -104,7 +104,7 @@ flowchart TD
 ## AI Recommendation Modes
 
 > [!NOTE]
-> The AI modes are experimental—built for learning and experimenting with different recommendation approaches. Results should be verified. Enable via the "Enable AI Tools" toggle on the Recommend page.
+> The AI modes are experimental—built for learning and experimenting with different recommendation approaches. Results should be verified. Access them via the "Show AI Tools" toggle on the Recommend page.
 
 The AI Role Recommender supports **8 different modes**, each with different speed/accuracy trade-offs:
 

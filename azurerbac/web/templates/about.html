@@ -145,85 +145,7 @@
     <div class="min-h-full">
         <!-- Header with gradient -->
         <div class="gradient-bg">
-            <nav class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <div class="flex items-center justify-between h-16 sm:h-20">
-                    <!-- Logo - hidden on mobile to save space -->
-                    <div class="hidden sm:flex items-center">
-                        <a href="/" class="flex-shrink-0 flex items-center group">
-                            <div class="bg-white/20 backdrop-blur-sm rounded-xl p-2 group-hover:bg-white/30 transition-colors">
-                                <svg class="h-7 w-7 sm:h-8 sm:w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                                </svg>
-                            </div>
-                            <div class="ml-3">
-                                <span class="text-lg sm:text-xl font-bold text-white group-hover:text-azure-100 transition-colors">Azure RBAC Catalog</span>
-                            </div>
-                        </a>
-                    </div>
-                    <!-- Mobile: Show small logo -->
-                    <div class="sm:hidden flex items-center">
-                        <a href="/" class="flex items-center group" aria-label="Azure RBAC Catalog Home">
-                            <div class="bg-white/20 backdrop-blur-sm rounded-lg p-1.5 group-hover:bg-white/30 transition-colors">
-                                <svg class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                                </svg>
-                            </div>
-                        </a>
-                    </div>
-                    <!-- Navigation tabs -->
-                    <div class="flex items-center">
-                        <div class="flex items-center bg-white/10 backdrop-blur-sm rounded-2xl p-1.5 sm:p-2 gap-1 sm:gap-2">
-                            <a href="/recent" class="ai-nav-link group flex items-center justify-center px-3 sm:px-4 py-2.5 sm:py-2.5 rounded-xl text-xs sm:text-base sm:w-[133px] font-semibold transition-all duration-200 text-white hover:bg-white/20" aria-label="Recent Changes">
-                                <svg class="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                                <span class="hidden sm:inline ml-2">Recent</span>
-                            </a>
-                            <a href="/roles" class="ai-nav-link group flex items-center justify-center px-3 sm:px-4 py-2.5 sm:py-2.5 rounded-xl text-xs sm:text-base sm:w-[133px] font-semibold transition-all duration-200 text-white hover:bg-white/20" aria-label="Browse Roles">
-                                <svg class="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 12h16.5m-16.5 3.75h16.5M3.75 19.5h16.5M5.625 4.5h12.75a1.875 1.875 0 010 3.75H5.625a1.875 1.875 0 010-3.75z" />
-                                </svg>
-                                <span class="hidden sm:inline ml-2">Roles</span>
-                            </a>
-                            <a href="/operations" class="ai-nav-link group flex items-center justify-center px-3 sm:px-4 py-2.5 sm:py-2.5 rounded-xl text-xs sm:text-base sm:w-[133px] font-semibold transition-all duration-200 text-white hover:bg-white/20" aria-label="Browse Operations">
-                                <svg class="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M10.343 3.94c.09-.542.56-.94 1.11-.94h1.093c.55 0 1.02.398 1.11.94l.149.894c.07.424.384.764.78.93.398.164.855.142 1.205-.108l.737-.527a1.125 1.125 0 011.45.12l.773.774c.39.389.44 1.002.12 1.45l-.527.737c-.25.35-.272.806-.107 1.204.165.397.505.71.93.78l.893.15c.543.09.94.559.94 1.109v1.094c0 .55-.397 1.02-.94 1.11l-.894.149c-.424.07-.764.383-.929.78-.165.398-.143.854.107 1.204l.527.738c.32.447.269 1.06-.12 1.45l-.774.773a1.125 1.125 0 01-1.449.12l-.738-.527c-.35-.25-.806-.272-1.204-.107-.397.165-.71.505-.78.929l-.15.894c-.09.542-.56.94-1.11.94h-1.094c-.55 0-1.019-.398-1.11-.94l-.148-.894c-.071-.424-.384-.764-.781-.93-.398-.164-.854-.142-1.204.108l-.738.527c-.447.32-1.06.269-1.45-.12l-.773-.774a1.125 1.125 0 01-.12-1.45l.527-.737c.25-.35.273-.806.108-1.204-.165-.397-.506-.71-.93-.78l-.894-.15c-.542-.09-.94-.56-.94-1.109v-1.094c0-.55.398-1.02.94-1.11l.894-.149c.424-.07.765-.383.93-.78.165-.398.143-.854-.108-1.204l-.526-.738a1.125 1.125 0 01.12-1.45l.773-.773a1.125 1.125 0 011.45-.12l.737.527c.35.25.807.272 1.204.107.397-.165.71-.505.78-.929l.15-.894z" />
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                </svg>
-                                <span class="hidden sm:inline ml-2">Operations</span>
-                            </a>
-                            <a href="/recommend" class="ai-nav-link group flex items-center justify-center px-3 sm:px-4 py-2.5 sm:py-2.5 rounded-xl text-xs sm:text-base sm:w-[133px] font-semibold transition-all duration-200 text-white hover:bg-white/20" aria-label="Role Recommender">
-                                <svg class="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z" />
-                                </svg>
-                                <span class="hidden sm:inline ml-2">Recommend</span>
-                            </a>
-                            <a href="/compare" class="ai-nav-link group flex items-center justify-center px-3 sm:px-4 py-2.5 sm:py-2.5 rounded-xl text-xs sm:text-base sm:w-[133px] font-semibold transition-all duration-200 text-white hover:bg-white/20" aria-label="Compare Roles">
-                                <svg class="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-                                </svg>
-                                <span class="hidden sm:inline ml-2">Compare</span>
-                            </a>
-                            <a href="/about" class="ai-nav-link group flex items-center justify-center px-3 sm:px-4 py-2.5 sm:py-2.5 rounded-xl text-xs sm:text-base sm:w-[133px] font-semibold transition-all duration-200 bg-white text-azure-700 shadow-md dark:bg-azure-600 dark:text-white" aria-label="About">
-                                <svg class="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
-                                </svg>
-                                <span class="hidden sm:inline ml-2">About</span>
-                            </a>
-                            <!-- Dark mode toggle -->
-                            <div class="w-px h-6 bg-white/20 mx-1 sm:mx-2 self-center"></div>
-                            <button id="dark-mode-toggle" type="button" class="flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-white/10 hover:bg-white/25 text-white transition-all duration-200" title="Toggle dark mode" aria-pressed="false">
-                                <svg class="sun-icon hidden w-4 h-4 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />
-                                </svg>
-                                <svg class="moon-icon w-4 h-4 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z" />
-                                </svg>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </nav>
+            {% include 'partials/_nav_full.html' %}
             <!-- Hero section -->
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-12 pt-4">
                 <div class="flex items-center gap-3 mb-3">
@@ -450,33 +372,7 @@
             </div>
         </main>
 
-        <!-- Footer -->
-        <footer class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 dark:bg-slate-900 dark:border-slate-700">
-            <div class="border-t border-slate-200 dark:border-slate-700 pt-8">
-                <div class="flex flex-col items-center" style="gap: 20px;">
-                    <!-- Internal navigation links for SEO -->
-                    <nav class="flex flex-col sm:flex-row flex-wrap justify-center items-center text-sm" style="gap: 12px 24px;">
-                        <a href="/recent" class="ai-nav-link text-slate-600 dark:text-slate-400 hover:text-azure-600 dark:hover:text-azure-400 transition-colors">Recent Changes</a>
-                        <a href="/roles" class="ai-nav-link text-slate-600 dark:text-slate-400 hover:text-azure-600 dark:hover:text-azure-400 transition-colors">Browse Roles</a>
-                        <a href="/operations" class="ai-nav-link text-slate-600 dark:text-slate-400 hover:text-azure-600 dark:hover:text-azure-400 transition-colors">Browse Operations</a>
-                        <a href="/compare" class="text-slate-600 dark:text-slate-400 hover:text-azure-600 dark:hover:text-azure-400 transition-colors">Compare Roles</a>
-                        <a href="/recommend" class="ai-nav-link text-slate-600 dark:text-slate-400 hover:text-azure-600 dark:hover:text-azure-400 transition-colors">Role Recommender</a>
-                        <a href="/analytics" class="ai-nav-link text-slate-600 dark:text-slate-400 hover:text-azure-600 dark:hover:text-azure-400 transition-colors">Analytics</a>
-                        <a href="/about" class="ai-nav-link text-slate-600 dark:text-slate-400 hover:text-azure-600 dark:hover:text-azure-400 transition-colors">About</a>
-                        <a href="/sitemap.xml" class="text-slate-600 dark:text-slate-400 hover:text-azure-600 dark:hover:text-azure-400 transition-colors">Sitemap</a>
-                        <span class="hidden sm:inline text-slate-300 dark:text-slate-600">|</span>
-                        <a href="/feeds/changelog.atom" class="text-slate-600 dark:text-slate-400 hover:text-orange-500 transition-colors" title="Subscribe via RSS/Atom">
-                            <svg class="w-5 h-5" viewBox="0 0 24 24" aria-hidden="true"><rect width="24" height="24" rx="4" fill="#f97316"/><circle cx="7" cy="17" r="2.5" fill="white"/><path d="M5 12.5c3.5 0 6.5 3 6.5 6.5h3c0-5.25-4.25-9.5-9.5-9.5v3z" fill="white"/><path d="M5 7c6.5 0 12 5.5 12 12h3c0-8.25-6.75-15-15-15v3z" fill="white"/></svg>
-                        </a>
-                    </nav>
-                    <div class="text-center px-4">
-                        <p class="text-sm text-slate-600 dark:text-slate-400">Azure RBAC Built-in Role Definitions Catalog — Track changes to <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles" target="_blank" rel="noopener noreferrer" class="text-azure-600 dark:text-azure-400 underline font-medium hover:text-azure-700 dark:hover:text-azure-300">Azure built-in roles</a></p>
-                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-3">{{ app_version }}</p>
-                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-3 leading-relaxed">This site is not affiliated with or endorsed by Microsoft.<br class="sm:hidden"> Content is provided "as is" without warranty of any kind.</p>
-                    </div>
-                </div>
-            </div>
-        </footer>
+        {% include 'partials/_footer.html' %}
     </div>
     
     <!-- Dark mode handler -->

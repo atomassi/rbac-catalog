@@ -3,7 +3,7 @@ import copy
 import pytest
 
 from azurerbac.azure.models import RoleDefinition
-from azurerbac.core.diffing import _sorted_list, diff_roles, diff_summary
+from azurerbac.core.diffing import diff_roles, diff_summary
 
 READER_ROLE_DICT = {
     "properties": {
@@ -258,13 +258,3 @@ def test_both_none_returns_unchanged():
     d = diff_roles(None, None)
     assert d.changed is False
     assert d.changes == []
-
-
-def test_sorted_list_falls_back_on_unsortable():
-    """_sorted_list returns unsorted list when items are not comparable."""
-    unsortable = [{"b": 2}, {"a": 1}]
-    result = _sorted_list(unsortable)
-    assert isinstance(result, list)
-    assert len(result) == 2
-    # Should be the original order (not sorted, since dicts aren't comparable)
-    assert result == unsortable

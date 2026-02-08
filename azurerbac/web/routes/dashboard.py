@@ -5,7 +5,8 @@ from __future__ import annotations
 import datetime as dt
 import logging
 from dataclasses import asdict, dataclass, field
-from typing import Annotated
+from typing import Annotated, Any
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
@@ -27,9 +28,9 @@ from azurerbac.web.services.dashboard import (
     fetch_roles_paginated,
     filter_cached_events,
     get_common_dashboard_data,
-    search_roles,
+    search_roles_in_cache,
 )
-from azurerbac.web.services.models import PaginationInfo, SortField
+from azurerbac.web.services.models import PaginationInfo, ScanMetadata, SortField
 
 logger = logging.getLogger(__name__)
 
@@ -54,9 +55,9 @@ class DashboardContext:
     event_type: str = "all"
     ai: int | None = None
     # Data
-    events: list = field(default_factory=list)
+    events: list[Any] = field(default_factory=list)
     total_events: int = 0
-    roles: list = field(default_factory=list)
+    roles: list[Any] = field(default_factory=list)
     total_roles: int = 0
     total_operations: int = 0
     last_scan: dt.datetime | None = None
@@ -81,33 +82,41 @@ async def recent_changes(
     )
     # If search query present, redirect to /roles
     if q:
-        from urllib.parse import urlencode
-
         params: dict[str, str | int] = {"q": q}
         if ai:
             params["ai"] = ai
         return RedirectResponse(url=f"/roles?{urlencode(params)}", status_code=302)
 
-    common = await get_common_dashboard_data(deps)
+    common = get_common_dashboard_data(deps)
 
-    events: list = []
+    events: list[Any] = []
     cutoff = dt.datetime.now(dt.UTC) - dt.timedelta(days=days)
 
     # Build cache key for filtered events (days + event_type)
     events_cache_key = f"{days}:{event_type}"
 
-    async with deps.SessionLocal() as session:
-        # Try filtered events cache first
-        if cached_filtered := deps.app_cache.get_filtered_events(events_cache_key):
-            events = cached_filtered
-        elif cached_events := deps.app_cache.get_change_events():
-            # Filter from raw cache and store in filtered cache
-            events = filter_cached_events(cached_events, deps, cutoff, event_type)
-            deps.app_cache.set_filtered_events(events_cache_key, events)
-        else:
-            events = await fetch_events_from_db(session, deps, cutoff, event_type)
+    # Resolve events from cache layers; only open a DB session on full miss
+    needs_db = False
+    if cached_filtered := deps.app_cache.get_filtered_events(events_cache_key):
+        events = cached_filtered
+    elif cached_events := deps.app_cache.get_change_events():
+        events = filter_cached_events(cached_events, deps, cutoff, event_type)
+        deps.app_cache.set_filtered_events(events_cache_key, events)
+    else:
+        needs_db = True
 
-        scan_meta = await ensure_scan_metadata(session, deps, common.last_scan, common.first_scan)
+    # Scan metadata may also need DB if not yet cached
+    scan_needs_db = common.last_scan is None or common.first_scan is None
+
+    if needs_db or scan_needs_db:
+        async with deps.SessionLocal() as session:
+            if needs_db:
+                events = await fetch_events_from_db(session, deps, cutoff, event_type)
+            scan_meta = await ensure_scan_metadata(
+                session, deps, common.last_scan, common.first_scan
+            )
+    else:
+        scan_meta = ScanMetadata(last_scan=common.last_scan, first_scan=common.first_scan)
 
     total_events = len(events)
     pagination = PaginationInfo.compute(total_events, page, limit)
@@ -147,26 +156,32 @@ async def roles_list(
     logger.info(
         "Dashboard /roles: q='%s' page=%d sort=%s status=%s", q or "", page, sort, status_filter
     )
-    common = await get_common_dashboard_data(deps)
+    common = get_common_dashboard_data(deps)
 
-    async with deps.SessionLocal() as session:
-        if not q:
-            result = await fetch_roles_paginated(
-                session, deps, status_filter, sort, order, page, limit
-            )
-        else:
-            result = await search_roles(
-                session,
-                deps,
-                q,
-                status_filter,
-                sort,
-                order,
-                page,
-                limit,
-            )
+    if not q:
+        result = await fetch_roles_paginated(deps, status_filter, sort, order, page, limit)
+    else:
+        cached_roles = deps.app_cache.cache.roles_by_id
+        if not cached_roles:
+            raise RuntimeError("Role cache is empty - application not initialized")
+        result = search_roles_in_cache(
+            cached_roles,
+            q,
+            status_filter,
+            sort,
+            order,
+            page,
+            limit,
+        )
 
-        scan_meta = await ensure_scan_metadata(session, deps, common.last_scan, common.first_scan)
+    # Only open a DB session if scan metadata is not yet cached
+    if common.last_scan is None or common.first_scan is None:
+        async with deps.SessionLocal() as session:
+            scan_meta = await ensure_scan_metadata(
+                session, deps, common.last_scan, common.first_scan
+            )
+    else:
+        scan_meta = ScanMetadata(last_scan=common.last_scan, first_scan=common.first_scan)
 
     ctx = DashboardContext(
         tab="roles",

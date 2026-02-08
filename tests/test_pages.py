@@ -943,6 +943,7 @@ def _build_cache_service(
     mock.get_comparison.return_value = None  # cache miss by default
     mock.restore_operation_casing.side_effect = lambda ops: list(ops)
     mock.cache.operation_to_roles = op_to_roles
+    mock.cache.ops_lowered_to_orig = {}
     return mock
 
 

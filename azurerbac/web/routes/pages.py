@@ -165,9 +165,6 @@ async def role_detail(
             page,
             limit,
             days,
-            default_page=DEFAULT_PAGE,
-            default_limit=DEFAULT_LIMIT,
-            default_days=DEFAULT_DAYS,
         )
         return RedirectResponse(url=url, status_code=301)
 
@@ -211,7 +208,7 @@ async def operations_list(
     order: str = SortOrder.ASC,
 ) -> Response:
     """Operations list page."""
-    logger.info("Operations list: q='%s' page=%d provider=%s", q or "", page, provider or "all")
+    logger.debug("Operations list: q='%s' page=%d provider=%s", q or "", page, provider or "all")
 
     # Get all operations from cache
     all_operations = deps.app_cache.get_all_operations()
@@ -347,7 +344,7 @@ async def recommend_page(
     deps: Annotated[PagesDeps, Depends(get_pages_deps)],
 ) -> Response:
     """Role recommender page."""
-    logger.info("Recommend page loaded")
+    logger.debug("Recommend page loaded")
     ops_count = deps.app_cache.cache.metadata.operations_count
 
     return deps.templates.TemplateResponse(
@@ -366,7 +363,7 @@ async def about_page(
     deps: Annotated[PagesDeps, Depends(get_pages_deps)],
 ) -> Response:
     """About page."""
-    logger.info("About page loaded")
+    logger.debug("About page loaded")
     # Preserve ai=1 parameter if set
     ai_mode = request.query_params.get("ai") == "1"
 

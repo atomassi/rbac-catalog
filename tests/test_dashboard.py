@@ -27,13 +27,14 @@ class TestEnrichRoleWithCounts:
 
     def test_enrich_role_fallback_returns_zeros(self):
         """Test enriching role returns zeros when cache misses (role_json is now in RoleHistory)."""
+        from azurerbac.core.constants import RoleStatus
         from azurerbac.web.services.dashboard import enrich_role_with_counts
 
         role = MagicMock()
         role.role_id = "test-role-id"
         role.role_name = "Test Role"
         role.role_type = "BuiltInRole"
-        role.status = "active"
+        role.status = RoleStatus.ACTIVE
         role.updated_on = None
 
         mock_app_cache = MagicMock()
@@ -47,6 +48,7 @@ class TestEnrichRoleWithCounts:
 
     def test_enrich_role_uses_cache(self):
         """Test enriching role uses cache when available."""
+        from azurerbac.core.constants import RoleStatus
         from azurerbac.matching.models import RoleNetPermissions
         from azurerbac.web.services.dashboard import enrich_role_with_counts
 
@@ -54,7 +56,7 @@ class TestEnrichRoleWithCounts:
         role.role_id = "test-role-id"
         role.role_name = "Test Role"
         role.role_type = "BuiltInRole"
-        role.status = "active"
+        role.status = RoleStatus.ACTIVE
         role.updated_on = None
 
         mock_app_cache = MagicMock()

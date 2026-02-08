@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field, fields
 from enum import Enum
 from typing import TYPE_CHECKING, NamedTuple
 
@@ -66,16 +66,6 @@ class ExpandedMissing(NamedTuple):
     total: int
 
 
-class RoleInfo(NamedTuple):
-    """Basic role information."""
-
-    role_id: str
-    role_name: str
-    description: str
-    permissions: list[Permission]
-    assignable_scope: str = "/"
-
-
 class PatternCacheKey(NamedTuple):
     """Cache key for pattern matching."""
 
@@ -117,10 +107,14 @@ class ClassifiedOperations:
     data: frozenset[str] = field(default_factory=frozenset)
     control_wildcards: frozenset[str] = field(default_factory=frozenset)
     data_wildcards: frozenset[str] = field(default_factory=frozenset)
+    all_requested: frozenset[str] = field(init=False, repr=False)
 
-    @property
-    def all_requested(self) -> frozenset[str]:
-        return self.control | self.data | self.control_wildcards | self.data_wildcards
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "all_requested",
+            self.control | self.data | self.control_wildcards | self.data_wildcards,
+        )
 
     def __len__(self) -> int:
         return (
@@ -140,19 +134,8 @@ class OperationSets:
 
     @classmethod
     def from_cache(cls, cache: CacheData) -> OperationSets:
-        """Build from cached frozensets (fast - O(1))."""
+        """Build from cached frozensets."""
         return cls(all_control=cache.control_ops_lowered, all_data=cache.data_ops_lowered)
-
-
-@dataclass(frozen=True, slots=True)
-class WildcardCoverage:
-    """Coverage information for a wildcard pattern."""
-
-    pattern: str
-    plane: str
-    covered_count: int
-    total_count: int
-    uncovered_samples: tuple[str, ...] = field(default_factory=tuple)
 
 
 @dataclass(slots=True)
@@ -179,10 +162,6 @@ class PlaneContext:
     wildcards: frozenset[str]
     wildcard_ops_map: dict[str, set[str]]
     cached_ops: set[str] | None
-
-    @property
-    def prefix(self) -> str:
-        return self.plane.value
 
     def make_key(self, pattern: str) -> WildcardKey:
         return self.plane.make_key(pattern)
@@ -215,6 +194,6 @@ class RoleMatch:
         return len(self.missing_operations) == 0
 
     def to_dict(self) -> JsonDict:
-        result = asdict(self)
+        result = {f.name: getattr(self, f.name) for f in fields(self)}
         result["is_full_match"] = self.is_full_match
         return result

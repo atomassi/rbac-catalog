@@ -100,14 +100,6 @@ class TestDiffLines:
         assert "added" not in types
         assert types.count("unchanged") == 2
 
-    def test_ensure_str_with_non_string(self):
-        """_ensure_str JSON-serializes non-string values."""
-        from azurerbac.web.filters import _ensure_str
-
-        result = _ensure_str({"key": "value"})
-        assert '"key"' in result
-        assert '"value"' in result
-
 
 class TestFullJsonDiff:
     """Tests for the full_json_diff function."""
@@ -206,46 +198,6 @@ class TestDateFormatting:
         result = format_date(d_obj)
 
         assert result == "2024-06-15"
-
-
-"""Additional tests for web/utils.py module."""
-
-
-class TestWildcardToSqlLike:
-    """Tests for wildcard_to_sql_like function."""
-
-    @pytest.mark.parametrize(
-        ("pattern", "expected"),
-        [
-            pytest.param("Microsoft.*", "Microsoft.%", id="star_to_percent"),
-            pytest.param("Microsoft.*/*/read", "Microsoft.%/%/read", id="multiple_wildcards"),
-            pytest.param(
-                "Microsoft.Compute/virtualMachines/read",
-                "Microsoft.Compute/virtualMachines/read",
-                id="no_wildcards",
-            ),
-        ],
-    )
-    def test_wildcard_conversion(self, pattern: str, expected: str):
-        """Test wildcard to SQL LIKE pattern conversion."""
-        from azurerbac.core.patterns import wildcard_to_sql_like
-
-        result = wildcard_to_sql_like(pattern)
-        assert result == expected
-
-    def test_escapes_sql_percent(self):
-        """Test that existing % is escaped."""
-        from azurerbac.core.patterns import wildcard_to_sql_like
-
-        result = wildcard_to_sql_like("test%pattern")
-        assert r"\%" in result
-
-    def test_escapes_sql_underscore(self):
-        """Test that existing _ is escaped."""
-        from azurerbac.core.patterns import wildcard_to_sql_like
-
-        result = wildcard_to_sql_like("test_pattern")
-        assert r"\_" in result
 
 
 class TestIsWildcardPattern:

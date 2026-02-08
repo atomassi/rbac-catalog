@@ -4,7 +4,7 @@ import logging
 
 from azurerbac.azure.http import authenticated_management_async_client, management_url
 from azurerbac.azure.models import RoleDefinition
-from azurerbac.settings import get_settings
+from azurerbac.settings import Settings
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +30,7 @@ async def fetch_builtin_roles() -> list[RoleDefinition]:
 
     Uses RBAC API if USE_RBAC_API=true, otherwise uses Resource Graph.
     """
-    if get_settings().use_rbac_api:
+    if Settings.get().use_rbac_api:
         return await fetch_builtin_roles_rbac_api()
     return await fetch_builtin_roles_resource_graph()
 

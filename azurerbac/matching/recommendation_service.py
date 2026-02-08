@@ -19,7 +19,6 @@ from azurerbac.matching.models import (
     PlaneContext,
     RoleCoverage,
     RoleEvaluationContext,
-    RoleInfo,
     RoleNetPermissions,
 )
 from azurerbac.matching.role_matching import (
@@ -41,51 +40,12 @@ def _get_default_cache() -> CacheData:
     return get_cache_service().cache
 
 
-class PlaneContextFactory:
-    """Factory for creating PlaneContext objects - eliminates duplication."""
-
-    __slots__ = ("control_wildcard_ops", "data_wildcard_ops", "op_sets")
-
-    def __init__(
-        self,
-        op_sets: OperationSets,
-        control_wildcard_ops: dict[str, set[str]],
-        data_wildcard_ops: dict[str, set[str]],
-    ) -> None:
-        self.op_sets = op_sets
-        self.control_wildcard_ops = control_wildcard_ops
-        self.data_wildcard_ops = data_wildcard_ops
-
-    def create(
-        self,
-        classified: ClassifiedOperations,
-        cached_coverage: RoleCoverage | None,
-    ) -> tuple[PlaneContext, PlaneContext]:
-        """Create PlaneContext objects for both planes."""
-        control = PlaneContext(
-            plane=Plane.CONTROL,
-            all_ops=self.op_sets.all_control,
-            wildcards=classified.control_wildcards,
-            wildcard_ops_map=self.control_wildcard_ops,
-            cached_ops=cached_coverage.control if cached_coverage else None,
-        )
-        data = PlaneContext(
-            plane=Plane.DATA,
-            all_ops=self.op_sets.all_data,
-            wildcards=classified.data_wildcards,
-            wildcard_ops_map=self.data_wildcard_ops,
-            cached_ops=cached_coverage.data if cached_coverage else None,
-        )
-        return control, data
-
-
 class RoleRecommendationService:
     """Service for recommending least-privilege roles based on requested operations."""
 
     __slots__ = (
         "_cache",
         "_ops_lowered_to_orig",
-        "_plane_factory",
         "control_wildcard_ops",
         "data_wildcard_ops",
         "op_sets",
@@ -107,7 +67,6 @@ class RoleRecommendationService:
         # Capture cache eagerly to ensure op_sets and _cache are always in sync.
         self._cache = cache if cache is not None else _get_default_cache()
 
-        # Use cached frozensets (O(1)) instead of rebuilding from operations (O(n))
         self.op_sets = OperationSets.from_cache(self._cache)
         self.requested_ops_data_flags = requested_ops_data_flags or {}
 
@@ -118,15 +77,27 @@ class RoleRecommendationService:
         self.control_wildcard_ops: dict[str, set[str]] = {}
         self.data_wildcard_ops: dict[str, set[str]] = {}
 
-        # Factory for creating plane contexts (eliminates duplication)
-        self._plane_factory = PlaneContextFactory(
-            self.op_sets, self.control_wildcard_ops, self.data_wildcard_ops
+    def _make_plane_contexts(
+        self,
+        classified: ClassifiedOperations,
+        cached_coverage: RoleCoverage | None,
+    ) -> tuple[PlaneContext, PlaneContext]:
+        """Create PlaneContext objects for control and data planes."""
+        control = PlaneContext(
+            plane=Plane.CONTROL,
+            all_ops=self.op_sets.all_control,
+            wildcards=classified.control_wildcards,
+            wildcard_ops_map=self.control_wildcard_ops,
+            cached_ops=cached_coverage.control if cached_coverage else None,
         )
-
-    @property
-    def _caches(self) -> CacheData:
-        """Get the cache data (captured at construction time)."""
-        return self._cache
+        data = PlaneContext(
+            plane=Plane.DATA,
+            all_ops=self.op_sets.all_data,
+            wildcards=classified.data_wildcards,
+            wildcard_ops_map=self.data_wildcard_ops,
+            cached_ops=cached_coverage.data if cached_coverage else None,
+        )
+        return control, data
 
     def restore_original_casing(self, operations: set[str]) -> list[str]:
         """Restore original casing for operation names."""
@@ -137,26 +108,13 @@ class RoleRecommendationService:
         return self._cache.role_definitions
 
     def get_cache_stats(self) -> CacheStats:
-        """Get current cache entry counts for logging.
-
-        Returns:
-            CacheStats with current entry counts.
-        """
-        caches = self._caches
+        """Get current cache entry counts."""
         return CacheStats(
-            pattern_match=len(caches.pattern_match),
-            partial_coverage=len(caches.partial_coverage),
-            role_coverage=len(caches.role_coverage),
-            wildcard_count=len(caches.wildcard_count),
+            pattern_match=len(self._cache.pattern_match),
+            partial_coverage=len(self._cache.partial_coverage),
+            role_coverage=len(self._cache.role_coverage),
+            wildcard_count=len(self._cache.wildcard_count),
         )
-
-    def _get_plane_contexts(
-        self,
-        classified: ClassifiedOperations,
-        cached_coverage: RoleCoverage | None,
-    ) -> tuple[PlaneContext, PlaneContext]:
-        """Create PlaneContext objects for control and data planes."""
-        return self._plane_factory.create(classified, cached_coverage)
 
     def classify_operations(
         self,
@@ -190,12 +148,7 @@ class RoleRecommendationService:
         control_wildcards: set[str],
         data_wildcards: set[str],
     ) -> None:
-        """Classify a single operation into the appropriate bucket.
-
-        Extracted for clarity and testability (SRP).
-        Note: Operations are stored lowered for case-insensitive matching
-        with RoleCoverage.
-        """
+        """Classify a single operation into the appropriate bucket."""
         is_wildcard = is_wildcard_pattern(op)
         op_lowered = op.lower()
 
@@ -328,7 +281,7 @@ class RoleRecommendationService:
 
         Uses PlaneContext to eliminate control/data code duplication.
         """
-        control_plane, data_plane = self._get_plane_contexts(classified, cached_coverage)
+        control_plane, data_plane = self._make_plane_contexts(classified, cached_coverage)
 
         # Check explicit operations
         ctx.matched_ops.update(classified.control & cached_coverage.control)
@@ -433,7 +386,7 @@ class RoleRecommendationService:
     ) -> int:
         """Count coverage for a single wildcard pattern in one plane."""
         key = plane.make_key(op)
-        pattern_ops = get_matching_operations(op, all_ops, plane, caches=self._caches)
+        pattern_ops = get_matching_operations(op, all_ops, plane, caches=self._cache)
 
         if key in ctx.wildcard_partial_coverage:
             return len(cached_ops & pattern_ops)
@@ -448,7 +401,7 @@ class RoleRecommendationService:
         ctx: RoleEvaluationContext,
     ) -> RoleNetPermissions:
         """Calculate control and data plane permission counts."""
-        cached_perms = self._caches.role_net_permissions.get(ctx.role_id)
+        cached_perms = self._cache.role_net_permissions.get(ctx.role_id)
         if cached_perms:
             return cached_perms
 
@@ -461,29 +414,29 @@ class RoleRecommendationService:
                 perm.not_actions,
                 self.op_sets.all_control,
                 Plane.CONTROL,
-                caches=self._caches,
+                caches=self._cache,
             )
             data_count += count_net_permissions(
                 perm.data_actions,
                 perm.not_data_actions,
                 self.op_sets.all_data,
                 Plane.DATA,
-                caches=self._caches,
+                caches=self._cache,
             )
 
         return RoleNetPermissions(control_count, data_count)
 
     def get_cached_coverage(self, role_id: str) -> RoleCoverage | None:
         """Get cached coverage for a role, if available."""
-        return self._caches.role_coverage.get(role_id)
+        return self._cache.role_coverage.get(role_id)
 
     def is_high_privilege(self, role_id: str) -> bool:
-        """Check if a role is high-privilege (O(1) cache lookup).
+        """Check if a role is high-privilege.
 
         A role is high-privilege if it can assign ANY role without condition.
         Returns False for roles not in cache (ad-hoc/test roles).
         """
-        return role_id in self._caches.high_privilege_roles
+        return role_id in self._cache.high_privilege_roles
 
     def expand_missing_operations(
         self,
@@ -569,7 +522,7 @@ class RoleRecommendationService:
         Uses heapq.nsmallest() instead of sorted().
         """
         key = plane.make_key(op)
-        pattern_ops = get_matching_operations(op, all_ops, plane, caches=self._caches)
+        pattern_ops = get_matching_operations(op, all_ops, plane, caches=self._cache)
 
         if key in ctx.wildcard_partial_coverage:
             covered = cached_ops & pattern_ops
@@ -608,21 +561,3 @@ class RoleRecommendationService:
                 # Extract pattern from key (e.g., "ctrl:pattern" -> "pattern")
                 pattern = key.split(":", 1)[1] if ":" in key else key
                 ctx.matched_ops.add(pattern)
-
-    @staticmethod
-    def is_builtin_role(role: RoleDefinition) -> bool:
-        """Check if a role is a built-in role."""
-        return role.is_builtin
-
-    @staticmethod
-    def extract_role_info(role: RoleDefinition) -> RoleInfo:
-        """Extract role information from a RoleDefinition."""
-        scopes = role.properties.assignable_scopes
-        assignable_scope = scopes[0] if scopes else "/"
-        return RoleInfo(
-            role_id=role.role_id,
-            role_name=role.role_name,
-            description=role.description,
-            permissions=role.properties.permissions,
-            assignable_scope=assignable_scope,
-        )

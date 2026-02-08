@@ -29,9 +29,9 @@ from urllib.parse import quote
 
 from cachetools import LRUCache
 
-from azurerbac.cache.utils import create_lru_cache, sitemap_url
 from azurerbac.core.constants import POPULAR_COMPARE_PAIRS, RoleStatus
 from azurerbac.core.types import JsonDict
+from azurerbac.core.utils import content_hash
 from azurerbac.matching.models import (
     CoverageResult,
     PartialCoverageCacheKey,
@@ -44,6 +44,22 @@ from azurerbac.matching.models import (
 if TYPE_CHECKING:
     from azurerbac.analytics.models import AnalyticsData
     from azurerbac.azure.models import OperationData, RoleDefinition
+
+
+def sitemap_url(
+    loc: str,
+    lastmod: str,
+    changefreq: str = "weekly",
+    priority: float = 0.5,
+) -> str:
+    """Generate a sitemap URL XML entry."""
+    return f"""  <url>
+    <loc>{loc}</loc>
+    <lastmod>{lastmod}</lastmod>
+    <changefreq>{changefreq}</changefreq>
+    <priority>{priority}</priority>
+  </url>"""
+
 
 logger = logging.getLogger(__name__)
 
@@ -96,6 +112,14 @@ class CachedChangeEvent:
     summary: str | None = None
     diff_json: JsonDict | None = None
     role_json: JsonDict | None = None
+
+    @property
+    def effective_timestamp(self) -> dt.datetime:
+        """Best available timestamp (azure_updated_on > scan_timestamp > UTC min)."""
+        ts = self.azure_updated_on or self.scan_timestamp
+        if ts is None:
+            return dt.datetime.min.replace(tzinfo=dt.UTC)
+        return ts if ts.tzinfo else ts.replace(tzinfo=dt.UTC)
 
 
 @dataclass(slots=True)
@@ -185,9 +209,9 @@ class Sitemap:
 </urlset>"""
 
         logger.debug(
-            "Sitemap built: %d URLs, %d bytes",
+            "Sitemap built: %d URLs, %d chars",
             len(urls),
-            len(content.encode("utf-8")),
+            len(content),
         )
 
         return cls(content=content, built_at=dt.datetime.now(dt.UTC))
@@ -283,22 +307,22 @@ class RequestCaches:
     """
 
     role_pages: LRUCache[str, Any] = field(
-        default_factory=lambda: create_lru_cache(_ROLE_PAGES_CACHE_MAX_SIZE)
+        default_factory=lambda: LRUCache(maxsize=_ROLE_PAGES_CACHE_MAX_SIZE)
     )
     operation_pages: LRUCache[str, Any] = field(
-        default_factory=lambda: create_lru_cache(_OPERATION_PAGES_CACHE_MAX_SIZE)
+        default_factory=lambda: LRUCache(maxsize=_OPERATION_PAGES_CACHE_MAX_SIZE)
     )
     allowing_roles: LRUCache[str, Any] = field(
-        default_factory=lambda: create_lru_cache(_ALLOWING_ROLES_CACHE_MAX_SIZE)
+        default_factory=lambda: LRUCache(maxsize=_ALLOWING_ROLES_CACHE_MAX_SIZE)
     )
     filtered_events: LRUCache[str, Any] = field(
-        default_factory=lambda: create_lru_cache(_FILTERED_EVENTS_CACHE_MAX_SIZE)
+        default_factory=lambda: LRUCache(maxsize=_FILTERED_EVENTS_CACHE_MAX_SIZE)
     )
     related_roles: LRUCache[str, Any] = field(
-        default_factory=lambda: create_lru_cache(_RELATED_ROLES_CACHE_MAX_SIZE)
+        default_factory=lambda: LRUCache(maxsize=_RELATED_ROLES_CACHE_MAX_SIZE)
     )
     comparisons: LRUCache[str, Any] = field(
-        default_factory=lambda: create_lru_cache(_COMPARISON_CACHE_MAX_SIZE)
+        default_factory=lambda: LRUCache(maxsize=_COMPARISON_CACHE_MAX_SIZE)
     )
 
 
@@ -449,6 +473,23 @@ class CacheData:
         return self.analysis.role_coverage
 
     @cached_property
+    def events_by_role(self) -> dict[str, list[CachedChangeEvent]]:
+        """Index of change events keyed by role_id (populated lazily)."""
+        index: dict[str, list[CachedChangeEvent]] = {}
+        for event in self.all_change_events:
+            index.setdefault(event.role_id, []).append(event)
+        return index
+
+    @cached_property
+    def role_name_to_id(self) -> dict[str, str]:
+        """Index of lowered role_name -> role_id."""
+        return {
+            role.role_name.lower(): role_id
+            for role_id, role in self.source.roles_by_id.items()
+            if role.role_name
+        }
+
+    @cached_property
     def role_net_permissions(self) -> dict[str, RoleNetPermissions]:
         """Derived from role_coverage: count of control/data ops per role."""
         return {
@@ -520,7 +561,6 @@ class CacheData:
 
 def compute_roles_hash(roles: list[RoleDefinition]) -> str:
     """Compute hash of role data for change detection."""
-    from azurerbac.core.utils import content_hash
 
     def role_key(role: RoleDefinition) -> str:
         updated = role.properties.updated_on.isoformat() if role.properties.updated_on else ""
@@ -531,8 +571,6 @@ def compute_roles_hash(roles: list[RoleDefinition]) -> str:
 
 def compute_operations_hash(operations: list[OperationData]) -> str:
     """Compute hash of operation data for change detection."""
-    from azurerbac.core.utils import content_hash
-
     return content_hash("|".join(sorted(op.name for op in operations)))
 
 

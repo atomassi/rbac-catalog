@@ -96,13 +96,16 @@ async def redirect_old_domain(
     if request.url.path in HEALTH_PATHS:
         return await call_next(request)
 
-    host = request.headers.get("x-forwarded-host", request.headers.get("host", "")).lower()
+    raw_host = request.headers.get("x-forwarded-host") or request.headers.get("host")
+    if not raw_host:
+        return await call_next(request)
 
-    if any(old in host for old in OLD_DOMAINS):
-        new_url = f"https://{NEW_DOMAIN}{request.url.path}"
-        if request.url.query:
-            new_url += f"?{request.url.query}"
+    # Proxy chain first entry, then strip port
+    client_host = raw_host.split(",", 1)[0].strip().lower()
+    domain = client_host.partition(":")[0]
 
-        return RedirectResponse(url=new_url, status_code=301)
+    if domain in OLD_DOMAINS:
+        new_url = request.url.replace(scheme="https", netloc=NEW_DOMAIN)
+        return RedirectResponse(url=str(new_url), status_code=301)
 
     return await call_next(request)

@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
-
-from azurerbac.core.types import JsonDict
+from dataclasses import dataclass
 
 
 @dataclass(slots=True)
@@ -14,9 +12,6 @@ class ScanResult:
     created: int
     updated: int
     total: int
-
-    def to_dict(self) -> JsonDict:
-        return asdict(self)
 
 
 @dataclass(slots=True)

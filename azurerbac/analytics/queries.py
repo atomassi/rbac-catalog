@@ -5,16 +5,10 @@ from __future__ import annotations
 import datetime as dt
 import logging
 from collections import Counter
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from sqlalchemy import and_, case, distinct, func, select
 
-from azurerbac.analytics.constants import (
-    DAILY_CHANGES_DAYS,
-    TOP_N_PROVIDERS,
-    TOP_N_ROLES,
-    VOLATILE_THRESHOLD,
-)
 from azurerbac.analytics.models import (
     AllTimeStats,
     DailyChanges,
@@ -40,6 +34,11 @@ if TYPE_CHECKING:
     from azurerbac.matching.models import RoleNetPermissions
 
 logger = logging.getLogger(__name__)
+
+VOLATILE_THRESHOLD: Final = 3
+TOP_N_ROLES: Final = 10
+TOP_N_PROVIDERS: Final = 15
+DAILY_CHANGES_DAYS: Final = 180
 
 
 async def fetch_all_time_stats(session: AsyncSession) -> AllTimeStats:
@@ -384,7 +383,6 @@ def compute_top_providers(
     result = [
         ProviderStats(
             provider=provider or "Unknown",
-            role_count=0,
             operation_count=count,
         )
         for provider, count in provider_counts.most_common(limit)

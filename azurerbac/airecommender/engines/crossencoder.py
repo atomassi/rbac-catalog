@@ -8,10 +8,11 @@ achieving 10-15% higher accuracy than bi-encoders alone.
 from __future__ import annotations
 
 import logging
+import math
 from typing import Any, Final, override
 
 from azurerbac.airecommender.engines.base import BaseRecommenderEngine, RankedRole
-from azurerbac.airecommender.engines.common import ScoreNormalizer
+from azurerbac.airecommender.engines.common import normalize_candidates
 from azurerbac.airecommender.engines.config import CROSSENCODER_THRESHOLDS, CROSSENCODER_WEIGHTS
 from azurerbac.airecommender.engines.registry import EngineRegistry
 from azurerbac.airecommender.modes import RecommenderMode
@@ -76,7 +77,7 @@ class CrossEncoderEngine(BaseRecommenderEngine):
         candidates = self._filter_min_confidence(
             candidates, threshold=CROSSENCODER_THRESHOLDS.min_confidence
         )
-        candidates = ScoreNormalizer.normalize_candidates(candidates[:top_k])
+        candidates = normalize_candidates(candidates[:top_k])
 
         self._log_complete(candidates, show_top=6)
         return candidates
@@ -114,7 +115,7 @@ class CrossEncoderEngine(BaseRecommenderEngine):
                 # Cross-encoder scores can be negative, normalize to 0-1
                 raw_score = float(ce_scores[i])
                 # Sigmoid-like normalization for cross-encoder scores
-                normalized = 1 / (1 + 2.718 ** (-raw_score))
+                normalized = 1 / (1 + math.exp(-raw_score))
                 candidate.llm_score = normalized  # Reuse llm_score field for CE score
                 # Combine bi-encoder and cross-encoder scores
                 # Weight cross-encoder higher as it's more accurate

@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
 from azurerbac.core.diffing import RoleDiff
 from azurerbac.core.enums import SortOrder
-from azurerbac.core.types import JsonDict
+from azurerbac.core.patterns import (
+    expand_patterns_to_operations,
+    is_wildcard_pattern,
+    matches_pattern,
+)
 from azurerbac.matching.models import RoleCoverage
 
 if TYPE_CHECKING:
@@ -78,16 +82,10 @@ class PaginationParams:
 
     page: int
     page_size: int
-    sort: str | SortField = SortField.NAME
-    order: str | SortOrder = SortOrder.ASC
 
     @property
     def offset(self) -> int:
         return (self.page - 1) * self.page_size
-
-    @property
-    def sort_field(self) -> SortField:
-        return SortField.from_string(str(self.sort))
 
 
 class RawPermissions:
@@ -135,8 +133,6 @@ class RawPermissions:
     @property
     def has_wildcards(self) -> bool:
         """Check if any patterns contain wildcards."""
-        from azurerbac.core.patterns import is_wildcard_pattern
-
         return any(is_wildcard_pattern(p) or p == "*" for p in self.all_patterns)
 
     @property
@@ -154,8 +150,6 @@ class RawPermissions:
 
         This matters when one block excludes an action that another block grants.
         """
-        from azurerbac.core.patterns import expand_patterns_to_operations
-
         control_effective: set[str] = set()
         data_effective: set[str] = set()
 
@@ -283,8 +277,6 @@ class RolePermissionAnalyzer:
         self, operation_name: str, *, is_data_action: bool
     ) -> PatternMatchResult:
         """Find pattern granting an operation."""
-        from azurerbac.core.patterns import matches_pattern
-
         operation_lower = operation_name.lower()
 
         for perm in self.permissions:
@@ -311,15 +303,19 @@ class PaginationInfo:
     end_idx: int
 
     @staticmethod
+    def count_pages(total_items: int, page_size: int) -> int:
+        """Compute total page count."""
+        return max(1, (total_items + page_size - 1) // page_size)
+
+    @staticmethod
     def compute(total_items: int, page: int, page_size: int) -> PaginationInfo:
         """Compute pagination values."""
-        total_pages = max(1, (total_items + page_size - 1) // page_size)
-        # Clamp page to available pages
-        clamped_page = min(page, total_pages)
+        tp = PaginationInfo.count_pages(total_items, page_size)
+        clamped_page = min(page, tp)
         start_idx = (clamped_page - 1) * page_size
         end_idx = start_idx + page_size
         return PaginationInfo(
-            total_pages=total_pages,
+            total_pages=tp,
             start_idx=start_idx,
             end_idx=end_idx,
         )
@@ -373,10 +369,6 @@ class PermissionBlockView:
         """Check if block has data plane permissions."""
         return bool(self.data_actions or self.not_data_actions)
 
-    def to_dict(self) -> JsonDict:
-        """Convert to dict for template rendering."""
-        return asdict(self)
-
 
 @dataclass(slots=True)
 class RoleEffectivePermissions:
@@ -393,12 +385,6 @@ class RoleEffectivePermissions:
     raw_data_actions: list[str]
     permission_blocks: list[PermissionBlockView]
 
-    def to_dict(self) -> JsonDict:
-        """Convert to dict for template rendering."""
-        result = asdict(self)
-        result["permission_blocks"] = [b.to_dict() for b in self.permission_blocks]
-        return result
-
 
 @dataclass(slots=True)
 class EnrichedChangeEvent:
@@ -411,19 +397,6 @@ class EnrichedChangeEvent:
     diff: RoleDiff | None
     diff_pretty: str
     role_json_pretty: str
-
-    def to_dict(self) -> JsonDict:
-        """Convert to dict for template rendering."""
-        result: JsonDict = {
-            "scan_timestamp": self.scan_timestamp,
-            "azure_updated_on": self.azure_updated_on,
-            "event_type": self.event_type,
-            "summary": self.summary,
-            "diff": self.diff.to_dict() if self.diff else None,
-            "diff_pretty": self.diff_pretty,
-            "role_json_pretty": self.role_json_pretty,
-        }
-        return result
 
 
 @dataclass(slots=True)
@@ -461,10 +434,6 @@ class RoleAllowingOperation:
             condition_text=match_result.condition_text,
         )
 
-    def to_dict(self) -> JsonDict:
-        """Convert to dict for template rendering."""
-        return asdict(self)
-
 
 @dataclass(frozen=True, slots=True)
 class RelatedRole:
@@ -495,10 +464,6 @@ class RoleWithCounts:
     actions_count: int
     data_actions_count: int
 
-    def to_dict(self) -> JsonDict:
-        """Convert to dict for template rendering."""
-        return asdict(self)
-
 
 @dataclass(slots=True)
 class DashboardSummary:
@@ -508,10 +473,6 @@ class DashboardSummary:
     total_operations: int
     last_scan: datetime | None
     first_scan: datetime | None
-
-    def to_dict(self) -> JsonDict:
-        """Convert to dict for template rendering."""
-        return asdict(self)
 
 
 @dataclass(slots=True)

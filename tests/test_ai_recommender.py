@@ -111,7 +111,7 @@ class TestRecommenderMode:
     )
     def test_is_valid(self, string_val, expected):
         """Test mode validation."""
-        assert RecommenderMode.is_valid(string_val) is expected
+        assert (RecommenderMode.from_string(string_val) is not None) is expected
 
     @pytest.mark.parametrize(
         "mode,requires_llm",

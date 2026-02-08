@@ -6,10 +6,13 @@ import heapq
 import logging
 from collections.abc import Set as AbstractSet
 from functools import lru_cache
-from itertools import islice
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING
 
-from azurerbac.core.constants import MAX_UNCOVERED_SAMPLE
+from azurerbac.core.constants import (
+    HIGH_PRIVILEGE_OPERATION,
+    HIGH_PRIVILEGE_ROLE_IDS,
+    MAX_UNCOVERED_SAMPLE,
+)
 from azurerbac.core.patterns import is_wildcard_pattern, matches_pattern
 from azurerbac.matching.models import (
     CoverageResult,
@@ -26,8 +29,6 @@ logger = logging.getLogger(__name__)
 
 type OperationName = str
 type Pattern = str
-
-_EXTENDED_SAMPLE_SIZE: Final[int] = 100
 
 
 def _get_cache(caches: CacheData | None = None) -> CacheData:
@@ -114,12 +115,7 @@ def pattern_covers_pattern(role_pattern: str, requested_pattern: str) -> bool:
 
 def operation_matches_any_pattern(operation: OperationName, patterns: list[Pattern]) -> bool:
     """Check if an operation matches any of the given patterns."""
-    for pattern in patterns:
-        if pattern == "*":
-            return True
-        if matches_pattern(operation, pattern):
-            return True
-    return False
+    return any(p == "*" or matches_pattern(operation, p) for p in patterns)
 
 
 def check_operation_allowed(
@@ -153,7 +149,7 @@ def get_matching_operations(
     This is the core optimization - we cache the result of pattern matching
     so subsequent calls with the same pattern are instant.
 
-    Note: Returns lowered operation names for O(1) membership tests.
+    Note: Returns lowered operation names.
     Expects all_operations to contain lowered names.
 
     Args:
@@ -175,101 +171,6 @@ def get_matching_operations(
         cache.pattern_match[key] = matching
 
     return matching
-
-
-def has_any_wildcard_coverage(
-    requested_pattern: str,
-    actions: list[str],
-    not_actions: list[str],
-    all_operations: AbstractSet[str],
-    plane: Plane | None = None,
-    *,
-    caches: CacheData | None = None,
-) -> bool:
-    """Fast check if actions provide ANY coverage for a wildcard pattern."""
-    matching_ops = get_matching_operations(requested_pattern, all_operations, plane, caches=caches)
-    if not matching_ops:
-        return False
-
-    # Check extended sample for any allowed operation (islice avoids list conversion)
-    sample = islice(matching_ops, _EXTENDED_SAMPLE_SIZE)
-    return any(check_operation_allowed(op, actions, not_actions) for op in sample)
-
-
-def check_wildcard_operation_allowed(
-    requested_pattern: str,
-    actions: list[str],
-    not_actions: list[str],
-) -> bool:
-    """Check if a wildcard pattern is fully covered by the given actions/notActions.
-
-    A wildcard pattern is covered if:
-    1. At least one action pattern covers the entire requested pattern
-    2. No notAction pattern excludes any part of the requested pattern
-
-    This is more conservative - we only say it's covered if the role
-    definitely grants all operations matching the requested pattern.
-    """
-    # Check if any action pattern covers the requested pattern
-    if not any(pattern_covers_pattern(action, requested_pattern) for action in actions):
-        return False
-
-    # Check if any notAction might exclude parts of the requested pattern
-    # If a notAction overlaps with the requested pattern, we can't guarantee full coverage
-
-    # Pre-compute requested pattern parts for overlap check (avoid repeated work in loop)
-    req_is_wildcard = is_wildcard_pattern(requested_pattern)
-    req_suffix = ""
-    req_prefix = ""
-    if req_is_wildcard:
-        req_parts = requested_pattern.split("*")
-        req_suffix = req_parts[-1].lower()  # e.g., "/read"
-        req_prefix = req_parts[0].lower()
-
-    for not_action in not_actions:
-        # If notAction covers the requested pattern, it's excluded
-        if pattern_covers_pattern(not_action, requested_pattern):
-            return False
-        # If notAction could match some operations in the requested pattern
-        # we're conservative and say it's not fully covered
-        if req_is_wildcard and is_wildcard_pattern(not_action):
-            # Check if patterns could possibly overlap (match same operations)
-            # For patterns like */read and Microsoft.Authorization/*/Delete:
-            # - */read matches anything ending in /read
-            # - Microsoft.Authorization/*/Delete matches Authorization resources with /Delete
-            # These don't overlap because the suffixes are different
-
-            # Get the suffix after the last wildcard and prefix before first wildcard
-            not_parts = not_action.split("*")
-            not_suffix = not_parts[-1].lower()  # e.g., "/delete"
-            not_prefix = not_parts[0].lower()
-
-            # Patterns overlap if:
-            # 1. One suffix is empty OR suffixes are compatible (one could match the other)
-            # 2. AND one prefix is empty OR prefixes are compatible
-
-            # Check suffix compatibility
-            suffixes_compatible = (
-                not req_suffix
-                or not not_suffix  # One is empty (like * pattern)
-                or req_suffix == not_suffix  # Same suffix
-                or req_suffix.endswith(not_suffix)
-                or not_suffix.endswith(req_suffix)
-            )
-
-            # Check prefix compatibility
-            prefixes_compatible = (
-                not req_prefix
-                or not not_prefix  # One is empty
-                or req_prefix.startswith(not_prefix)
-                or not_prefix.startswith(req_prefix)
-            )
-
-            # Only consider patterns overlapping if BOTH prefix and suffix are compatible
-            if suffixes_compatible and prefixes_compatible:
-                return False
-
-    return True
 
 
 def _compute_covered_operations(
@@ -324,32 +225,7 @@ def count_wildcard_partial_coverage(
     *,
     caches: CacheData | None = None,
 ) -> CoverageResult:
-    """Count operations matching a wildcard pattern granted by the actions.
-
-    Args:
-        requested_pattern: Wildcard operation pattern to evaluate coverage for,
-            for example ``"Microsoft.Storage/*"`` or ``"*/read"``.
-        actions: Action patterns granted by the role (the role's ``actions``).
-        not_actions: Exclusion patterns that remove operations from the granted
-            set (the role's ``notActions``).
-        all_operations: Full set of known operation names used to expand
-            wildcard patterns.
-        plane: Optional plane filter that restricts matching to a specific
-            plane (for example, control or data). If ``None``, all planes are
-            considered.
-        max_uncovered_sample: Maximum number of uncovered operations to include
-            in the sample list for the result. This does not affect counts,
-            only how many example operation names are returned.
-        caches: Optional cache data override. When provided, it is used for
-            operation and partial coverage caching instead of the global cache
-            service.
-
-    Returns:
-        CoverageResult: Coverage statistics for the requested pattern,
-        including the number of covered operations, total matching operations,
-        number of uncovered operations, and a sample list of uncovered
-        operation names (up to ``max_uncovered_sample``).
-    """
+    """Count operations matching a wildcard pattern that are granted by the given actions."""
     cache = _get_cache(caches)
     partial_cache_key = PartialCoverageCacheKey.build(
         requested_pattern, plane, actions, not_actions
@@ -435,18 +311,7 @@ def count_net_permissions(
     *,
     caches: CacheData | None = None,
 ) -> int:
-    """Count the net number of operations granted (actions minus notActions).
-
-    Args:
-        actions: List of action patterns that grant access.
-        not_actions: List of notAction patterns that deny access.
-        all_operations: Set of all valid operations.
-        plane: Optional plane for cache lookups (CONTROL or DATA).
-        caches: Optional cache container.
-
-    Returns:
-        Net count of granted operations.
-    """
+    """Count the net number of operations granted (actions minus notActions)."""
     if not actions:
         return 0
 
@@ -479,19 +344,8 @@ def count_net_permissions(
 def is_high_privilege_role(role: RoleDefinition) -> bool:
     """Check if a role is high-privilege based on its ID or effective permissions.
 
-    A role is high-privilege if:
-    1. It's a well-known high-privilege role (Owner, Contributor, User Access Administrator)
-    2. OR it grants Microsoft.Authorization/roleAssignments/write in any permission block
-       WITHOUT a condition that constrains roleAssignments.
-
-    Args:
-        role: RoleDefinition object to check.
-
-    Returns:
-        True if the role can assign ANY role without restriction.
+    High-privilege: well-known role IDs OR grants roleAssignments/write without ABAC condition.
     """
-    from azurerbac.core.constants import HIGH_PRIVILEGE_OPERATION, HIGH_PRIVILEGE_ROLE_IDS
-
     # Fast path: check well-known high-privilege role IDs
     if role.role_id in HIGH_PRIVILEGE_ROLE_IDS:
         return True

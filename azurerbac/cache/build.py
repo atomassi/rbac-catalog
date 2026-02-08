@@ -32,8 +32,6 @@ from azurerbac.core.constants import POPULAR_COMPARE_PAIRS, RoleStatus
 from azurerbac.core.patterns import is_wildcard_pattern, matches_pattern
 from azurerbac.core.utils import truncate_microseconds
 from azurerbac.matching.models import (
-    CoverageResult,
-    PartialCoverageCacheKey,
     Plane,
     RoleCoverage,
 )
@@ -128,6 +126,36 @@ def _collect_role_patterns(roles: list[RoleDefinition]) -> set[str]:
     return patterns
 
 
+def _compute_plane_effective(
+    granted_patterns: list[str],
+    excluded_patterns: list[str],
+    all_ops: set[str],
+    plane: Plane,
+    pattern_match: dict[PatternCacheKey, set[str]],
+    ops_lower_to_orig: dict[str, str],
+) -> set[str]:
+    """Compute effective ops for one plane in one permission block."""
+    granted: set[str] = set()
+    excluded: set[str] = set()
+    _add_operations_for_patterns(
+        granted,
+        granted_patterns,
+        all_ops=all_ops,
+        plane=plane,
+        pattern_match=pattern_match,
+        ops_lower_to_orig=ops_lower_to_orig,
+    )
+    _add_operations_for_patterns(
+        excluded,
+        excluded_patterns,
+        all_ops=all_ops,
+        plane=plane,
+        pattern_match=pattern_match,
+        ops_lower_to_orig=ops_lower_to_orig,
+    )
+    return granted - excluded
+
+
 def _compute_role_coverage(
     role: RoleDefinition,
     all_control_ops: set[str],
@@ -145,47 +173,22 @@ def _compute_role_coverage(
     data_effective: set[str] = set()
 
     for perm in role.properties.permissions:
-        # Control plane: compute this block's effective ops
-        block_control_granted: set[str] = set()
-        block_control_excluded: set[str] = set()
-        _add_operations_for_patterns(
-            block_control_granted,
+        control_effective |= _compute_plane_effective(
             perm.actions,
-            all_ops=all_control_ops,
-            plane=Plane.CONTROL,
-            pattern_match=pattern_match,
-            ops_lower_to_orig=control_ops_lower_to_orig,
-        )
-        _add_operations_for_patterns(
-            block_control_excluded,
             perm.not_actions,
-            all_ops=all_control_ops,
-            plane=Plane.CONTROL,
-            pattern_match=pattern_match,
-            ops_lower_to_orig=control_ops_lower_to_orig,
+            all_control_ops,
+            Plane.CONTROL,
+            pattern_match,
+            control_ops_lower_to_orig,
         )
-        control_effective |= block_control_granted - block_control_excluded
-
-        # Data plane: compute this block's effective ops
-        block_data_granted: set[str] = set()
-        block_data_excluded: set[str] = set()
-        _add_operations_for_patterns(
-            block_data_granted,
+        data_effective |= _compute_plane_effective(
             perm.data_actions,
-            all_ops=all_data_ops,
-            plane=Plane.DATA,
-            pattern_match=pattern_match,
-            ops_lower_to_orig=data_ops_lower_to_orig,
-        )
-        _add_operations_for_patterns(
-            block_data_excluded,
             perm.not_data_actions,
-            all_ops=all_data_ops,
-            plane=Plane.DATA,
-            pattern_match=pattern_match,
-            ops_lower_to_orig=data_ops_lower_to_orig,
+            all_data_ops,
+            Plane.DATA,
+            pattern_match,
+            data_ops_lower_to_orig,
         )
-        data_effective |= block_data_granted - block_data_excluded
 
     return RoleCoverage(control_effective, data_effective)
 
@@ -214,29 +217,8 @@ def precompute_all(
     first_scan: datetime | None = None,
     analytics: AnalyticsData | None = None,
 ) -> CacheData:
-    """Pre-compute ALL caches and return complete CacheData.
-
-    Precomputes:
-    1. Common wildcard pattern matches (*/read, */write, etc.)
-    2. All unique action patterns found in roles
-    3. Role coverage data (which operations each role grants)
-    4. Role net permission counts
-    5. Prefix indexes for fast lookup
-
-    Args:
-        roles: List of RoleDefinition Pydantic models
-        all_operations: List of OperationData models
-        metadata: Optional CacheMetadata for versioning/invalidation.
-        roles_by_id: Optional dict of roles by ID.
-        all_change_events: Optional list of change events.
-        last_scan: Optional timestamp.
-        first_scan: Optional timestamp.
-        analytics: Optional pre-computed analytics data.
-
-    Returns:
-        Complete CacheData with all computed fields.
-    """
-    start = time.time()
+    """Pre-compute all caches and return complete CacheData."""
+    start = time.perf_counter()
     logger.debug(
         "Precomputing caches for %d roles, %d operations...",
         len(roles),
@@ -250,10 +232,8 @@ def precompute_all(
 
     # Build computed data into temporary dicts
     pattern_match: dict[PatternCacheKey, set[str]] = {}
-    wildcard_count: dict[PatternCacheKey, int] = {}
     operations_by_prefix_computed: dict[Plane, dict[str, set[str]]] = {}
     role_coverage: dict[str, RoleCoverage] = {}
-    partial_coverage: dict[PartialCoverageCacheKey, CoverageResult] = {}
 
     # Separate control and data plane operations
     all_control_ops = {op.name for op in all_operations if not op.is_data_action}
@@ -341,19 +321,19 @@ def precompute_all(
         ),
         computed=ComputedCaches(
             pattern_match=pattern_match,
-            partial_coverage=partial_coverage,
-            wildcard_count=wildcard_count,
         ),
         content=PrerenderedContent(
             analytics=analytics,
         ),
     )
 
-    elapsed = time.time() - start
+    elapsed = time.perf_counter() - start
     logger.info(
-        f"Precomputed all caches in {elapsed:.2f}s: "
-        f"{len(all_action_patterns)} patterns, {len(role_coverage)} roles, "
-        f"{len(pattern_match)} pattern matches"
+        "Precomputed all caches in %.2fs: %d patterns, %d roles, %d pattern matches",
+        elapsed,
+        len(all_action_patterns),
+        len(role_coverage),
+        len(pattern_match),
     )
 
     return new_cache
@@ -371,12 +351,12 @@ async def build_from_db(session: AsyncSession) -> CacheData:
     # Fetch ALL roles (active and deleted) for roles_by_id index
     async with TimedDbQuery("fetch_all_roles") as timer:
         all_roles_result = await session.execute(select(Role))
-        all_role_snapshots = list(all_roles_result.scalars().all())
-        timer.rows = len(all_role_snapshots)
+        all_roles = list(all_roles_result.scalars().all())
+        timer.rows = len(all_roles)
 
     # Fetch active roles for role_jsons (used by recommender)
-    active_roles = [r for r in all_role_snapshots if r.status == RoleStatus.ACTIVE]
-    logger.debug(f"Found {len(active_roles)} active roles out of {len(all_role_snapshots)} total")
+    active_roles = [r for r in all_roles if r.status == RoleStatus.ACTIVE]
+    logger.debug("Found %d active roles out of %d total", len(active_roles), len(all_roles))
 
     # Fetch all operations
     async with TimedDbQuery("fetch_all_operations") as timer:
@@ -421,7 +401,7 @@ async def build_from_db(session: AsyncSession) -> CacheData:
 
     # Build roles_by_id index with CachedRole objects
     roles_by_id: dict[str, CachedRole] = {}
-    for role in all_role_snapshots:
+    for role in all_roles:
         role_def = role.last_known_definition
         if role_def:
             roles_by_id[role.role_id] = CachedRole(
@@ -473,11 +453,10 @@ async def build_from_db(session: AsyncSession) -> CacheData:
     )
 
     # Build analytics data (now we have role_net_permissions available)
-    from azurerbac.analytics.service import AnalyticsService
+    from azurerbac.analytics.service import build_analytics_from_db
 
-    analytics_service = AnalyticsService()
     all_ops_lower = {op.name.lower() for op in all_operations}
-    analytics_data = await analytics_service.build_from_db(
+    analytics_data = await build_analytics_from_db(
         session,
         all_ops_lower,
         roles_by_id=roles_by_id,
@@ -503,8 +482,11 @@ async def build_from_db(session: AsyncSession) -> CacheData:
     )
 
     logger.info(
-        f"Cache built: {len(active_roles)} roles, {len(all_operations)} operations, "
-        f"{len(roles_by_id)} indexed, {len(all_change_events)} events"
+        "Cache built: %d roles, %d operations, %d indexed, %d events",
+        len(active_roles),
+        len(all_operations),
+        len(roles_by_id),
+        len(all_change_events),
     )
 
     return cache_data

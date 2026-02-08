@@ -127,13 +127,6 @@ class EngineFactory:
             settings = Settings.get()
 
         if settings.use_managed_identity:
-            logger.info(
-                "Creating engine with managed identity: host=%s, port=%s, database=%s, user=%s",
-                settings.msi_db_host,
-                settings.msi_db_port,
-                settings.msi_db_name,
-                settings.msi_db_user,
-            )
             return cls.from_managed_identity(
                 host=settings.msi_db_host,
                 database=settings.msi_db_name,

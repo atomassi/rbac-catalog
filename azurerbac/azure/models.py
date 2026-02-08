@@ -100,16 +100,9 @@ class Permission(BaseModel):
 
     def to_comparable_dict(self) -> JsonDict:
         """Export to dict with sorted lists for comparison/diffing."""
-        result: JsonDict = {
-            "actions": sorted(self.actions),
-            "notActions": sorted(self.not_actions),
-            "dataActions": sorted(self.data_actions),
-            "notDataActions": sorted(self.not_data_actions),
-        }
-        if self.condition:
-            result["condition"] = self.condition
-        if self.condition_version:
-            result["conditionVersion"] = self.condition_version
+        result = self.to_dict()
+        for key in ("actions", "notActions", "dataActions", "notDataActions"):
+            result[key] = sorted(result[key])
         return result
 
     @property
@@ -189,57 +182,17 @@ class RoleDefinition(BaseModel):
             id=normalized_id,
             name=name,
             type=ROLE_DEFINITION_TYPE,
-            properties=RoleProperties.model_validate(
-                {
-                    "roleName": props.get("roleName", ""),
-                    "type": props.get("type", ""),
-                    "description": props.get("description", ""),
-                    "assignableScopes": props.get("assignableScopes", []),
-                    "permissions": [
-                        Permission.model_validate(p) for p in props.get("permissions", [])
-                    ],
-                    "createdOn": props.get("createdOn", ""),
-                    "updatedOn": props.get("updatedOn", ""),
-                    "createdBy": props.get("createdBy"),
-                    "updatedBy": props.get("updatedBy"),
-                    # isServiceRole intentionally excluded
-                }
-            ),
+            properties=RoleProperties.model_validate(props),
         )
 
     @classmethod
     def from_rbac_api(cls, item: dict[str, Any]) -> RoleDefinition:
-        """Transform an RBAC API role definition response to normalized format.
-
-        The RBAC API returns roles in the standard ARM format:
-        {
-            "id": "/providers/Microsoft.Authorization/roleDefinitions/{guid}",
-            "name": "{guid}",
-            "type": "Microsoft.Authorization/roleDefinitions",
-            "properties": { ... }
-        }
-        """
-        props = item.get("properties", {})
-
+        """Transform an RBAC API role definition response to normalized format."""
         return cls(
             id=item.get("id", ""),
             name=item.get("name", ""),
             type=item.get("type", ROLE_DEFINITION_TYPE),
-            properties=RoleProperties.model_validate(
-                {
-                    "roleName": props.get("roleName", ""),
-                    "type": props.get("type", ""),
-                    "description": props.get("description", ""),
-                    "assignableScopes": props.get("assignableScopes", []),
-                    "permissions": [
-                        Permission.model_validate(p) for p in props.get("permissions", [])
-                    ],
-                    "createdOn": props.get("createdOn", ""),
-                    "updatedOn": props.get("updatedOn", ""),
-                    "createdBy": props.get("createdBy"),
-                    "updatedBy": props.get("updatedBy"),
-                }
-            ),
+            properties=RoleProperties.model_validate(item.get("properties", {})),
         )
 
     def to_dict(self) -> JsonDict:

@@ -12,10 +12,8 @@ from azurerbac.matching.role_matching import (
     _segment_pattern_covers,
     _suffix_pattern_covers,
     check_operation_allowed,
-    check_wildcard_operation_allowed,
     count_net_permissions,
     count_wildcard_partial_coverage,
-    has_any_wildcard_coverage,
     is_high_privilege_role,
     operation_matches_any_pattern,
     pattern_covers_pattern,
@@ -179,50 +177,8 @@ class TestPatternCoverage:
 
 
 # =============================================================================
-# Wildcard Operation Tests
+# Wildcard Partial Coverage Tests
 # =============================================================================
-
-
-class TestWildcardOperations:
-    """Tests for wildcard operation allowed and coverage functions."""
-
-    @pytest.mark.parametrize(
-        "requested_pattern,actions,not_actions,expected",
-        [
-            # Universal wildcard covers everything
-            ("Microsoft.Storage/*", ["*"], [], True),
-            # Prefix pattern covers prefix request
-            ("Microsoft.Storage/*", ["Microsoft.Storage/*"], [], True),
-            # Suffix pattern covers suffix request
-            ("*/read", ["*/read"], [], True),
-            # Broader action covers narrower request
-            ("Microsoft.Storage/storageAccounts/*", ["Microsoft.Storage/*"], [], True),
-            # notAction excludes
-            ("Microsoft.Storage/*", ["*"], ["Microsoft.Storage/*"], False),
-            # notAction overlaps with wildcard request (conservative: returns False)
-            ("*/read", ["*"], ["Microsoft.Authorization/*/read"], False),
-            # notAction doesn't overlap (different suffix)
-            ("*/read", ["*"], ["Microsoft.Authorization/*/delete"], True),
-            # Action doesn't cover request
-            ("Microsoft.Storage/*", ["Microsoft.Compute/*"], [], False),
-            # Complex: notAction prefix/suffix don't overlap with request
-            (
-                "Microsoft.Storage/*/read",
-                ["*"],
-                ["Microsoft.Authorization/*/delete"],
-                True,
-            ),
-        ],
-    )
-    def test_wildcard_operation_allowed(
-        self,
-        requested_pattern: str,
-        actions: list[str],
-        not_actions: list[str],
-        expected: bool,
-    ):
-        """Test wildcard operation allowed logic."""
-        assert check_wildcard_operation_allowed(requested_pattern, actions, not_actions) == expected
 
 
 class TestCountWildcardPartialCoverage:
@@ -475,21 +431,6 @@ class TestRemoveExcludedOperations:
         covered = {"op1", "op2", "op3"}
         result = _remove_excluded_operations(covered, ["op2"], frozenset(), None, cache)
         assert result == {"op1", "op3"}
-
-
-# =============================================================================
-# has_any_wildcard_coverage Tests
-# =============================================================================
-
-
-class TestHasAnyWildcardCoverage:
-    """Tests for has_any_wildcard_coverage function."""
-
-    def test_returns_false_when_pattern_matches_nothing(self):
-        """Pattern that matches zero operations returns False."""
-        all_ops: frozenset[str] = frozenset({"microsoft.compute/read", "microsoft.compute/write"})
-        result = has_any_wildcard_coverage("Microsoft.Fake/*/read", ["*"], [], all_ops)
-        assert result is False
 
 
 # =============================================================================
@@ -1239,7 +1180,7 @@ class TestMaxResultsParameter:
 
         cache = get_cache_service()
         ops = list(cache.cache.all_operations)
-        cache.swap_in_memory(precompute_all(roles, ops))
+        cache.swap(precompute_all(roles, ops))
 
         result = recommend_roles(
             ["Microsoft.Storage/storageAccounts/read"],
@@ -1360,8 +1301,8 @@ class TestIntraRequestCacheConsistency:
         )
 
         # Verify it uses our custom cache, not global
-        assert svc._caches is custom_cache
-        assert "test-role-id" in svc._caches.role_coverage
+        assert svc._cache is custom_cache
+        assert "test-role-id" in svc._cache.role_coverage
 
     def test_service_captures_cache_eagerly_when_none_provided(self, populated_cache):
         """When no cache provided, service captures global cache at construction."""
@@ -1391,14 +1332,14 @@ class TestIntraRequestCacheConsistency:
             svc = RoleRecommendationService()
 
             # Verify it captured cache_v1
-            assert "v1-marker" in svc._caches.role_coverage
+            assert "v1-marker" in svc._cache.role_coverage
 
             # Now swap the global cache to v2
             current_cache[0] = cache_v2
 
             # Service should STILL use cache_v1 (captured at construction)
-            assert "v1-marker" in svc._caches.role_coverage
-            assert "v2-marker" not in svc._caches.role_coverage
+            assert "v1-marker" in svc._cache.role_coverage
+            assert "v2-marker" not in svc._cache.role_coverage
 
     def test_new_service_gets_fresh_cache(self, populated_cache):
         """Each new service instance captures the current cache state."""
@@ -1424,17 +1365,17 @@ class TestIntraRequestCacheConsistency:
         ):
             # First service gets v1
             svc1 = RoleRecommendationService()
-            assert "v1-marker" in svc1._caches.role_coverage
+            assert "v1-marker" in svc1._cache.role_coverage
 
             # Swap cache
             current_cache[0] = cache_v2
 
             # Second service gets v2 (fresh)
             svc2 = RoleRecommendationService()
-            assert "v2-marker" in svc2._caches.role_coverage
+            assert "v2-marker" in svc2._cache.role_coverage
 
             # First service still has v1
-            assert "v1-marker" in svc1._caches.role_coverage
+            assert "v1-marker" in svc1._cache.role_coverage
 
 
 # =============================================================================

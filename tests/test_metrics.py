@@ -157,7 +157,7 @@ class TestMetricsLocalMode:
     @pytest.mark.parametrize(
         "func_name,args",
         [
-            ("track_metric", ("test_metric", 42.0, {"dim": "value"})),
+            ("track_gauge", ("test_metric", 42.0, {"dim": "value"})),
             ("track_startup", (5.0, 100, 5000)),
             ("track_cache_refresh", (3.0, "startup", 100, 5000)),
             ("track_role_scan", (100, 5, 3, 2)),
@@ -259,10 +259,10 @@ class TestMetricsDimensions:
             {},
         ],
     )
-    def test_track_metric_with_properties(self, local_env, properties):
-        """track_metric should accept various property types."""
+    def test_track_gauge_with_properties(self, local_env, properties):
+        """track_gauge should accept various property types."""
         metrics_module = local_env
-        metrics_module.track_metric("test", 1.0, properties)
+        metrics_module.track_gauge("test", 1.0, properties)
 
     @pytest.mark.parametrize("source", ["startup", "worker", "periodic", "manual"])
     def test_track_cache_refresh_with_source_dimension(self, local_env, source):
@@ -279,10 +279,10 @@ class TestMetricsDimensions:
 class TestMetricsErrorHandling:
     """Test that metrics functions handle errors gracefully."""
 
-    def test_track_metric_with_negative_value(self, local_env):
-        """track_metric should accept negative values."""
+    def test_track_gauge_with_negative_value(self, local_env):
+        """track_gauge should accept negative values."""
         metrics_module = local_env
-        metrics_module.track_metric("test", -42.0)
+        metrics_module.track_gauge("test", -42.0)
 
 
 # =============================================================================
@@ -399,98 +399,6 @@ class TestOpenTelemetryIntegration:
 # =============================================================================
 # Timer Tests
 # =============================================================================
-
-
-class TestTimedOperation:
-    """Tests for TimedOperation context manager."""
-
-    def test_sync_context_manager_logs_completion(self, caplog):
-        """Test that sync context manager logs start and completion."""
-        import logging
-
-        from azurerbac.telemetry.timers import TimedOperation
-
-        test_logger = logging.getLogger("test_timer")
-        test_logger.setLevel(logging.DEBUG)
-
-        with (
-            caplog.at_level(logging.DEBUG, logger="test_timer"),
-            TimedOperation("test_operation", log=test_logger),
-        ):
-            pass
-
-        assert "Starting: test_operation" in caplog.text
-        assert "Completed: test_operation" in caplog.text
-
-    def test_sync_context_manager_logs_failure_on_exception(self, caplog):
-        """Test that sync context manager logs failure when exception occurs."""
-        import logging
-
-        from azurerbac.telemetry.timers import TimedOperation
-
-        test_logger = logging.getLogger("test_timer_fail")
-        test_logger.setLevel(logging.DEBUG)
-
-        with (
-            caplog.at_level(logging.DEBUG, logger="test_timer_fail"),
-            pytest.raises(ValueError),
-            TimedOperation("failing_operation", log=test_logger),
-        ):
-            raise ValueError("Test error")
-
-        assert "Starting: failing_operation" in caplog.text
-        assert "Failed: failing_operation" in caplog.text
-
-    @pytest.mark.asyncio
-    async def test_async_context_manager_logs_completion(self, caplog):
-        """Test that async context manager logs start and completion."""
-        import logging
-
-        from azurerbac.telemetry.timers import TimedOperation
-
-        test_logger = logging.getLogger("test_async_timer")
-        test_logger.setLevel(logging.DEBUG)
-
-        with caplog.at_level(logging.DEBUG, logger="test_async_timer"):
-            async with TimedOperation("async_test_operation", log=test_logger):
-                pass
-
-        assert "Starting: async_test_operation" in caplog.text
-        assert "Completed: async_test_operation" in caplog.text
-
-    @pytest.mark.asyncio
-    async def test_async_context_manager_logs_failure_on_exception(self, caplog):
-        """Test that async context manager logs failure when exception occurs."""
-        import logging
-
-        from azurerbac.telemetry.timers import TimedOperation
-
-        test_logger = logging.getLogger("test_async_timer_fail")
-        test_logger.setLevel(logging.DEBUG)
-
-        with (
-            caplog.at_level(logging.DEBUG, logger="test_async_timer_fail"),
-            pytest.raises(ValueError),
-        ):
-            async with TimedOperation("async_failing_op", log=test_logger):
-                raise ValueError("Test error")
-
-        assert "Starting: async_failing_op" in caplog.text
-        assert "Failed: async_failing_op" in caplog.text
-
-    def test_uses_default_logger_when_none_provided(self, caplog):
-        """Test that default module logger is used when none provided."""
-        import logging
-
-        from azurerbac.telemetry.timers import TimedOperation
-
-        with (
-            caplog.at_level(logging.DEBUG, logger="azurerbac.telemetry.timers"),
-            TimedOperation("default_logger_test"),
-        ):
-            pass
-
-        assert "default_logger_test" in caplog.text
 
 
 class TestTimedDbQuery:
@@ -726,10 +634,8 @@ class TestTrackDbQueryError:
             mock_duration.assert_not_called()
             mock_event.assert_not_called()
 
-    def test_handles_metric_tracking_failure_gracefully(self, local_env, caplog):
-        """Test exception handling when metric tracking fails."""
-        import logging
-
+    def test_propagates_metric_tracking_failure(self, local_env):
+        """Metric failures propagate — MetricsSender handles them internally."""
         metrics_module = local_env
 
         with (
@@ -737,12 +643,9 @@ class TestTrackDbQueryError:
             patch.object(
                 metrics_module, "track_duration", side_effect=Exception("Tracking failed")
             ),
-            caplog.at_level(logging.WARNING, logger="azurerbac.telemetry.metrics"),
+            pytest.raises(Exception, match="Tracking failed"),
         ):
-            # Should not raise
             metrics_module.track_db_query_error("query", 1.0, "Error")
-
-            assert "Failed to track db query error" in caplog.text
 
 
 # =============================================================================

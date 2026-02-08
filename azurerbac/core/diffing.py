@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -77,36 +76,23 @@ METADATA_ONLY_FIELDS = frozenset(
 _ROOT_PATH = "<root>"
 
 
-def _sorted_list(value: Iterable) -> list:
-    try:
-        return sorted(value)
-    except TypeError:
-        return list(value)
-
-
 def diff_roles(old: RoleDefinition | None, new: RoleDefinition | None) -> RoleDiff:
     """Compute diff between two role definitions for UI rendering."""
     if old is None and new is None:
         return RoleDiff(changed=False)
 
     if old is None:
+        # new is guaranteed not-None here (both-None case returned above)
+        assert new is not None
         return RoleDiff(
             changed=True,
-            changes=[
-                DiffChange(
-                    path=_ROOT_PATH, from_value=None, to_value=new.to_dict() if new else None
-                )
-            ],
+            changes=[DiffChange(path=_ROOT_PATH, from_value=None, to_value=new.to_dict())],
         )
 
     if new is None:
         return RoleDiff(
             changed=True,
-            changes=[
-                DiffChange(
-                    path=_ROOT_PATH, from_value=old.to_dict() if old else None, to_value=None
-                )
-            ],
+            changes=[DiffChange(path=_ROOT_PATH, from_value=old.to_dict(), to_value=None)],
         )
 
     changes: list[DiffChange] = []
@@ -131,8 +117,8 @@ def diff_roles(old: RoleDefinition | None, new: RoleDefinition | None) -> RoleDi
 
     add(
         "properties.assignableScopes",
-        _sorted_list(oldp.assignable_scopes),
-        _sorted_list(newp.assignable_scopes),
+        sorted(oldp.assignable_scopes),
+        sorted(newp.assignable_scopes),
     )
 
     old_perms = [p.to_comparable_dict() for p in oldp.permissions]

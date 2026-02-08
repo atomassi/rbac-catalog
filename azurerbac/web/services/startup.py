@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-import asyncio
-import concurrent.futures
 import logging
 import time
 from collections.abc import Callable
 
 import anyio
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
+from anyio import to_thread
+from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession as _AsyncSession
 
 from azurerbac.cache import get_cache_service
 from azurerbac.settings import Settings
@@ -17,10 +17,10 @@ from azurerbac.settings import Settings
 logger = logging.getLogger(__name__)
 
 
-async def preload_cache(session_factory: async_sessionmaker[AsyncSession]) -> None:
+async def preload_cache(session_factory: async_sessionmaker[_AsyncSession]) -> None:
     """Preload cache with commonly accessed data."""
     logger.info("CACHE INITIALIZATION STARTED")
-    start = time.time()
+    start = time.perf_counter()
 
     service = get_cache_service()
 
@@ -29,7 +29,7 @@ async def preload_cache(session_factory: async_sessionmaker[AsyncSession]) -> No
         if not await service.rebuild_in_memory(session):
             raise RuntimeError("Cache initialization failed - cannot start without cache")
 
-    elapsed = time.time() - start
+    elapsed = time.perf_counter() - start
     roles_count = service.cache.metadata.roles_count
     operations_count = service.cache.metadata.operations_count
     logger.info("CACHE INITIALIZATION COMPLETE in %.2fs", elapsed)
@@ -42,16 +42,8 @@ async def preload_cache(session_factory: async_sessionmaker[AsyncSession]) -> No
     track_cache_refresh(elapsed, "startup", roles_count, operations_count)
 
 
-async def cache_refresh_task(session_factory: async_sessionmaker[AsyncSession]) -> None:
-    """Background task for periodic cache refresh from database.
-
-    Simple refresh flow:
-    - At startup: preload_cache() builds from database
-    - Every 2 hours: rebuild from database to ensure consistency
-
-    Args:
-        session_factory: Async session factory for database access
-    """
+async def cache_refresh_task(session_factory: async_sessionmaker[_AsyncSession]) -> None:
+    """Periodic cache refresh from database."""
     from azurerbac.telemetry import track_cache_refresh, track_cache_refresh_failure
 
     settings = Settings.get()
@@ -64,11 +56,11 @@ async def cache_refresh_task(session_factory: async_sessionmaker[AsyncSession]) 
 
             try:
                 logger.info("Background: periodic rebuild from database")
-                start_time = time.time()
+                start_time = time.perf_counter()
 
                 async with session_factory() as session:
                     if await service.rebuild_in_memory(session):
-                        elapsed = time.time() - start_time
+                        elapsed = time.perf_counter() - start_time
                         logger.info("Background: periodic rebuild completed in %.2fs", elapsed)
 
                         track_cache_refresh(
@@ -99,44 +91,33 @@ async def ensure_db(engine: AsyncEngine) -> None:
     await ensure_db_core(engine)
 
 
-async def _run_in_thread(func: Callable[[], None]) -> None:
-    """Run blocking function in thread pool."""
-    loop = asyncio.get_event_loop()
-    with concurrent.futures.ThreadPoolExecutor() as pool:
-        await loop.run_in_executor(pool, func)
+async def _warmup_engine(name: str, factory: Callable[[], object]) -> None:
+    """Pre-warm an AI engine in a background thread."""
+
+    def _warmup() -> None:
+        try:
+            logger.info("%s WARMUP: Starting...", name)
+            start = time.perf_counter()
+            result = factory()
+            if result is False:
+                logger.warning("%s WARMUP: Skipped (no pre-built index)", name)
+            else:
+                logger.info("%s WARMUP: Initialized in %.2fs", name, time.perf_counter() - start)
+        except Exception as e:
+            logger.exception("%s WARMUP: Failed (non-fatal): %s", name, e)
+
+    await to_thread.run_sync(_warmup)
 
 
 async def warmup_colbert() -> None:
     """Pre-warm ColBERT engine."""
+    from azurerbac.airecommender.engines.colbert import get_colbert_index
 
-    def _warmup() -> None:
-        try:
-            logger.info("COLBERT WARMUP: Starting...")
-            start = time.time()
-            from azurerbac.airecommender.engines.colbert import get_colbert_index
-
-            if get_colbert_index().warmup():
-                logger.info("COLBERT WARMUP: Initialized in %.2fs", time.time() - start)
-            else:
-                logger.warning("COLBERT WARMUP: Skipped (no pre-built index)")
-        except Exception as e:
-            logger.exception("COLBERT WARMUP: Failed (non-fatal): %s", e)
-
-    await _run_in_thread(_warmup)
+    await _warmup_engine("COLBERT", lambda: get_colbert_index().warmup())
 
 
 async def warmup_crossencoder() -> None:
     """Pre-warm CrossEncoder model."""
+    from azurerbac.airecommender.engines.crossencoder import get_cross_encoder
 
-    def _warmup() -> None:
-        try:
-            logger.info("CROSSENCODER WARMUP: Starting...")
-            start = time.time()
-            from azurerbac.airecommender.engines.crossencoder import get_cross_encoder
-
-            get_cross_encoder()
-            logger.info("CROSSENCODER WARMUP: Initialized in %.2fs", time.time() - start)
-        except Exception as e:
-            logger.exception("CROSSENCODER WARMUP: Failed (non-fatal): %s", e)
-
-    await _run_in_thread(_warmup)
+    await _warmup_engine("CROSSENCODER", get_cross_encoder)

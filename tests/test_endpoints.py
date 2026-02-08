@@ -88,7 +88,7 @@ async def test_client(async_session_maker):
         for role in test_role_defs
     }
     # Build full cache with role_coverage (required for recommend_roles and dashboard)
-    cache.swap_in_memory(precompute_all(test_role_defs, test_operations, roles_by_id=roles_by_id))
+    cache.swap(precompute_all(test_role_defs, test_operations, roles_by_id=roles_by_id))
 
     # Store original session maker
     original_session = app_module.SessionLocal

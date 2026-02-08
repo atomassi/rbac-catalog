@@ -13,7 +13,6 @@ from azurerbac.cache import (
     CacheMetadata,
     CacheService,
     PatternCacheKey,
-    Plane,
     compute_operations_hash,
     compute_roles_hash,
     get_cache_service,
@@ -25,7 +24,7 @@ from azurerbac.cache.build import (
 )
 from azurerbac.cache.models import PopularComparison
 from azurerbac.core.constants import EventType, RoleStatus
-from azurerbac.matching.models import RoleCoverage
+from azurerbac.matching.models import Plane, RoleCoverage
 
 
 def make_cached_roles_by_id(roles: list[RoleDefinition]) -> dict[str, CachedRole]:
@@ -289,7 +288,7 @@ class TestLowerOptimization:
         clear_computed_caches()
 
         # Build cache and run recommend_roles
-        get_cache_service().swap_in_memory(precompute_all(roles, operations))
+        get_cache_service().swap(precompute_all(roles, operations))
         result = recommend_roles(
             ["Microsoft.Storage/storageAccounts/read"],
             roles,
@@ -1020,7 +1019,7 @@ class TestThreadSafety:
             ops_by_name_lower=get_cache_service().cache.ops_by_name_lower,
             ops_by_prefix=get_cache_service().cache.ops_by_prefix,
         )
-        get_cache_service().swap_in_memory(precompute_all(sample_roles, sample_operations))
+        get_cache_service().swap(precompute_all(sample_roles, sample_operations))
 
         read_results: list[tuple[int, int, int]] = []
         errors: list[tuple[int, str]] = []
@@ -1107,11 +1106,11 @@ class TestCacheLifecycle:
             ops_by_prefix=get_cache_service().cache.ops_by_prefix,
         )
 
-        get_cache_service().swap_in_memory(precompute_all(sample_roles, sample_operations))
+        get_cache_service().swap(precompute_all(sample_roles, sample_operations))
         first_coverage = get_cache_service().get_role_coverage("reader-role-id")
         assert first_coverage is not None
 
-        get_cache_service().swap_in_memory(precompute_all(sample_roles, sample_operations))
+        get_cache_service().swap(precompute_all(sample_roles, sample_operations))
         second_coverage = get_cache_service().get_role_coverage("reader-role-id")
 
         assert second_coverage is not None
@@ -1134,7 +1133,7 @@ class TestCacheLifecycle:
 
         results = []
         for _ in range(5):
-            get_cache_service().swap_in_memory(precompute_all(sample_roles, sample_operations))
+            get_cache_service().swap(precompute_all(sample_roles, sample_operations))
             coverage = get_cache_service().get_role_coverage("reader-role-id")
             assert coverage is not None
             results.append((len(coverage[0]), len(coverage[1])))
@@ -1167,14 +1166,12 @@ class TestSeedPopularComparisons:
 class TestRebuildInMemory:
     """Tests for CacheService.rebuild_in_memory failure paths."""
 
-    async def test_returns_false_when_lock_held(self):
-        """rebuild_in_memory returns False when rebuild lock is already held."""
-
+    async def test_returns_false_when_rebuild_in_progress(self):
+        """rebuild_in_memory returns False when a rebuild is already in progress."""
         from azurerbac.cache.service import _REBUILD_LOCK
 
         service = get_cache_service()
-        acquired = _REBUILD_LOCK.acquire(blocking=False)
-        assert acquired, "Failed to acquire _REBUILD_LOCK for test setup"
+        await _REBUILD_LOCK.acquire()
         try:
             result = await service.rebuild_in_memory(MagicMock())
             assert result is False
@@ -1185,10 +1182,9 @@ class TestRebuildInMemory:
         """rebuild_in_memory returns False when build_from_db raises."""
         from unittest.mock import AsyncMock, patch
 
-        from azurerbac.cache.service import CacheService
-
-        with patch.object(
-            CacheService, "build_from_db", new=AsyncMock(side_effect=RuntimeError("DB down"))
+        with patch(
+            "azurerbac.cache.build.build_from_db",
+            new=AsyncMock(side_effect=RuntimeError("DB down")),
         ):
             service = get_cache_service()
             result = await service.rebuild_in_memory(MagicMock())
@@ -1221,14 +1217,13 @@ class TestRebuildInMemory:
             )
 
         service = get_cache_service()
-        service.swap(cache_data)
 
-        # Before seeding, the comparisons LRU should be empty
+        # Seed popular comparisons and swap atomically
+        request_caches = service._seed_popular_comparisons(cache_data)
+        service.swap(cache_data, request_caches)
+
+        # Verify the comparison is now cached
         cache_key = f"{r_ids[0]}:{r_ids[1]}"
-        assert service.get_comparison(cache_key) is None
-
-        # Seed and verify the comparison is now cached
-        service._seed_popular_comparisons()
         result = service.get_comparison(cache_key)
         assert result is not None
         assert result.role_a.role_id == r_ids[0]
@@ -1251,20 +1246,21 @@ class TestRebuildInMemory:
                 category="Test",
             )
         ]
-        service._cache = replace(
+        cache_data = replace(
             service._cache,
             content=replace(service._cache.content, popular_comparisons=popular),
         )
 
-        # Should not raise
-        service._seed_popular_comparisons()
-        assert service.get_comparison("missing-a:missing-b") is None
+        # Should not raise; missing roles are silently skipped
+        request_caches = service._seed_popular_comparisons(cache_data)
+        assert request_caches.comparisons.get("missing-a:missing-b") is None
 
     def test_seed_noop_when_no_popular_comparisons(self):
         """Seeding with no popular comparisons should be a no-op."""
         service = get_cache_service()
         service.reset()
-        service._seed_popular_comparisons()  # should not raise
+        result = service._seed_popular_comparisons(service._cache)
+        assert len(result.comparisons) == 0
 
 
 # =============================================================================
@@ -1276,7 +1272,7 @@ class TestSitemapUrl:
     """Tests for the sitemap_url utility function."""
 
     def test_generates_valid_xml(self):
-        from azurerbac.cache.utils import sitemap_url
+        from azurerbac.cache.models import sitemap_url
 
         result = sitemap_url("https://example.com/roles", "2026-01-15", "weekly", 0.8)
         assert "<loc>https://example.com/roles</loc>" in result
@@ -1285,7 +1281,7 @@ class TestSitemapUrl:
         assert "<priority>0.8</priority>" in result
 
     def test_uses_defaults(self):
-        from azurerbac.cache.utils import sitemap_url
+        from azurerbac.cache.models import sitemap_url
 
         result = sitemap_url("https://example.com", "2026-01-01")
         assert "<changefreq>weekly</changefreq>" in result

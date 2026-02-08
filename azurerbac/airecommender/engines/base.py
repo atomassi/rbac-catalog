@@ -141,9 +141,9 @@ class BaseRecommenderEngine(ABC):
         if normalizer is not None:
             candidates = normalizer(candidates)
         else:
-            from azurerbac.airecommender.engines.common import ScoreNormalizer
+            from azurerbac.airecommender.engines.common import normalize_candidates
 
-            candidates = ScoreNormalizer.normalize_candidates(candidates)
+            candidates = normalize_candidates(candidates)
 
         return candidates
 
@@ -196,7 +196,7 @@ Return ONLY the role names in order, one per line, most appropriate first."""
             # Re-order candidates based on LLM ranking
             name_to_candidate = {c.role_name.lower(): c for c in candidates}
             reranked: list[RankedRole] = []
-            seen_ids: set[str] = set()  # O(1) lookup for deduplication
+            seen_ids: set[str] = set()
 
             for i, name in enumerate(llm_ranked_names[:top_k]):
                 if name in name_to_candidate:

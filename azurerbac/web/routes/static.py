@@ -2,16 +2,55 @@
 
 from __future__ import annotations
 
+import logging
 from http import HTTPStatus
 from pathlib import Path
 from typing import Final
 
+import anyio
 from fastapi import APIRouter, Request
 from fastapi.responses import Response
 
 from azurerbac.core.constants import SITE_URL
 
+logger = logging.getLogger(__name__)
+
 INDEXNOW_KEY: Final = "4484caab4dbc472ca61ac1141d812336"
+
+_STATIC_IMAGES_DIR: Final = Path(__file__).parent.parent / "static" / "images"
+_CACHE_1D: Final = {"Cache-Control": "public, max-age=86400"}
+
+_FAVICON_BINARY: Final = (
+    "favicon.ico",
+    "favicon-48.png",
+    "favicon-192.png",
+    "apple-touch-icon.png",
+)
+
+# Populated during app startup via load_static_assets()
+_STATIC_BYTES: dict[str, bytes] = {}
+_STATIC_TEXT: dict[str, str] = {}
+
+
+async def load_static_assets() -> None:
+    """Load favicon assets during app startup with error handling.
+
+    Missing files are logged as warnings; the app continues to serve
+    other routes and returns 404 for absent assets.
+    """
+    for name in _FAVICON_BINARY:
+        path = _STATIC_IMAGES_DIR / name
+        try:
+            _STATIC_BYTES[name] = await anyio.Path(path).read_bytes()
+        except OSError:
+            logger.warning("Static asset missing: %s", path)
+    try:
+        _STATIC_TEXT["favicon.svg"] = await anyio.Path(
+            _STATIC_IMAGES_DIR / "favicon.svg"
+        ).read_text(encoding="utf-8")
+    except OSError:
+        logger.warning("Static asset missing: %s/favicon.svg", _STATIC_IMAGES_DIR)
+
 
 router = APIRouter(tags=["static"])
 
@@ -56,7 +95,7 @@ async def robots_txt() -> Response:
     return Response(
         content=body,
         media_type="text/plain",
-        headers={"Cache-Control": "public, max-age=86400"},
+        headers=_CACHE_1D,
     )
 
 
@@ -66,7 +105,7 @@ async def google_site_verification() -> Response:
     return Response(
         content="google-site-verification: googleec37c4d2676ac205.html",
         media_type="text/html",
-        headers={"Cache-Control": "public, max-age=86400"},
+        headers=_CACHE_1D,
     )
 
 
@@ -76,22 +115,12 @@ async def indexnow_key() -> Response:
     return Response(
         content=INDEXNOW_KEY,
         media_type="text/plain",
-        headers={"Cache-Control": "public, max-age=86400"},
+        headers=_CACHE_1D,
     )
-
-
-def _get_static_images_path() -> Path:
-    """Get static/images directory path."""
-    return Path(__file__).parent.parent / "static" / "images"
 
 
 def _static_response(content: bytes | str, media_type: str) -> Response:
-    """Create cached static response."""
-    return Response(
-        content=content,
-        media_type=media_type,
-        headers={"Cache-Control": "public, max-age=86400"},
-    )
+    return Response(content=content, media_type=media_type, headers=_CACHE_1D)
 
 
 @router.get(
@@ -101,10 +130,9 @@ def _static_response(content: bytes | str, media_type: str) -> Response:
 )
 async def favicon_ico() -> Response:
     """Serve favicon.ico."""
-    return _static_response(
-        (_get_static_images_path() / "favicon.ico").read_bytes(),
-        "image/x-icon",
-    )
+    if data := _STATIC_BYTES.get("favicon.ico"):
+        return _static_response(data, "image/x-icon")
+    return Response(status_code=HTTPStatus.NOT_FOUND)
 
 
 @router.get(
@@ -114,38 +142,34 @@ async def favicon_ico() -> Response:
 )
 async def favicon_svg() -> Response:
     """Serve favicon.svg."""
-    return _static_response(
-        (_get_static_images_path() / "favicon.svg").read_text(),
-        "image/svg+xml",
-    )
+    if data := _STATIC_TEXT.get("favicon.svg"):
+        return _static_response(data, "image/svg+xml")
+    return Response(status_code=HTTPStatus.NOT_FOUND)
 
 
 @router.get("/favicon-48.png")
 async def favicon_png_48() -> Response:
-    """Serve 48x48 PNG favicon."""
-    return _static_response(
-        (_get_static_images_path() / "favicon-48.png").read_bytes(),
-        "image/png",
-    )
+    """Serve 48x48 favicon."""
+    if data := _STATIC_BYTES.get("favicon-48.png"):
+        return _static_response(data, "image/png")
+    return Response(status_code=HTTPStatus.NOT_FOUND)
 
 
 @router.get("/favicon-192.png")
 async def favicon_png_192() -> Response:
-    """Serve 192x192 PNG favicon for Android/PWA."""
-    return _static_response(
-        (_get_static_images_path() / "favicon-192.png").read_bytes(),
-        "image/png",
-    )
+    """Serve 192x192 favicon."""
+    if data := _STATIC_BYTES.get("favicon-192.png"):
+        return _static_response(data, "image/png")
+    return Response(status_code=HTTPStatus.NOT_FOUND)
 
 
 @router.get("/apple-touch-icon.png")
 @router.get("/apple-touch-icon-precomposed.png")
 async def apple_touch_icon() -> Response:
-    """Serve Apple touch icon (180x180)."""
-    return _static_response(
-        (_get_static_images_path() / "apple-touch-icon.png").read_bytes(),
-        "image/png",
-    )
+    """Serve Apple touch icon."""
+    if data := _STATIC_BYTES.get("apple-touch-icon.png"):
+        return _static_response(data, "image/png")
+    return Response(status_code=HTTPStatus.NOT_FOUND)
 
 
 @router.api_route(

@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import signal
-import time as time_module
+import time
 from typing import Any
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -98,14 +98,14 @@ class Worker:
         logger.info("Starting job: %s", job.name)
 
         with WorkerOperationContext(job.name):
-            start_time = time_module.time()
+            start_time = time.perf_counter()
             try:
                 await job.run()
-                elapsed = time_module.time() - start_time
+                elapsed = time.perf_counter() - start_time
                 logger.info("%s completed (took %.2fs)", job.name, elapsed)
                 track_worker_result(job.name, JobResult.SUCCESS, elapsed)
             except Exception as e:
-                elapsed = time_module.time() - start_time
+                elapsed = time.perf_counter() - start_time
                 logger.exception("Failed to run %s: %s", job.name, e)
                 track_worker_result(job.name, JobResult.FAILURE, elapsed, str(e))
 

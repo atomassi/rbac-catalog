@@ -8,7 +8,6 @@ from xml.etree.ElementTree import Element, SubElement, tostring
 
 from azurerbac.cache import CacheService
 from azurerbac.cache.models import CachedChangeEvent
-from azurerbac.core.utils import ensure_utc_or_min
 
 
 def _build_rich_content(event: CachedChangeEvent, site_url: str) -> str:
@@ -169,14 +168,9 @@ def get_recent_events(
     """Get recent change events from cache."""
     events = cache.get_change_events() or []
 
-    # Filter by cutoff date (handle naive/aware comparison)
-    filtered = [
-        e for e in events if ensure_utc_or_min(e.azure_updated_on or e.scan_timestamp) >= cutoff
-    ]
+    # Filter by cutoff date
+    filtered = [e for e in events if e.effective_timestamp >= cutoff]
 
     # Sort by date descending and limit
-    def _event_sort_key(e: CachedChangeEvent) -> dt.datetime:
-        return ensure_utc_or_min(e.azure_updated_on or e.scan_timestamp)
-
-    filtered.sort(key=_event_sort_key, reverse=True)
+    filtered.sort(key=lambda e: e.effective_timestamp, reverse=True)
     return filtered[:limit]

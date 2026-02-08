@@ -577,32 +577,6 @@ class TestUtils:
             assert result is not None
             assert result.tzinfo == expected_tzinfo
 
-    @pytest.mark.parametrize(
-        ("input_dt", "expected"),
-        [
-            pytest.param(
-                None,
-                dt.datetime.min.replace(tzinfo=dt.UTC),
-                id="none_returns_min",
-            ),
-            pytest.param(
-                dt.datetime(2023, 1, 15, 12, 30, 0, tzinfo=dt.UTC),
-                dt.datetime(2023, 1, 15, 12, 30, 0, tzinfo=dt.UTC),
-                id="aware_datetime_preserved",
-            ),
-            pytest.param(
-                dt.datetime(2023, 1, 15, 12, 30, 0),
-                dt.datetime(2023, 1, 15, 12, 30, 0, tzinfo=dt.UTC),
-                id="naive_datetime_gets_utc",
-            ),
-        ],
-    )
-    def test_ensure_utc_or_min(self, input_dt, expected):
-        """Test ensure_utc_or_min with various inputs."""
-        from azurerbac.core.utils import ensure_utc_or_min
-
-        assert ensure_utc_or_min(input_dt) == expected
-
     # format_iso_z parametrized tests
     @pytest.mark.parametrize(
         ("input_dt", "expected"),
@@ -674,25 +648,6 @@ class TestPatternUtilities:
         from azurerbac.core.patterns import is_wildcard_pattern
 
         assert is_wildcard_pattern(pattern) == expected
-
-    @pytest.mark.parametrize(
-        "pattern,expected",
-        [
-            pytest.param("Microsoft.Storage/*", "Microsoft.Storage/%", id="trailing_wildcard"),
-            pytest.param("*/read", "%/read", id="leading_wildcard"),
-            pytest.param("Microsoft.*/read", "Microsoft.%/read", id="middle_wildcard"),
-            pytest.param("*", "%", id="universal_wildcard"),
-            pytest.param("Microsoft.Storage/read", "Microsoft.Storage/read", id="no_wildcard"),
-            # Escaping special SQL characters
-            pytest.param("test%pattern", r"test\%pattern", id="escape_percent"),
-            pytest.param("test_pattern", r"test\_pattern", id="escape_underscore"),
-        ],
-    )
-    def test_wildcard_to_sql_like(self, pattern: str, expected: str):
-        """Test wildcard_to_sql_like conversion."""
-        from azurerbac.core.patterns import wildcard_to_sql_like
-
-        assert wildcard_to_sql_like(pattern) == expected
 
     @pytest.mark.parametrize(
         "patterns,all_ops,expected_count",

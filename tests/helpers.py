@@ -294,7 +294,7 @@ def recommend_roles_with_cache(
 
     cache = get_cache_service()
     ops = operations if operations is not None else list(cache.cache.all_operations)
-    cache.swap_in_memory(precompute_all(roles, ops))
+    cache.swap(precompute_all(roles, ops))
     return recommend_roles(
         requested_operations, roles, requested_ops_data_flags=requested_ops_data_flags
     )

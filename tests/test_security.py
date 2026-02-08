@@ -53,7 +53,7 @@ async def client(async_session_maker) -> AsyncGenerator[AsyncClient, None]:
         role.role_id: CachedRole(definition=role, status=RoleStatus.ACTIVE)
         for role in test_role_defs
     }
-    cache.swap_in_memory(precompute_all(test_role_defs, test_operations, roles_by_id=roles_by_id))
+    cache.swap(precompute_all(test_role_defs, test_operations, roles_by_id=roles_by_id))
 
     original_session = app_module.app.state.session_local
     app_module.app.state.session_local = test_session_maker

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 
-from azurerbac.web.constants import MIN_AI_QUERY_CHARS, MIN_SEARCH_CHARS
+from azurerbac.web.constants import MIN_SEARCH_CHARS
 from azurerbac.web.routes.models import (
     AIEngineInfo,
     AIRecommendResponse,
@@ -12,8 +12,6 @@ from azurerbac.web.routes.models import (
 )
 
 __all__ = [
-    "MIN_AI_QUERY_CHARS",
-    "MIN_SEARCH_CHARS",
     "ErrorMessages",
     "ai_error_response",
     "empty_search_response",

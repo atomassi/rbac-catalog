@@ -4,6 +4,7 @@ import heapq
 import logging
 import time
 from collections import OrderedDict
+from itertools import islice
 
 from mcp.server.fastmcp import Context, FastMCP
 from starlette.applications import Starlette
@@ -46,7 +47,7 @@ from azurerbac.mcp.constants import (
     SEARCH_OPERATIONS_DESC,
     SEARCH_ROLES_DESC,
 )
-from azurerbac.mcp.utils import InputValidator, TokenBucketRateLimiter, ToolTimer, ValidationError
+from azurerbac.mcp.utils import TokenBucketRateLimiter, ToolTimer, ValidationError, validate_input
 from azurerbac.telemetry import track_event
 
 logger = logging.getLogger(__name__)
@@ -196,9 +197,8 @@ class MCPServer:
         """Find role by ID or name."""
         if cached := self._cache.get_role_by_id(role_id_or_name):
             return cached
-        for role in self._cache.get_all_roles():
-            if role.role_name and role.role_name.lower() == role_id_or_name.lower():
-                return self._cache.get_role_by_id(role.name)
+        if role_id := self._cache.cache.role_name_to_id.get(role_id_or_name.lower()):
+            return self._cache.get_role_by_id(role_id)
         return None
 
     @staticmethod
@@ -229,9 +229,7 @@ class MCPServer:
 
             with self._timer("search_operations", session_id) as timer:
                 try:
-                    query = InputValidator.validate(
-                        query, MAX_QUERY_LENGTH, MIN_QUERY_LENGTH, "Query"
-                    )
+                    query = validate_input(query, MAX_QUERY_LENGTH, MIN_QUERY_LENGTH, "Query")
                 except ValidationError as e:
                     timer.fail()
                     return str(e)
@@ -270,20 +268,24 @@ class MCPServer:
 
             with self._timer("search_roles", session_id) as timer:
                 try:
-                    query = InputValidator.validate(
-                        query, MAX_QUERY_LENGTH, MIN_QUERY_LENGTH, "Query"
-                    )
+                    query = validate_input(query, MAX_QUERY_LENGTH, MIN_QUERY_LENGTH, "Query")
                 except ValidationError as e:
                     timer.fail()
                     return str(e)
 
                 query_lower = query.lower()
-                matching = [
-                    r
-                    for r in self._cache.get_all_roles()
-                    if query_lower in (r.role_name or "").lower()
-                    or query_lower in (r.description or "").lower()
-                ][: min(limit, MAX_ROLES_LIMIT)]
+                effective_limit = min(limit, MAX_ROLES_LIMIT)
+                matching = list(
+                    islice(
+                        (
+                            r
+                            for r in self._cache.cache.roles_by_id.values()
+                            if query_lower in (r.role_name or "").lower()
+                            or query_lower in (r.description or "").lower()
+                        ),
+                        effective_limit,
+                    )
+                )
                 timer.result_count = len(matching)
 
             if not matching:
@@ -294,7 +296,7 @@ class MCPServer:
                 desc = (role.description or "")[:100]
                 if len(role.description or "") > 100:
                     desc += "..."
-                lines.append(f"• **{role.role_name}** (ID: {role.name})")
+                lines.append(f"• **{role.role_name}** (ID: {role.role_id})")
                 if desc:
                     lines.append(f"  {desc}")
             return "\n".join(lines)
@@ -312,7 +314,7 @@ class MCPServer:
 
             with self._timer("get_role", session_id) as timer:
                 try:
-                    role_id_or_name = InputValidator.validate(
+                    role_id_or_name = validate_input(
                         role_id_or_name, MAX_ROLE_ID_LENGTH, 1, "Role identifier"
                     )
                 except ValidationError as e:
@@ -367,7 +369,7 @@ class MCPServer:
 
             with self._timer("get_role_permissions", session_id) as timer:
                 try:
-                    role_id_or_name = InputValidator.validate(
+                    role_id_or_name = validate_input(
                         role_id_or_name, MAX_ROLE_ID_LENGTH, 1, "Role identifier"
                     )
                 except ValidationError as e:
@@ -437,18 +439,18 @@ class MCPServer:
                     # Explicit operations - auto-detect plane
                     for op in operations or []:
                         sanitized_ops.append(
-                            InputValidator.validate(op, MAX_OPERATION_LENGTH, 1, "Operation")
+                            validate_input(op, MAX_OPERATION_LENGTH, 1, "Operation")
                         )
 
                     # Control-plane wildcards
                     for op in wildcards_control or []:
-                        clean = InputValidator.validate(op, MAX_OPERATION_LENGTH, 1, "Operation")
+                        clean = validate_input(op, MAX_OPERATION_LENGTH, 1, "Operation")
                         sanitized_ops.append(clean)
                         data_flags[clean] = False
 
                     # Data-plane wildcards
                     for op in wildcards_data or []:
-                        clean = InputValidator.validate(op, MAX_OPERATION_LENGTH, 1, "Operation")
+                        clean = validate_input(op, MAX_OPERATION_LENGTH, 1, "Operation")
                         sanitized_ops.append(clean)
                         data_flags[clean] = True
                 except ValidationError as e:
@@ -493,9 +495,7 @@ class MCPServer:
 
             with self._timer("ai_recommend", session_id) as timer:
                 try:
-                    query = InputValidator.validate(
-                        query, MAX_AI_QUERY_LENGTH, MIN_AI_QUERY_LENGTH, "Query"
-                    )
+                    query = validate_input(query, MAX_AI_QUERY_LENGTH, MIN_AI_QUERY_LENGTH, "Query")
                 except ValidationError as e:
                     timer.fail()
                     return str(e)

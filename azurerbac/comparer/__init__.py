@@ -1,14 +1,10 @@
-"""Role comparison package.
+"""Role comparison: three-way permission splits (only-A, shared, only-B)."""
 
-Provides comparison logic for Azure RBAC built-in roles, computing
-three-way permission splits (only-A, shared, only-B).
-"""
-
-from azurerbac.comparer.compare import compute_role_comparison
-from azurerbac.comparer.models import RoleComparison, RoleComparisonSide
+from azurerbac.comparer.compare import build_comparison, compute_role_comparison
+from azurerbac.comparer.models import RoleComparison
 
 __all__ = [
     "RoleComparison",
-    "RoleComparisonSide",
+    "build_comparison",
     "compute_role_comparison",
 ]

@@ -23,17 +23,12 @@ def _json_to_str(value: Any) -> str:
     return json.dumps(value, indent=2, sort_keys=True, default=str)
 
 
-def _ensure_str(item: Any) -> str:
-    """Convert item to string via JSON if needed."""
-    return item if isinstance(item, str) else _json_to_str(item)
-
-
-def _process_ndiff(diff_lines_iter: list[str]) -> list[dict]:
+def _process_ndiff(diff_lines: list[str]) -> list[dict]:
     """Process ndiff output into {type, text} dicts."""
     result = []
     i = 0
-    while i < len(diff_lines_iter):
-        line = diff_lines_iter[i]
+    while i < len(diff_lines):
+        line = diff_lines[i]
         code = line[:2]
         text = line[2:]
 
@@ -43,16 +38,16 @@ def _process_ndiff(diff_lines_iter: list[str]) -> list[dict]:
             continue
 
         # Look ahead for comma-only changes (JSON formatting noise)
-        if code == _CODE_REMOVED and i + 1 < len(diff_lines_iter):
+        if code == _CODE_REMOVED and i + 1 < len(diff_lines):
             next_idx = i + 1
-            next_line = diff_lines_iter[next_idx]
+            next_line = diff_lines[next_idx]
             next_code = next_line[:2]
             next_text = next_line[2:]
 
             # Skip "?" hint if present
-            if next_code == _CODE_HINT and next_idx + 1 < len(diff_lines_iter):
+            if next_code == _CODE_HINT and next_idx + 1 < len(diff_lines):
                 next_idx += 1
-                next_line = diff_lines_iter[next_idx]
+                next_line = diff_lines[next_idx]
                 next_code = next_line[:2]
                 next_text = next_line[2:]
 
@@ -108,8 +103,6 @@ def _parse_datetime_value(value: Any) -> datetime | None:
             return datetime.fromisoformat(value)
         except (ValueError, TypeError):
             return None
-    if hasattr(value, "strftime"):
-        return value
     return None
 
 

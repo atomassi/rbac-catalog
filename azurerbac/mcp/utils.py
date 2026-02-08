@@ -4,7 +4,10 @@ import re
 import time
 from collections import OrderedDict
 from dataclasses import dataclass
+from types import TracebackType
 from typing import Final
+
+from azurerbac.telemetry import track_duration, track_event, track_gauge
 
 _SUSPICIOUS_PATTERN: Final = re.compile(
     r"[<>{}\\;`$]"  # HTML, template, shell metacharacters
@@ -86,30 +89,26 @@ class TokenBucketRateLimiter:
         self._buckets.move_to_end(bucket_id)
 
 
-class InputValidator:
-    """Input sanitization and validation."""
+def is_suspicious(value: str) -> bool:
+    """Detect injection patterns."""
+    return bool(_SUSPICIOUS_PATTERN.search(value))
 
-    @staticmethod
-    def is_suspicious(value: str) -> bool:
-        """Detect injection patterns."""
-        return bool(_SUSPICIOUS_PATTERN.search(value))
 
-    @staticmethod
-    def validate(
-        value: str,
-        max_length: int,
-        min_length: int = 0,
-        field_name: str = "Input",
-    ) -> str:
-        """Validate and sanitize input. Raises ValidationError on failure."""
-        stripped = value.strip()
-        if len(stripped) > max_length:
-            raise ValidationError(f"Input too long. Maximum {max_length} characters allowed.")
-        if len(stripped) < min_length:
-            raise ValidationError(f"{field_name} must be at least {min_length} characters")
-        if InputValidator.is_suspicious(stripped):
-            raise ValidationError(f"Invalid {field_name.lower()} format")
-        return stripped
+def validate_input(
+    value: str,
+    max_length: int,
+    min_length: int = 0,
+    field_name: str = "Input",
+) -> str:
+    """Validate and sanitize input. Raises ValidationError on failure."""
+    stripped = value.strip()
+    if len(stripped) > max_length:
+        raise ValidationError(f"Input too long. Maximum {max_length} characters allowed.")
+    if len(stripped) < min_length:
+        raise ValidationError(f"{field_name} must be at least {min_length} characters")
+    if is_suspicious(stripped):
+        raise ValidationError(f"Invalid {field_name.lower()} format")
+    return stripped
 
 
 class ToolTimer:
@@ -127,7 +126,12 @@ class ToolTimer:
     def __enter__(self) -> "ToolTimer":
         return self
 
-    def __exit__(self, exc_type: type | None, exc_val: object, exc_tb: object) -> None:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
         if exc_type is not None:
             self._success = False
         self._record()
@@ -136,8 +140,6 @@ class ToolTimer:
         self._success = False
 
     def _record(self) -> None:
-        from azurerbac.telemetry import track_duration, track_event, track_gauge
-
         duration = time.perf_counter() - self.start
         props = {
             "tool": self.tool_name,

@@ -113,10 +113,10 @@ describe('NavState', () => {
             expect(NavState.getBackUrl()).toBe('/recommend');
         });
 
-        it('should return /recommend with ai param when AI mode enabled', () => {
+        it('should return /recommend even when AI mode enabled (no ai param)', () => {
             NavState.set({ back: 'recommend' });
             NavState.setAiMode(true);
-            expect(NavState.getBackUrl()).toBe('/recommend?ai=1');
+            expect(NavState.getBackUrl()).toBe('/recommend');
         });
 
         it('should return /roles for roles back target', () => {

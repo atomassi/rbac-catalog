@@ -17,11 +17,9 @@
  * @property {string} [from_operation] - Operation name to return to
  * @property {string} [from_compare_url] - Compare page URL to return to
  * @property {string} [from_compare_label] - Compare page label for back button
- * @property {string} [ai] - AI mode flag from state
  *
  * @typedef {Object} BackDefaults
  * @property {BackTarget} [back] - Default back target
- * @property {string} [ai] - Default AI mode
  */
 
 const NavState = {
@@ -123,25 +121,6 @@ const NavState = {
     },
 
     /**
-     * Initialize AI mode from URL parameter on page load.
-     * If ai=1 is in URL, store it in sessionStorage.
-     * Note: We don't remove ai=1 from URL as this can cause sessionStorage issues on refresh.
-     * Call this on pages that support AI mode.
-     * @returns {void}
-     */
-    initAiModeFromUrl() {
-        const urlParams = new URLSearchParams(window.location.search);
-        const aiParam = urlParams.get('ai');
-        this._log('[NavState.initAiModeFromUrl] URL:', window.location.href, 'ai param:', aiParam);
-        if (aiParam === '1') {
-            this.setAiMode(true);
-            // Don't remove ai=1 from URL - causes sessionStorage to be cleared on refresh in some browsers
-        } else {
-            this._log('[NavState.initAiModeFromUrl] No ai=1 in URL, current sessionStorage:', sessionStorage.getItem(this.AI_KEY));
-        }
-    },
-
-    /**
      * Set "back" context when navigating to a detail page.
      * Call this before navigating to a role or operation detail.
      * @param {BackTarget} backTo - Where to go back to
@@ -164,7 +143,6 @@ const NavState = {
     getBackUrl(defaults = {}) {
         const state = this.get();
         const back = state.back || defaults.back || 'recent';
-        const aiMode = state.ai || defaults.ai;
 
         let url;
         switch (back) {
@@ -204,11 +182,6 @@ const NavState = {
                 break;
             default:
                 url = '/recent';
-        }
-
-        // Add ai=1 if in AI mode (use persistent AI mode, fallback to state.ai)
-        if (this.isAiMode() || aiMode) {
-            url += (url.includes('?') ? '&' : '?') + 'ai=1';
         }
 
         return url;

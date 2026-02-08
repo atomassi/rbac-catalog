@@ -53,7 +53,6 @@ class DashboardContext:
     order: str = SortOrder.ASC
     status_filter: str = StatusFilter.ACTIVE
     event_type: str = "all"
-    ai: int | None = None
     # Data
     events: list[Any] = field(default_factory=list)
     total_events: int = 0
@@ -74,7 +73,6 @@ async def recent_changes(
     event_type: str = "all",
     page: Annotated[int, Query(ge=1, le=MAX_PAGE_NUMBER)] = DEFAULT_PAGE,
     limit: Annotated[int, Query(ge=1, le=MAX_PAGE_SIZE)] = DEFAULT_LIMIT,
-    ai: int | None = None,
 ) -> Response:
     """Recent changes page. Also serves as the home page (/) to avoid redirect latency."""
     logger.info(
@@ -83,8 +81,6 @@ async def recent_changes(
     # If search query present, redirect to /roles
     if q:
         params: dict[str, str | int] = {"q": q}
-        if ai:
-            params["ai"] = ai
         return RedirectResponse(url=f"/roles?{urlencode(params)}", status_code=302)
 
     common = get_common_dashboard_data(deps)
@@ -129,7 +125,6 @@ async def recent_changes(
         q=q,
         days=days,
         event_type=event_type,
-        ai=ai,
         events=events[pagination.start_idx : pagination.end_idx],
         total_events=total_events,
         total_roles=common.total_roles or 0,
@@ -150,7 +145,6 @@ async def roles_list(
     sort: str = SortField.NAME,
     order: str = SortOrder.ASC,
     status_filter: str = StatusFilter.ACTIVE,
-    ai: int | None = None,
 ) -> Response:
     """Roles list page."""
     logger.info(
@@ -192,7 +186,6 @@ async def roles_list(
         sort=sort,
         order=order,
         status_filter=status_filter,
-        ai=ai,
         roles=result.items,
         total_roles=common.total_roles or 0,
         total_operations=common.total_operations or 0,

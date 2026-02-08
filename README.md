@@ -6,7 +6,7 @@
 [![Python](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
-**Live site:** [rbac-catalog.dev](https://rbac-catalog.dev/recommend?ai=1)
+**Live site:** [rbac-catalog.dev](https://rbac-catalog.dev/)
 
 A comprehensive catalog and monitoring tool for [Azure built-in RBAC roles](https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles). Browse roles, explore their permissions, track changes over time, find least-privilege roles based on operation requirements, and get AI-powered role recommendations.
 
@@ -104,7 +104,7 @@ flowchart TD
 ## AI Recommendation Modes
 
 > [!NOTE]
-> The AI modes are experimental—built for learning and experimenting with different recommendation approaches. Results should be verified. Access via `?ai=1` query parameter.
+> The AI modes are experimental—built for learning and experimenting with different recommendation approaches. Results should be verified. Access them via the "Show AI Tools" toggle on the Recommend page.
 
 The AI Role Recommender supports **8 different modes**, each with different speed/accuracy trade-offs:
 

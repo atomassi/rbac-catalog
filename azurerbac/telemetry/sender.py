@@ -86,7 +86,7 @@ class MetricsSender:
             return
 
         try:
-            attributes = cls._base_attributes() | {k: str(v) for k, v in (properties or {}).items()}
+            attributes = {k: str(v) for k, v in (properties or {}).items()} | cls._base_attributes()
 
             # Use Gauge for current value reporting
             if name not in cls._gauges:
@@ -111,7 +111,7 @@ class MetricsSender:
             return
 
         try:
-            attributes = cls._base_attributes() | {k: str(v) for k, v in (properties or {}).items()}
+            attributes = {k: str(v) for k, v in (properties or {}).items()} | cls._base_attributes()
             histogram = cls._get_histogram(name, f"Histogram: {name}")
             histogram.record(value, attributes)
         except Exception as e:
@@ -129,7 +129,7 @@ class MetricsSender:
             return
 
         try:
-            attributes = cls._base_attributes() | {k: str(v) for k, v in (properties or {}).items()}
+            attributes = {k: str(v) for k, v in (properties or {}).items()} | cls._base_attributes()
 
             if name not in cls._counters:
                 cls._counters[name] = cls._meter.create_counter(

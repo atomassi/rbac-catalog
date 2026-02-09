@@ -25,6 +25,7 @@ class MetricsSender:
     _histograms: ClassVar[dict[str, Any]] = {}
     _gauges: ClassVar[dict[str, Any]] = {}
     _counters: ClassVar[dict[str, Any]] = {}
+    _environment: ClassVar[str] = "local"
     _initialized: ClassVar[bool] = False
 
     @classmethod
@@ -50,6 +51,7 @@ class MetricsSender:
             from opentelemetry import metrics
 
             cls._meter = metrics.get_meter("azurerbac.telemetry")
+            cls._environment = settings.environment_name
             logger.info("OpenTelemetry metrics initialized")
             return True
         except ImportError:
@@ -57,6 +59,11 @@ class MetricsSender:
         except Exception as e:
             logger.exception("Failed to initialize OpenTelemetry metrics: %s", e)
         return False
+
+    @classmethod
+    def _base_attributes(cls) -> dict[str, str]:
+        """Return base attributes included on every metric (e.g. environment)."""
+        return {"environment": cls._environment}
 
     @classmethod
     def _get_histogram(cls, name: str, description: str, unit: str = "s") -> Any:
@@ -79,7 +86,7 @@ class MetricsSender:
             return
 
         try:
-            attributes = {k: str(v) for k, v in (properties or {}).items()}
+            attributes = cls._base_attributes() | {k: str(v) for k, v in (properties or {}).items()}
 
             # Use Gauge for current value reporting
             if name not in cls._gauges:
@@ -104,7 +111,7 @@ class MetricsSender:
             return
 
         try:
-            attributes = {k: str(v) for k, v in (properties or {}).items()}
+            attributes = cls._base_attributes() | {k: str(v) for k, v in (properties or {}).items()}
             histogram = cls._get_histogram(name, f"Histogram: {name}")
             histogram.record(value, attributes)
         except Exception as e:
@@ -122,7 +129,7 @@ class MetricsSender:
             return
 
         try:
-            attributes = {k: str(v) for k, v in (properties or {}).items()}
+            attributes = cls._base_attributes() | {k: str(v) for k, v in (properties or {}).items()}
 
             if name not in cls._counters:
                 cls._counters[name] = cls._meter.create_counter(

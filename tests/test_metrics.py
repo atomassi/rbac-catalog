@@ -146,6 +146,98 @@ class TestMetricsSenderUnit:
         assert mock_meter.create_histogram.call_count == 1
 
 
+class TestBaseAttributes:
+    """Test that environment dimension is included on every emitted metric."""
+
+    @pytest.fixture(autouse=True)
+    def _setup_sender(self, reset_metrics_sender):
+        """Set up MetricsSender with a mock meter and known environment."""
+        from azurerbac.telemetry.sender import MetricsSender
+
+        self.mock_meter = MagicMock()
+        MetricsSender._initialized = True
+        MetricsSender._meter = self.mock_meter
+        MetricsSender._environment = "production"
+        MetricsSender._histograms = {}
+        MetricsSender._gauges = {}
+        MetricsSender._counters = {}
+
+        # Patch initialize to return True (skip settings/env checks)
+        self._init_patch = patch.object(MetricsSender, "initialize", return_value=True)
+        self._init_patch.start()
+
+    @pytest.fixture(autouse=True)
+    def _teardown_sender(self):
+        yield
+        self._init_patch.stop()
+
+    def test_send_gauge_includes_environment(self):
+        """send_gauge should include environment in attributes."""
+        from azurerbac.telemetry.sender import MetricsSender
+
+        mock_gauge = MagicMock()
+        self.mock_meter.create_gauge.return_value = mock_gauge
+
+        MetricsSender.send_gauge("test_gauge", 42.0, {"source": "startup"})
+
+        mock_gauge.set.assert_called_once()
+        attrs = mock_gauge.set.call_args[0][1]
+        assert attrs["environment"] == "production"
+        assert attrs["source"] == "startup"
+
+    def test_send_histogram_includes_environment(self):
+        """send_histogram should include environment in attributes."""
+        from azurerbac.telemetry.sender import MetricsSender
+
+        mock_histogram = MagicMock()
+        self.mock_meter.create_histogram.return_value = mock_histogram
+
+        MetricsSender.send_histogram("test_hist", 1.5, {"query": "roles"})
+
+        mock_histogram.record.assert_called_once()
+        attrs = mock_histogram.record.call_args[0][1]
+        assert attrs["environment"] == "production"
+        assert attrs["query"] == "roles"
+
+    def test_send_count_includes_environment(self):
+        """send_count should include environment in attributes."""
+        from azurerbac.telemetry.sender import MetricsSender
+
+        mock_counter = MagicMock()
+        self.mock_meter.create_counter.return_value = mock_counter
+
+        MetricsSender.send_count("test_count", 1, {"operation": "scan"})
+
+        mock_counter.add.assert_called_once()
+        attrs = mock_counter.add.call_args[0][1]
+        assert attrs["environment"] == "production"
+        assert attrs["operation"] == "scan"
+
+    def test_properties_cannot_override_environment(self):
+        """Caller-provided environment key must not override the base attribute."""
+        from azurerbac.telemetry.sender import MetricsSender
+
+        mock_gauge = MagicMock()
+        self.mock_meter.create_gauge.return_value = mock_gauge
+
+        MetricsSender.send_gauge("test", 1.0, {"environment": "custom"})
+
+        attrs = mock_gauge.set.call_args[0][1]
+        assert attrs["environment"] == "production"
+
+    def test_environment_present_with_no_properties(self):
+        """Environment should be present even when no properties are passed."""
+        from azurerbac.telemetry.sender import MetricsSender
+
+        mock_gauge = MagicMock()
+        self.mock_meter.create_gauge.return_value = mock_gauge
+
+        MetricsSender.send_gauge("test", 1.0)
+
+        attrs = mock_gauge.set.call_args[0][1]
+        assert attrs == {"environment": "production"}
+
+
 # =============================================================================
 # Local Mode Tests - Metrics Functions Are No-Op
 # =============================================================================

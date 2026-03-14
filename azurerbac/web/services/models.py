@@ -277,14 +277,12 @@ class RolePermissionAnalyzer:
         self, operation_name: str, *, is_data_action: bool
     ) -> PatternMatchResult:
         """Find pattern granting an operation."""
-        operation_lower = operation_name.lower()
-
         for perm in self.permissions:
             actions = perm.data_actions if is_data_action else perm.actions
             for pattern in actions:
                 if matches_pattern(operation_name, pattern):
                     condition = perm.condition or ""
-                    has_condition = bool(condition and operation_lower in condition.lower())
+                    has_condition = bool(condition)
                     return PatternMatchResult(
                         matched_pattern=pattern,
                         has_condition=has_condition,

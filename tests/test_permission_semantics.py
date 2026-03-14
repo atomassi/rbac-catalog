@@ -8,10 +8,12 @@ NOT: (union of all actions) - (union of all notActions)
 This matters when one block excludes an action that another block explicitly grants.
 """
 
+from unittest.mock import MagicMock
+
 import pytest
 
 from azurerbac.cache.build import _compute_role_coverage
-from azurerbac.web.services.models import RawPermissions
+from azurerbac.web.services.models import RawPermissions, RolePermissionAnalyzer
 from tests.helpers import make_role_definition, make_role_with_multiple_permissions
 
 # =============================================================================
@@ -438,3 +440,204 @@ class TestPermissionSemanticsRegression:
         # read/write should be granted (Block 1)
         assert "microsoft.storage/storageaccounts/read" in result.control
         assert "microsoft.storage/storageaccounts/write" in result.control
+
+
+# =============================================================================
+# RolePermissionAnalyzer.find_matching_pattern — condition detection
+# =============================================================================
+
+_ABAC_CONDITION_WITHOUT_OP = (
+    "@Request[Microsoft.Authorization/roleAssignments:RoleDefinitionId] "
+    "ForAnyOfAnyValues:GuidEquals "
+    "{8b9dfcab4b774632a6df94bd07820648,"
+    "5a382001fe3641ffbba48bf06bd54da9}"
+)
+
+_ABAC_CONDITION_WITH_OP = (
+    "((!(ActionMatches{'Microsoft.Authorization/roleAssignments/write'})) "
+    "OR (@Request[Microsoft.Authorization/roleAssignments:RoleDefinitionId] "
+    "ForAnyOfAnyValues:GuidEquals {acdd72a7}))"
+)
+
+_BLOB_CONDITION = (
+    "@Resource[Microsoft.Storage/storageAccounts/blobServices/"
+    "containers:name] StringEquals 'public'"
+)
+
+
+@pytest.fixture
+def _mock_cache() -> MagicMock:
+    """Minimal mock cache for RolePermissionAnalyzer."""
+    cache = MagicMock()
+    cache.restore_operation_casing = MagicMock(side_effect=lambda x: x)
+    cache.get_role_coverage = MagicMock(return_value=None)
+    return cache
+
+
+class TestFindMatchingPatternCondition:
+    """Condition & pattern detection in find_matching_pattern (parametrized).
+
+    Regression: previously has_condition was only True when the operation name
+    appeared verbatim inside the condition text.
+    """
+
+    @pytest.mark.parametrize(
+        "label, actions, data_actions, condition, query_op, is_data, "
+        "expected_pattern, expected_has_condition, expected_condition",
+        [
+            pytest.param(
+                "no_condition",
+                ["Microsoft.Authorization/roleAssignments/read"],
+                [],
+                None,
+                "Microsoft.Authorization/roleAssignments/read",
+                False,
+                "Microsoft.Authorization/roleAssignments/read",
+                False,
+                None,
+                id="no-condition",
+            ),
+            pytest.param(
+                "condition_without_op_name",
+                ["Microsoft.Authorization/roleAssignments/write"],
+                [],
+                _ABAC_CONDITION_WITHOUT_OP,
+                "Microsoft.Authorization/roleAssignments/write",
+                False,
+                "Microsoft.Authorization/roleAssignments/write",
+                True,
+                _ABAC_CONDITION_WITHOUT_OP,
+                id="condition-without-op-name",
+            ),
+            pytest.param(
+                "condition_with_op_name",
+                ["Microsoft.Authorization/roleAssignments/write"],
+                [],
+                _ABAC_CONDITION_WITH_OP,
+                "Microsoft.Authorization/roleAssignments/write",
+                False,
+                "Microsoft.Authorization/roleAssignments/write",
+                True,
+                _ABAC_CONDITION_WITH_OP,
+                id="condition-with-op-name",
+            ),
+            pytest.param(
+                "wildcard_with_condition",
+                ["Microsoft.Authorization/*"],
+                [],
+                _ABAC_CONDITION_WITHOUT_OP,
+                "Microsoft.Authorization/roleAssignments/write",
+                False,
+                "Microsoft.Authorization/*",
+                True,
+                _ABAC_CONDITION_WITHOUT_OP,
+                id="wildcard-with-condition",
+            ),
+            pytest.param(
+                "data_action_with_condition",
+                [],
+                ["Microsoft.Storage/storageAccounts/blobServices/containers/blobs/read"],
+                _BLOB_CONDITION,
+                "Microsoft.Storage/storageAccounts/blobServices/containers/blobs/read",
+                True,
+                "Microsoft.Storage/storageAccounts/blobServices/containers/blobs/read",
+                True,
+                _BLOB_CONDITION,
+                id="data-action-with-condition",
+            ),
+            pytest.param(
+                "no_match",
+                ["Microsoft.Compute/*/read"],
+                [],
+                None,
+                "Microsoft.Storage/storageAccounts/read",
+                False,
+                None,
+                False,
+                None,
+                id="no-match",
+            ),
+            pytest.param(
+                "control_not_in_data",
+                [],
+                ["Microsoft.Storage/storageAccounts/blobServices/containers/blobs/read"],
+                None,
+                "Microsoft.Storage/storageAccounts/blobServices/containers/blobs/read",
+                False,
+                None,
+                False,
+                None,
+                id="control-op-not-in-data-actions",
+            ),
+        ],
+    )
+    def test_single_block(
+        self,
+        _mock_cache: MagicMock,
+        label: str,
+        actions: list[str],
+        data_actions: list[str],
+        condition: str | None,
+        query_op: str,
+        is_data: bool,
+        expected_pattern: str | None,
+        expected_has_condition: bool,
+        expected_condition: str | None,
+    ) -> None:
+        role = make_role_definition(
+            role_name="Test Role",
+            role_id="test-id",
+            actions=actions,
+            data_actions=data_actions,
+            condition=condition,
+        )
+        analyzer = RolePermissionAnalyzer(role, cache=_mock_cache)
+
+        result = analyzer.find_matching_pattern(query_op, is_data_action=is_data)
+
+        assert result.matched_pattern == expected_pattern
+        assert result.has_condition is expected_has_condition
+        assert result.condition_text == expected_condition
+
+    @pytest.mark.parametrize(
+        "query_op, expected_has_condition, expected_condition",
+        [
+            pytest.param(
+                "Microsoft.Authorization/roleAssignments/write",
+                True,
+                _ABAC_CONDITION_WITHOUT_OP,
+                id="matching-block-has-condition",
+            ),
+            pytest.param(
+                "Microsoft.Compute/virtualMachines/read",
+                False,
+                None,
+                id="matching-block-no-condition",
+            ),
+        ],
+    )
+    def test_multi_block(
+        self,
+        _mock_cache: MagicMock,
+        query_op: str,
+        expected_has_condition: bool,
+        expected_condition: str | None,
+    ) -> None:
+        """Multi-block: condition detected only for the block that matches."""
+        role = make_role_with_multiple_permissions(
+            "Multi Block Role",
+            "multi-id",
+            [
+                {"actions": ["Microsoft.Compute/virtualMachines/read"]},
+                {
+                    "actions": ["Microsoft.Authorization/roleAssignments/write"],
+                    "condition": _ABAC_CONDITION_WITHOUT_OP,
+                },
+            ],
+        )
+        analyzer = RolePermissionAnalyzer(role, cache=_mock_cache)
+
+        result = analyzer.find_matching_pattern(query_op, is_data_action=False)
+
+        assert result.has_condition is expected_has_condition
+        assert result.condition_text == expected_condition

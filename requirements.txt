@@ -64,7 +64,7 @@ llama-index-workflows==2.11.6
 llama-cloud==0.1.35
 llama-cloud-services==0.6.54
 llama-parse==0.6.54
-openai==2.28.0
+openai==2.29.0
 
 # Retry logic
 tenacity==9.1.4

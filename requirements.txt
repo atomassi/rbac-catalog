@@ -31,14 +31,14 @@ typing_extensions>=4.0.0
 
 # PyTorch - use CPU-only on Linux (Azure deployment), standard on macOS
 --extra-index-url https://download.pytorch.org/whl/cpu
-torch==2.10.0; sys_platform == "darwin"
+torch==2.11.0+cpu; sys_platform == "darwin"
 torch==2.10.0+cpu; sys_platform == "linux"
 
 # Scientific computing for sparse matrices
 scipy==1.17.1
 
 # Sentence embeddings for semantic search
-sentence-transformers==5.3.0
+sentence-transformers==5.4.0
 transformers==4.57.6
 
 # ColBERT for token-level late interaction

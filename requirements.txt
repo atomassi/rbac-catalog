@@ -48,7 +48,7 @@ langchain==0.3.27
 langchain-community==0.3.27
 langchain-core==0.3.82
 langchain-text-splitters==0.3.11
-langsmith==0.6.3
+langsmith==0.7.31
 
 # LlamaIndex - pin all sub-packages to avoid pip backtracking
 llama-index==0.14.10

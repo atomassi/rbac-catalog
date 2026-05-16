@@ -6,6 +6,19 @@
 [![Python](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
+> [!IMPORTANT]
+> **The public site at [rbac-catalog.dev](https://rbac-catalog.dev/) will be decommissioned on June 12, 2026.**
+>
+> The full source — application code, Bicep templates, and post-deploy
+> scripts — stays in this repository under the MIT license. You can stand
+> up your own copy on Azure in about 15 minutes by following the
+> step-by-step walkthrough in [`buildout/README.md`](buildout/README.md).
+> See also [`buildout/ARCHITECTURE.md`](buildout/ARCHITECTURE.md) for the
+> design rationale and resource breakdown.
+>
+> Microsoft's official Azure built-in roles reference is at
+> [learn.microsoft.com/azure/role-based-access-control/built-in-roles](https://learn.microsoft.com/azure/role-based-access-control/built-in-roles).
+
 **Live site:** [rbac-catalog.dev](https://rbac-catalog.dev/)
 
 A comprehensive catalog and monitoring tool for [Azure built-in RBAC roles](https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles). Browse roles, explore their permissions, track changes over time, find least-privilege roles based on operation requirements, and get AI-powered role recommendations.

@@ -2,13 +2,21 @@
 // Azure RBAC Catalog — single-file Bicep entry point
 // ============================================================================
 // Mandatory : App Service + ACR + PostgreSQL (AAD auth) + Log Analytics + App Insights
-// Optional  : VNet, Ollama VM, deployment slots, Automation runbooks
+// Optional  : deployment slots (staging + ppe)
+//
+// Out of scope by design:
+//   * Ollama VM / VNet — the public site runs without AI when
+//     ``OLLAMA_BASE_URL`` is empty; bring your own Ollama endpoint and set
+//     ``OLLAMA_BASE_URL`` post-deploy if you want AI features.
+//   * Automation Account / housekeeping runbooks — not required to run
+//     the site. ACR Basic does not support retention; prune images out of
+//     band if/when needed.
 //
 // Edit parameters/*.bicepparam, then run `./scripts/deploy.sh`.
 // ============================================================================
 
 metadata name        = 'azurerbac-buildout'
-metadata description = 'Subscription-scoped deployment of the Azure RBAC Catalog (App Service + ACR + PostgreSQL + monitoring, with optional VNet/Ollama VM/slots/automation).'
+metadata description = 'Subscription-scoped deployment of the Azure RBAC Catalog (App Service + ACR + PostgreSQL + monitoring, with optional deployment slots).'
 
 targetScope = 'subscription'
 
@@ -23,7 +31,7 @@ param environmentName string = 'prod'
 @description('Resource group name to create or update.')
 param resourceGroupName string = 'myapp-rg'
 
-@description('Primary Azure region (App Service, monitoring, optional VNet/VM).')
+@description('Primary Azure region (App Service, monitoring).')
 param location string = 'westeurope'
 
 @description('Region for the PostgreSQL Flexible Server. Defaults to `location`.')
@@ -53,9 +61,6 @@ param postgresStorageGB int = 32
 @description('PostgreSQL major version.')
 param postgresVersion string = '17'
 
-@description('Ollama VM size (only used when deployOllamaVm = true).')
-param ollamaVmSize string = 'Standard_B2als_v2'
-
 @description('PostgreSQL administrator username (initial bootstrap; the app uses Entra ID after).')
 param postgresAdminUser string = 'pgadmin'
 
@@ -63,26 +68,11 @@ param postgresAdminUser string = 'pgadmin'
 @secure()
 param postgresAdminPassword string
 
-@description('SSH public key authorized on the Ollama VM. Required only when deployOllamaVm = true.')
-param sshPublicKey string = ''
-
-@description('Public IP allowed to SSH the Ollama VM. Required only when deployOllamaVm = true.')
-param adminIpAddress string = ''
-
-@description('Provision the VNet + subnets + Ollama NSG. Required when deployOllamaVm = true.')
-param deployVNet bool = false
-
-@description('Provision the Ollama VM (Ubuntu, B2als_v2). Requires deployVNet = true.')
-param deployOllamaVm bool = false
-
 @description('Provision staging + ppe deployment slots. Recommended (not required) for blue/green deploys.')
 param deploySlots bool = false
 
-@description('Provision Automation Account + housekeeping runbooks (ACR cleanup, PPE shutdown).')
-param deployAutomation bool = false
-
-@description('Override the OLLAMA_BASE_URL env var injected into the App Service. Empty = auto-compute from the VM IP, or AI disabled.')
-param ollamaBaseUrlOverride string = ''
+@description('Ollama endpoint reachable from the App Service. Empty = AI features disabled (the site still works for browsing and rule-based recommendations).')
+param ollamaBaseUrl string = ''
 
 @description('Enforce HTTPS-only on the App Service. Default: true. Set to false ONLY if fronting the app with a Cloudflare Flexible (HTTP-to-origin) reverse proxy.')
 param appServiceHttpsOnly bool = true
@@ -102,11 +92,8 @@ var n = {
   plan:       '${baseName}-plan'
   acr:        '${baseName}registry'
   pg:         '${baseName}-pg'
-  vnet:       '${baseName}-vnet'
   logs:       '${baseName}-logs'
   insights:   '${baseName}-insights'
-  automation: '${baseName}-automation'
-  ollama:     '${baseName}-ollama'
 }
 
 var tags = {
@@ -128,12 +115,6 @@ resource rg 'Microsoft.Resources/resourceGroups@2024-03-01' = {
 // ---------------------------------------------------------------------------
 // Modules
 // ---------------------------------------------------------------------------
-
-module network 'modules/network.bicep' = if (deployVNet) {
-  scope: rg
-  name: 'network'
-  params: { vnetName: n.vnet, location: location, tags: tags, adminIpAddress: adminIpAddress }
-}
 
 module monitoring 'modules/monitoring.bicep' = {
   scope: rg
@@ -160,24 +141,6 @@ module postgres 'modules/postgres.bicep' = {
   }
 }
 
-module ollamaVm 'modules/ollama-vm.bicep' = if (deployOllamaVm && deployVNet) {
-  scope: rg
-  name: 'ollama-vm'
-  params: {
-    vmName: n.ollama
-    location: location
-    tags: tags
-    vmSize: ollamaVmSize
-    sshPublicKey: sshPublicKey
-    subnetId: deployVNet ? network!.outputs.ollamaSubnetId : ''
-  }
-}
-
-// OLLAMA_BASE_URL: explicit override wins; otherwise auto-compute from the VM IP.
-var ollamaBaseUrl = !empty(ollamaBaseUrlOverride)
-  ? ollamaBaseUrlOverride
-  : (deployOllamaVm && deployVNet ? 'http://${ollamaVm!.outputs.privateIp}:11434' : '')
-
 module appService 'modules/appservice.bicep' = {
   scope: rg
   name: 'appservice'
@@ -194,7 +157,6 @@ module appService 'modules/appservice.bicep' = {
     // PG role created by scripts/grant-postgres-aad-admin.sh matches the App
     // Service name (its MI display name).
     postgresUser: n.app
-    appServiceSubnetId: deployVNet ? network!.outputs.appServiceSubnetId : ''
     environmentName: environmentName
     deploySlots: deploySlots
     ollamaBaseUrl: ollamaBaseUrl
@@ -210,20 +172,8 @@ module acr 'modules/acr.bicep' = {
     location: acrLocation
     tags: tags
     appServicePrincipalId: appService.outputs.appServicePrincipalId
-    logAnalyticsId: monitoring.outputs.logAnalyticsId
-  }
-}
-
-module automation 'modules/automation.bicep' = if (deployAutomation) {
-  scope: rg
-  name: 'automation'
-  params: {
-    accountName: n.automation
-    location: location
-    tags: tags
-    acrName: n.acr
-    appServiceName: n.app
-    runPpeShutdown: deploySlots
+    stagingSlotPrincipalId: appService.outputs.stagingSlotPrincipalId
+    ppeSlotPrincipalId: appService.outputs.ppeSlotPrincipalId
     logAnalyticsId: monitoring.outputs.logAnalyticsId
   }
 }
@@ -238,7 +188,11 @@ output appServiceName        string = n.app
 output appInsightsName       string = n.insights
 output appServiceUrl         string = 'https://${appService.outputs.defaultHostname}'
 output appServicePrincipalId string = appService.outputs.appServicePrincipalId
+// Slot principal IDs are emitted so post-deploy bootstrap (in particular
+// scripts/grant-postgres-aad-admin.sh) can grant PostgreSQL access to each
+// slot's managed identity. Empty when ``deploySlots = false``.
+output stagingSlotPrincipalId string = appService.outputs.stagingSlotPrincipalId
+output ppeSlotPrincipalId     string = appService.outputs.ppeSlotPrincipalId
 output acrName               string = n.acr
 output acrLoginServer        string = acr.outputs.loginServer
 output postgresFqdn          string = postgres.outputs.fqdn
-output ollamaPrivateIp       string = deployOllamaVm && deployVNet ? ollamaVm!.outputs.privateIp : ''

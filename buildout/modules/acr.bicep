@@ -18,6 +18,12 @@ param tags object
 @description('Principal ID of the App Service managed identity (granted AcrPull).')
 param appServicePrincipalId string
 
+@description('Principal ID of the staging slot managed identity. Empty when slots are not deployed; granted AcrPull when set.')
+param stagingSlotPrincipalId string = ''
+
+@description('Principal ID of the ppe slot managed identity. Empty when slots are not deployed; granted AcrPull when set.')
+param ppeSlotPrincipalId string = ''
+
 @description('Log Analytics workspace ID. When non-empty, registry events are forwarded for security monitoring.')
 param logAnalyticsId string = ''
 
@@ -30,9 +36,11 @@ resource acr 'Microsoft.ContainerRegistry/registries@2023-11-01-preview' = {
     adminUserEnabled: false
     anonymousPullEnabled: false
     publicNetworkAccess: 'Enabled'
-    policies: {
-      retentionPolicy: { status: 'enabled', days: 7 }
-    }
+    // NOTE: ACR's built-in ``policies.retentionPolicy`` is a Premium-SKU
+    // feature and fails deployment on Basic registries. The buildout does
+    // not provision Automation runbooks, so prune stale manifests out of
+    // band when needed (or switch to Premium and re-enable the policy
+    // here if/when image volume justifies it).
   }
 }
 
@@ -45,6 +53,29 @@ resource acrPull 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   properties: {
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', acrPullRoleId)
     principalId: appServicePrincipalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+// Deployment slots have their own system-assigned identities, so each
+// slot needs its own AcrPull grant — otherwise the slot fails to pull
+// the same private image at first start.
+resource acrPullStaging 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(stagingSlotPrincipalId)) {
+  name: guid(acr.id, stagingSlotPrincipalId, acrPullRoleId)
+  scope: acr
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', acrPullRoleId)
+    principalId: stagingSlotPrincipalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+resource acrPullPpe 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(ppeSlotPrincipalId)) {
+  name: guid(acr.id, ppeSlotPrincipalId, acrPullRoleId)
+  scope: acr
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', acrPullRoleId)
+    principalId: ppeSlotPrincipalId
     principalType: 'ServicePrincipal'
   }
 }

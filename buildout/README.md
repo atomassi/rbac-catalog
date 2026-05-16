@@ -17,20 +17,27 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for design rationale.
 
 - App Service Plan (Linux, P0v3) + App Service (system-assigned MI)
 - Azure Container Registry (Basic)
-- PostgreSQL Flexible Server v17 — **Entra ID auth only**, no password in app config
+- PostgreSQL Flexible Server v17 — Entra ID auth (password auth is also
+  enabled on first deploy so the AAD-mapped role can be provisioned; see
+  [§ Security notes](#security-notes))
 - Log Analytics workspace + Application Insights
 
-**Optional** (feature flags in your `.bicepparam`):
+**Optional** (feature flag in your `.bicepparam`):
 
 | Flag | Adds | Status |
 |---|---|---|
 | `deploySlots` | `staging` + `ppe` deployment slots | **Recommended** for blue/green deploys (not required) |
-| `deployVNet` | VNet + subnets + Ollama NSG | Required only if `deployOllamaVm = true` |
-| `deployOllamaVm` | Ubuntu VM running Ollama | Skip if `OLLAMA_BASE_URL` points to an external endpoint |
-| `deployAutomation` | Automation Account + ACR cleanup + slot shutdown | Pure housekeeping |
+
+**Out of scope by design** — intentionally NOT provisioned by this buildout
+so the templates stay small and predictable:
+
+| Skipped | Why |
+|---|---|
+| **Ollama VM / VNet** | An always-on VM-hosted Ollama is expensive (~$30 / month) and rarely useful for a public demo site. The app degrades gracefully when `OLLAMA_BASE_URL` is empty — the catalog still browses, search still works, only the LLM-backed recommendation modes are disabled. Bring your own Ollama-compatible endpoint and set `OLLAMA_BASE_URL` in `.env` if you want AI features. |
+| **Automation Account / runbooks** | Useful only as housekeeping (ACR pruning, PPE-slot shutdown). ACR Basic does not support retention policies anyway; prune images out of band when needed. Removing this avoids shipping empty runbook scaffolds. |
 
 Two profiles ship out of the box:
-- [`parameters/prod.bicepparam`](parameters/prod.bicepparam) — production baseline (App Service + slots + VNet + ACR + PG + monitoring) ~$80 / month. Ollama VM and Automation are opt-in (set them to `true` in the file, or pass `--parameters deployOllamaVm=true deployAutomation=true` to `az`).
+- [`parameters/prod.bicepparam`](parameters/prod.bicepparam) — production baseline with slots (~$77 / month)
 - [`parameters/dev.bicepparam`](parameters/dev.bicepparam) — mandatory only, cheap SKUs (~$20 / month)
 
 ---
@@ -51,8 +58,7 @@ az login
 ```
 
 You also need **Owner** (or Contributor + User Access Administrator) on the
-target subscription. For the optional Ollama VM you'll also need an SSH
-public key (`~/.ssh/id_ed25519.pub`).
+target subscription.
 
 ---
 
@@ -78,14 +84,10 @@ param baseName          = 'myapp'        // 3-15 alphanumeric chars
 `<base>-pg`, …). The App Service, ACR, and PG server names must be
 globally unique — pick something distinctive.
 
-If you don't need all the optional features, flip them in the same file
-(every flag defaults to `false`):
+If you don't need slots, flip the flag in the same file:
 
 ```bicep
-param deployVNet       = false
-param deployOllamaVm   = false
-param deploySlots      = false
-param deployAutomation = false
+param deploySlots = false
 ```
 
 ### 3. Set secrets in `.env`
@@ -121,8 +123,8 @@ To preview changes without applying them:
 
 ### 5. Push the first image + populate the DB
 
-The App Service is now running but stuck — no image exists yet. Build it,
-restart, and trigger the first scans:
+The App Service is now running but stuck — no image exists yet. Build it
+and restart:
 
 ```bash
 ACR=$(jq -r .acrName.value .deploy-outputs.json)
@@ -137,9 +139,12 @@ az acr build --registry "$ACR" --image azurerbac:latest \
 cd buildout
 
 az webapp restart -n "$APP" -g "$RG"
-curl -X POST "$URL/api/admin/scan/roles"
-curl -X POST "$URL/api/admin/scan/operations"
 ```
+
+The background worker runs the first role + operations scan automatically
+on startup (the buildout sets `RUN_SCAN_ON_STARTUP=true` and
+`RUN_OPERATIONS_SCAN_ON_STARTUP=true`). The catalog is populated within a
+few minutes; no manual scan invocation is required.
 
 **Verify**: `curl -fsS "$URL/healthz"` returns `{"status":"ok"}` and the
 homepage at `$URL` loads.
@@ -173,18 +178,31 @@ One-time setup, after your first successful `deploy.sh`:
 ./scripts/setup-github-oidc.sh <github-org-or-user>/<repo>
 ```
 
-The script creates the Entra ID app, federated credentials, and role
-assignments (Contributor on the RG, AcrPush on the registry), then prints
-the Secrets / Variables to add under
-**GitHub → Settings → Secrets and variables → Actions**:
+The script creates the Entra ID app, federated credentials (one per GitHub
+environment used by the workflows: `staging`, `production`, `ppe`, plus
+`main` branch and pull requests), and **least-privilege** role assignments:
+
+- `AcrPush` on the registry
+- `Website Contributor` on the App Service
+- `Reader` on the resource group
+
+It does **not** grant Contributor on the RG. If you later need Bicep
+redeploys from CI, add a narrower custom role rather than widening
+Contributor.
+
+Then add these to **GitHub → Settings → Secrets and variables → Actions**:
 
 | Type | Name |
 |---|---|
 | Secret | `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID` |
 | Variable | `ACR_NAME`, `APP_SERVICE_NAME`, `RESOURCE_GROUP_NAME` |
 
-Once those are set, the existing workflows will pick them up on the next
-run — nothing to copy or commit.
+> ⚠️ The shipped workflows in [`.github/workflows/`](../.github/workflows/)
+> currently hard-code `APP_NAME`, `RESOURCE_GROUP`, `ACR_NAME`, and
+> `ACR_LOGIN_SERVER` in their `env:` blocks. If you deploy with custom
+> names, edit those `env:` values to match (or change the workflows to
+> read `${{ vars.APP_SERVICE_NAME }}` etc.) — setting the GitHub
+> Variables alone is not enough until the workflows pick them up.
 
 ---
 
@@ -230,9 +248,7 @@ az webapp deployment slot swap -n "$APP" -g "$RG" --slot ppe --target-slot produ
 |---|---|
 | **Mandatory only** (P0v3 + B1ms PG + ACR Basic + Log Analytics) | **≈ $77** |
 | + slots (free with the plan) | + $0 |
-| + VNet + Ollama VM (B2als_v2) | + $34 |
-| + Automation (free tier) | + $0 |
-| **Full prod profile** | **≈ $111** |
+| **Full prod profile** | **≈ $77** |
 
 Dev profile lands at **≈ $20 / month**.
 
@@ -251,10 +267,10 @@ run (or failed). Re-run it manually and restart the App Service.
 **`RoleAssignmentExists` on re-deploy** — safe to ignore; the AcrPull
 assignment uses `guid()` and is idempotent.
 
-**Ollama unreachable from the App Service** — only relevant if you
-deployed the optional VM. The NSG allows port 11434 from
-`10.0.2.0/24`; App Service VNet integration is wired automatically when
-`deployVNet = true` and `deployOllamaVm = true`.
+**AI recommendations return only TF-IDF / embedding results** — the
+buildout does NOT provision Ollama. Set `OLLAMA_BASE_URL` in `.env`
+(pointing at an Ollama-compatible endpoint of your choice) and redeploy
+to enable the LLM-backed modes.
 
 ---
 
@@ -268,27 +284,20 @@ buildout/
 ├── bicepconfig.json                   # strict linter rules
 ├── main.bicep                         # single subscription-scoped template
 ├── parameters/
-│   ├── prod.bicepparam                # VNet + slots ON; Ollama + Automation opt-in
+│   ├── prod.bicepparam                # slots ON
 │   └── dev.bicepparam                 # mandatory only
 ├── modules/
-│   ├── network.bicep                  # (optional) VNet + NSG
 │   ├── monitoring.bicep               # Log Analytics + App Insights
-│   ├── acr.bicep                      # Container Registry + AcrPull
+│   ├── acr.bicep                      # Container Registry + AcrPull (incl. slots)
 │   ├── postgres.bicep                 # PG Flexible Server + AAD auth
-│   ├── appservice.bicep               # Plan + app (+ optional slots)
-│   ├── ollama-vm.bicep                # (optional) Ubuntu + Ollama
-│   └── automation.bicep               # (optional) Automation account
+│   └── appservice.bicep               # Plan + app + optional staging/ppe slots
 ├── dashboards/
 │   └── grafana-appinsights.template.json
-├── runbooks/
-│   ├── ACR-Cleanup.ps1
-│   └── PPE-Auto-Shutdown.ps1
-├── scripts/
-│   ├── deploy.sh                      # validate + deploy + DB grant
-│   ├── grant-postgres-aad-admin.sh    # PG Entra ID auth + grants
-│   ├── install-ollama.cloud-init.yaml # baked into the Ollama VM
-│   ├── render-grafana-dashboard.sh    # fills the dashboard template
-│   └── setup-github-oidc.sh           # creates the GitHub OIDC identity
+└── scripts/
+    ├── deploy.sh                      # validate + deploy + DB grant
+    ├── grant-postgres-aad-admin.sh    # PG Entra ID auth + grants (incl. slot identities)
+    ├── render-grafana-dashboard.sh    # fills the dashboard template
+    └── setup-github-oidc.sh           # creates the GitHub OIDC identity (per-environment FIDs)
 ```
 
 The CI workflows live at the repo root in
@@ -307,15 +316,12 @@ production-grade deployment you should review and (for the items marked
 |---|---|---|
 | **App Service inbound** | `httpsOnly = true`, `minTlsVersion = '1.2'` | If you front the app with Cloudflare in **Flexible** mode (HTTP-to-origin), set `appServiceHttpsOnly = false`. Prefer Cloudflare **Full (strict)** + `httpsOnly = true`. |
 | **PostgreSQL firewall** | `postgresAllowAllAzureServices = true` (rule `0.0.0.0` — reachable from every Azure tenant) | For production: set `postgresAllowAllAzureServices = false` and migrate to a Private Endpoint or a VNet-integrated server. The current rule is a documented Azure convenience that exposes the server to all Azure subscriptions. |
-| **PostgreSQL password auth** | `postgresEnablePasswordAuth = true` | Required for the first deployment so `grant-postgres-aad-admin.sh` can provision the AAD-mapped role. Re-deploy with `postgresEnablePasswordAuth = false` afterwards to remove the password attack surface; the app uses Entra ID. |
-| **PG admin firewall during bootstrap** | `grant-postgres-aad-admin.sh` opens the firewall to your public IP | The script now uses a stable rule name (`deploy-shell-temp`) and removes the rule on exit via `trap`. |
+| **PostgreSQL password auth** | `postgresEnablePasswordAuth = true` on first deploy | Required so `grant-postgres-aad-admin.sh` can provision the AAD-mapped role. The app itself never uses password auth (it uses Entra ID via `USE_MANAGED_IDENTITY=true`), but the server still accepts password auth until you redeploy with `postgresEnablePasswordAuth = false`. Doing so removes the password attack surface entirely. |
+| **PG admin firewall during bootstrap** | `grant-postgres-aad-admin.sh` opens the firewall to your public IP | The script uses a stable rule name (`deploy-shell-temp`) and removes the rule on exit via `trap`. |
 | **Container image** | App Service pulls `azurerbac:latest` | Pin to an immutable tag or digest in CI: pass `imageTag` to `appservice.bicep` (e.g. a Git SHA). |
 | **ACR public network** | `publicNetworkAccess = 'Enabled'`, `adminUserEnabled = false`, `anonymousPullEnabled = false` | For a closed network, switch to a Private Endpoint (Premium SKU required). |
-| **Automation Account roles** | Scoped: **AcrDelete** on the ACR + **Website Contributor** on the App Service | Already least-privilege. Avoid widening to Contributor. |
-| **GitHub Actions identity** | OIDC (no client secret) + scoped roles: **AcrPush** on ACR + **Website Contributor** on App + **Reader** on RG | If your workflow needs Bicep redeploy, add a narrower custom role rather than Contributor on the RG. |
-| **Ollama VM SSH** | NSG allows TCP/22 only from `adminIpAddress` (single IP); password auth disabled, SSH key only | Leave `adminIpAddress` empty to skip the SSH rule entirely; access via Azure Bastion. |
-| **Ollama VM Ollama port** | NSG allows TCP/11434 only from the App Service subnet (`10.0.2.0/24`); `OLLAMA_ORIGINS` is unset | Already locked down. |
-| **Diagnostic logging** | All resources (App, PG, ACR, Automation) forward `allLogs` + `AllMetrics` to Log Analytics | Already on. Add Defender for Cloud / Microsoft Defender for Containers for vulnerability scanning. |
+| **GitHub Actions identity** | OIDC (no client secret) + scoped roles: **AcrPush** on ACR + **Website Contributor** on App + **Reader** on RG, plus per-environment federated credentials (`staging`, `production`, `ppe`) | If your workflow needs Bicep redeploy, add a narrower custom role rather than Contributor on the RG. |
+| **Diagnostic logging** | All resources (App, PG, ACR) forward `allLogs` + `AllMetrics` to Log Analytics | Already on. Add Defender for Cloud / Microsoft Defender for Containers for vulnerability scanning. |
 | **Backups** | PG backup retention 7 days, no geo-redundancy | Increase `backupRetentionDays` and enable `geoRedundantBackup` for production. |
-| **Secrets in Bicep params** | `postgresAdminPassword` and `sshPublicKey` come from environment variables (`.env`, gitignored) — never written to disk in the repo | Already on. The `.bicepparam` files use `readEnvironmentVariable()`. |
+| **Secrets in Bicep params** | `postgresAdminPassword` comes from an environment variable (`.env`, gitignored) — never written to disk in the repo | Already on. The `.bicepparam` files use `readEnvironmentVariable()`. |
 

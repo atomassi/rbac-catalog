@@ -1,5 +1,5 @@
 // ============================================================================
-// Dev profile — mandatory resources only, cheaper SKUs.
+// Dev profile — cheaper SKUs, no slots.
 // ============================================================================
 
 using '../main.bicep'
@@ -9,6 +9,6 @@ param resourceGroupName  = 'myapp-dev-rg'
 param baseName           = 'myappdev'
 param appServicePlanSku  = 'B1'
 
-// (deployVNet/deployOllamaVm/deploySlots/deployAutomation default to false)
+// (deploySlots defaults to false)
 
 param postgresAdminPassword = readEnvironmentVariable('PG_ADMIN_PASSWORD', '')

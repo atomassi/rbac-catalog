@@ -82,12 +82,29 @@ ACR_ID=$(az acr show --name "$ACR" --query id -o tsv)
 assign_role() {
   local role="$1" scope="$2"
   echo "→ Granting '$role' on $scope..."
-  az role assignment create \
-    --assignee-object-id "$SP_OBJECT_ID" \
-    --assignee-principal-type ServicePrincipal \
-    --role "$role" \
-    --scope "$scope" \
-    --output none 2>/dev/null || true
+
+  # Suppress only the idempotent "RoleAssignmentExists" case. Permission
+  # errors, unknown role names, and invalid scopes MUST surface so the
+  # operator does not end up printing the GitHub configuration and
+  # walking away with broken CI auth.
+  local stderr
+  if stderr=$(az role assignment create \
+      --assignee-object-id "$SP_OBJECT_ID" \
+      --assignee-principal-type ServicePrincipal \
+      --role "$role" \
+      --scope "$scope" \
+      --output none 2>&1); then
+    return 0
+  fi
+
+  if grep -qiE 'RoleAssignmentExists|already exists' <<<"$stderr"; then
+    echo "  ✓ already exists"
+    return 0
+  fi
+
+  echo "ERROR: failed to assign '$role' on $scope:" >&2
+  echo "$stderr" >&2
+  exit 1
 }
 
 assign_role "AcrPush"              "$ACR_ID"
@@ -122,8 +139,22 @@ EOF
 }
 
 echo "→ Adding federated credentials for $REPO..."
-create_federated "main-branch"       "repo:${REPO}:ref:refs/heads/main"
-create_federated "pull-requests"     "repo:${REPO}:pull_request"
+# GitHub Actions builds an OIDC subject of either:
+#   * ``repo:<repo>:ref:refs/heads/<branch>``           (no environment)
+#   * ``repo:<repo>:pull_request``                       (no environment)
+#   * ``repo:<repo>:environment:<environment-name>``     (when ``environment:`` is set)
+#
+# The repository's deploy workflows pin ``environment: staging``,
+# ``environment: production``, and ``environment: ppe`` (see
+# ``.github/workflows/{deploy,deploy-ppe,rollback}.yml``). Without an
+# environment-keyed federated credential below, ``azure/login`` fails for
+# every deploy job with ``AADSTS70021: No matching federated identity
+# record found``.
+create_federated "main-branch"          "repo:${REPO}:ref:refs/heads/main"
+create_federated "pull-requests"        "repo:${REPO}:pull_request"
+create_federated "environment-staging"     "repo:${REPO}:environment:staging"
+create_federated "environment-production"  "repo:${REPO}:environment:production"
+create_federated "environment-ppe"         "repo:${REPO}:environment:ppe"
 
 # ---------------------------------------------------------------------------
 # 4. Print GitHub secrets / variables

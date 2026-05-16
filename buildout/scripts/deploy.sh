@@ -49,8 +49,7 @@ fi
 
 LOCATION="${LOCATION:-westeurope}"
 export PG_ADMIN_PASSWORD
-export SSH_PUBLIC_KEY="${SSH_PUBLIC_KEY:-}"
-export ADMIN_IP="${ADMIN_IP:-}"
+export OLLAMA_BASE_URL="${OLLAMA_BASE_URL:-}"
 
 if [[ -n "${SUBSCRIPTION_ID:-}" ]]; then
   az account set --subscription "$SUBSCRIPTION_ID"

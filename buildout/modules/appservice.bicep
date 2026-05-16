@@ -40,9 +40,6 @@ param postgresDatabase string = 'azurerbac'
 @description('PG role used by the AAD-token connection (matches the App Service name — its MI display name).')
 param postgresUser string
 
-@description('Resource ID of the App Service integration subnet. Empty = no VNet integration.')
-param appServiceSubnetId string
-
 @description('Environment name. Drives APP_ENVIRONMENT_NAME.')
 param environmentName string
 
@@ -74,25 +71,58 @@ resource plan 'Microsoft.Web/serverfarms@2024-04-01' = {
 var commonAppSettings = [
   { name: 'WEBSITES_PORT', value: '8000' }
   { name: 'WEBSITES_ENABLE_APP_SERVICE_STORAGE', value: 'false' }
-  { name: 'APP_ENVIRONMENT_NAME', value: environmentName == 'prod' ? 'production' : environmentName }
   { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: appInsightsConnectionString }
   { name: 'USE_MANAGED_IDENTITY', value: 'true' }
   { name: 'MSI_DB_HOST', value: postgresHost }
   { name: 'MSI_DB_PORT', value: '5432' }
   { name: 'MSI_DB_NAME', value: postgresDatabase }
-  { name: 'MSI_DB_USER', value: postgresUser }
   { name: 'OLLAMA_BASE_URL', value: ollamaBaseUrl }
   { name: 'OLLAMA_MODEL', value: 'qwen-rbac-v5' }
   { name: 'ROLE_SCAN_ENABLED', value: 'true' }
   { name: 'OPERATIONS_SCAN_ENABLED', value: 'true' }
-  { name: 'RUN_SCAN_ON_STARTUP', value: 'false' }
+  // Run both scans on first startup so a brand-new deployment populates
+  // the role + operation catalog immediately. Without this the worker only
+  // scans on its 2-hour / 24-hour cadence, and the site renders empty
+  // until the first scheduled tick.
+  { name: 'RUN_SCAN_ON_STARTUP', value: 'true' }
+  { name: 'RUN_OPERATIONS_SCAN_ON_STARTUP', value: 'true' }
   { name: 'ROLES_POLL_INTERVAL_SECONDS', value: '7200' }
   { name: 'OPERATIONS_POLL_INTERVAL_SECONDS', value: '86400' }
   { name: 'LOG_LEVEL', value: 'INFO' }
   { name: 'MCP_SERVER_ENABLED', value: 'true' }
 ]
 
-var commonSiteConfig = {
+// Resolve the production environment label.
+//   * environmentName == 'prod' is the buildout naming token; the runtime
+//     value is 'production' so telemetry matches the public site.
+var prodEnvLabel = environmentName == 'prod' ? 'production' : environmentName
+
+// APP_ENVIRONMENT_NAME and MSI_DB_USER are per-slot:
+//   * APP_ENVIRONMENT_NAME → telemetry / operator log distinction.
+//   * MSI_DB_USER          → each slot has its OWN system-assigned identity
+//                            and therefore its own pgaadauth-registered PG
+//                            role. ``scripts/grant-postgres-aad-admin.sh``
+//                            creates roles named ``<app>``, ``<app>-slot-staging``,
+//                            ``<app>-slot-ppe``.
+//
+// Both names are listed in ``slotConfigNames`` below so a slot swap does
+// NOT carry the labels with the code — otherwise a staging→production swap
+// would make the (now-production) slot use the staging PG role and pollute
+// staging telemetry.
+var prodAppSettings    = concat(commonAppSettings, [
+  { name: 'APP_ENVIRONMENT_NAME', value: prodEnvLabel }
+  { name: 'MSI_DB_USER',          value: postgresUser }
+])
+var stagingAppSettings = concat(commonAppSettings, [
+  { name: 'APP_ENVIRONMENT_NAME', value: 'staging' }
+  { name: 'MSI_DB_USER',          value: '${postgresUser}-slot-staging' }
+])
+var ppeAppSettings     = concat(commonAppSettings, [
+  { name: 'APP_ENVIRONMENT_NAME', value: 'ppe' }
+  { name: 'MSI_DB_USER',          value: '${postgresUser}-slot-ppe' }
+])
+
+var commonSiteConfigBase = {
   linuxFxVersion: 'DOCKER|${acrLoginServer}/azurerbac:${imageTag}'
   acrUseManagedIdentityCreds: true
   alwaysOn: sku != 'B1' && sku != 'F1'
@@ -100,15 +130,25 @@ var commonSiteConfig = {
   ftpsState: 'Disabled'
   minTlsVersion: minTlsVersion
   scmMinTlsVersion: minTlsVersion
-  appSettings: commonAppSettings
 }
 
-// Properties shared between the production slot, staging, and ppe.
-var siteProperties = {
+// Properties shared between the production slot, staging, and ppe — but
+// each gets its own ``appSettings`` so APP_ENVIRONMENT_NAME differs per
+// slot.
+var prodSiteProperties = {
   serverFarmId: plan.id
-  virtualNetworkSubnetId: empty(appServiceSubnetId) ? null : appServiceSubnetId
   httpsOnly: httpsOnly
-  siteConfig: commonSiteConfig
+  siteConfig: union(commonSiteConfigBase, { appSettings: prodAppSettings })
+}
+var stagingSiteProperties = {
+  serverFarmId: plan.id
+  httpsOnly: httpsOnly
+  siteConfig: union(commonSiteConfigBase, { appSettings: stagingAppSettings })
+}
+var ppeSiteProperties = {
+  serverFarmId: plan.id
+  httpsOnly: httpsOnly
+  siteConfig: union(commonSiteConfigBase, { appSettings: ppeAppSettings })
 }
 
 resource app 'Microsoft.Web/sites@2024-04-01' = {
@@ -117,7 +157,7 @@ resource app 'Microsoft.Web/sites@2024-04-01' = {
   tags: tags
   kind: 'app,linux,container'
   identity: { type: 'SystemAssigned' }
-  properties: siteProperties
+  properties: prodSiteProperties
 }
 
 resource stagingSlot 'Microsoft.Web/sites/slots@2024-04-01' = if (deploySlots) {
@@ -127,7 +167,7 @@ resource stagingSlot 'Microsoft.Web/sites/slots@2024-04-01' = if (deploySlots) {
   tags: tags
   kind: 'app,linux,container'
   identity: { type: 'SystemAssigned' }
-  properties: siteProperties
+  properties: stagingSiteProperties
 }
 
 resource ppeSlot 'Microsoft.Web/sites/slots@2024-04-01' = if (deploySlots) {
@@ -137,7 +177,20 @@ resource ppeSlot 'Microsoft.Web/sites/slots@2024-04-01' = if (deploySlots) {
   tags: tags
   kind: 'app,linux,container'
   identity: { type: 'SystemAssigned' }
-  properties: siteProperties
+  properties: ppeSiteProperties
+}
+
+// Pin APP_ENVIRONMENT_NAME and MSI_DB_USER to their slot so a swap does
+// NOT move the env label or PG role with the code. Without this, a
+// staging→production swap would make the (now-production) slot keep
+// ``APP_ENVIRONMENT_NAME=staging`` and ``MSI_DB_USER=<app>-slot-staging``
+// and pollute production telemetry / use the wrong PG identity.
+resource appSlotConfigNames 'Microsoft.Web/sites/config@2024-04-01' = if (deploySlots) {
+  parent: app
+  name: 'slotConfigNames'
+  properties: {
+    appSettingNames: [ 'APP_ENVIRONMENT_NAME', 'MSI_DB_USER' ]
+  }
 }
 
 // Forward all diagnostic logs to Log Analytics.
@@ -160,3 +213,13 @@ output appServiceId string = app.id
 output appServiceName string = app.name
 output defaultHostname string = app.properties.defaultHostName
 output appServicePrincipalId string = app.identity.principalId
+
+// Slot-specific managed-identity principal IDs. Empty strings when
+// ``deploySlots = false`` so callers can pass them through bicep
+// without conditional wiring; the postgres-AAD-admin script skips
+// empties. Slot identities need their own ACR pull + PostgreSQL
+// grants — production-identity grants do NOT cover them.
+// ``stagingSlot``/``ppeSlot`` only exist when ``deploySlots`` is true;
+// the ``!.`` operator tells Bicep this access path is guarded.
+output stagingSlotPrincipalId string = deploySlots ? stagingSlot!.identity.principalId : ''
+output ppeSlotPrincipalId     string = deploySlots ? ppeSlot!.identity.principalId     : ''

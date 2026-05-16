@@ -5,9 +5,33 @@ the Azure RBAC Catalog. Plan for **~15 minutes** end-to-end.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for design rationale.
 
-> A CDN / WAF in front of the App Service is **optional**. Both Cloudflare
-> and Azure Front Door are valid options — configure either externally;
-> neither is provisioned by these templates.
+---
+
+## Put it behind a reverse proxy / CDN for production
+
+The buildout provisions the App Service with its default
+`*.azurewebsites.net` hostname. That's fine for **dev, staging, internal
+tools, prototypes, and low-risk apps**. For an internet-facing production
+deployment, you should put **Cloudflare** or **Azure Front Door + WAF** in
+front and restrict the App Service so users can't reach it directly.
+
+You get:
+
+- **WAF** (OWASP rule set, custom rules).
+- **DDoS protection** at the edge.
+- **TLS termination & certificate management.**
+- **Bot filtering and edge rate-limiting.**
+- **Caching + global anycast** routing for latency / failover.
+- **Origin hiding** — the App Service IP / hostname is never exposed.
+- **Cleaner DNS** (use your custom domain; drop the `*.azurewebsites.net`
+  default).
+
+### References
+
+- [Azure Front Door overview](https://learn.microsoft.com/azure/frontdoor/front-door-overview)
+- [App Service access restrictions](https://learn.microsoft.com/azure/app-service/app-service-ip-restrictions)
+- [Private endpoint for App Service](https://learn.microsoft.com/azure/app-service/networking/private-endpoint)
+- [Cloudflare — protect your origin server](https://developers.cloudflare.com/fundamentals/security/protect-your-origin-server/)
 
 ---
 
@@ -62,92 +86,99 @@ target subscription.
 
 ---
 
-## Deploy from scratch (5 steps)
+## Deploy from scratch — copy/paste walkthrough
 
-### 1. Pick your subscription
+Total wall time: **~15 min**. Run every step from `buildout/`.
 
-```bash
-az account set --subscription <subscription_id>
-```
-
-### 2. Pick your names
-
-Edit [`parameters/prod.bicepparam`](parameters/prod.bicepparam) — only **two
-lines** matter for naming:
-
-```bicep
-param resourceGroupName = 'myapp-rg'
-param baseName          = 'myapp'        // 3-15 alphanumeric chars
-```
-
-`baseName` is the prefix for every resource (`<base>-app`, `<base>registry`,
-`<base>-pg`, …). The App Service, ACR, and PG server names must be
-globally unique — pick something distinctive.
-
-If you don't need slots, flip the flag in the same file:
-
-```bicep
-param deploySlots = false
-```
-
-### 3. Set secrets in `.env`
+### 1. Create your `.env`
 
 ```bash
+cd buildout
 cp .env.example .env
-$EDITOR .env       # fill in the placeholders
+$EDITOR .env                              # fill in SUBSCRIPTION_ID, RG_NAME,
+                                          # BASE_NAME, LOCATION, PG_ADMIN_PASSWORD
 source .env
 ```
 
-`.env` is gitignored. For non-interactive / CI deploys, see
-[§ Other ways to handle secrets](#other-ways-to-handle-secrets).
+> `BASE_NAME` becomes `<base>-app`, `<base>registry`, `<base>-pg`, etc.
+> The App Service, ACR, and PG server names are part of public DNS, so
+> pick something short and distinctive (3-15 alphanumeric).
 
-### 4. Deploy
+### 2. Log in to Azure
 
 ```bash
-./scripts/deploy.sh prod        # or 'dev' for the dev profile
+az login
+az account set --subscription "$SUBSCRIPTION_ID"
+az bicep install                          # one-time, no-op if already installed
 ```
 
-`deploy.sh`:
-1. Validates the template against Azure.
-2. Runs `az deployment sub create` (10-15 min — PG is the slow step).
-3. Saves the deployment outputs to `.deploy-outputs.json`.
-4. Configures Entra ID auth on PostgreSQL (runs
-   [`grant-postgres-aad-admin.sh`](scripts/grant-postgres-aad-admin.sh)
-   automatically — pass `--skip-pg-grant` to skip).
+You need **Owner** (or Contributor + User Access Administrator) on the
+subscription so the deployment can create the role assignments that wire
+AcrPull / DB grants automatically.
 
-To preview changes without applying them:
+### 3. (Optional) Dry-run with `--what-if`
 
 ```bash
 ./scripts/deploy.sh prod --what-if
 ```
 
-### 5. Push the first image + populate the DB
+Expected output: a list of resources to **Create** under
+`resourceGroups/$RG_NAME`. Any 3 "Unsupported" role-assignment entries
+are normal — they reference managed-identity principalIds that only
+exist after the apps are deployed.
 
-The App Service is now running but stuck — no image exists yet. Build it
-and restart:
+### 4. Deploy
 
 ```bash
-ACR=$(jq -r .acrName.value .deploy-outputs.json)
-APP=$(jq -r .appServiceName.value .deploy-outputs.json)
-RG=$(jq -r  .resourceGroupName.value .deploy-outputs.json)
-URL=$(jq -r .appServiceUrl.value .deploy-outputs.json)
+./scripts/deploy.sh prod
+```
 
-# From the repo root (where Dockerfile lives)
-cd ..
+`deploy.sh` does, in order:
+1. Validates the template against Azure (~10 s).
+2. Runs `az deployment sub create` (~10–15 min — PG is the slow step).
+3. Saves outputs to `buildout/.deploy-outputs.json`.
+4. Configures Entra ID auth on PostgreSQL by calling
+   [`grant-postgres-aad-admin.sh`](scripts/grant-postgres-aad-admin.sh)
+   (registers the App Service MI + each slot MI as PG roles and grants
+   them CRUD on the `azurerbac` database). Pass `--skip-pg-grant` to
+   skip this step.
+
+### 5. Push the first image
+
+The App Service is now running but has no image to pull. Build and push
+it from the repo root:
+
+```bash
+cd ..                                     # back to repo root (Dockerfile lives here)
+OUT=buildout/.deploy-outputs.json
+ACR=$(jq -r .acrName.value         "$OUT")
+APP=$(jq -r .appServiceName.value  "$OUT")
+RG=$(jq  -r .resourceGroupName.value "$OUT")
+URL=$(jq -r .appServiceUrl.value   "$OUT")
+
 az acr build --registry "$ACR" --image azurerbac:latest \
-  --build-arg VERSION="$(git describe --tags --always)" .
-cd buildout
+    --build-arg VERSION="$(git describe --tags --always 2>/dev/null || echo dev)" .
 
 az webapp restart -n "$APP" -g "$RG"
 ```
 
-The background worker runs the first role + operations scan automatically
-on startup (the buildout sets `RUN_SCAN_ON_STARTUP=true` and
-`RUN_OPERATIONS_SCAN_ON_STARTUP=true`). The catalog is populated within a
-few minutes; no manual scan invocation is required.
+The background worker (production slot only — staging/ppe are
+intentionally non-writers) runs the first role + operations scan on
+startup. The catalog populates within a few minutes.
 
-**Verify**: `curl -fsS "$URL/healthz"` returns `{"status":"ok"}` and the
-homepage at `$URL` loads.
+### 6. Verify
+
+```bash
+# Health endpoint
+curl -fsS "$URL/healthz"
+# {"status":"ok"}
+
+# Homepage
+curl -fsS -o /dev/null -w "%{http_code}\n" "$URL"
+# 200
+```
+
+Open `$URL` in a browser and you should see the role catalog.
 
 ---
 
@@ -161,48 +192,34 @@ variable will work — including:
 - **Azure Key Vault references** at deploy time — Microsoft's recommended
   pattern, nothing on disk. See
   [docs](https://learn.microsoft.com/azure/azure-resource-manager/templates/key-vault-parameter).
-- **GitHub Actions OIDC** — no secret stored at all; see CI section below.
+- **CI variables** — export `PG_ADMIN_PASSWORD`, `SUBSCRIPTION_ID`, `RG_NAME`,
+  `BASE_NAME`, `LOCATION` from your CI system's secret store before invoking
+  `./scripts/deploy.sh`.
 
 ---
 
-## CI/CD with GitHub Actions
+## Continuous deployment
 
-The repository already ships with workflows in
-[`.github/workflows/`](../.github/workflows/) (build, deploy, deploy-ppe,
-rollback). They authenticate to Azure via **OIDC federation** — no client
-secret is stored in GitHub.
+The buildout stops at "infrastructure ready". Wiring up continuous deployment
+to the App Service is intentionally out of scope so you can use whichever
+pipeline you prefer:
 
-One-time setup, after your first successful `deploy.sh`:
+- **GitHub Actions** — see Azure's
+  [login-via-OIDC guide](https://learn.microsoft.com/azure/developer/github/connect-from-azure)
+  and the
+  [`azure/webapps-deploy`](https://github.com/Azure/webapps-deploy) action.
+- **Azure DevOps** — use the
+  [Azure Web App for Containers](https://learn.microsoft.com/azure/devops/pipelines/tasks/reference/azure-web-app-container-v1)
+  task with a workload-identity service connection.
+- **Direct from the Portal** — App Service → *Deployment Center* → choose
+  *Container Registry* (recommended for this image), *GitHub Actions*, or
+  *Azure Pipelines*. The Portal will configure credentials and write the
+  required app settings for you.
 
-```bash
-./scripts/setup-github-oidc.sh <github-org-or-user>/<repo>
-```
-
-The script creates the Entra ID app, federated credentials (one per GitHub
-environment used by the workflows: `staging`, `production`, `ppe`, plus
-`main` branch and pull requests), and **least-privilege** role assignments:
-
-- `AcrPush` on the registry
-- `Website Contributor` on the App Service
-- `Reader` on the resource group
-
-It does **not** grant Contributor on the RG. If you later need Bicep
-redeploys from CI, add a narrower custom role rather than widening
-Contributor.
-
-Then add these to **GitHub → Settings → Secrets and variables → Actions**:
-
-| Type | Name |
-|---|---|
-| Secret | `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID` |
-| Variable | `ACR_NAME`, `APP_SERVICE_NAME`, `RESOURCE_GROUP_NAME` |
-
-> ⚠️ The shipped workflows in [`.github/workflows/`](../.github/workflows/)
-> currently hard-code `APP_NAME`, `RESOURCE_GROUP`, `ACR_NAME`, and
-> `ACR_LOGIN_SERVER` in their `env:` blocks. If you deploy with custom
-> names, edit those `env:` values to match (or change the workflows to
-> read `${{ vars.APP_SERVICE_NAME }}` etc.) — setting the GitHub
-> Variables alone is not enough until the workflows pick them up.
+Whichever option you pick, the App Service is already configured to pull
+its image with the system-assigned managed identity (`AcrPull` granted on
+the registry by Bicep), so your pipeline only needs *push* permission on
+the ACR — no admin credentials required.
 
 ---
 
@@ -229,11 +246,12 @@ plugin).
 
 ## Common commands
 
-Read names from `.deploy-outputs.json` to avoid hardcoding:
+Read names from `.deploy-outputs.json` to avoid hardcoding (run from
+`buildout/`):
 
 ```bash
-APP=$(jq -r .appServiceName.value     .deploy-outputs.json)
-RG=$(jq -r  .resourceGroupName.value  .deploy-outputs.json)
+APP=$(jq -r .appServiceName.value    .deploy-outputs.json)
+RG=$(jq  -r .resourceGroupName.value .deploy-outputs.json)
 
 az webapp log tail   -n "$APP" -g "$RG"                                            # live logs
 az webapp restart    -n "$APP" -g "$RG"                                            # restart
@@ -259,7 +277,8 @@ Dev profile lands at **≈ $20 / month**.
 **`ResourceNameNotAvailable`** — the App Service / ACR / PG name is taken
 globally. Pick a more distinctive `baseName`.
 
-**Container won't start (5xx)** — no image yet. Run step 5 above.
+**Container won't start (5xx)** — no image yet. Run step 5 of the
+walkthrough.
 
 **PG auth errors in the app logs** — `grant-postgres-aad-admin.sh` didn't
 run (or failed). Re-run it manually and restart the App Service.
@@ -296,13 +315,8 @@ buildout/
 └── scripts/
     ├── deploy.sh                      # validate + deploy + DB grant
     ├── grant-postgres-aad-admin.sh    # PG Entra ID auth + grants (incl. slot identities)
-    ├── render-grafana-dashboard.sh    # fills the dashboard template
-    └── setup-github-oidc.sh           # creates the GitHub OIDC identity (per-environment FIDs)
+    └── render-grafana-dashboard.sh    # fills the dashboard template
 ```
-
-The CI workflows live at the repo root in
-[`.github/workflows/`](../.github/workflows/) — they're standard GitHub
-Actions files, not specific to this folder.
 
 ---
 
@@ -320,7 +334,6 @@ production-grade deployment you should review and (for the items marked
 | **PG admin firewall during bootstrap** | `grant-postgres-aad-admin.sh` opens the firewall to your public IP | The script uses a stable rule name (`deploy-shell-temp`) and removes the rule on exit via `trap`. |
 | **Container image** | App Service pulls `azurerbac:latest` | Pin to an immutable tag or digest in CI: pass `imageTag` to `appservice.bicep` (e.g. a Git SHA). |
 | **ACR public network** | `publicNetworkAccess = 'Enabled'`, `adminUserEnabled = false`, `anonymousPullEnabled = false` | For a closed network, switch to a Private Endpoint (Premium SKU required). |
-| **GitHub Actions identity** | OIDC (no client secret) + scoped roles: **AcrPush** on ACR + **Website Contributor** on App + **Reader** on RG, plus per-environment federated credentials (`staging`, `production`, `ppe`) | If your workflow needs Bicep redeploy, add a narrower custom role rather than Contributor on the RG. |
 | **Diagnostic logging** | All resources (App, PG, ACR) forward `allLogs` + `AllMetrics` to Log Analytics | Already on. Add Defender for Cloud / Microsoft Defender for Containers for vulnerability scanning. |
 | **Backups** | PG backup retention 7 days, no geo-redundancy | Increase `backupRetentionDays` and enable `geoRedundantBackup` for production. |
 | **Secrets in Bicep params** | `postgresAdminPassword` comes from an environment variable (`.env`, gitignored) — never written to disk in the repo | Already on. The `.bicepparam` files use `readEnvironmentVariable()`. |

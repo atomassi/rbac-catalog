@@ -8,10 +8,13 @@
 # 4. Configures Entra ID auth on PostgreSQL (unless --skip-pg-grant).
 #
 # Usage:
-#   ./scripts/deploy.sh prod                # default
-#   ./scripts/deploy.sh dev
-#   ./scripts/deploy.sh prod --skip-pg-grant
-#   ./scripts/deploy.sh prod --what-if      # dry run; no changes applied
+#   ./scripts/deploy.sh prod                                # default
+#   ./scripts/deploy.sh dev                                 # dev profile
+#   ./scripts/deploy.sh prod --what-if                      # dry run
+#   ./scripts/deploy.sh prod --skip-pg-grant                # skip PG bootstrap
+#   ./scripts/deploy.sh prod baseName=myapp                 # ad-hoc Bicep
+#                                                           # parameter override
+#                                                           # (also use env vars)
 # ============================================================================
 
 set -euo pipefail
@@ -19,12 +22,18 @@ set -euo pipefail
 ENVIRONMENT="prod"
 SKIP_PG_GRANT=0
 WHAT_IF=0
+OVERRIDES=()
 
 for arg in "$@"; do
   case "$arg" in
     --skip-pg-grant) SKIP_PG_GRANT=1 ;;
     --what-if)       WHAT_IF=1 ;;
     prod|dev)        ENVIRONMENT="$arg" ;;
+    # Anything of the form ``name=value`` becomes an ad-hoc Bicep parameter
+    # override on the az CLI call, without editing the .bicepparam file.
+    # Useful for one-off deploys where you don't want to commit your name
+    # choices into the repo.
+    *=*)             OVERRIDES+=("$arg") ;;
     *) echo "Unknown argument: $arg" >&2; exit 1 ;;
   esac
 done
@@ -47,8 +56,12 @@ fi
 
 : "${PG_ADMIN_PASSWORD:?PG_ADMIN_PASSWORD is required — see .env.example}"
 
-LOCATION="${LOCATION:-westeurope}"
+# Bicepparam files read these via ``readEnvironmentVariable``; export them
+# explicitly so they survive into the ``az`` subprocess.
 export PG_ADMIN_PASSWORD
+export RG_NAME="${RG_NAME:-myapp-rg}"
+export BASE_NAME="${BASE_NAME:-myapp}"
+export LOCATION="${LOCATION:-westeurope}"
 export OLLAMA_BASE_URL="${OLLAMA_BASE_URL:-}"
 
 if [[ -n "${SUBSCRIPTION_ID:-}" ]]; then
@@ -59,7 +72,12 @@ DEPLOY_NAME="${ENVIRONMENT}-$(date +%Y%m%d-%H%M%S)"
 
 echo "Deploying:  $DEPLOY_NAME"
 echo "Location:   $LOCATION"
+echo "RG:         $RG_NAME"
+echo "Base name:  $BASE_NAME"
 echo "Params:     $PARAM_FILE"
+if [[ ${#OVERRIDES[@]} -gt 0 ]]; then
+  echo "Overrides:  ${OVERRIDES[*]}"
+fi
 
 # ---------------------------------------------------------------------------
 # Validate + deploy
@@ -71,6 +89,7 @@ az deployment sub validate \
   --location "$LOCATION" \
   --template-file main.bicep \
   --parameters "$PARAM_FILE" \
+  ${OVERRIDES[@]:+--parameters "${OVERRIDES[@]}"} \
   --output none
 
 if [[ "$WHAT_IF" -eq 1 ]]; then
@@ -78,7 +97,9 @@ if [[ "$WHAT_IF" -eq 1 ]]; then
   az deployment sub what-if \
     --location "$LOCATION" \
     --template-file main.bicep \
-    --parameters "$PARAM_FILE"
+    --parameters "$PARAM_FILE" \
+    ${OVERRIDES[@]:+--parameters "${OVERRIDES[@]}"} \
+    --result-format ResourceIdOnly
   echo
   echo "✓ What-If complete — no resources were created or modified."
   exit 0
@@ -90,6 +111,7 @@ az deployment sub create \
   --location "$LOCATION" \
   --template-file main.bicep \
   --parameters "$PARAM_FILE" \
+  ${OVERRIDES[@]:+--parameters "${OVERRIDES[@]}"} \
   --output none
 
 # ---------------------------------------------------------------------------
@@ -131,12 +153,14 @@ Next steps (run from the repo root):
   az acr build \\
     --registry \$(jq -r .acrName.value \$OUT) \\
     --image azurerbac:latest \\
-    --build-arg VERSION=\$(git describe --tags --always) .
+    --build-arg VERSION=\$(git describe --tags --always 2>/dev/null || echo dev) .
 
   # 2. Restart the App Service so it picks up the new image:
   az webapp restart \\
     -n \$(jq -r .appServiceName.value \$OUT) \\
     -g \$(jq -r .resourceGroupName.value \$OUT)
 
-  # 3. Populate the database (see README "Step 5" for the curl commands).
+  # 3. Verify:  curl -fsS "\$(jq -r .appServiceUrl.value \$OUT)/healthz"
+
+See buildout/README.md "Step 5" for the full walkthrough.
 EOF

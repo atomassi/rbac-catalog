@@ -47,7 +47,7 @@
 - **App uses Entra ID for DB auth** — no passwords stored in App Service config; rotation is automatic via MSI tokens. The PG admin password is required only during initial deployment so the AAD-mapped role can be provisioned; redeploy with `postgresEnablePasswordAuth = false` afterwards to reach **AAD-only** server config.
 - **ACR Basic** — cheapest SKU that supports MI pull. No retention policy (Premium-only); prune images out of band when needed.
 - **Ollama is BYO** — the buildout does not provision an Ollama VM. Point `OLLAMA_BASE_URL` at any Ollama-compatible endpoint to enable LLM modes; leave empty to disable AI features (the site still works).
-- **No VNet integration** — the App Service uses the PostgreSQL public endpoint with firewall rules. A VNet is only useful when fronting a private Ollama or Private Endpoints; both are out of scope here.
+- **No VNet integration** — the App Service uses the PostgreSQL public endpoint with firewall rules.
 - **Edge / WAF kept out of Bicep** — both Cloudflare and Azure Front Door work; configure externally.
 - **Public network access on PG** — public endpoint + firewall + Entra ID auth. Switch to a private endpoint if your security posture demands it.
 
@@ -55,5 +55,6 @@
 
 - App Service production + each deployment slot: **system-assigned MI**, each granted `AcrPull` on the registry (Bicep) and a per-identity PG role (post-deploy SQL via `grant-postgres-aad-admin.sh`).
 - App authenticates to PostgreSQL using a password-less, token-based Entra ID connection on every connection open.
-- `MSI_DB_USER` and `APP_ENVIRONMENT_NAME` are slot-sticky (registered in `slotConfigNames`) so a slot swap does NOT carry the staging PG role or the staging telemetry label into production.
+- `MSI_DB_USER`, `APP_ENVIRONMENT_NAME`, and the scan-enable flags (`ROLE_SCAN_ENABLED`, `OPERATIONS_SCAN_ENABLED`, `RUN_SCAN_ON_STARTUP`, `RUN_OPERATIONS_SCAN_ON_STARTUP`) are slot-sticky (registered in `slotConfigNames`) so a slot swap does NOT carry the staging PG role, the staging telemetry label, or the scanner with the code.
+- Only the **production slot** runs the role + operations scans. Staging and ppe are intentionally non-writers so they don't race the production worker and double-count events.
 - No client secrets, no DB passwords, no ACR creds in App Service configuration.

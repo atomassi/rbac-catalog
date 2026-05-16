@@ -90,7 +90,9 @@ resource allowAzure 'Microsoft.DBforPostgreSQL/flexibleServers/firewallRules@202
   properties: { startIpAddress: '0.0.0.0', endIpAddress: '0.0.0.0' }
 }
 
-// pgvector + pg_trgm for AI embeddings + fuzzy text search.
+// Extensions used by the app:
+//   * vector  — AI embeddings storage / similarity search.
+//   * pg_trgm — fuzzy text search.
 resource extensions 'Microsoft.DBforPostgreSQL/flexibleServers/configurations@2024-08-01' = {
   parent: server
   name: 'azure.extensions'

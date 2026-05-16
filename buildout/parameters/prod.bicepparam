@@ -1,28 +1,30 @@
 // ============================================================================
-// Production profile.
-// Defaults: deployment slots ON.
-// Customize the two name values below; flip the optional flags as needed.
+// Production profile — deployment slots ON.
 //
-// Out of scope by design (set ``OLLAMA_BASE_URL`` as an app setting to wire
-// up an external Ollama endpoint, or leave it empty to disable AI features):
-//   * Ollama VM           — not provisioned. Bring your own endpoint.
-//   * VNet integration    — App Service uses the public PostgreSQL endpoint.
-//   * Automation Account  — runbook content was never published; not useful.
+// All values that vary per deployment (resource group, name prefix, region,
+// password, optional Ollama endpoint) come from environment variables so the
+// same .bicepparam works for everyone:
+//
+//   export RG_NAME="myapp-rg"
+//   export BASE_NAME="myapp"
+//   export LOCATION="westeurope"
+//   export PG_ADMIN_PASSWORD="<strong-password>"
+//   # optional: export OLLAMA_BASE_URL="http://my-ollama:11434"
+//
+// See README "Step 1" for the full list.
 // ============================================================================
 
 using '../main.bicep'
 
-// --- Edit these for your deployment ---------------------------------------
-param resourceGroupName = 'myapp-rg'
-param baseName          = 'myapp'
+param resourceGroupName = readEnvironmentVariable('RG_NAME',   'myapp-rg')
+param baseName          = readEnvironmentVariable('BASE_NAME', 'myapp')
+param location          = readEnvironmentVariable('LOCATION',  'westeurope')
 
-// --- Optional features ----------------------------------------------------
 param deploySlots = true
 
-// --- Optional external endpoints ------------------------------------------
-// Set OLLAMA_BASE_URL via .env (e.g. http://your-ollama-host:11434) or leave
-// empty to disable AI features.
-param ollamaBaseUrl = readEnvironmentVariable('OLLAMA_BASE_URL', '')
-
-// --- Secrets (read from environment via `source .env`) --------------------
 param postgresAdminPassword = readEnvironmentVariable('PG_ADMIN_PASSWORD', '')
+
+// Optional external Ollama-compatible endpoint. Empty (the default) disables
+// LLM-backed recommendations; the catalog and rule-based recommender still
+// work. The buildout does NOT provision Ollama itself.
+param ollamaBaseUrl = readEnvironmentVariable('OLLAMA_BASE_URL', '')

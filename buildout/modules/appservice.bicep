@@ -71,6 +71,18 @@ resource plan 'Microsoft.Web/serverfarms@2024-04-01' = {
 var commonAppSettings = [
   { name: 'WEBSITES_PORT', value: '8000' }
   { name: 'WEBSITES_ENABLE_APP_SERVICE_STORAGE', value: 'false' }
+  // Point the App Service warmup probe at ``/healthz`` instead of the
+  // default ``/``. The homepage triggers full cache initialization and
+  // AI-model warmup (~3-4 min on cold start), which exceeds the
+  // platform's HTTP-ping timeout and causes spurious "container did not
+  // start" errors in the platform log. ``/healthz`` returns a cheap
+  // 200 once the lifespan has completed.
+  { name: 'WEBSITE_WARMUP_PATH', value: '/healthz' }
+  // Tell App Service to use the system MI when pulling from ACR. Without
+  // ``DOCKER_REGISTRY_SERVER_URL`` the platform falls back to ACR admin
+  // credentials, which fails with "admin credentials on ACR are disabled"
+  // because ``adminUserEnabled = false`` in acr.bicep.
+  { name: 'DOCKER_REGISTRY_SERVER_URL', value: 'https://${acrLoginServer}' }
   { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: appInsightsConnectionString }
   { name: 'USE_MANAGED_IDENTITY', value: 'true' }
   { name: 'MSI_DB_HOST', value: postgresHost }
@@ -78,18 +90,40 @@ var commonAppSettings = [
   { name: 'MSI_DB_NAME', value: postgresDatabase }
   { name: 'OLLAMA_BASE_URL', value: ollamaBaseUrl }
   { name: 'OLLAMA_MODEL', value: 'qwen-rbac-v5' }
-  { name: 'ROLE_SCAN_ENABLED', value: 'true' }
-  { name: 'OPERATIONS_SCAN_ENABLED', value: 'true' }
-  // Run both scans on first startup so a brand-new deployment populates
-  // the role + operation catalog immediately. Without this the worker only
-  // scans on its 2-hour / 24-hour cadence, and the site renders empty
-  // until the first scheduled tick.
-  { name: 'RUN_SCAN_ON_STARTUP', value: 'true' }
-  { name: 'RUN_OPERATIONS_SCAN_ON_STARTUP', value: 'true' }
-  { name: 'ROLES_POLL_INTERVAL_SECONDS', value: '7200' }
-  { name: 'OPERATIONS_POLL_INTERVAL_SECONDS', value: '86400' }
   { name: 'LOG_LEVEL', value: 'INFO' }
   { name: 'MCP_SERVER_ENABLED', value: 'true' }
+]
+
+// ---------------------------------------------------------------------------
+// Scan / scheduler settings — PRODUCTION SLOT ONLY
+// ---------------------------------------------------------------------------
+// The role + operations scans write the canonical catalog rows. Running
+// them in parallel from staging or ppe would race the production worker
+// and double-count events in role_history. Enabling them only on the
+// production slot keeps a single writer.
+//
+// Both ROLE_SCAN_ENABLED and OPERATIONS_SCAN_ENABLED, the on-startup
+// flags, and the poll intervals are listed in ``slotConfigNames`` below so
+// a slot swap keeps the scanner ON the production slot (and OFF the
+// pre-swap staging slot).
+var scanProdSettings = [
+  { name: 'ROLE_SCAN_ENABLED',              value: 'true' }
+  { name: 'OPERATIONS_SCAN_ENABLED',        value: 'true' }
+  // Run both scans on first startup so a brand-new deployment populates
+  // the role + operation catalog immediately, instead of waiting for the
+  // 2h / 24h scheduler tick.
+  { name: 'RUN_SCAN_ON_STARTUP',            value: 'true' }
+  { name: 'RUN_OPERATIONS_SCAN_ON_STARTUP', value: 'true' }
+  { name: 'ROLES_POLL_INTERVAL_SECONDS',    value: '7200' }
+  { name: 'OPERATIONS_POLL_INTERVAL_SECONDS', value: '86400' }
+]
+var scanDisabledSettings = [
+  { name: 'ROLE_SCAN_ENABLED',              value: 'false' }
+  { name: 'OPERATIONS_SCAN_ENABLED',        value: 'false' }
+  { name: 'RUN_SCAN_ON_STARTUP',            value: 'false' }
+  { name: 'RUN_OPERATIONS_SCAN_ON_STARTUP', value: 'false' }
+  { name: 'ROLES_POLL_INTERVAL_SECONDS',    value: '7200' }
+  { name: 'OPERATIONS_POLL_INTERVAL_SECONDS', value: '86400' }
 ]
 
 // Resolve the production environment label.
@@ -97,27 +131,29 @@ var commonAppSettings = [
 //     value is 'production' so telemetry matches the public site.
 var prodEnvLabel = environmentName == 'prod' ? 'production' : environmentName
 
-// APP_ENVIRONMENT_NAME and MSI_DB_USER are per-slot:
+// APP_ENVIRONMENT_NAME, MSI_DB_USER, and the scan flags are per-slot:
 //   * APP_ENVIRONMENT_NAME → telemetry / operator log distinction.
 //   * MSI_DB_USER          → each slot has its OWN system-assigned identity
 //                            and therefore its own pgaadauth-registered PG
 //                            role. ``scripts/grant-postgres-aad-admin.sh``
 //                            creates roles named ``<app>``, ``<app>-slot-staging``,
 //                            ``<app>-slot-ppe``.
+//   * ROLE_SCAN_ENABLED /  → only production runs the scans (single
+//     OPERATIONS_SCAN_ENABLED  writer; staging/ppe would race the DB).
 //
-// Both names are listed in ``slotConfigNames`` below so a slot swap does
-// NOT carry the labels with the code — otherwise a staging→production swap
-// would make the (now-production) slot use the staging PG role and pollute
-// staging telemetry.
-var prodAppSettings    = concat(commonAppSettings, [
+// All these names are listed in ``slotConfigNames`` below so a slot swap
+// does NOT carry the labels or the scanner with the code — otherwise a
+// staging→production swap would make the (now-production) slot use the
+// staging PG role and pollute staging telemetry.
+var prodAppSettings    = concat(commonAppSettings, scanProdSettings, [
   { name: 'APP_ENVIRONMENT_NAME', value: prodEnvLabel }
   { name: 'MSI_DB_USER',          value: postgresUser }
 ])
-var stagingAppSettings = concat(commonAppSettings, [
+var stagingAppSettings = concat(commonAppSettings, scanDisabledSettings, [
   { name: 'APP_ENVIRONMENT_NAME', value: 'staging' }
   { name: 'MSI_DB_USER',          value: '${postgresUser}-slot-staging' }
 ])
-var ppeAppSettings     = concat(commonAppSettings, [
+var ppeAppSettings     = concat(commonAppSettings, scanDisabledSettings, [
   { name: 'APP_ENVIRONMENT_NAME', value: 'ppe' }
   { name: 'MSI_DB_USER',          value: '${postgresUser}-slot-ppe' }
 ])
@@ -180,16 +216,23 @@ resource ppeSlot 'Microsoft.Web/sites/slots@2024-04-01' = if (deploySlots) {
   properties: ppeSiteProperties
 }
 
-// Pin APP_ENVIRONMENT_NAME and MSI_DB_USER to their slot so a swap does
-// NOT move the env label or PG role with the code. Without this, a
-// staging→production swap would make the (now-production) slot keep
-// ``APP_ENVIRONMENT_NAME=staging`` and ``MSI_DB_USER=<app>-slot-staging``
-// and pollute production telemetry / use the wrong PG identity.
+// Pin per-slot settings so a swap does NOT move them with the code.
+// Otherwise a staging→production swap would make the (now-production)
+// slot keep ``APP_ENVIRONMENT_NAME=staging``, ``MSI_DB_USER=<app>-slot-staging``
+// and (worst of all) keep the scanner OFF in the production slot while
+// running it twice on the new staging slot.
 resource appSlotConfigNames 'Microsoft.Web/sites/config@2024-04-01' = if (deploySlots) {
   parent: app
   name: 'slotConfigNames'
   properties: {
-    appSettingNames: [ 'APP_ENVIRONMENT_NAME', 'MSI_DB_USER' ]
+    appSettingNames: [
+      'APP_ENVIRONMENT_NAME'
+      'MSI_DB_USER'
+      'ROLE_SCAN_ENABLED'
+      'OPERATIONS_SCAN_ENABLED'
+      'RUN_SCAN_ON_STARTUP'
+      'RUN_OPERATIONS_SCAN_ON_STARTUP'
+    ]
   }
 }
 

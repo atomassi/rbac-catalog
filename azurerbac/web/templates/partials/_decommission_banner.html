@@ -1,33 +1,8 @@
-{# ============================================================================
-  Decommission banner — one-time top notice that the site is going away.
-
-  - Toggled site-wide by ``decommission_banner_enabled`` (False ⇒ nothing
-    renders, no JS runs).
-  - Dismissed per browser via ``localStorage``. The key includes
-    ``decommission_banner_version`` so bumping the version constant in
-    ``azurerbac/web/constants.py`` re-shows the banner to everyone who
-    previously dismissed it.
-  - Vanilla JS — does NOT depend on Alpine.js, so this works on every
-    page that includes this partial (no extra script tags needed on the
-    host template).
-  - Rendered on every user-facing page (index, role, role detail,
-    operations, operation detail, recommend, compare, compare detail,
-    analytics, about). The 4xx error pages intentionally do NOT include
-    it — a decommission notice next to a "page not found" message just
-    adds noise.
-  - Hidden by default; the inline script only un-hides it when the user
-    has not already dismissed this version. That avoids a flash of the
-    banner on slow connections + degrades gracefully when JS is off
-    (no banner at all is preferable to one the user can't dismiss).
-============================================================================ #}
+{# Decommission banner.
+   Toggled by ``Settings.decommission_banner_enabled``. Dismissed
+   per-browser via ``localStorage``, keyed on ``decommission_banner_version``
+   so bumping the constant re-shows the banner. #}
 {% if decommission_banner_enabled %}
-{# Color scheme:
-   - Light mode: amber-500 bg, amber-950 text → WCAG AA (>7:1 contrast).
-   - Dark mode:  amber-950 bg, amber-100 text → WCAG AA, sits naturally on
-     a dark page without bleeding into the nav.
-   Same text color is used for the dismiss button's focus ring so it works
-   in both modes. No bottom border — it caused a stray amber stripe under
-   the nav after the banner was dismissed in earlier revisions. #}
 <div
     id="rbac-decommission-banner"
     role="status"
@@ -35,24 +10,20 @@
     hidden
     class="bg-amber-500 dark:bg-amber-950 text-amber-950 dark:text-amber-100"
 >
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5 flex items-center gap-x-4 gap-y-2 flex-wrap sm:flex-nowrap">
-        <div class="flex items-center gap-2.5 flex-1 min-w-0">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                <path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 6a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 6zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
-            </svg>
-            <p class="text-base leading-snug">
-                {{ decommission_banner_message | safe }}
-            </p>
-        </div>
-        <div class="flex items-center gap-1.5 flex-shrink-0 ml-[1.875rem] sm:ml-0">
+    <div class="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-2 sm:py-2.5 flex items-center gap-2 sm:gap-4">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+            <path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 6a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 6zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
+        </svg>
+        <p class="text-sm sm:text-base leading-snug flex-1 min-w-0">
+            {{ decommission_banner_message | safe }}
+        </p>
+        <div class="flex items-center gap-1 sm:gap-1.5 flex-shrink-0">
             {% if decommission_banner_feedback_url %}
-            {# Solid, high-contrast pill: inverse of banner colors so it pops
-               against the amber background in both light and dark mode. #}
             <a
                 href="{{ decommission_banner_feedback_url }}"
                 target="_blank"
                 rel="noopener noreferrer"
-                class="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold
+                class="inline-flex items-center gap-1.5 rounded-md px-2.5 sm:px-3 py-1 sm:py-1.5 text-sm font-semibold
                        bg-amber-950 text-amber-50 hover:bg-amber-900
                        dark:bg-amber-100 dark:text-amber-950 dark:hover:bg-amber-50
                        focus:outline-none focus:ring-2 focus:ring-offset-2
@@ -60,8 +31,9 @@
                        dark:focus:ring-amber-100 dark:focus:ring-offset-amber-950
                        transition-colors whitespace-nowrap"
             >
-                Share feedback
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 opacity-80" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <span class="hidden sm:inline">Share feedback</span>
+                <span class="sm:hidden">Feedback</span>
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 sm:h-3.5 sm:w-3.5 opacity-80" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                     <path fill-rule="evenodd" d="M4.25 5.5a.75.75 0 00-.75.75v8.5c0 .414.336.75.75.75h8.5a.75.75 0 00.75-.75v-4a.75.75 0 011.5 0v4A2.25 2.25 0 0112.75 17h-8.5A2.25 2.25 0 012 14.75v-8.5A2.25 2.25 0 014.25 4h5a.75.75 0 010 1.5h-5z" clip-rule="evenodd" />
                     <path fill-rule="evenodd" d="M6.194 12.753a.75.75 0 001.06.053L16.5 4.44v2.81a.75.75 0 001.5 0v-4.5a.75.75 0 00-.75-.75h-4.5a.75.75 0 000 1.5h2.553l-9.056 8.194a.75.75 0 00-.053 1.06z" clip-rule="evenodd" />
                 </svg>
@@ -70,13 +42,13 @@
             <button
                 type="button"
                 id="rbac-decommission-banner-dismiss"
-                class="p-1.5 rounded-md
+                class="p-1 sm:p-1.5 rounded-md
                        hover:bg-amber-950/15 dark:hover:bg-amber-100/15
                        focus:outline-none focus:ring-2 focus:ring-amber-950 dark:focus:ring-amber-100
                        transition-colors"
                 aria-label="Dismiss notice"
             >
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 sm:h-5 sm:w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                     <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
                 </svg>
             </button>
@@ -85,31 +57,22 @@
 </div>
 <script>
 (function () {
-    // ``tojson`` emits a properly-escaped JS string so a future version
-    // constant containing a quote, backslash, or newline can't break out
-    // of the literal. The constant is operator-controlled (not user
-    // input) so this is defence-in-depth, not active mitigation.
+    // ``tojson`` escapes the constant safely for embedding in JS.
     var KEY = 'rbac-decommission-banner:' + {{ decommission_banner_version | tojson }};
     var banner = document.getElementById('rbac-decommission-banner');
     var button = document.getElementById('rbac-decommission-banner-dismiss');
     if (!banner || !button) return;
     var storage = null;
-    try {
-        // ``localStorage`` access throws in some privacy modes — fall back
-        // to "always show" rather than crashing the script.
-        storage = window.localStorage;
-    } catch (_) { /* noop */ }
+    try { storage = window.localStorage; } catch (_) { /* private mode */ }
     var dismissed = false;
     if (storage) {
-        try { dismissed = storage.getItem(KEY) === '1'; } catch (_) { /* noop */ }
+        try { dismissed = storage.getItem(KEY) === '1'; } catch (_) {}
     }
-    if (!dismissed) {
-        banner.hidden = false;
-    }
+    if (!dismissed) banner.hidden = false;
     button.addEventListener('click', function () {
         banner.hidden = true;
         if (storage) {
-            try { storage.setItem(KEY, '1'); } catch (_) { /* noop */ }
+            try { storage.setItem(KEY, '1'); } catch (_) {}
         }
     });
 })();

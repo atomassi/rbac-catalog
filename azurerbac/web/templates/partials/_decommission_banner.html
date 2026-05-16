@@ -35,24 +35,24 @@
     hidden
     class="bg-amber-500 dark:bg-amber-950 text-amber-950 dark:text-amber-100"
 >
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5 flex items-center gap-x-4 gap-y-2 flex-wrap sm:flex-nowrap">
-        <div class="flex items-center gap-2.5 flex-1 min-w-0">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                <path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 6a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 6zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
-            </svg>
-            <p class="text-base leading-snug">
-                {{ decommission_banner_message | safe }}
-            </p>
-        </div>
-        <div class="flex items-center gap-1.5 flex-shrink-0 ml-[1.875rem] sm:ml-0">
+    <div class="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-2 sm:py-2.5 flex items-center gap-2 sm:gap-4">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+            <path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 6a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 6zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
+        </svg>
+        <p class="text-sm sm:text-base leading-snug flex-1 min-w-0">
+            {{ decommission_banner_message | safe }}
+        </p>
+        <div class="flex items-center gap-1 sm:gap-1.5 flex-shrink-0">
             {% if decommission_banner_feedback_url %}
             {# Solid, high-contrast pill: inverse of banner colors so it pops
-               against the amber background in both light and dark mode. #}
+               against the amber background in both light and dark mode.
+               Compact on mobile (icon only with sr-only label); full label
+               at sm+. #}
             <a
                 href="{{ decommission_banner_feedback_url }}"
                 target="_blank"
                 rel="noopener noreferrer"
-                class="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold
+                class="inline-flex items-center gap-1.5 rounded-md px-2.5 sm:px-3 py-1 sm:py-1.5 text-sm font-semibold
                        bg-amber-950 text-amber-50 hover:bg-amber-900
                        dark:bg-amber-100 dark:text-amber-950 dark:hover:bg-amber-50
                        focus:outline-none focus:ring-2 focus:ring-offset-2
@@ -60,8 +60,9 @@
                        dark:focus:ring-amber-100 dark:focus:ring-offset-amber-950
                        transition-colors whitespace-nowrap"
             >
-                Share feedback
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 opacity-80" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <span class="hidden sm:inline">Share feedback</span>
+                <span class="sm:hidden">Feedback</span>
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 sm:h-3.5 sm:w-3.5 opacity-80" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                     <path fill-rule="evenodd" d="M4.25 5.5a.75.75 0 00-.75.75v8.5c0 .414.336.75.75.75h8.5a.75.75 0 00.75-.75v-4a.75.75 0 011.5 0v4A2.25 2.25 0 0112.75 17h-8.5A2.25 2.25 0 012 14.75v-8.5A2.25 2.25 0 014.25 4h5a.75.75 0 010 1.5h-5z" clip-rule="evenodd" />
                     <path fill-rule="evenodd" d="M6.194 12.753a.75.75 0 001.06.053L16.5 4.44v2.81a.75.75 0 001.5 0v-4.5a.75.75 0 00-.75-.75h-4.5a.75.75 0 000 1.5h2.553l-9.056 8.194a.75.75 0 00-.053 1.06z" clip-rule="evenodd" />
                 </svg>
@@ -70,13 +71,13 @@
             <button
                 type="button"
                 id="rbac-decommission-banner-dismiss"
-                class="p-1.5 rounded-md
+                class="p-1 sm:p-1.5 rounded-md
                        hover:bg-amber-950/15 dark:hover:bg-amber-100/15
                        focus:outline-none focus:ring-2 focus:ring-amber-950 dark:focus:ring-amber-100
                        transition-colors"
                 aria-label="Dismiss notice"
             >
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 sm:h-5 sm:w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                     <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
                 </svg>
             </button>

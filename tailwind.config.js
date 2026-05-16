@@ -3,11 +3,17 @@ module.exports = {
   content: [
     './azurerbac/web/templates/**/*.html',
     './azurerbac/web/static/js/**/*.js',
-    // Tailwind class strings also live in Python constants (e.g. the
-    // decommission banner message in ``azurerbac/web/constants.py``).
-    // Including the file in ``content`` lets the JIT see those classes
-    // and ship the corresponding rules.
-    './azurerbac/web/constants.py',
+  ],
+  // Some utility classes only appear inside Python string literals
+  // (e.g. the decommission banner HTML in ``azurerbac/web/constants.py``)
+  // and the JIT can't see them through the ``content`` globs. Scanning
+  // the whole Python file would also emit utilities for unrelated tokens
+  // (URLs, CSP domains, etc.) and bloat the bundle, so we list the
+  // referenced classes explicitly here.
+  safelist: [
+    'underline',
+    'font-medium',
+    'hover:no-underline',
   ],
   darkMode: 'class',
   theme: {

@@ -85,7 +85,11 @@
 </div>
 <script>
 (function () {
-    var KEY = 'rbac-decommission-banner:{{ decommission_banner_version }}';
+    // ``tojson`` emits a properly-escaped JS string so a future version
+    // constant containing a quote, backslash, or newline can't break out
+    // of the literal. The constant is operator-controlled (not user
+    // input) so this is defence-in-depth, not active mitigation.
+    var KEY = 'rbac-decommission-banner:' + {{ decommission_banner_version | tojson }};
     var banner = document.getElementById('rbac-decommission-banner');
     var button = document.getElementById('rbac-decommission-banner-dismiss');
     if (!banner || !button) return;

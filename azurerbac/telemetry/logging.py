@@ -14,6 +14,31 @@ _logger = logging.getLogger(__name__)
 _configured = False
 _configured_log_file: str | None = None
 
+# Control characters that allow attacker-controlled strings to forge log lines
+# (CRLF), break ANSI handling, or hide content from operators tailing the log.
+_LOG_INJECTION_TRANSLATE: Final = str.maketrans(
+    {c: f"\\x{c:02x}" for c in (*range(0x00, 0x20), 0x7F)}
+)
+_MAX_LOG_FIELD_LENGTH: Final = 200
+
+
+def sanitize_for_log(value: str | None, *, max_length: int = _MAX_LOG_FIELD_LENGTH) -> str:
+    r"""Return ``value`` with control characters escaped for safe logging.
+
+    Untrusted strings (request paths, query params, user-supplied search
+    text) must be sanitized before being interpolated into log messages.
+    Without this, a value containing ``\n`` can forge a fake log line,
+    and embedded ANSI escape codes can manipulate the operator terminal.
+    Truncates to ``max_length`` to bound a single line's size.
+    """
+    if value is None:
+        return ""
+    text = str(value).translate(_LOG_INJECTION_TRANSLATE)
+    if len(text) > max_length:
+        text = text[:max_length] + "…"
+    return text
+
+
 _SENSITIVE_PATTERNS: Final = (
     "Bearer ",
     "Authorization:",

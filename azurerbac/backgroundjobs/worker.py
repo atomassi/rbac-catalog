@@ -6,7 +6,6 @@ import asyncio
 import logging
 import signal
 import time
-from typing import Any
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from dotenv import load_dotenv
@@ -56,13 +55,21 @@ class Worker:
         return scheduler
 
     def _setup_shutdown_handler(self) -> None:
-        """Configure signal handlers for graceful shutdown."""
+        """Configure signal handlers for graceful shutdown.
+
+        Uses ``loop.add_signal_handler`` so the handler runs on the event
+        loop thread. ``signal.signal`` callbacks fire from an arbitrary
+        thread and cannot safely call :py:meth:`asyncio.Event.set`, which
+        can lose the wakeup and leave the worker hanging on Ctrl-C /
+        SIGTERM (typical container shutdown).
+        """
         if self._shutdown_event is None:
             return
 
         shutdown_event = self._shutdown_event
+        loop = asyncio.get_running_loop()
 
-        def handle_shutdown(signum: int, _frame: Any) -> None:
+        def handle_shutdown(signum: int) -> None:
             signame = signal.Signals(signum).name
             if shutdown_event.is_set():
                 logger.warning("Force exiting on repeated %s", signame)
@@ -70,8 +77,13 @@ class Worker:
             logger.info("Received %s, shutting down...", signame)
             shutdown_event.set()
 
-        signal.signal(signal.SIGINT, handle_shutdown)
-        signal.signal(signal.SIGTERM, handle_shutdown)
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            try:
+                loop.add_signal_handler(sig, handle_shutdown, sig)
+            except NotImplementedError:
+                # Windows event loops do not support add_signal_handler;
+                # fall back to the threaded signal.signal path.
+                signal.signal(sig, lambda s, _f: handle_shutdown(s))
 
     async def _run_startup_jobs(self) -> None:
         """Run optional startup jobs based on settings."""

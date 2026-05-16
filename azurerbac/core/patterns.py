@@ -6,7 +6,11 @@ import re
 from functools import lru_cache
 from typing import Final
 
-_CACHE_SIZE: Final[int] = 10000
+# Bounded LRU to avoid memory growth from attacker-supplied unique patterns
+# arriving via /api/operations/{search,count-matches}. 2000 entries comfortably
+# fits every legitimate Azure RBAC pattern family and bounds the worst-case
+# resident set under sustained adversarial input.
+_CACHE_SIZE: Final[int] = 2000
 
 
 @lru_cache(maxsize=_CACHE_SIZE)

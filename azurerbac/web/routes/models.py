@@ -22,7 +22,7 @@ class VersionResponse(BaseModel):
 class OperationItem(BaseModel):
     """Operation in recommendation request."""
 
-    name: str
+    name: str = Field(..., max_length=512)
     is_data_action: bool = False
 
 

@@ -108,9 +108,23 @@ def compute_role_effective_permissions(
     all_operations: list[OperationData],
     cache: CacheService | None = None,
 ) -> RoleEffectivePermissions:
-    """Compute effective permissions for a role."""
-    analyzer = RolePermissionAnalyzer(role, cache=cache)
-    return analyzer.get_effective_permissions(all_operations)
+    """Compute effective permissions for a role.
+
+    Memoized per role on the request-scoped cache: ``RequestCaches`` is
+    swapped wholesale whenever the source cache snapshot is rebuilt, so a
+    cached result cannot outlive the underlying data.
+    """
+    cache_resolved = _get_cache(cache)
+    role_id = role.name
+
+    cached = cache_resolved.get_effective_perms(role_id)
+    if cached is not None:
+        return cached
+
+    analyzer = RolePermissionAnalyzer(role, cache=cache_resolved)
+    result = analyzer.get_effective_permissions(all_operations)
+    cache_resolved.set_effective_perms(role_id, result)
+    return result
 
 
 # Weights for composite related-role similarity

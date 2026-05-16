@@ -518,10 +518,14 @@ class MCPServer:
                         top_k=top_k,
                         requested_mode=mcp_mode,
                     )
-                except Exception as e:
+                except Exception:
                     logger.exception("AI recommendation failed")
                     timer.fail()
-                    return f"AI recommendation failed: {e!s}"
+                    # Do not echo the underlying exception message back to the
+                    # remote MCP client: it can leak internal paths, DB driver
+                    # errors, or Ollama endpoint details. Log details server-side
+                    # only and return a fixed message.
+                    return "AI recommendation failed. Please try again later."
 
                 timer.result_count = len(recommendations)
 

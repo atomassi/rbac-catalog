@@ -19,13 +19,15 @@ from azurerbac.airecommender.modes import RecommenderMode
 from azurerbac.core.constants import DEFAULT_SEARCH_LIMIT
 from azurerbac.core.patterns import is_wildcard_pattern
 from azurerbac.matching import recommend_roles
-from azurerbac.telemetry import track_ai_recommendation, track_role_recommendation
+from azurerbac.telemetry import sanitize_for_log, track_ai_recommendation, track_role_recommendation
 from azurerbac.web.constants import (
     AI_RATE_LIMIT_PER_MINUTE,
     MAX_QUERY_LENGTH,
     MAX_SEARCH_LIMIT,
     MIN_AI_QUERY_CHARS,
     MIN_SEARCH_CHARS,
+    OPERATIONS_SEARCH_RATE_LIMIT_PER_MINUTE,
+    RECOMMEND_ROLES_RATE_LIMIT_PER_MINUTE,
 )
 from azurerbac.web.dependencies import BaseDeps, get_api_deps
 from azurerbac.web.limiter import limiter
@@ -56,7 +58,9 @@ type SearchLimit = Annotated[int, Query(ge=1, le=MAX_SEARCH_LIMIT)]
 
 
 @router.get("/operations/search", response_model=OperationSearchResponse)
+@limiter.limit(f"{OPERATIONS_SEARCH_RATE_LIMIT_PER_MINUTE}/minute")
 async def api_search_operations(
+    request: Request,
     deps: Annotated[BaseDeps, Depends(get_api_deps)],
     q: SearchQuery = "",
     limit: SearchLimit = DEFAULT_SEARCH_LIMIT,
@@ -72,7 +76,7 @@ async def api_search_operations(
 
     logger.info(
         "Operation search: query='%s' wildcard=%s results=%d",
-        q,
+        sanitize_for_log(q),
         is_wildcard,
         len(matching),
     )
@@ -85,7 +89,9 @@ async def api_search_operations(
 
 
 @router.get("/operations/count-matches", response_model=CountMatchesResponse)
+@limiter.limit(f"{OPERATIONS_SEARCH_RATE_LIMIT_PER_MINUTE}/minute")
 async def api_count_wildcard_matches(
+    request: Request,
     deps: Annotated[BaseDeps, Depends(get_api_deps)],
     pattern: SearchQuery,
     is_data_action: bool = False,
@@ -102,12 +108,14 @@ async def api_count_wildcard_matches(
 
 
 @router.post("/recommend-roles", response_model=RecommendRolesResponse)
+@limiter.limit(f"{RECOMMEND_ROLES_RATE_LIMIT_PER_MINUTE}/minute")
 async def api_recommend_roles(
-    request: RecommendRolesRequest,
+    request: Request,
+    body: RecommendRolesRequest,
     deps: Annotated[BaseDeps, Depends(get_api_deps)],
 ) -> RecommendRolesResponse:
     """Recommend roles based on selected operations."""
-    requested_ops, data_flags = request.parse_operations()
+    requested_ops, data_flags = body.parse_operations()
 
     # Run CPU-bound recommendation in thread pool to avoid blocking event loop
     matches = await to_thread.run_sync(
@@ -190,7 +198,7 @@ async def ai_recommend_endpoint(
 
     logger.info(
         "AI recommendation: query='%s' requested=%s actual=%s results=%d",
-        query[:50],
+        sanitize_for_log(query, max_length=50),
         requested_mode,
         actual_mode,
         len(recommendations),

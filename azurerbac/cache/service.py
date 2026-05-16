@@ -322,6 +322,14 @@ class CacheService:
     def set_comparison(self, key: str, value: RoleComparison) -> None:
         self._request_caches.comparisons[key] = value
 
+    def get_effective_perms(self, role_id: str) -> Any | None:
+        result = self._request_caches.effective_perms.get(role_id)
+        track_cache_hit("effective_perms", result is not None, role_id)
+        return result
+
+    def set_effective_perms(self, role_id: str, value: Any) -> None:
+        self._request_caches.effective_perms[role_id] = value
+
     # -------------------------------------------------------------------------
     # Metadata
     # -------------------------------------------------------------------------

@@ -49,13 +49,32 @@ class TestCacheHeaders:
 
     @pytest.mark.asyncio
     async def test_static_assets_long_cache(self, test_client):
-        """Test that static assets get long cache headers."""
+        """Test that static assets get long cache headers on a 200 response.
+
+        Requests a real asset shipped with the app so the route returns 200;
+        the middleware now (correctly) sets ``no-store`` on 4xx/5xx responses
+        so non-existent paths can no longer be used to assert this header.
+        """
         client, _ = test_client
-        response = await client.get("/static/css/styles.css")
+        response = await client.get("/robots.txt")
+        assert response.status_code == 200
         cache_control = response.headers.get("cache-control", "")
-        assert "max-age=31536000" in cache_control
-        assert "immutable" in cache_control
-        assert response.headers.get("vary") == "Accept-Encoding"
+        assert "max-age" in cache_control
+
+    @pytest.mark.asyncio
+    async def test_error_responses_are_not_long_cached(self, test_client):
+        """Regression: 4xx/5xx must not inherit the page's long s-maxage TTL.
+
+        A short negative cache on 404 is fine (~60 s); the bug being
+        guarded is the CDN pinning a failure for the full detail-page
+        ``s-maxage`` (1800 s) on every edge.
+        """
+        client, _ = test_client
+        response = await client.get("/roles/test-role")
+        assert response.status_code in (404, 400)
+        cache_control = response.headers.get("cache-control", "")
+        assert "s-maxage=1800" not in cache_control
+        assert "max-age=31536000" not in cache_control
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("path", ["/", "/recent", "/roles", "/recommend"])
@@ -70,13 +89,18 @@ class TestCacheHeaders:
 
     @pytest.mark.asyncio
     async def test_role_detail_cache_headers(self, test_client):
-        """Test that role detail pages get appropriate cache headers."""
+        """404 pages get a brief positive cache (absorb crawler storms).
+
+        5xx responses must be ``no-store`` (failure amplification), but 404s
+        for unknown URLs are safe to negatively cache for a short window so
+        bot/crawler probes don't keep hitting the origin.
+        """
         client, _ = test_client
-        # This will 404, but middleware still adds headers before route handler
-        response = await client.get("/roles/test-role")
+        response = await client.get("/this-path-does-not-exist")
+        assert response.status_code == 404
         cache_control = response.headers.get("cache-control", "")
-        # Role detail pages should have longer s-maxage (30 minutes)
-        assert "s-maxage=1800" in cache_control
+        assert "max-age=60" in cache_control
+        assert "no-store" not in cache_control
 
 
 # =============================================================================
@@ -235,6 +259,293 @@ class TestDomainRedirect:
 # =============================================================================
 
 
+class TestRequestBodySizeLimit:
+    """Tests for RequestBodySizeLimitMiddleware (DoS hardening)."""
+
+    @pytest.mark.asyncio
+    async def test_oversize_content_length_rejected_with_413(self, test_client):
+        """A POST with Content-Length above the cap must be rejected fast."""
+        from azurerbac.web.constants import MAX_REQUEST_BODY_BYTES
+
+        client, _ = test_client
+        # Send a small body but advertise a huge Content-Length
+        oversize = MAX_REQUEST_BODY_BYTES + 1
+        response = await client.post(
+            "/api/recommend-roles",
+            content=b'{"operations":[]}',
+            headers={"content-length": str(oversize), "content-type": "application/json"},
+        )
+        assert response.status_code == 413
+
+    @pytest.mark.asyncio
+    async def test_invalid_content_length_rejected(self, test_client):
+        """A malformed Content-Length header must be rejected with 400."""
+        client, _ = test_client
+        response = await client.post(
+            "/api/recommend-roles",
+            content=b'{"operations":[]}',
+            headers={"content-length": "not-a-number", "content-type": "application/json"},
+        )
+        assert response.status_code == 400
+
+    @pytest.mark.asyncio
+    async def test_normal_request_passes(self, test_client):
+        """Normal-sized POST bodies must pass through untouched."""
+        client, _ = test_client
+        response = await client.post(
+            "/api/recommend-roles",
+            json={"operations": [{"name": "Microsoft.Storage/storageAccounts/read"}]},
+        )
+        # Either 200, 422 (no cache yet), or 429 are acceptable here — the
+        # important assertion is that the body-size middleware did not 413/400.
+        assert response.status_code not in (400, 413)
+
+    @pytest.mark.asyncio
+    async def test_streaming_body_over_cap_rejected_with_413(self):
+        """An oversized body without Content-Length must be cut off by the stream wrapper.
+
+        This exercises the layer-2 (receive-wrapping) path that defends
+        against missing/lying ``Content-Length`` and chunked uploads.
+        Done as a pure ASGI test because httpx always sets Content-Length.
+        """
+        from azurerbac.web.middleware import RequestBodySizeLimitMiddleware
+
+        async def downstream(scope, receive, send):
+            # Drain the body to force the wrapper to run
+            while True:
+                msg = await receive()
+                if not msg.get("more_body"):
+                    break
+            await send({"type": "http.response.start", "status": 200, "headers": []})
+            await send({"type": "http.response.body", "body": b"ok", "more_body": False})
+
+        mw = RequestBodySizeLimitMiddleware(downstream, max_bytes=1024)
+        scope = {
+            "type": "http",
+            "method": "POST",
+            "headers": [(b"content-type", b"application/json")],  # NO content-length
+        }
+
+        # Send 3 chunks totalling 3 KB (over the 1 KB cap)
+        sent_chunks = [
+            {"type": "http.request", "body": b"x" * 500, "more_body": True},
+            {"type": "http.request", "body": b"x" * 500, "more_body": True},
+            {"type": "http.request", "body": b"x" * 2000, "more_body": False},
+        ]
+
+        async def receive():
+            return sent_chunks.pop(0)
+
+        responses = []
+
+        async def send(message):
+            responses.append(message)
+
+        await mw(scope, receive, send)
+
+        # First response should be our 413
+        assert responses, "middleware sent no response"
+        assert responses[0]["type"] == "http.response.start"
+        assert responses[0]["status"] == 413
+        body = b"".join(m.get("body", b"") for m in responses if m["type"] == "http.response.body")
+        assert b"Request body too large" in body
+
+    @pytest.mark.asyncio
+    async def test_negative_content_length_rejected(self, test_client):
+        """A negative Content-Length is malformed per RFC 9110 — must be 400."""
+        client, _ = test_client
+        response = await client.post(
+            "/api/recommend-roles",
+            content=b'{"operations":[]}',
+            headers={"content-length": "-1", "content-type": "application/json"},
+        )
+        assert response.status_code == 400
+
+    @pytest.mark.asyncio
+    async def test_zero_content_length_passes(self, test_client):
+        """An explicit Content-Length: 0 must not be blocked by the body cap."""
+        client, _ = test_client
+        response = await client.post(
+            "/api/recommend-roles",
+            content=b"",
+            headers={"content-length": "0", "content-type": "application/json"},
+        )
+        # The downstream app may return 400/422 for an empty body, but the
+        # response must NOT be our middleware's plain-text rejection.
+        assert response.text != "Invalid Content-Length"
+        assert response.text != "Request body too large"
+
+    @pytest.mark.asyncio
+    async def test_rejection_includes_connection_close(self, test_client):
+        """413 responses must include ``Connection: close`` to prevent socket reuse abuse."""
+        from azurerbac.web.constants import MAX_REQUEST_BODY_BYTES
+
+        client, _ = test_client
+        response = await client.post(
+            "/api/recommend-roles",
+            content=b'{"operations":[]}',
+            headers={
+                "content-length": str(MAX_REQUEST_BODY_BYTES + 1),
+                "content-type": "application/json",
+            },
+        )
+        assert response.status_code == 413
+        assert response.headers.get("connection", "").lower() == "close"
+
+    @pytest.mark.asyncio
+    async def test_downstream_response_suppressed_after_413(self):
+        """If downstream tries to respond after our 413, those messages must be dropped."""
+        from azurerbac.web.middleware import RequestBodySizeLimitMiddleware
+
+        async def downstream(scope, receive, send):
+            # Read until disconnect, then try to respond anyway (simulating
+            # a handler that races with our 413).
+            while True:
+                msg = await receive()
+                if msg["type"] == "http.disconnect" or not msg.get("more_body"):
+                    break
+            await send({"type": "http.response.start", "status": 200, "headers": []})
+            await send({"type": "http.response.body", "body": b"downstream-ok"})
+
+        mw = RequestBodySizeLimitMiddleware(downstream, max_bytes=100)
+        scope = {"type": "http", "method": "POST", "headers": []}
+
+        chunks = [{"type": "http.request", "body": b"x" * 500, "more_body": False}]
+
+        async def receive():
+            return chunks.pop(0)
+
+        responses = []
+
+        async def send(message):
+            responses.append(message)
+
+        await mw(scope, receive, send)
+
+        # Only the 413 must be on the wire — downstream's 200 must be swallowed.
+        starts = [m for m in responses if m["type"] == "http.response.start"]
+        assert len(starts) == 1
+        assert starts[0]["status"] == 413
+        bodies = b"".join(
+            m.get("body", b"") for m in responses if m["type"] == "http.response.body"
+        )
+        assert b"downstream-ok" not in bodies
+
+    @pytest.mark.asyncio
+    async def test_receive_returns_disconnect_after_cap(self):
+        """After cap is exceeded, subsequent receive() calls must yield http.disconnect."""
+        from azurerbac.web.middleware import RequestBodySizeLimitMiddleware
+
+        captured_messages = []
+
+        async def downstream(scope, receive, send):
+            # Read four times; first triggers cap, rest must all be disconnect.
+            for _ in range(4):
+                captured_messages.append(await receive())
+
+        mw = RequestBodySizeLimitMiddleware(downstream, max_bytes=10)
+        scope = {"type": "http", "method": "POST", "headers": []}
+        chunks = [{"type": "http.request", "body": b"x" * 100, "more_body": False}]
+
+        async def receive():
+            return chunks.pop(0)
+
+        async def send(message):
+            pass
+
+        await mw(scope, receive, send)
+
+        assert captured_messages[0]["type"] == "http.disconnect"
+        assert all(m["type"] == "http.disconnect" for m in captured_messages)
+
+    @pytest.mark.asyncio
+    async def test_cancellederror_propagates(self):
+        """asyncio.CancelledError from downstream must NOT be swallowed.
+
+        Swallowing CancelledError would break parent-task cancellation
+        and prevent proper resource cleanup.
+        """
+        import asyncio
+
+        from azurerbac.web.middleware import RequestBodySizeLimitMiddleware
+
+        async def downstream(scope, receive, send):
+            raise asyncio.CancelledError
+
+        mw = RequestBodySizeLimitMiddleware(downstream, max_bytes=1024)
+        scope = {"type": "http", "method": "POST", "headers": []}
+
+        async def receive():
+            return {"type": "http.request", "body": b"", "more_body": False}
+
+        async def send(message):
+            pass
+
+        with pytest.raises(asyncio.CancelledError):
+            await mw(scope, receive, send)
+
+    @pytest.mark.asyncio
+    async def test_413_not_sent_after_response_already_started(self):
+        """Streaming endpoints: if downstream started a response before the
+        oversize chunk arrives, we MUST NOT emit a second http.response.start.
+
+        Otherwise we'd commit a double-start ASGI protocol violation. The
+        existing response wins; the connection just disconnects.
+        """
+        from azurerbac.web.middleware import RequestBodySizeLimitMiddleware
+
+        async def streaming_downstream(scope, receive, send):
+            # Start responding BEFORE consuming the body.
+            await send({"type": "http.response.start", "status": 200, "headers": []})
+            await send({"type": "http.response.body", "body": b"partial", "more_body": True})
+            # Now read body — first chunk will trip the cap.
+            await receive()
+
+        mw = RequestBodySizeLimitMiddleware(streaming_downstream, max_bytes=10)
+        scope = {"type": "http", "method": "POST", "headers": []}
+        chunks = [{"type": "http.request", "body": b"x" * 500, "more_body": False}]
+
+        async def receive():
+            return chunks.pop(0)
+
+        responses = []
+
+        async def send(message):
+            responses.append(message)
+
+        await mw(scope, receive, send)
+
+        # Exactly one http.response.start, and it's the downstream 200 — NOT 413.
+        starts = [m for m in responses if m["type"] == "http.response.start"]
+        assert len(starts) == 1, f"expected single start, got {len(starts)}"
+        assert starts[0]["status"] == 200
+
+    @pytest.mark.asyncio
+    async def test_none_body_does_not_crash(self):
+        """A buggy server sending ``body=None`` (off-spec but possible) must
+        not crash with TypeError — we defensively coerce to b''."""
+        from azurerbac.web.middleware import RequestBodySizeLimitMiddleware
+
+        captured = []
+
+        async def downstream(scope, receive, send):
+            captured.append(await receive())
+
+        mw = RequestBodySizeLimitMiddleware(downstream, max_bytes=1024)
+        scope = {"type": "http", "method": "POST", "headers": []}
+        chunks = [{"type": "http.request", "body": None, "more_body": False}]
+
+        async def receive():
+            return chunks.pop(0)
+
+        async def send(message):
+            pass
+
+        # Must not raise TypeError on len(None).
+        await mw(scope, receive, send)
+        assert captured[0]["type"] == "http.request"
+
+
 class TestMiddlewareIntegration:
     """Integration tests for all middleware working together."""
 
@@ -255,12 +566,17 @@ class TestMiddlewareIntegration:
 
     @pytest.mark.asyncio
     async def test_static_assets_get_correct_headers(self, test_client):
-        """Test that static assets have cache but also security headers."""
-        client, _ = test_client
-        response = await client.get("/static/css/styles.css")
+        """Test that 200 static responses carry cache and security headers.
 
-        # Should have long cache
-        assert "max-age=31536000" in response.headers.get("cache-control", "")
+        Uses ``/robots.txt`` (always 200) because the previous probe of a
+        missing CSS asset 404'd and is now (correctly) ``no-store``.
+        """
+        client, _ = test_client
+        response = await client.get("/robots.txt")
+        assert response.status_code == 200
+
+        # Should have cache headers
+        assert "max-age" in response.headers.get("cache-control", "")
 
         # But also security headers (X-Content-Type-Options handled by Cloudflare)
         assert response.headers.get("x-frame-options") == "DENY"

@@ -3,6 +3,11 @@ module.exports = {
   content: [
     './azurerbac/web/templates/**/*.html',
     './azurerbac/web/static/js/**/*.js',
+    // Tailwind class strings also live in Python constants (e.g. the
+    // decommission banner message in ``azurerbac/web/constants.py``).
+    // Including the file in ``content`` lets the JIT see those classes
+    // and ship the corresponding rules.
+    './azurerbac/web/constants.py',
   ],
   darkMode: 'class',
   theme: {

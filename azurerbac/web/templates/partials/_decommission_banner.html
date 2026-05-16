@@ -8,7 +8,13 @@
     ``azurerbac/web/constants.py`` re-shows the banner to everyone who
     previously dismissed it.
   - Vanilla JS — does NOT depend on Alpine.js, so this works on every
-    page including the home page and the 4xx error pages.
+    page that includes this partial (no extra script tags needed on the
+    host template).
+  - Rendered on every user-facing page (index, role, role detail,
+    operations, operation detail, recommend, compare, compare detail,
+    analytics, about). The 4xx error pages intentionally do NOT include
+    it — a decommission notice next to a "page not found" message just
+    adds noise.
   - Hidden by default; the inline script only un-hides it when the user
     has not already dismissed this version. That avoids a flash of the
     banner on slow connections + degrades gracefully when JS is off

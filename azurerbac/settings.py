@@ -39,6 +39,7 @@ class EnvVars:
     USE_RBAC_API: Final = "USE_RBAC_API"
     MCP_SERVER_ENABLED: Final = "MCP_SERVER_ENABLED"
     ENABLED_AI_ENGINES: Final = "ENABLED_AI_ENGINES"
+    DECOMMISSION_BANNER_ENABLED: Final = "DECOMMISSION_BANNER_ENABLED"
 
 
 _BOOL_TRUE_VALUES: Final = frozenset({"1", "true", "yes", "y", "on"})
@@ -98,6 +99,11 @@ class Settings(BaseModel):
     environment_name: str = "local"
     use_rbac_api: bool = True
     mcp_server_enabled: bool = True
+    # Decommission notice toggle. Defaults to off; flip on per-environment
+    # via the ``DECOMMISSION_BANNER_ENABLED`` env var (typically as an App
+    # Service / App Insights application setting). See
+    # ``azurerbac/web/constants.py`` for the message + version constants.
+    decommission_banner_enabled: bool = False
     enabled_ai_engines: list[str] = Field(
         default=["crossencoder", "colbert", "semantic", "llm", "rag", "hyde", "tfidf"],
         description="AI recommendation engines to expose in the UI.",
@@ -166,6 +172,7 @@ def _load_settings() -> Settings:
     _set_bool(kwargs, "enable_embeddings_in_tests", EnvVars.AZURERBAC_ENABLE_EMBEDDINGS_IN_TESTS)
     _set_bool(kwargs, "use_rbac_api", EnvVars.USE_RBAC_API)
     _set_bool(kwargs, "mcp_server_enabled", EnvVars.MCP_SERVER_ENABLED)
+    _set_bool(kwargs, "decommission_banner_enabled", EnvVars.DECOMMISSION_BANNER_ENABLED)
 
     if (engines_raw := os.getenv(EnvVars.ENABLED_AI_ENGINES)) is not None:
         import re

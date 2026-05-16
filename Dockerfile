@@ -51,5 +51,12 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:8000/healthz || exit 1
 
-# Start command - background worker + web server
-CMD ["sh", "-c", "python -m azurerbac.backgroundjobs.worker & python -m uvicorn azurerbac.web.app:app --host 0.0.0.0 --port ${PORT}"]
+# Start command — background worker + web server co-located in ONE container.
+#
+# ARCHITECTURAL NOTE: In a clean production deployment the background worker
+# and the web server SHOULD run as separate containers (Container Apps,
+# Kubernetes Deployments, or two App Services). Separation gives each tier
+# its own lifecycle, log stream, resource limits, scaling rules, and isolates
+# a worker crash from the web tier. They are deliberately co-located here to
+# save the cost of a second Azure App Service plan in the current deployment.
+CMD ["sh", "-c", "python -m azurerbac.backgroundjobs.worker & exec python -m uvicorn azurerbac.web.app:app --host 0.0.0.0 --port ${PORT} --limit-concurrency 256 --limit-max-requests 10000 --timeout-keep-alive 5 --h11-max-incomplete-event-size 16384"]

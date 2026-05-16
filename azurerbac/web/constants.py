@@ -24,6 +24,8 @@ MAX_ROLE_EVENTS: Final = 200
 MIN_SEARCH_CHARS: Final = 2
 MIN_AI_QUERY_CHARS: Final = 3
 AI_RATE_LIMIT_PER_MINUTE: Final = 10
+RECOMMEND_ROLES_RATE_LIMIT_PER_MINUTE: Final = 60
+OPERATIONS_SEARCH_RATE_LIMIT_PER_MINUTE: Final = 60
 MAX_QUERY_LENGTH: Final = 100
 MAX_SEARCH_LIMIT: Final = 100
 
@@ -33,6 +35,7 @@ CACHE_CDN_LONG: Final = 1800
 CACHE_STALE_REVALIDATE: Final = 1200
 
 CACHE_HEADER_NONE: Final = "no-store"
+CACHE_HEADER_NOT_FOUND: Final = "public, max-age=60, s-maxage=60"
 CACHE_HEADER_STATIC: Final = "public, max-age=31536000, immutable"
 CACHE_HEADER_MAIN_PAGE: Final = (
     f"public, max-age={CACHE_BROWSER_SHORT}, s-maxage={CACHE_CDN_MEDIUM}, "
@@ -69,3 +72,9 @@ PERMISSIONS_POLICY_HEADER: Final = (
 )
 
 GZIP_MIN_SIZE: Final = 500
+
+# Hard cap on inbound request bodies. The largest legitimate request is
+# /api/recommend-roles with up to 100 OperationItem entries; even with
+# 512-char names that's ~ 60 KB. 256 KB is a generous safety margin and
+# guards against malformed Content-Length headers and JSON bombs.
+MAX_REQUEST_BODY_BYTES: Final = 256 * 1024

@@ -47,7 +47,7 @@ class AIRecommendRequest(BaseModel):
 
     query: str = Field(..., min_length=1, max_length=MAX_AI_QUERY_LENGTH)
     top_k: int = Field(default=5, ge=1, le=MAX_TOP_K)
-    recommender_mode: str = RecommenderMode.LLM.value
+    recommender_mode: str = Field(default=RecommenderMode.LLM.value, max_length=32)
 
 
 @dataclass(slots=True)

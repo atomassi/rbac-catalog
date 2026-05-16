@@ -1,6 +1,6 @@
 """Telemetry: Application Insights metrics and logging."""
 
-from .logging import configure_logging
+from .logging import configure_logging, sanitize_for_log
 from .metrics import (
     flush_metrics,
     track_ai_recommendation,
@@ -25,6 +25,7 @@ __all__ = [
     "WorkerOperationContext",
     "configure_logging",
     "flush_metrics",
+    "sanitize_for_log",
     "track_ai_recommendation",
     "track_cache_call",
     "track_cache_hit",

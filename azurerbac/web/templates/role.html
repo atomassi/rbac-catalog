@@ -736,8 +736,8 @@
             {% if role.status != 'deleted' and effective_perms %}
             <script>
                 window._effectivePermsData = {
-                    control: {{ effective_perms.control_plane_actions | tojson | safe }},
-                    data: {{ effective_perms.data_plane_actions | tojson | safe }}
+                    control: {{ effective_perms.control_plane_actions | tojson }},
+                    data: {{ effective_perms.data_plane_actions | tojson }}
                 };
             </script>
             <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-lg overflow-hidden mb-8" 

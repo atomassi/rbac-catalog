@@ -292,6 +292,10 @@ _ROLE_PAGES_CACHE_MAX_SIZE: Final[int] = 500
 # Each page is ~50 operations x ~0.5KB = ~25KB per entry, ~12.5MB max
 _OPERATION_PAGES_CACHE_MAX_SIZE: Final[int] = 500
 
+# Maximum entries in effective_perms cache (per-role expanded permissions).
+# ~800 built-in roles total; an entry is ~10KB → ~8MB max.
+_EFFECTIVE_PERMS_CACHE_MAX_SIZE: Final[int] = 1000
+
 
 @dataclass
 class ComputedCaches:
@@ -333,6 +337,9 @@ class RequestCaches:
     )
     comparisons: LRUCache[str, Any] = field(
         default_factory=lambda: LRUCache(maxsize=_COMPARISON_CACHE_MAX_SIZE)
+    )
+    effective_perms: LRUCache[str, Any] = field(
+        default_factory=lambda: LRUCache(maxsize=_EFFECTIVE_PERMS_CACHE_MAX_SIZE)
     )
 
 

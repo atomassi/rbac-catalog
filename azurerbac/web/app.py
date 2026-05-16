@@ -52,6 +52,7 @@ from azurerbac.web.constants import GZIP_MIN_SIZE
 from azurerbac.web.dependencies import BaseDeps, DashboardDeps, PagesDeps
 from azurerbac.web.filters import diff_lines, format_date, format_datetime, full_json_diff
 from azurerbac.web.middleware import (
+    RequestBodySizeLimitMiddleware,
     add_cache_headers,
     add_security_headers,
     redirect_old_domain,
@@ -311,3 +312,9 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> Respon
 app.middleware("http")(add_cache_headers)
 app.middleware("http")(add_security_headers)
 app.middleware("http")(redirect_old_domain)
+
+# Body-size cap is a pure ASGI middleware (not BaseHTTPMiddleware) so the
+# wrapped receive callable propagates to downstream handlers. Registered
+# LAST so it runs FIRST on inbound requests, rejecting oversized bodies
+# before any other middleware reads them.
+app.add_middleware(RequestBodySizeLimitMiddleware)

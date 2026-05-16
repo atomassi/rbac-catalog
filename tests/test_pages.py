@@ -39,6 +39,7 @@ class TestComputeRoleEffectivePermissionsServices:
 
         # Create mock app_cache with pre-computed coverage
         mock_app_cache = MagicMock()
+        mock_app_cache.get_effective_perms.return_value = None
         # Cache stores lowered operation names
         mock_app_cache.get_role_coverage.return_value = (
             {"microsoft.storage/storageaccounts/read"},
@@ -78,6 +79,7 @@ class TestComputeRoleEffectivePermissionsServices:
 
         # Create mock with delete excluded (cache stores lowered)
         mock_app_cache = MagicMock()
+        mock_app_cache.get_effective_perms.return_value = None
         mock_app_cache.get_role_coverage.return_value = (
             {
                 "microsoft.storage/storageaccounts/read",
@@ -117,6 +119,7 @@ class TestComputeRoleEffectivePermissionsServices:
         ]
 
         mock_app_cache = MagicMock()
+        mock_app_cache.get_effective_perms.return_value = None
         mock_app_cache.get_role_coverage.return_value = (
             set(),
             {"microsoft.storage/storageaccounts/blobservices/containers/blobs/read"},
@@ -187,6 +190,7 @@ class TestComputeRoleEffectivePermissionsServices:
         )
 
         mock_app_cache = MagicMock()
+        mock_app_cache.get_effective_perms.return_value = None
         mock_app_cache.get_role_coverage.return_value = cache_coverage
         ops_map = {
             "microsoft.storage/storageaccounts/read": "Microsoft.Storage/storageAccounts/read",
@@ -217,6 +221,7 @@ class TestComputeRoleEffectivePermissionsServices:
         mock_app_cache = MagicMock()
         # Cache miss
         mock_app_cache.get_role_coverage.return_value = None
+        mock_app_cache.get_effective_perms.return_value = None
         ops_map = {
             "microsoft.storage/storageaccounts/read": "Microsoft.Storage/storageAccounts/read",
             "microsoft.storage/storageaccounts/write": "Microsoft.Storage/storageAccounts/write",
@@ -254,6 +259,7 @@ class TestComputeRoleEffectivePermissionsServices:
         mock_app_cache = MagicMock()
         # Cache miss - forces manual computation
         mock_app_cache.get_role_coverage.return_value = None
+        mock_app_cache.get_effective_perms.return_value = None
 
         # Track what restore_operation_casing receives
         received_ops: list[list[str]] = []

@@ -716,10 +716,18 @@ class TestAiRecommendTool:
 
     @patch("azurerbac.mcp.server.ai_recommend_roles")
     def test_ai_exception_handled(self, mock_ai: MagicMock, mcp_server: MCPServer) -> None:
+        """Internal exception messages must not be echoed back to the MCP client.
+
+        Leaking ``str(exception)`` over the wire can disclose internal paths,
+        DB driver errors, or Ollama endpoint URLs. The handler should return
+        a fixed, user-safe message and rely on server-side logging for detail.
+        """
         mock_ai.side_effect = RuntimeError("Model not loaded")
         result = _call_tool(mcp_server, "ai_recommend", query="read blob storage data", ctx=None)
         assert "failed" in result.lower()
-        assert "Model not loaded" in result
+        # The exception message must NOT be present in the response
+        assert "Model not loaded" not in result
+        assert "RuntimeError" not in result
 
 
 # =============================================================================

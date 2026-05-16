@@ -849,23 +849,30 @@ class TestWorker:
             pytest.param(True, True, id="with_event_registers_signals"),
         ],
     )
-    def test_setup_shutdown_handler(self, has_event: bool, expect_signals_registered: bool):
+    @pytest.mark.asyncio
+    async def test_setup_shutdown_handler(self, has_event: bool, expect_signals_registered: bool):
         """_setup_shutdown_handler should register signals only when event exists."""
         import signal
-        from unittest.mock import patch
+        from unittest.mock import MagicMock, patch
 
         from azurerbac.backgroundjobs.worker import Worker
 
         worker = Worker()
         worker._shutdown_event = asyncio.Event() if has_event else None
 
-        with patch("azurerbac.backgroundjobs.worker.signal.signal") as mock_signal:
+        mock_loop = MagicMock()
+        with patch(
+            "azurerbac.backgroundjobs.worker.asyncio.get_running_loop",
+            return_value=mock_loop,
+        ):
             worker._setup_shutdown_handler()
 
-            if expect_signals_registered:
-                assert mock_signal.call_count == 2
-                registered_signals = {call.args[0] for call in mock_signal.call_args_list}
-                assert signal.SIGINT in registered_signals
-                assert signal.SIGTERM in registered_signals
-            else:
-                mock_signal.assert_not_called()
+        if expect_signals_registered:
+            assert mock_loop.add_signal_handler.call_count == 2
+            registered_signals = {
+                call.args[0] for call in mock_loop.add_signal_handler.call_args_list
+            }
+            assert signal.SIGINT in registered_signals
+            assert signal.SIGTERM in registered_signals
+        else:
+            mock_loop.add_signal_handler.assert_not_called()

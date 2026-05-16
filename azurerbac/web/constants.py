@@ -78,3 +78,27 @@ GZIP_MIN_SIZE: Final = 500
 # 512-char names that's ~ 60 KB. 256 KB is a generous safety margin and
 # guards against malformed Content-Length headers and JSON bombs.
 MAX_REQUEST_BODY_BYTES: Final = 256 * 1024
+
+# ---------------------------------------------------------------------------
+# Decommission banner
+# ---------------------------------------------------------------------------
+# Banner is ENABLED via ``Settings.decommission_banner_enabled`` (env var
+# ``DECOMMISSION_BANNER_ENABLED``). Default is False so a local dev run
+# never sees the notice; production sets the env var to ``true``.
+#
+# Bump ``DECOMMISSION_BANNER_VERSION`` whenever the message text materially
+# changes — the dismiss state is keyed on it, so users who dismissed the
+# old text will see the new one.
+#
+# Both the message HTML and the optional feedback URL are constants here
+# (not env vars) because they should travel with the deployment and be
+# code-reviewed.
+DECOMMISSION_BANNER_VERSION: Final[str] = "2026-05-decommission-v3"
+DECOMMISSION_BANNER_FEEDBACK_URL: Final[str] = "https://forms.gle/N323bjAWGKJzUWb49"
+DECOMMISSION_BANNER_MESSAGE: Final[str] = (
+    "This site is being decommissioned on <strong>June 12, 2026</strong>. "
+    "Bookmark the "
+    '<a href="https://learn.microsoft.com/azure/role-based-access-control/built-in-roles" '
+    'class="underline font-medium hover:no-underline">Azure built-in roles reference</a> '
+    "on Microsoft Learn."
+)

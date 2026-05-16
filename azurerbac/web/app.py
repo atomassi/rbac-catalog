@@ -48,7 +48,12 @@ from azurerbac.core.constants import SITE_URL
 from azurerbac.core.utils import slugify
 from azurerbac.mcp import create_disabled_mcp_app, create_mcp_server
 from azurerbac.settings import Settings, is_running_in_pytest
-from azurerbac.web.constants import GZIP_MIN_SIZE
+from azurerbac.web.constants import (
+    DECOMMISSION_BANNER_FEEDBACK_URL,
+    DECOMMISSION_BANNER_MESSAGE,
+    DECOMMISSION_BANNER_VERSION,
+    GZIP_MIN_SIZE,
+)
 from azurerbac.web.dependencies import BaseDeps, DashboardDeps, PagesDeps
 from azurerbac.web.filters import diff_lines, format_date, format_datetime, full_json_diff
 from azurerbac.web.middleware import (
@@ -114,6 +119,14 @@ templates.env.globals["app_version"] = __version__
 
 # SEO: Expose canonical site URL to templates
 templates.env.globals["site_url"] = SITE_URL
+
+# Decommission banner — enabled via ``Settings.decommission_banner_enabled``
+# (env var ``DECOMMISSION_BANNER_ENABLED``). Message + version + feedback URL
+# live in ``azurerbac/web/constants.py`` so they ship with the deployment.
+templates.env.globals["decommission_banner_enabled"] = settings.decommission_banner_enabled
+templates.env.globals["decommission_banner_version"] = DECOMMISSION_BANNER_VERSION
+templates.env.globals["decommission_banner_message"] = DECOMMISSION_BANNER_MESSAGE
+templates.env.globals["decommission_banner_feedback_url"] = DECOMMISSION_BANNER_FEEDBACK_URL
 
 
 # ─────────────────────────────────────────────────────────────────────────────

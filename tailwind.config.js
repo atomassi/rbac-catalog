@@ -4,6 +4,17 @@ module.exports = {
     './azurerbac/web/templates/**/*.html',
     './azurerbac/web/static/js/**/*.js',
   ],
+  // Some utility classes only appear inside Python string literals
+  // (e.g. the decommission banner HTML in ``azurerbac/web/constants.py``)
+  // and the JIT can't see them through the ``content`` globs. Scanning
+  // the whole Python file would also emit utilities for unrelated tokens
+  // (URLs, CSP domains, etc.) and bloat the bundle, so we list the
+  // referenced classes explicitly here.
+  safelist: [
+    'underline',
+    'font-medium',
+    'hover:no-underline',
+  ],
   darkMode: 'class',
   theme: {
     extend: {

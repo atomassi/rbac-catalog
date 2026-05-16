@@ -35,6 +35,12 @@
     hidden
     class="bg-amber-500 dark:bg-amber-950 text-amber-950 dark:text-amber-100"
 >
+    {# Header row alignment:
+       - On mobile the message is allowed to wrap to a second line if the
+         viewport is narrower than the message length (~280 px). The icon
+         and the action cluster stay vertically centred against the wrapped
+         block.
+       - On sm+ everything fits on a single line in practice. #}
     <div class="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-2 sm:py-2.5 flex items-center gap-2 sm:gap-4">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
             <path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 6a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 6zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
@@ -44,10 +50,11 @@
         </p>
         <div class="flex items-center gap-1 sm:gap-1.5 flex-shrink-0">
             {% if decommission_banner_feedback_url %}
-            {# Solid, high-contrast pill: inverse of banner colors so it pops
-               against the amber background in both light and dark mode.
-               Compact on mobile (icon only with sr-only label); full label
-               at sm+. #}
+            {# Solid, high-contrast pill: inverse of banner colors so it
+               pops against the amber background in both light and dark
+               mode. Renders a shorter visible label ("Feedback") on
+               mobile so the row stays compact; the longer "Share
+               feedback" wording appears on sm+. #}
             <a
                 href="{{ decommission_banner_feedback_url }}"
                 target="_blank"

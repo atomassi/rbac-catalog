@@ -280,7 +280,7 @@
             {
                 "@type": "ListItem",
                 "position": {{ loop.index + ((page - 1) * limit) }},
-                "name": "{{ role.role_name }}",
+                "name": {{ role.role_name | tojson }},
                 "url": "{{ site_url }}/roles/{{ role.role_id }}/{{ role.role_name | slugify }}"
             }{% if not loop.last %},{% endif %}
             {% endfor %}

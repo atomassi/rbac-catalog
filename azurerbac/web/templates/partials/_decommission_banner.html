@@ -1,33 +1,8 @@
-{# ============================================================================
-  Decommission banner — one-time top notice that the site is going away.
-
-  - Toggled site-wide by ``decommission_banner_enabled`` (False ⇒ nothing
-    renders, no JS runs).
-  - Dismissed per browser via ``localStorage``. The key includes
-    ``decommission_banner_version`` so bumping the version constant in
-    ``azurerbac/web/constants.py`` re-shows the banner to everyone who
-    previously dismissed it.
-  - Vanilla JS — does NOT depend on Alpine.js, so this works on every
-    page that includes this partial (no extra script tags needed on the
-    host template).
-  - Rendered on every user-facing page (index, role, role detail,
-    operations, operation detail, recommend, compare, compare detail,
-    analytics, about). The 4xx error pages intentionally do NOT include
-    it — a decommission notice next to a "page not found" message just
-    adds noise.
-  - Hidden by default; the inline script only un-hides it when the user
-    has not already dismissed this version. That avoids a flash of the
-    banner on slow connections + degrades gracefully when JS is off
-    (no banner at all is preferable to one the user can't dismiss).
-============================================================================ #}
+{# Decommission banner.
+   Toggled by ``Settings.decommission_banner_enabled``. Dismissed
+   per-browser via ``localStorage``, keyed on ``decommission_banner_version``
+   so bumping the constant re-shows the banner. #}
 {% if decommission_banner_enabled %}
-{# Color scheme:
-   - Light mode: amber-500 bg, amber-950 text → WCAG AA (>7:1 contrast).
-   - Dark mode:  amber-950 bg, amber-100 text → WCAG AA, sits naturally on
-     a dark page without bleeding into the nav.
-   Same text color is used for the dismiss button's focus ring so it works
-   in both modes. No bottom border — it caused a stray amber stripe under
-   the nav after the banner was dismissed in earlier revisions. #}
 <div
     id="rbac-decommission-banner"
     role="status"
@@ -35,12 +10,6 @@
     hidden
     class="bg-amber-500 dark:bg-amber-950 text-amber-950 dark:text-amber-100"
 >
-    {# Header row alignment:
-       - On mobile the message is allowed to wrap to a second line if the
-         viewport is narrower than the message length (~280 px). The icon
-         and the action cluster stay vertically centred against the wrapped
-         block.
-       - On sm+ everything fits on a single line in practice. #}
     <div class="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-2 sm:py-2.5 flex items-center gap-2 sm:gap-4">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
             <path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 6a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 6zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
@@ -50,11 +19,6 @@
         </p>
         <div class="flex items-center gap-1 sm:gap-1.5 flex-shrink-0">
             {% if decommission_banner_feedback_url %}
-            {# Solid, high-contrast pill: inverse of banner colors so it
-               pops against the amber background in both light and dark
-               mode. Renders a shorter visible label ("Feedback") on
-               mobile so the row stays compact; the longer "Share
-               feedback" wording appears on sm+. #}
             <a
                 href="{{ decommission_banner_feedback_url }}"
                 target="_blank"
@@ -93,31 +57,22 @@
 </div>
 <script>
 (function () {
-    // ``tojson`` emits a properly-escaped JS string so a future version
-    // constant containing a quote, backslash, or newline can't break out
-    // of the literal. The constant is operator-controlled (not user
-    // input) so this is defence-in-depth, not active mitigation.
+    // ``tojson`` escapes the constant safely for embedding in JS.
     var KEY = 'rbac-decommission-banner:' + {{ decommission_banner_version | tojson }};
     var banner = document.getElementById('rbac-decommission-banner');
     var button = document.getElementById('rbac-decommission-banner-dismiss');
     if (!banner || !button) return;
     var storage = null;
-    try {
-        // ``localStorage`` access throws in some privacy modes — fall back
-        // to "always show" rather than crashing the script.
-        storage = window.localStorage;
-    } catch (_) { /* noop */ }
+    try { storage = window.localStorage; } catch (_) { /* private mode */ }
     var dismissed = false;
     if (storage) {
-        try { dismissed = storage.getItem(KEY) === '1'; } catch (_) { /* noop */ }
+        try { dismissed = storage.getItem(KEY) === '1'; } catch (_) {}
     }
-    if (!dismissed) {
-        banner.hidden = false;
-    }
+    if (!dismissed) banner.hidden = false;
     button.addEventListener('click', function () {
         banner.hidden = true;
         if (storage) {
-            try { storage.setItem(KEY, '1'); } catch (_) { /* noop */ }
+            try { storage.setItem(KEY, '1'); } catch (_) {}
         }
     });
 })();

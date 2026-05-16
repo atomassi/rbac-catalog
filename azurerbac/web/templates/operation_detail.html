@@ -58,7 +58,7 @@
             {
                 "@type": "ListItem",
                 "position": 3,
-                "name": "{{ operation.display_name or operation.name }}",
+                "name": {{ (operation.display_name or operation.name) | tojson }},
                 "item": "{{ site_url }}/operations/{{ operation.name }}"
             }
         ]
@@ -71,7 +71,7 @@
         "@context": "https://schema.org",
         "@type": "TechArticle",
         "headline": "{{ operation.name }} - Azure RBAC Operation",
-        "description": "{{ operation.description | default('Azure RBAC operation ' ~ operation.name ~ '. View which built-in roles allow this permission.', true) | replace('"', '\\"') }}",
+        "description": {{ (operation.description or ('Azure RBAC operation ' ~ operation.name ~ '. View which built-in roles allow this permission.')) | tojson }},
         "articleSection": "Azure RBAC Operations",
         "keywords": "Azure, RBAC, {{ operation.name }}, {{ operation.provider_display_name or operation.provider_namespace }}, {{ 'Data Plane' if operation.is_data_action else 'Control Plane' }}, Permissions",
         "datePublished": "{{ operation.first_seen_at.isoformat() if operation.first_seen_at else '' }}",
@@ -213,7 +213,7 @@
                             const backLabel = document.getElementById('back-label');
                             const state = NavState.get();
                             // Prevent loop - if back points to this same operation, use default
-                            if (state.back === 'operation' && state.from_operation === '{{ operation.name }}') {
+                            if (state.back === 'operation' && state.from_operation === {{ operation.name | tojson }}) {
                                 backBtn.href = '/operations';
                                 backLabel.textContent = 'Back to Operations';
                             } else {

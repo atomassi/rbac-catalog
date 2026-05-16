@@ -43,7 +43,7 @@
         "@context": "https://schema.org",
         "@type": "TechArticle",
         "headline": "{{ role.role_name }} - Azure Built-in Role Definition",
-        "description": "{{ role.description | default('Detailed definition and permissions for the Azure built-in role ' ~ role.role_name ~ '.', true) | replace('"', '\\"') }}{% if effective_perms and effective_perms.has_conditions %} Includes ABAC condition explanations.{% endif %}",
+        "description": {{ ((role.description or ('Detailed definition and permissions for the Azure built-in role ' ~ role.role_name ~ '.')) ~ ((' Includes ABAC condition explanations.') if (effective_perms and effective_perms.has_conditions) else '')) | tojson }},
         "articleSection": "Azure RBAC Roles",
         "keywords": "Azure, RBAC, {{ role.role_name }}, Security, IAM, {{ role.role_id }}, {{ role.role_id | replace('-', '') }}{% if effective_perms and effective_perms.has_conditions %}, ABAC, attribute-based access control, condition explanation{% endif %}",
         "datePublished": "{{ (role.created_on or role.first_seen_at or role.last_seen_at or role.updated_on).isoformat() if (role.created_on or role.first_seen_at or role.last_seen_at or role.updated_on) else '' }}",
@@ -69,8 +69,8 @@
     {
         "@context": "https://schema.org",
         "@type": "DefinedTerm",
-        "name": "{{ role.role_name }}",
-        "description": "{{ role.description | default('Azure built-in RBAC role', true) | replace('"', '\\"') }}",
+        "name": {{ role.role_name | tojson }},
+        "description": {{ (role.description or 'Azure built-in RBAC role') | tojson }},
         "identifier": [
             "{{ role.role_id }}",
             "{{ role.role_id | replace('-', '') }}"
@@ -106,7 +106,7 @@
             {
                 "@type": "ListItem",
                 "position": 3,
-                "name": "{{ role.role_name }}",
+                "name": {{ role.role_name | tojson }},
                 "item": "{{ site_url }}/roles/{{ role.role_id }}/{{ role.role_name | slugify }}"
             }
         ]
@@ -124,7 +124,7 @@
                 "name": "What is Azure role ID {{ role.role_id }}?",
                 "acceptedAnswer": {
                     "@type": "Answer",
-                    "text": "Azure role ID {{ role.role_id }} is the {{ role.role_name }} role. {{ role.description | default('This is an Azure built-in RBAC role.', true) | replace('"', '\\"') }}"
+                    "text": {{ ('Azure role ID ' ~ role.role_id ~ ' is the ' ~ role.role_name ~ ' role. ' ~ (role.description or 'This is an Azure built-in RBAC role.')) | tojson }}
                 }
             },
             {
@@ -247,7 +247,7 @@
                             const backLabel = document.getElementById('back-label');
                             const state = NavState.get();
                             // Prevent loop - if back points to this same role, use default
-                            if (state.back === 'role' && state.from_role_id === '{{ role.role_id }}') {
+                            if (state.back === 'role' && state.from_role_id === {{ role.role_id | tojson }}) {
                                 backBtn.href = '/roles';
                                 backLabel.textContent = 'Back to Roles';
                             } else {

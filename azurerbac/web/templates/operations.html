@@ -413,7 +413,7 @@
                             <thead>
                                 <tr class="bg-slate-50 dark:bg-slate-700/50 border-b border-slate-100 dark:border-slate-700">
                                     <th scope="col" class="px-4 sm:px-6 py-4 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                                        <a href="?{% if q %}q={{ q }}&{% endif %}{% if is_data_action is not none %}is_data_action={{ '1' if is_data_action else '0' }}&{% endif %}{% if provider %}provider={{ provider | urlencode }}&{% endif %}limit={{ limit }}&sort=name&order={% if sort == 'name' and order == 'asc' %}desc{% else %}asc{% endif %}" 
+                                        <a href="?{% if q %}q={{ q | urlencode }}&{% endif %}{% if is_data_action is not none %}is_data_action={{ '1' if is_data_action else '0' }}&{% endif %}{% if provider %}provider={{ provider | urlencode }}&{% endif %}limit={{ limit }}&sort=name&order={% if sort == 'name' and order == 'asc' %}desc{% else %}asc{% endif %}" 
                                            class="group inline-flex items-center hover:text-slate-700 dark:hover:text-slate-300">
                                             Operation Name
                                             <span class="ml-1 flex-none">
@@ -430,7 +430,7 @@
                                         </a>
                                     </th>
                                     <th scope="col" class="hide-mobile px-6 py-4 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                                        <a href="?{% if q %}q={{ q }}&{% endif %}{% if is_data_action is not none %}is_data_action={{ '1' if is_data_action else '0' }}&{% endif %}{% if provider %}provider={{ provider | urlencode }}&{% endif %}limit={{ limit }}&sort=provider&order={% if sort == 'provider' and order == 'asc' %}desc{% else %}asc{% endif %}" 
+                                        <a href="?{% if q %}q={{ q | urlencode }}&{% endif %}{% if is_data_action is not none %}is_data_action={{ '1' if is_data_action else '0' }}&{% endif %}{% if provider %}provider={{ provider | urlencode }}&{% endif %}limit={{ limit }}&sort=provider&order={% if sort == 'provider' and order == 'asc' %}desc{% else %}asc{% endif %}" 
                                            class="group inline-flex items-center hover:text-slate-700 dark:hover:text-slate-300">
                                             Provider
                                             <span class="ml-1 flex-none">
@@ -447,7 +447,7 @@
                                         </a>
                                     </th>
                                     <th scope="col" class="hide-mobile px-6 py-4 text-center text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                                        <a href="?{% if q %}q={{ q }}&{% endif %}{% if is_data_action is not none %}is_data_action={{ '1' if is_data_action else '0' }}&{% endif %}{% if provider %}provider={{ provider | urlencode }}&{% endif %}limit={{ limit }}&sort=roles&order={% if sort == 'roles' and order == 'asc' %}desc{% else %}asc{% endif %}" 
+                                        <a href="?{% if q %}q={{ q | urlencode }}&{% endif %}{% if is_data_action is not none %}is_data_action={{ '1' if is_data_action else '0' }}&{% endif %}{% if provider %}provider={{ provider | urlencode }}&{% endif %}limit={{ limit }}&sort=roles&order={% if sort == 'roles' and order == 'asc' %}desc{% else %}asc{% endif %}" 
                                            class="group inline-flex items-center justify-center hover:text-slate-700 dark:hover:text-slate-300" title="Number of built-in roles granting this operation">
                                             Granted By
                                             <span class="ml-1 flex-none">
@@ -464,7 +464,7 @@
                                         </a>
                                     </th>
                                     <th scope="col" class="hide-mobile px-6 py-4 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                                        <a href="?{% if q %}q={{ q }}&{% endif %}{% if is_data_action is not none %}is_data_action={{ '1' if is_data_action else '0' }}&{% endif %}{% if provider %}provider={{ provider | urlencode }}&{% endif %}limit={{ limit }}&sort=type&order={% if sort == 'type' and order == 'asc' %}desc{% else %}asc{% endif %}" 
+                                        <a href="?{% if q %}q={{ q | urlencode }}&{% endif %}{% if is_data_action is not none %}is_data_action={{ '1' if is_data_action else '0' }}&{% endif %}{% if provider %}provider={{ provider | urlencode }}&{% endif %}limit={{ limit }}&sort=type&order={% if sort == 'type' and order == 'asc' %}desc{% else %}asc{% endif %}" 
                                            class="group inline-flex items-center hover:text-slate-700 dark:hover:text-slate-300">
                                             Type
                                             <span class="ml-1 flex-none">

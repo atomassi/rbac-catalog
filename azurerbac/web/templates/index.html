@@ -272,7 +272,7 @@
     {
         "@context": "https://schema.org",
         "@type": "ItemList",
-        "name": "Azure Built-in RBAC Roles{% if q %} - Search: {{ q }}{% endif %}",
+        "name": {{ (("Azure Built-in RBAC Roles - Search: " ~ q) if q else "Azure Built-in RBAC Roles") | tojson }},
         "description": "List of Azure built-in RBAC role definitions with permissions and actions",
         "numberOfItems": {{ roles | length }},
         "itemListElement": [
@@ -280,7 +280,7 @@
             {
                 "@type": "ListItem",
                 "position": {{ loop.index + ((page - 1) * limit) }},
-                "name": "{{ role.role_name }}",
+                "name": {{ role.role_name | tojson }},
                 "url": "{{ site_url }}/roles/{{ role.role_id }}/{{ role.role_name | slugify }}"
             }{% if not loop.last %},{% endif %}
             {% endfor %}

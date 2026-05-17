@@ -291,6 +291,7 @@ azurerbac/
 ├── telemetry/       # Application Insights integration
 └── web/             # FastAPI app, routes, templates
 
+buildout/            # Bicep IaC + scripts to deploy your own copy to Azure
 scripts/             # Deployment and smoke test scripts
 tests/               # Unit tests
 e2e/                 # Playwright end-to-end tests

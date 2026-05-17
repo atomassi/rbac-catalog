@@ -13,11 +13,6 @@
 > scripts — stays in this repository under the MIT license. You can stand
 > up your own copy on Azure in about 15 minutes by following the
 > step-by-step walkthrough in [`buildout/README.md`](buildout/README.md).
-> See also [`buildout/ARCHITECTURE.md`](buildout/ARCHITECTURE.md) for the
-> design rationale and resource breakdown.
->
-> Microsoft's official Azure built-in roles reference is at
-> [learn.microsoft.com/azure/role-based-access-control/built-in-roles](https://learn.microsoft.com/azure/role-based-access-control/built-in-roles).
 
 **Live site:** [rbac-catalog.dev](https://rbac-catalog.dev/)
 
@@ -191,8 +186,6 @@ python scripts/smoke_tests.py --url https://your-staging-url.azurewebsites.net
 ```
 
 ## Deployment
-
-To deploy your own copy to Azure, see [`buildout/README.md`](buildout/README.md). What follows describes how this repo deploys to the public site.
 
 ### CI pipeline (this repo)
 

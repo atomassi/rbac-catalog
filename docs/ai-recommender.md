@@ -1,6 +1,6 @@
 # AI Recommender — Implementation Notes
 
-Internal-implementation reference for the AI Role Recommender. The high-level mode table is in the [main README](../README.md#ai-recommendation-modes).
+Internal implementation reference for the AI Role Recommender. The high-level mode table is in the [main README](../README.md#ai-recommendation-modes).
 
 ## LLM Fine-Tuning
 

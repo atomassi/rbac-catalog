@@ -187,7 +187,7 @@ python scripts/smoke_tests.py --url https://your-staging-url.azurewebsites.net
 
 ## Deployment
 
-### CI pipeline (this repo)
+### CI pipeline
 
 Deployments to the live site use a **staging-first approach** with automatic promotion:
 

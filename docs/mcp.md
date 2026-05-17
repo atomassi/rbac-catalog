@@ -13,6 +13,18 @@ This is the full reference for the [MCP (Model Context Protocol)](https://modelc
 | `recommend_roles` | Find least-privilege roles for specific operations |
 | `ai_recommend` | Natural language role recommendations |
 
+## Example queries
+
+Natural-language questions you can ask an AI assistant connected to this MCP server:
+
+- "What permissions does the Storage Blob Data Contributor role have?"
+- "Compare Storage Blob Data Contributor and Storage Blob Data Owner"
+- "Which roles allow `Microsoft.Storage/storageAccounts/blobServices/containers/blobs/read` and `Microsoft.Storage/storageAccounts/blobServices/containers/blobs/tags/read`?"
+- "What operations correspond to `Microsoft.Storage/*`?"
+- "Describe role `b7e6dc6d-f1e8-4753-8033-0f276bb0955b`"
+- "What Azure roles can read blob storage?"
+- "Find the least-privilege role for reading Key Vault secrets"
+
 ## Direct tool invocations
 
 Search for storage operations:

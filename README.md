@@ -165,12 +165,12 @@ Once configured, ask your AI assistant questions like:
 
 - "What permissions does the Storage Blob Data Contributor role have?"
 - "Compare Storage Blob Data Contributor and Storage Blob Data Owner"
-- "Which roles allow `Microsoft.Storage/storageAccounts/blobServices/containers/blobs/read` and `…/blobs/tags/read`?"
+- "Which roles allow `Microsoft.Storage/storageAccounts/blobServices/containers/blobs/read` and `Microsoft.Storage/storageAccounts/blobServices/containers/blobs/tags/read`?"
 - "What operations correspond to `Microsoft.Storage/*`?"
 - "Describe role `b7e6dc6d-f1e8-4753-8033-0f276bb0955b`"
 - "Find the least-privilege role for reading Key Vault secrets"
 
-See [docs/mcp.md](docs/mcp.md) for the full tool reference, direct invocation examples, and rate-limiting details.
+See [docs/mcp.md](docs/mcp.md) for the full tool reference, more example queries, direct invocation examples, and rate-limiting details.
 
 ## LLM Fine-Tuning
 

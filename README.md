@@ -13,11 +13,8 @@
 > scripts — stays in this repository under the MIT license. You can stand
 > up your own copy on Azure in about 15 minutes by following the
 > step-by-step walkthrough in [`buildout/README.md`](buildout/README.md).
-> See also [`buildout/ARCHITECTURE.md`](buildout/ARCHITECTURE.md) for the
-> design rationale and resource breakdown.
->
-> Microsoft's official Azure built-in roles reference is at
-> [learn.microsoft.com/azure/role-based-access-control/built-in-roles](https://learn.microsoft.com/azure/role-based-access-control/built-in-roles).
+
+---
 
 **Live site:** [rbac-catalog.dev](https://rbac-catalog.dev/)
 
@@ -132,6 +129,8 @@ The AI Role Recommender supports **8 different modes**, each with different spee
 | **HyDE** | Hypothetical document generation + semantic search | Embeddings + Ollama |
 | **Hybrid** | Multi-stage: TF-IDF → Embeddings → LLM pipeline | All components |
 
+See [docs/ai-recommender.md](docs/ai-recommender.md) for the LLM fine-tuning approach and how the underlying knowledge base (`document_text`) is built.
+
 ## MCP Server Integration
 
 Azure RBAC Catalog exposes an [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server for AI assistants like GitHub Copilot, Claude, and Cursor. This allows AI tools to query Azure RBAC data directly.
@@ -159,122 +158,18 @@ Create `.vscode/mcp.json` in your workspace:
 }
 ```
 
-### Available Tools
+### Example usage
 
-| Tool | Description |
-|------|-------------|
-| `search_operations` | Search Azure operations by name/pattern (supports wildcards like `Microsoft.Storage/*/read`) |
-| `search_roles` | Search roles by name or description |
-| `get_role` | Get detailed role info including all permissions |
-| `get_role_permissions` | Get expanded list of actual operations a role grants |
-| `recommend_roles` | Find least-privilege roles for specific operations |
-| `ai_recommend` | Natural language role recommendations |
+Once configured, ask your AI assistant questions like:
 
-### Example Usage
-
-**Natural language queries you can ask your AI assistant:**
-
-```
 - "What permissions does the Storage Blob Data Contributor role have?"
 - "Compare Storage Blob Data Contributor and Storage Blob Data Owner"
-- "Which roles allow Microsoft.Storage/storageAccounts/blobServices/containers/blobs/read and Microsoft.Storage/storageAccounts/blobServices/containers/blobs/tags/read?"
-- "What operations correspond to Microsoft.Storage/*?"
-- "Describe role b7e6dc6d-f1e8-4753-8033-0f276bb0955b"
-- "What Azure roles can read blob storage?"
+- "Which roles allow `Microsoft.Storage/storageAccounts/blobServices/containers/blobs/read` and `Microsoft.Storage/storageAccounts/blobServices/containers/blobs/tags/read`?"
+- "What operations correspond to `Microsoft.Storage/*`?"
+- "Describe role `b7e6dc6d-f1e8-4753-8033-0f276bb0955b`"
 - "Find the least-privilege role for reading Key Vault secrets"
-```
 
-**Direct tool invocations:**
-
-Search for storage operations:
-```
-search_operations("Microsoft.Storage/storageAccounts/read", limit=10)
-```
-
-Find all operations under a resource provider (wildcard search):
-```
-search_operations("Microsoft.Storage/*", limit=50)
-```
-
-Find roles matching a description:
-```
-search_roles("blob storage", limit=5)
-```
-
-Get AI-powered recommendations:
-```
-ai_recommend("I need to read and write blobs in Azure Storage", top_k=3)
-```
-
-Find least-privilege roles for specific operations:
-```
-recommend_roles(["Microsoft.Storage/storageAccounts/read", "Microsoft.Storage/storageAccounts/blobServices/containers/read"], max_results=5)
-```
-
-Find roles that grant specific blob operations:
-```
-recommend_roles(["Microsoft.Storage/storageAccounts/blobServices/containers/blobs/read", "Microsoft.Storage/storageAccounts/blobServices/containers/blobs/tags/read"], max_results=5)
-```
-
-Get detailed info about a role by ID:
-```
-get_role("b7e6dc6d-f1e8-4753-8033-0f276bb0955b")
-```
-
-Get detailed info about a role by name:
-```
-get_role("Storage Blob Data Reader")
-```
-
-### Rate Limiting
-
-The MCP server implements dual-layer rate limiting using token bucket algorithm:
-- **Global**: Protects against server overload (shared bucket across all clients)
-- **Per-session**: Prevents individual clients from monopolizing resources (separate bucket per session ID)
-
-Tokens refill continuously at a configurable rate, allowing burst capacity while enforcing sustained limits. Rate-limited requests receive informative error messages with retry-after guidance. Session buckets use LRU eviction to bound memory usage.
-
-## LLM Fine-Tuning
-
-The LLM mode uses a fine-tuned [Qwen2.5-0.5B-Instruct](https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct) model trained specifically for Azure RBAC role matching.
-
-### Approach
-
-Fine-tuning was done using [Unsloth](https://github.com/unslothai/unsloth) for efficient LoRA training on consumer hardware. The model takes natural language queries like "I need to read blob storage" and outputs structured JSON with role recommendations and confidence scores.
-
-## Knowledge Base
-
-Each role is converted into a searchable `document_text` combining:
-- **Role name & description** — From Azure's Role Definition API
-- **Action keywords** — Tokenized from expanded permissions (e.g., `Microsoft.Compute/virtualMachines/powerOff/action` → `virtualmachines poweroff action`)
-- **Curated patterns** — Human-written query examples (e.g., "read blob storage")
-
-```mermaid
-flowchart LR
-    subgraph Sources["<b>Sources</b>"]
-        API["Role API"]
-        Ops["Permissions API"]
-        Patterns["Curated patterns"]
-    end
-    
-    API -->|permissions/wildcards| Effective
-    Ops -->|all operations| Effective
-    Effective[Compute effective<br/>permissions] -->|expanded ops| Tokenize[Tokenize]
-    Tokenize -->|keywords| DocText
-    Patterns -->|search phrases| DocText
-    
-    DocText["document_text"]
-    
-    style Sources fill:#E6F2FA,stroke:#0078D4
-    style DocText fill:#E8F5E9,stroke:#4CAF50
-```
-
-| Engine | How it uses `document_text` |
-|--------|---------------------------|
-| **TF-IDF** | BM25 keyword matching |
-| **Semantic** | Embeds into vectors, cosine similarity |
-| **ColBERT** | Token-level MaxSim matching |
-| **LLM** | Doesn't use it—fine-tuned model predicts directly |
+See [docs/mcp.md](docs/mcp.md) for the full tool reference, more example queries, direct invocation examples, and rate-limiting details.
 
 ## Testing
 
@@ -294,27 +189,7 @@ python scripts/smoke_tests.py --url https://your-staging-url.azurewebsites.net
 
 ## Deployment
 
-### Deploy your own copy
-
-Want to run this in your own Azure subscription? The
-[`buildout/`](buildout/) folder ships single-file Bicep templates and helper
-scripts to provision everything you need (App Service + ACR + PostgreSQL +
-monitoring + optional staging/ppe slots) in ~15 minutes.
-
-```bash
-cd buildout
-cp .env.example .env
-$EDITOR .env                  # set SUBSCRIPTION_ID, RG_NAME, BASE_NAME, ...
-source .env
-az login && az account set --subscription "$SUBSCRIPTION_ID"
-./scripts/deploy.sh prod
-```
-
-See [`buildout/README.md`](buildout/README.md) for the full step-by-step
-walkthrough and [`buildout/ARCHITECTURE.md`](buildout/ARCHITECTURE.md) for
-the design rationale.
-
-### CI pipeline (this repo)
+### CI pipeline
 
 Deployments to the live site use a **staging-first approach** with automatic promotion:
 
@@ -353,6 +228,7 @@ azurerbac/
 ├── telemetry/       # Application Insights integration
 └── web/             # FastAPI app, routes, templates
 
+buildout/            # Bicep IaC + scripts to deploy your own copy to Azure
 scripts/             # Deployment and smoke test scripts
 tests/               # Unit tests
 e2e/                 # Playwright end-to-end tests

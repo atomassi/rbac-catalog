@@ -192,25 +192,7 @@ python scripts/smoke_tests.py --url https://your-staging-url.azurewebsites.net
 
 ## Deployment
 
-### Deploy your own copy
-
-Want to run this in your own Azure subscription? The
-[`buildout/`](buildout/) folder ships single-file Bicep templates and helper
-scripts to provision everything you need (App Service + ACR + PostgreSQL +
-monitoring + optional staging/ppe slots) in ~15 minutes.
-
-```bash
-cd buildout
-cp .env.example .env
-$EDITOR .env                  # set SUBSCRIPTION_ID, RG_NAME, BASE_NAME, ...
-source .env
-az login && az account set --subscription "$SUBSCRIPTION_ID"
-./scripts/deploy.sh prod
-```
-
-See [`buildout/README.md`](buildout/README.md) for the full step-by-step
-walkthrough and [`buildout/ARCHITECTURE.md`](buildout/ARCHITECTURE.md) for
-the design rationale.
+To deploy your own copy to Azure, see [`buildout/README.md`](buildout/README.md). What follows describes how this repo deploys to the public site.
 
 ### CI pipeline (this repo)
 

@@ -14,6 +14,8 @@
 > up your own copy on Azure in about 15 minutes by following the
 > step-by-step walkthrough in [`buildout/README.md`](buildout/README.md).
 
+---
+
 **Live site:** [rbac-catalog.dev](https://rbac-catalog.dev/)
 
 A comprehensive catalog and monitoring tool for [Azure built-in RBAC roles](https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles). Browse roles, explore their permissions, track changes over time, find least-privilege roles based on operation requirements, and get AI-powered role recommendations.

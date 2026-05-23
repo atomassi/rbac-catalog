@@ -46,7 +46,7 @@
 - **PostgreSQL Flexible (not Single)** — better price/perf and Entra ID auth. B1ms is enough for the workload (< 5 RPS, ~200 MB data).
 - **App uses Entra ID for DB auth** — no passwords stored in App Service config; rotation is automatic via MSI tokens. The PG admin password is required only during initial deployment so the AAD-mapped role can be provisioned; redeploy with `postgresEnablePasswordAuth = false` afterwards to reach **AAD-only** server config.
 - **ACR Basic** — cheapest SKU that supports MI pull. No retention policy (Premium-only); prune images out of band when needed.
-- **Ollama is BYO** — the infra does not provision an Ollama VM. Point `OLLAMA_BASE_URL` at any Ollama-compatible endpoint to enable LLM modes; leave empty to disable AI features (the site still works).
+- **Ollama is BYO** — the buildout does not provision an Ollama VM. Point `OLLAMA_BASE_URL` at any Ollama-compatible endpoint to enable LLM modes; leave empty to disable AI features (the site still works).
 - **No VNet integration** — the App Service uses the PostgreSQL public endpoint with firewall rules.
 - **Edge / WAF kept out of Bicep** — both Cloudflare and Azure Front Door work; configure externally.
 - **Public network access on PG** — public endpoint + firewall + Entra ID auth. Switch to a private endpoint if your security posture demands it.

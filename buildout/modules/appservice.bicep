@@ -127,7 +127,7 @@ var scanDisabledSettings = [
 ]
 
 // Resolve the production environment label.
-//   * environmentName == 'prod' is the infra naming token; the runtime
+//   * environmentName == 'prod' is the buildout naming token; the runtime
 //     value is 'production' so telemetry matches the public site.
 var prodEnvLabel = environmentName == 'prod' ? 'production' : environmentName
 

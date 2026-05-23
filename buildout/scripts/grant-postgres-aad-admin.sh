@@ -15,8 +15,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-INFRA_DIR="$(dirname "$SCRIPT_DIR")"
-cd "$INFRA_DIR"
+BUILDOUT_DIR="$(dirname "$SCRIPT_DIR")"
+cd "$BUILDOUT_DIR"
 
 OUTPUTS_FILE=".deploy-outputs.json"
 if [[ ! -f "$OUTPUTS_FILE" ]]; then

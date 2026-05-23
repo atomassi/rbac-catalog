@@ -15,7 +15,7 @@
 >
 > - **Run it locally** — see [`docs/run-local.md`](docs/run-local.md).
 > - **Deploy your own copy on Azure** — see the step-by-step walkthrough
->   in [`infra/README.md`](infra/README.md).
+>   in [`buildout/README.md`](buildout/README.md).
 
 ---
 
@@ -53,7 +53,7 @@ A comprehensive catalog and monitoring tool for [Azure built-in RBAC roles](http
 | **Testing** | pytest, Playwright |
 | **Ops Automation** | Azure Automation |
 
-## Infrastructure & Costs
+## Buildoutstructure & Costs
 
 The site runs on Azure with Cloudflare CDN.
 
@@ -233,7 +233,7 @@ azurerbac/
 ├── telemetry/       # Application Insights integration
 └── web/             # FastAPI app, routes, templates
 
-infra/               # Bicep IaC + scripts to deploy your own copy to Azure
+buildout/               # Bicep IaC + scripts to deploy your own copy to Azure
 scripts/             # Deployment and smoke test scripts
 tests/               # Unit tests
 e2e/                 # Playwright end-to-end tests

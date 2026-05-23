@@ -1,6 +1,6 @@
-# Infra — deploy the Azure RBAC Catalog from scratch
+# Buildout — deploy the Azure RBAC Catalog from scratch
 
-Bicep templates + helper scripts to provision the Azure infrastructure for
+Bicep templates + helper scripts to provision the Azure buildoutstructure for
 the Azure RBAC Catalog. Plan for **~15 minutes** end-to-end.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for design rationale.
@@ -9,7 +9,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for design rationale.
 
 ## Put it behind a reverse proxy / CDN for production
 
-The infra provisions the App Service with its default
+The buildout provisions the App Service with its default
 `*.azurewebsites.net` hostname. That's fine for **dev, staging, internal
 tools, prototypes, and low-risk apps**. For an internet-facing production
 deployment, you should put **Cloudflare** or **Azure Front Door + WAF** in
@@ -52,7 +52,7 @@ You get:
 |---|---|---|
 | `deploySlots` | `staging` + `ppe` deployment slots | **Recommended** for blue/green deploys (not required) |
 
-**Out of scope by design** — intentionally NOT provisioned by this infra
+**Out of scope by design** — intentionally NOT provisioned by this buildout
 so the templates stay small and predictable:
 
 | Skipped | Why |
@@ -88,12 +88,12 @@ target subscription.
 
 ## Deploy from scratch — copy/paste walkthrough
 
-Total wall time: **~15 min**. Run every step from `infra/`.
+Total wall time: **~15 min**. Run every step from `buildout/`.
 
 ### 1. Create your `.env`
 
 ```bash
-cd infra
+cd buildout
 cp .env.example .env
 $EDITOR .env                              # fill in SUBSCRIPTION_ID, RG_NAME,
                                           # BASE_NAME, LOCATION, PG_ADMIN_PASSWORD
@@ -136,7 +136,7 @@ exist after the apps are deployed.
 `deploy.sh` does, in order:
 1. Validates the template against Azure (~10 s).
 2. Runs `az deployment sub create` (~10–15 min — PG is the slow step).
-3. Saves outputs to `infra/.deploy-outputs.json`.
+3. Saves outputs to `buildout/.deploy-outputs.json`.
 4. Configures Entra ID auth on PostgreSQL by calling
    [`grant-postgres-aad-admin.sh`](scripts/grant-postgres-aad-admin.sh)
    (registers the App Service MI + each slot MI as PG roles and grants
@@ -150,7 +150,7 @@ it from the repo root:
 
 ```bash
 cd ..                                     # back to repo root (Dockerfile lives here)
-OUT=infra/.deploy-outputs.json
+OUT=buildout/.deploy-outputs.json
 ACR=$(jq -r .acrName.value         "$OUT")
 APP=$(jq -r .appServiceName.value  "$OUT")
 RG=$(jq  -r .resourceGroupName.value "$OUT")
@@ -200,7 +200,7 @@ variable will work — including:
 
 ## Continuous deployment
 
-The infra stops at "infrastructure ready". Wiring up continuous deployment
+The buildout stops at "buildoutstructure ready". Wiring up continuous deployment
 to the App Service is intentionally out of scope so you can use whichever
 pipeline you prefer:
 
@@ -247,7 +247,7 @@ plugin).
 ## Common commands
 
 Read names from `.deploy-outputs.json` to avoid hardcoding (run from
-`infra/`):
+`buildout/`):
 
 ```bash
 APP=$(jq -r .appServiceName.value    .deploy-outputs.json)
@@ -287,7 +287,7 @@ run (or failed). Re-run it manually and restart the App Service.
 assignment uses `guid()` and is idempotent.
 
 **AI recommendations return only TF-IDF / embedding results** — the
-infra does NOT provision Ollama. Set `OLLAMA_BASE_URL` in `.env`
+buildout does NOT provision Ollama. Set `OLLAMA_BASE_URL` in `.env`
 (pointing at an Ollama-compatible endpoint of your choice) and redeploy
 to enable the LLM-backed modes.
 
@@ -296,7 +296,7 @@ to enable the LLM-backed modes.
 ## Folder layout
 
 ```text
-infra/
+buildout/
 ├── README.md                          # this file
 ├── ARCHITECTURE.md                    # diagrams + design rationale
 ├── .env.example  /  .gitignore

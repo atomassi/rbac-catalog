@@ -28,7 +28,7 @@ class ManagedIdentityAuthenticator:
     _instance: ThreadSafeSingleton[Self] | None = None
 
     def __init__(self) -> None:
-        self._credential: ManagedIdentityCredential | None = None
+        self._credential: "ManagedIdentityCredential | None" = None
 
     @classmethod
     def get(cls) -> Self:

@@ -26,7 +26,7 @@ class EmbeddingModel:
     """Sentence embedding model for semantic similarity search."""
 
     def __init__(self) -> None:
-        self._model: SentenceTransformer | None = None
+        self._model: "SentenceTransformer | None" = None
         self._embeddings: dict[str, list[float]] = {}
         self._matrix: np.ndarray | None = None
         self._doc_ids: list[str] = []

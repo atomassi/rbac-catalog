@@ -90,6 +90,7 @@ ignore = [
     "ERA001",  # Commented-out code (keep for reference)
     "E402",    # Module import not at top (needed for warnings filter)
     "PERF401", # Manual list append in loop (often clearer than extend)
+    "UP037",   # Quoted annotation (needed for TYPE_CHECKING-only refs at runtime)
 ]
 
 [tool.ruff.lint.pydocstyle]

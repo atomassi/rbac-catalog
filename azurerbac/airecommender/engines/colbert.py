@@ -161,7 +161,7 @@ class ColBERTIndex:
     """Wrapper for ColBERT index using RAGatouille."""
 
     def __init__(self) -> None:
-        self._rag: RAGPretrainedModel | None = None
+        self._rag: "RAGPretrainedModel | None" = None
         self._is_loaded = False
         self._lock = threading.Lock()
 

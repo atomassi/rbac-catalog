@@ -628,7 +628,7 @@ def build_indexes(
     """
     ops_by_name_lower = {op.name.lower(): op for op in operations}
 
-    ops_by_prefix: defaultdict[str, list[OperationData]] = defaultdict(list)
+    ops_by_prefix: "defaultdict[str, list[OperationData]]" = defaultdict(list)
     for op in operations:
         name_lower = op.name.lower()
         slash_idx = name_lower.find("/")

@@ -93,8 +93,8 @@ class AIRoleRecommender:
     def __init__(self) -> None:
         self._ollama_client: OllamaClient | None = None
         self._knowledge_base: RoleKnowledgeBase | None = None
-        self._enhanced_tfidf: EnhancedTFIDFRecommender | None = None
-        self._embedding_model: EmbeddingModel | None = None
+        self._enhanced_tfidf: "EnhancedTFIDFRecommender | None" = None
+        self._embedding_model: "EmbeddingModel | None" = None
         self._initialized = False
         self._roles_hash: str | None = None
 

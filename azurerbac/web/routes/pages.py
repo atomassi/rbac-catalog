@@ -238,7 +238,7 @@ async def operations_list(
 
     # Try cache first (short-circuits on first miss)
     if (cached_page := deps.app_cache.get_operation_page(cache_key)) is not None and (
-        cached_count := deps.app_cache.get_operation_page(count_key)
+        cached_count := deps.app_cache.get_operation_page_count(count_key)
     ) is not None:
         # Cache hit - use cached data
         page_operations = cached_page
@@ -268,7 +268,7 @@ async def operations_list(
 
         # Cache the results
         deps.app_cache.set_operation_page(cache_key, page_operations)
-        deps.app_cache.set_operation_page(count_key, total_filtered)
+        deps.app_cache.set_operation_page_count(count_key, total_filtered)
 
     return deps.templates.TemplateResponse(
         request,

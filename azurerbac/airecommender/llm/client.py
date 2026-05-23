@@ -4,11 +4,10 @@ from __future__ import annotations
 
 import json
 import logging
-import urllib.error
-import urllib.request
 from dataclasses import dataclass, field
 from typing import Final
 
+import httpx
 from tenacity import (
     retry,
     retry_if_exception_type,
@@ -92,29 +91,25 @@ class OllamaClient:
             True if connection successful, False otherwise
         """
         try:
-            # Test connection to Ollama
-            url = f"{self.base_url}/api/tags"
-            req = urllib.request.Request(url, method="GET")
-            req.add_header("Content-Type", "application/json")
+            response = httpx.get(f"{self.base_url}/api/tags", timeout=5)
+            response.raise_for_status()
+            data = response.json()
+            models = [m.get("name", "") for m in data.get("models", [])]
 
-            with urllib.request.urlopen(req, timeout=5) as response:
-                data = json.loads(response.read().decode())
-                models = [m.get("name", "") for m in data.get("models", [])]
+            if self.model in models or any(self.model.split(":")[0] in m for m in models):
+                self._connected = True
+                logger.info("Connected to Ollama server with model: %s", self.model)
+                return True
+            logger.warning("Ollama model '%s' not found. Available: %s", self.model, models)
+            # Try to use first available model
+            if models:
+                self._connected = True
+                self.model = models[0]
+                logger.info("Using available Ollama model: %s", self.model)
+                return True
+            return False
 
-                if self.model in models or any(self.model.split(":")[0] in m for m in models):
-                    self._connected = True
-                    logger.info("Connected to Ollama server with model: %s", self.model)
-                    return True
-                logger.warning("Ollama model '%s' not found. Available: %s", self.model, models)
-                # Try to use first available model
-                if models:
-                    self._connected = True
-                    self.model = models[0]
-                    logger.info("Using available Ollama model: %s", self.model)
-                    return True
-                return False
-
-        except urllib.error.URLError as e:
+        except httpx.HTTPError as e:
             logger.exception("Ollama server not available at %s: %s", self.base_url, e)
             return False
         except Exception as e:
@@ -153,7 +148,7 @@ class OllamaClient:
             return None
 
     @retry(
-        retry=retry_if_exception_type(urllib.error.URLError),
+        retry=retry_if_exception_type((httpx.TransportError, httpx.HTTPStatusError)),
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=1, max=8),
         reraise=True,
@@ -167,9 +162,9 @@ class OllamaClient:
         timeout: int,
     ) -> str:
         """Internal method with retry decorator for Ollama API calls."""
-        url = f"{self.base_url}/api/generate"
-        data = json.dumps(
-            {
+        response = httpx.post(
+            f"{self.base_url}/api/generate",
+            json={
                 "model": model,
                 "prompt": prompt,
                 "stream": False,
@@ -177,15 +172,12 @@ class OllamaClient:
                     "num_predict": max_tokens,
                     "temperature": temperature,
                 },
-            }
-        ).encode("utf-8")
-
-        req = urllib.request.Request(url, data=data, method="POST")
-        req.add_header("Content-Type", "application/json")
-
-        with urllib.request.urlopen(req, timeout=timeout) as response:
-            result = json.loads(response.read().decode())
-            return result.get("response", "").strip()
+            },
+            timeout=timeout,
+        )
+        response.raise_for_status()
+        result = response.json()
+        return result.get("response", "").strip()
 
     def set_known_role_names(self, role_names: list[str]) -> None:
         """Set known role names for fuzzy matching.

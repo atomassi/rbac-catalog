@@ -103,8 +103,6 @@ convention = "google"
 "azurerbac/web/routes/static.py" = ["N806"]  # SessionLocal variable naming
 "azurerbac/core/models.py" = ["D101"]  # SQLAlchemy models are self-documenting
 "azurerbac/backgroundjobs/*" = ["D103", "D101", "ANN"]  # Internal workers
-"azurerbac/airecommender/llm/client.py" = ["S310"]  # URL from trusted config, not user input
-"azurerbac/cache/persistence.py" = ["S301"]  # Internal cache file, not untrusted data
 
 [tool.ruff.lint.isort]
 known-first-party = ["azurerbac"]
@@ -139,7 +137,13 @@ filterwarnings = [
 pythonVersion = "3.12"
 typeCheckingMode = "standard"
 include = ["azurerbac"]
-exclude = ["tests", "**/__pycache__"]
+exclude = [
+    "tests",
+    "**/__pycache__",
+    "**/node_modules",
+    "**/.*",
+    ".venv",
+]
 venvPath = "."
 venv = ".venv"
 # Report settings

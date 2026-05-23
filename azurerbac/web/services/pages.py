@@ -32,6 +32,7 @@ if TYPE_CHECKING:
 
     from azurerbac.cache import CacheService
     from azurerbac.core.models import Role, RoleHistory
+    from azurerbac.matching.models import RoleCoverage
 
 logger = logging.getLogger(__name__)
 
@@ -183,6 +184,98 @@ def _extract_role_metadata(
     return scopes, conditions
 
 
+def _count_co_occurring_roles(
+    role_id: str,
+    current_control: set[str],
+    current_data: set[str],
+    op_to_roles: dict[str, list[str]],
+) -> dict[str, int]:
+    """Count how many of the source role's operations each other role shares.
+
+    Uses an inverted index (op -> roles granting it) to compute candidates in
+    O(sum of posting list lengths) rather than scanning every role.
+    """
+    co_occurrence: dict[str, int] = {}
+    for ops_set in (current_control, current_data):
+        for op in ops_set:
+            for rid in op_to_roles.get(op, []):
+                if rid != role_id:
+                    co_occurrence[rid] = co_occurrence.get(rid, 0) + 1
+    return co_occurrence
+
+
+def _classify_subset_relationship(
+    *,
+    intersection: int,
+    current_len: int,
+    other_len: int,
+    current_scopes: frozenset[str],
+    other_scopes: frozenset[str],
+    current_conditions: frozenset[str],
+    other_conditions: frozenset[str],
+) -> tuple[bool, bool]:
+    """Return ``(is_subset, is_superset)`` flags for the candidate role.
+
+    Subset/superset relationships require identical conditions; otherwise the
+    roles are not directly comparable in a least-privilege sense.
+    """
+    if current_conditions != other_conditions:
+        return False, False
+    is_subset = intersection == other_len and _scopes_contain(current_scopes, other_scopes)
+    is_superset = intersection == current_len and _scopes_contain(other_scopes, current_scopes)
+    return is_subset, is_superset
+
+
+def _score_candidate(
+    *,
+    candidate: CachedRole,
+    other_coverage: RoleCoverage,
+    current_control: set[str],
+    current_data: set[str],
+    current_len: int,
+    current_scopes: frozenset[str],
+    current_conditions: frozenset[str],
+) -> RelatedRole | None:
+    """Build a ``RelatedRole`` for one candidate, or ``None`` if it scores too low."""
+    other_len = len(other_coverage.control) + len(other_coverage.data)
+    if other_len == 0:
+        return None
+
+    intersection = len(current_control & other_coverage.control) + len(
+        current_data & other_coverage.data
+    )
+    union = current_len + other_len - intersection
+    ops_sim = intersection / union if union > 0 else 0.0
+
+    other_scopes, other_conditions = _extract_role_metadata(candidate)
+    scope_sim = 1.0 if current_scopes == other_scopes else 0.0
+    cond_sim = _condition_similarity(current_conditions, other_conditions)
+
+    similarity = _W_OPS * ops_sim + _W_SCOPE * scope_sim + _W_COND * cond_sim
+    if similarity < 0.20:
+        return None
+
+    is_subset, is_superset = _classify_subset_relationship(
+        intersection=intersection,
+        current_len=current_len,
+        other_len=other_len,
+        current_scopes=current_scopes,
+        other_scopes=other_scopes,
+        current_conditions=current_conditions,
+        other_conditions=other_conditions,
+    )
+
+    return RelatedRole(
+        role_id=candidate.role_id,
+        role_name=candidate.role_name,
+        similarity=similarity,
+        shared_count=intersection,
+        total_count=other_len,
+        is_subset=is_subset,
+        is_superset=is_superset,
+    )
+
+
 def compute_related_roles(
     role_id: str,
     limit: int = 12,
@@ -224,15 +317,9 @@ def compute_related_roles(
 
     current_scopes, current_conditions = _extract_role_metadata(current_cached)
 
-    # Use inverted index to count co-occurring roles efficiently
-    co_occurrence: dict[str, int] = {}
-    op_to_roles = cache_resolved.cache.operation_to_roles
-    for ops_set in (current_control, current_data):
-        for op in ops_set:
-            for rid in op_to_roles.get(op, []):
-                if rid != role_id:
-                    co_occurrence[rid] = co_occurrence.get(rid, 0) + 1
-
+    co_occurrence = _count_co_occurring_roles(
+        role_id, current_control, current_data, cache_resolved.cache.operation_to_roles
+    )
     if not co_occurrence:
         return []
 
@@ -253,52 +340,17 @@ def compute_related_roles(
         if not other_coverage:
             continue
 
-        # Compute intersection directly from separate sets (avoids set union per candidate)
-        other_control_len = len(other_coverage.control)
-        other_data_len = len(other_coverage.data)
-        other_len = other_control_len + other_data_len
-        if other_len == 0:
-            continue
-
-        intersection = len(current_control & other_coverage.control) + len(
-            current_data & other_coverage.data
+        related = _score_candidate(
+            candidate=cached_role,
+            other_coverage=other_coverage,
+            current_control=current_control,
+            current_data=current_data,
+            current_len=current_len,
+            current_scopes=current_scopes,
+            current_conditions=current_conditions,
         )
-        union = current_len + other_len - intersection
-        ops_sim = intersection / union if union > 0 else 0.0
-
-        other_scopes, other_conditions = _extract_role_metadata(cached_role)
-        scope_sim = 1.0 if current_scopes == other_scopes else 0.0
-        cond_sim = _condition_similarity(current_conditions, other_conditions)
-
-        similarity = _W_OPS * ops_sim + _W_SCOPE * scope_sim + _W_COND * cond_sim
-
-        if similarity < 0.20:
-            continue
-
-        # Subset/superset requires identical conditions
-        same_conditions = current_conditions == other_conditions
-
-        # other is a subset of current: all other ops in current, current scopes ⊇ other scopes
-        ops_subset = intersection == other_len
-        is_subset = same_conditions and ops_subset and _scopes_contain(current_scopes, other_scopes)
-
-        # other is a superset of current: all current ops in other, other scopes ⊇ current scopes
-        ops_superset = intersection == current_len
-        is_superset = (
-            same_conditions and ops_superset and _scopes_contain(other_scopes, current_scopes)
-        )
-
-        results.append(
-            RelatedRole(
-                role_id=rid,
-                role_name=cached_role.role_name,
-                similarity=similarity,
-                shared_count=intersection,
-                total_count=other_len,
-                is_subset=is_subset,
-                is_superset=is_superset,
-            )
-        )
+        if related is not None:
+            results.append(related)
 
     results.sort(key=lambda x: (-x.similarity, -x.shared_count, x.role_name))
     final = results[:limit]

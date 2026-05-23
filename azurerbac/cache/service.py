@@ -8,7 +8,7 @@ import logging
 from collections.abc import Iterable
 from dataclasses import replace
 from datetime import datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from azurerbac.cache.models import (
     CacheData,
@@ -29,10 +29,12 @@ if TYPE_CHECKING:
 
     from azurerbac.azure.models import OperationData, RoleDefinition
     from azurerbac.comparer import RoleComparison
+    from azurerbac.web.routes.models import OperationWithCount
     from azurerbac.web.services.models import (
         RelatedRole,
         RoleAllowingOperation,
         RoleEffectivePermissions,
+        RoleWithCounts,
     )
 
 logger = logging.getLogger(__name__)
@@ -286,21 +288,37 @@ class CacheService:
     # Request-scoped caches (role pages, operation pages, allowing roles)
     # -------------------------------------------------------------------------
 
-    def get_role_page(self, page_key: str) -> Any:
+    def get_role_page(self, page_key: str) -> list[RoleWithCounts] | None:
         result = self._request_caches.role_pages.get(page_key)
         track_cache_hit("role_page", result is not None, page_key)
         return result
 
-    def set_role_page(self, page_key: str, roles: Any) -> None:
+    def set_role_page(self, page_key: str, roles: list[RoleWithCounts]) -> None:
         self._request_caches.role_pages[page_key] = roles
 
-    def get_operation_page(self, page_key: str) -> Any:
+    def get_role_page_count(self, count_key: str) -> int | None:
+        result = self._request_caches.role_page_counts.get(count_key)
+        track_cache_hit("role_page_count", result is not None, count_key)
+        return result
+
+    def set_role_page_count(self, count_key: str, total: int) -> None:
+        self._request_caches.role_page_counts[count_key] = total
+
+    def get_operation_page(self, page_key: str) -> list[OperationWithCount] | None:
         result = self._request_caches.operation_pages.get(page_key)
         track_cache_hit("operation_page", result is not None, page_key)
         return result
 
-    def set_operation_page(self, page_key: str, value: Any) -> None:
+    def set_operation_page(self, page_key: str, value: list[OperationWithCount]) -> None:
         self._request_caches.operation_pages[page_key] = value
+
+    def get_operation_page_count(self, count_key: str) -> int | None:
+        result = self._request_caches.operation_page_counts.get(count_key)
+        track_cache_hit("operation_page_count", result is not None, count_key)
+        return result
+
+    def set_operation_page_count(self, count_key: str, total: int) -> None:
+        self._request_caches.operation_page_counts[count_key] = total
 
     def get_allowing_roles(self, key: str) -> RoleAllowingOperationList | None:
         result = self._request_caches.allowing_roles.get(key)

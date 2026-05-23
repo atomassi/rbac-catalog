@@ -269,7 +269,7 @@ def ai_recommend_roles(
     roles: list[RoleDefinition],
     top_k: int = 5,
     requested_mode: str | None = None,
-) -> tuple[list[dict], str]:
+) -> tuple[list[JsonDict], str]:
     """Get recommendations as dicts. Returns (results, mode_used)."""
     recommender = get_ai_recommender()
 

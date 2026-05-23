@@ -15,7 +15,7 @@
 >
 > - **Run it locally** — see [`docs/run-local.md`](docs/run-local.md).
 > - **Deploy your own copy on Azure** — see the step-by-step walkthrough
->   in [`buildout/README.md`](buildout/README.md).
+>   in [`infra/README.md`](infra/README.md).
 
 ---
 
@@ -233,7 +233,7 @@ azurerbac/
 ├── telemetry/       # Application Insights integration
 └── web/             # FastAPI app, routes, templates
 
-buildout/            # Bicep IaC + scripts to deploy your own copy to Azure
+infra/            # Bicep IaC + scripts to deploy your own copy to Azure
 scripts/             # Deployment and smoke test scripts
 tests/               # Unit tests
 e2e/                 # Playwright end-to-end tests

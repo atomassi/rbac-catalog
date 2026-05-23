@@ -26,5 +26,5 @@ param postgresAdminPassword = readEnvironmentVariable('PG_ADMIN_PASSWORD', '')
 
 // Optional external Ollama-compatible endpoint. Empty (the default) disables
 // LLM-backed recommendations; the catalog and rule-based recommender still
-// work. The buildout does NOT provision Ollama itself.
+// work. The infra does NOT provision Ollama itself.
 param ollamaBaseUrl = readEnvironmentVariable('OLLAMA_BASE_URL', '')

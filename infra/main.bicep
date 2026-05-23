@@ -15,7 +15,7 @@
 // Edit parameters/*.bicepparam, then run `./scripts/deploy.sh`.
 // ============================================================================
 
-metadata name        = 'azurerbac-buildout'
+metadata name        = 'azurerbac-infra'
 metadata description = 'Subscription-scoped deployment of the Azure RBAC Catalog (App Service + ACR + PostgreSQL + monitoring, with optional deployment slots).'
 
 targetScope = 'subscription'

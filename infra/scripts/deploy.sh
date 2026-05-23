@@ -39,8 +39,8 @@ for arg in "$@"; do
 done
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BUILDOUT_DIR="$(dirname "$SCRIPT_DIR")"
-cd "$BUILDOUT_DIR"
+INFRA_DIR="$(dirname "$SCRIPT_DIR")"
+cd "$INFRA_DIR"
 
 PARAM_FILE="parameters/${ENVIRONMENT}.bicepparam"
 [[ -f "$PARAM_FILE" ]] || { echo "Parameter file not found: $PARAM_FILE" >&2; exit 1; }
@@ -147,7 +147,7 @@ cat <<EOF
 Next steps (run from the repo root):
 
   cd ..
-  OUT=buildout/$OUTPUTS_FILE
+  OUT=infra/$OUTPUTS_FILE
 
   # 1. Build & push the container image:
   az acr build \\
@@ -162,5 +162,5 @@ Next steps (run from the repo root):
 
   # 3. Verify:  curl -fsS "\$(jq -r .appServiceUrl.value \$OUT)/healthz"
 
-See buildout/README.md "Step 5" for the full walkthrough.
+See infra/README.md "Step 5" for the full walkthrough.
 EOF

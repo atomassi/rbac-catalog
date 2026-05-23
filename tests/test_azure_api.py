@@ -10,9 +10,9 @@ from pydantic import ValidationError
 from azurerbac.azure.models import OperationData, Permission, RoleDefinition, RoleProperties
 
 
-def _transform_resource_graph_role(item: dict[str, Any]) -> dict[str, Any]:
-    """Test helper: transform Resource Graph role to expected format."""
-    return RoleDefinition.from_resource_graph(item).to_dict()
+def _transform_role(item: dict[str, Any]) -> dict[str, Any]:
+    """Test helper: transform an RBAC API role payload to canonical dict."""
+    return RoleDefinition.from_rbac_api(item).to_dict()
 
 
 class TestFlattenProviderOperationsPayload:
@@ -87,57 +87,23 @@ class TestFlattenProviderOperationsPayload:
 
 
 def _make_input_item(
-    role_id: str = "/providers/Microsoft.Authorization/RoleDefinitions/test-guid",
+    role_id: str = "/providers/Microsoft.Authorization/roleDefinitions/test-guid",
     role_name: str = "Test Role",
     role_type: str = "BuiltInRole",
     permissions: list | None = None,
     **extra_props,
 ) -> dict:
-    """Helper to create input items for transformation."""
+    """Helper to create RBAC API-shaped input items for transformation."""
     props = {
         "roleName": role_name,
         "type": role_type,
         "permissions": permissions or [],
         **extra_props,
     }
-    return {"id": role_id, "properties": props}
-
-
-# =============================================================================
-# Tests for ID Normalization
-# =============================================================================
-
-
-class TestIdNormalization:
-    """Tests for role ID extraction and normalization."""
-
-    @pytest.mark.parametrize(
-        "input_id,expected_name",
-        [
-            ("/providers/Microsoft.Authorization/RoleDefinitions/abc-123", "abc-123"),
-            ("/subscriptions/sub/providers/Microsoft.Authorization/RoleDefinitions/xyz", "xyz"),
-            ("/providers/Microsoft.Authorization/roleDefinitions/lowercase", "lowercase"),
-        ],
-    )
-    def test_extracts_name_from_id(self, input_id: str, expected_name: str):
-        """Test GUID extraction from various ID formats."""
-        item = _make_input_item(role_id=input_id)
-        result = _transform_resource_graph_role(item)
-        assert result["name"] == expected_name
-
-    def test_normalizes_roledefinitions_casing(self):
-        """Test that RoleDefinitions is normalized to roleDefinitions."""
-        item = _make_input_item(role_id="/providers/Microsoft.Authorization/RoleDefinitions/test")
-        result = _transform_resource_graph_role(item)
-        assert "/roleDefinitions/" in result["id"]
-        assert "/RoleDefinitions/" not in result["id"]
-
-    def test_handles_missing_id(self):
-        """Test handling when id is missing."""
-        item = {"properties": {"roleName": "Test", "permissions": []}}
-        result = _transform_resource_graph_role(item)
-        assert result["name"] == ""
-        assert result["id"] == ""
+    # RBAC API returns ``name`` (the GUID) as a top-level field; derive it
+    # from the id when the caller doesn't override it.
+    name = role_id.rsplit("/", 1)[-1] if "/" in role_id else role_id
+    return {"id": role_id, "name": name, "properties": props}
 
 
 # =============================================================================
@@ -166,7 +132,7 @@ class TestPermissionNormalization:
     ):
         """Test that permission keys are normalized correctly."""
         item = _make_input_item(permissions=[{input_key: input_value}])
-        result = _transform_resource_graph_role(item)
+        result = _transform_role(item)
         perms = result["properties"]["permissions"][0]
         assert expected_key in perms
         assert perms[expected_key] == input_value
@@ -176,7 +142,7 @@ class TestPermissionNormalization:
         item = _make_input_item(
             permissions=[{"actions": ["Microsoft.Compute/virtualMachines/read"]}]
         )
-        result = _transform_resource_graph_role(item)
+        result = _transform_role(item)
         perms = result["properties"]["permissions"][0]
         assert perms["actions"] == ["Microsoft.Compute/virtualMachines/read"]
         assert perms["notActions"] == []
@@ -190,7 +156,7 @@ class TestPermissionNormalization:
                 {"actions": None, "notActions": None, "dataActions": None, "notDataActions": None}
             ]
         )
-        result = _transform_resource_graph_role(item)
+        result = _transform_role(item)
         perms = result["properties"]["permissions"][0]
         assert perms["actions"] == []
         assert perms["notActions"] == []
@@ -208,7 +174,7 @@ class TestPermissionNormalization:
                 }
             ]
         )
-        result = _transform_resource_graph_role(item)
+        result = _transform_role(item)
         perms = result["properties"]["permissions"][0]
         assert perms["condition"] == "@Resource[Microsoft.Storage/storageAccounts:name] == 'test'"
         assert perms["conditionVersion"] == "2.0"
@@ -235,7 +201,7 @@ class TestFullTransformation:
             updatedBy="user2",
             isServiceRole=False,
         )
-        result = _transform_resource_graph_role(item)
+        result = _transform_role(item)
 
         props = result["properties"]
         assert props["roleName"] == "Full Role"
@@ -256,8 +222,13 @@ class TestFullTransformation:
 
     def test_handles_empty_properties(self):
         """Test handling of empty properties object."""
-        item = {"id": "/providers/Microsoft.Authorization/RoleDefinitions/empty", "properties": {}}
-        result = _transform_resource_graph_role(item)
+        item = {
+            "id": "/providers/Microsoft.Authorization/roleDefinitions/empty",
+            "name": "empty",
+            "type": "Microsoft.Authorization/roleDefinitions",
+            "properties": {},
+        }
+        result = _transform_role(item)
         assert result["properties"]["roleName"] == ""
         assert result["properties"]["type"] == ""
         assert result["properties"]["permissions"] == []
@@ -271,7 +242,7 @@ class TestFullTransformation:
                 {"notActions": ["notAction1"]},
             ]
         )
-        result = _transform_resource_graph_role(item)
+        result = _transform_role(item)
         perms = result["properties"]["permissions"]
         assert len(perms) == 3
         assert perms[0]["actions"] == ["action1"]
@@ -288,7 +259,7 @@ class TestFullTransformation:
 class TestRoles:
     def test_transform_smoke(self):
         item = _make_input_item()
-        result = _transform_resource_graph_role(item)
+        result = _transform_role(item)
         assert result["type"] == "Microsoft.Authorization/roleDefinitions"
 
 
@@ -390,7 +361,7 @@ class TestRolePropertiesCaseInsensitive:
         [
             # camelCase (standard)
             {"roleName": "Test", "assignableScopes": ["/"], "createdOn": "2024-01-01T00:00:00Z"},
-            # PascalCase (Resource Graph)
+            # PascalCase
             {"RoleName": "Test", "AssignableScopes": ["/"], "CreatedOn": "2024-01-01T00:00:00Z"},
             # UPPERCASE
             {"ROLENAME": "Test", "ASSIGNABLESCOPES": ["/"], "CREATEDON": "2024-01-01T00:00:00Z"},
@@ -910,93 +881,8 @@ def _make_mock_response(json_data):
     return mock_response
 
 
-class TestFetchBuiltinRolesResourceGraph:
-    """Tests for fetch_builtin_roles_resource_graph with mocked Azure API."""
-
-    @pytest.mark.asyncio
-    async def test_returns_role_definitions_on_success(self):
-        from unittest.mock import patch
-
-        from azurerbac.azure.models import RoleDefinition
-
-        response = _make_mock_response(
-            {
-                "data": [
-                    {
-                        "id": "/providers/Microsoft.Authorization/RoleDefinitions/abc-123",
-                        "properties": {
-                            "roleName": "Reader",
-                            "type": "BuiltInRole",
-                            "permissions": [],
-                        },
-                    }
-                ],
-            }
-        )
-        mock_client = _make_mock_async_client(response, method="post")
-
-        with patch(
-            "azurerbac.azure.roles.authenticated_management_async_client",
-            return_value=mock_client,
-        ):
-            from azurerbac.azure.roles import fetch_builtin_roles_resource_graph
-
-            roles = await fetch_builtin_roles_resource_graph()
-
-        assert len(roles) == 1
-        assert isinstance(roles[0], RoleDefinition)
-        assert roles[0].role_name == "Reader"
-
-    @pytest.mark.asyncio
-    async def test_handles_pagination_with_skip_token(self):
-        from unittest.mock import patch
-
-        first_response = _make_mock_response(
-            {
-                "data": [
-                    {
-                        "id": "/providers/Microsoft.Authorization/RoleDefinitions/abc",
-                        "properties": {
-                            "roleName": "Role1",
-                            "type": "BuiltInRole",
-                            "permissions": [],
-                        },
-                    }
-                ],
-                "$skipToken": "token123",
-            }
-        )
-        second_response = _make_mock_response(
-            {
-                "data": [
-                    {
-                        "id": "/providers/Microsoft.Authorization/RoleDefinitions/def",
-                        "properties": {
-                            "roleName": "Role2",
-                            "type": "BuiltInRole",
-                            "permissions": [],
-                        },
-                    }
-                ],
-            }
-        )
-
-        mock_client = _make_mock_async_client([first_response, second_response], method="post")
-
-        with patch(
-            "azurerbac.azure.roles.authenticated_management_async_client",
-            return_value=mock_client,
-        ):
-            from azurerbac.azure.roles import fetch_builtin_roles_resource_graph
-
-            roles = await fetch_builtin_roles_resource_graph()
-
-        assert len(roles) == 2
-        assert mock_client.post.call_count == 2
-
-
-class TestFetchBuiltinRolesRbacApi:
-    """Tests for fetch_builtin_roles_rbac_api with mocked Azure API."""
+class TestFetchBuiltinRoles:
+    """Tests for fetch_builtin_roles with mocked Azure API."""
 
     @pytest.fixture
     def mock_role_response(self):
@@ -1026,9 +912,9 @@ class TestFetchBuiltinRolesRbacApi:
             "azurerbac.azure.roles.authenticated_management_async_client",
             return_value=mock_client,
         ):
-            from azurerbac.azure.roles import fetch_builtin_roles_rbac_api
+            from azurerbac.azure.roles import fetch_builtin_roles
 
-            roles = await fetch_builtin_roles_rbac_api()
+            roles = await fetch_builtin_roles()
 
         assert len(roles) == 1
         assert isinstance(roles[0], RoleDefinition)
@@ -1072,9 +958,9 @@ class TestFetchBuiltinRolesRbacApi:
             "azurerbac.azure.roles.authenticated_management_async_client",
             return_value=mock_client,
         ):
-            from azurerbac.azure.roles import fetch_builtin_roles_rbac_api
+            from azurerbac.azure.roles import fetch_builtin_roles
 
-            roles = await fetch_builtin_roles_rbac_api()
+            roles = await fetch_builtin_roles()
 
         assert len(roles) == page_count
         assert mock_client.get.call_count == page_count
@@ -1106,9 +992,9 @@ class TestFetchBuiltinRolesRbacApi:
             "azurerbac.azure.roles.authenticated_management_async_client",
             return_value=mock_client,
         ):
-            from azurerbac.azure.roles import fetch_builtin_roles_rbac_api
+            from azurerbac.azure.roles import fetch_builtin_roles
 
-            await fetch_builtin_roles_rbac_api()
+            await fetch_builtin_roles()
 
         # Second call should use the nextLink URL directly
         assert mock_client.get.call_count == 2
@@ -1142,9 +1028,9 @@ class TestFetchBuiltinRolesRbacApi:
             ),
             pytest.raises((httpx.HTTPStatusError, httpx.ConnectError)),
         ):
-            from azurerbac.azure.roles import fetch_builtin_roles_rbac_api
+            from azurerbac.azure.roles import fetch_builtin_roles
 
-            await fetch_builtin_roles_rbac_api()
+            await fetch_builtin_roles()
 
 
 class TestFetchProviderOperations:
@@ -1194,13 +1080,7 @@ class TestAzureFetchErrorHandling:
         [
             (
                 "azurerbac.azure.roles",
-                "fetch_builtin_roles_resource_graph",
-                "post",
-                "azurerbac.azure.roles.authenticated_management_async_client",
-            ),
-            (
-                "azurerbac.azure.roles",
-                "fetch_builtin_roles_rbac_api",
+                "fetch_builtin_roles",
                 "get",
                 "azurerbac.azure.roles.authenticated_management_async_client",
             ),

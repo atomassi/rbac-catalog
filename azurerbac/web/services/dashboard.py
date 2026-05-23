@@ -333,7 +333,7 @@ async def fetch_roles_paginated(
     count_cache_key = f"roles_count:{status_filter}"
 
     cached_roles = deps.app_cache.get_role_page(cache_key)
-    cached_count = deps.app_cache.get_role_page(count_cache_key)
+    cached_count = deps.app_cache.get_role_page_count(count_cache_key)
 
     # Full cache hit - return immediately
     if cached_roles is not None and cached_count is not None:
@@ -346,7 +346,7 @@ async def fetch_roles_paginated(
         raise RuntimeError("Role cache is empty - application not initialized")
 
     deps.app_cache.set_role_page(cache_key, result.items)
-    deps.app_cache.set_role_page(count_cache_key, result.total_count)
+    deps.app_cache.set_role_page_count(count_cache_key, result.total_count)
     return result
 
 

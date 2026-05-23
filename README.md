@@ -23,6 +23,8 @@
 
 A comprehensive catalog and monitoring tool for [Azure built-in RBAC roles](https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles). Browse roles, explore their permissions, track changes over time, find least-privilege roles based on operation requirements, and get AI-powered role recommendations.
 
+[![Azure RBAC Catalog screenshot](docs/images/homepage.png)](https://rbac-catalog.dev/)
+
 ## Features
 
 - **Role Catalog** — Browse all 800+ Azure built-in roles with full permission details

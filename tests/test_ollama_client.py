@@ -1,9 +1,8 @@
 """Tests for OllamaClient methods."""
 
-import json
-import urllib.error
 from unittest.mock import MagicMock, patch
 
+import httpx
 import pytest
 
 from azurerbac.airecommender.llm.client import OllamaClient
@@ -336,32 +335,26 @@ class TestGenerateWithRetry:
 
     def test_generate_success_first_try(self, connected_client):
         """Test successful generation on first attempt."""
-        response_data = {"response": "test response"}
-
         mock_response = MagicMock()
-        mock_response.read.return_value = json.dumps(response_data).encode()
-        mock_response.__enter__ = MagicMock(return_value=mock_response)
-        mock_response.__exit__ = MagicMock(return_value=False)
+        mock_response.json.return_value = {"response": "test response"}
+        mock_response.raise_for_status.return_value = None
 
-        with patch("urllib.request.urlopen", return_value=mock_response):
+        with patch("httpx.post", return_value=mock_response):
             result = connected_client.generate("test prompt")
             assert result == "test response"
 
-    def test_generate_retries_on_url_error(self, connected_client):
-        """Test that URLError triggers retry and succeeds on second attempt."""
-        response_data = {"response": "success after retry"}
-
+    def test_generate_retries_on_transport_error(self, connected_client):
+        """Test that transport errors trigger retry and succeed on second attempt."""
         mock_response = MagicMock()
-        mock_response.read.return_value = json.dumps(response_data).encode()
-        mock_response.__enter__ = MagicMock(return_value=mock_response)
-        mock_response.__exit__ = MagicMock(return_value=False)
+        mock_response.json.return_value = {"response": "success after retry"}
+        mock_response.raise_for_status.return_value = None
 
-        # First call raises URLError, second succeeds
+        # First call raises transport error, second succeeds
         # Patch tenacity sleep to avoid actual delays
         with (
             patch(
-                "urllib.request.urlopen",
-                side_effect=[urllib.error.URLError("connection failed"), mock_response],
+                "httpx.post",
+                side_effect=[httpx.ConnectError("connection failed"), mock_response],
             ),
             patch("tenacity.nap.time.sleep"),
         ):
@@ -373,8 +366,8 @@ class TestGenerateWithRetry:
         # Patch tenacity sleep to avoid actual delays
         with (
             patch(
-                "urllib.request.urlopen",
-                side_effect=urllib.error.URLError("connection failed"),
+                "httpx.post",
+                side_effect=httpx.ConnectError("connection failed"),
             ),
             patch("tenacity.nap.time.sleep"),
         ):
@@ -385,16 +378,13 @@ class TestGenerateWithRetry:
         """Test that generate uses the default timeout constant."""
         from azurerbac.airecommender.llm.client import DEFAULT_TIMEOUT_SECONDS
 
-        response_data = {"response": "test"}
-
         mock_response = MagicMock()
-        mock_response.read.return_value = json.dumps(response_data).encode()
-        mock_response.__enter__ = MagicMock(return_value=mock_response)
-        mock_response.__exit__ = MagicMock(return_value=False)
+        mock_response.json.return_value = {"response": "test"}
+        mock_response.raise_for_status.return_value = None
 
-        with patch("urllib.request.urlopen", return_value=mock_response) as mock_urlopen:
+        with patch("httpx.post", return_value=mock_response) as mock_post:
             connected_client.generate("test prompt")
-            _, kwargs = mock_urlopen.call_args
+            _, kwargs = mock_post.call_args
             assert kwargs["timeout"] == DEFAULT_TIMEOUT_SECONDS
 
     @pytest.mark.parametrize(
@@ -407,20 +397,15 @@ class TestGenerateWithRetry:
     def test_generate_uses_correct_model(self, connected_client, use_custom_model, expected_model):
         """Test that generate uses correct model based on parameter."""
         connected_client.model = "test-model"
-        response_data = {"response": "test"}
-
         mock_response = MagicMock()
-        mock_response.read.return_value = json.dumps(response_data).encode()
-        mock_response.__enter__ = MagicMock(return_value=mock_response)
-        mock_response.__exit__ = MagicMock(return_value=False)
+        mock_response.json.return_value = {"response": "test"}
+        mock_response.raise_for_status.return_value = None
 
-        with patch("urllib.request.urlopen", return_value=mock_response) as mock_urlopen:
+        with patch("httpx.post", return_value=mock_response) as mock_post:
             connected_client.generate("test prompt", model=use_custom_model)
             # Verify model in request body
-            call_args = mock_urlopen.call_args
-            request = call_args[0][0]
-            body = json.loads(request.data.decode())
-            assert body["model"] == expected_model
+            _, kwargs = mock_post.call_args
+            assert kwargs["json"]["model"] == expected_model
 
 
 # =============================================================================

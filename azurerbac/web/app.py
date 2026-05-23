@@ -14,7 +14,7 @@ from __future__ import annotations
 import logging
 import os
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager, nullcontext
+from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontextmanager
 from pathlib import Path
 
 if not os.environ.get("PYTEST_CURRENT_TEST"):
@@ -155,31 +155,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:  # pylint: disable=unus
     Background tasks are only started after critical startup steps succeed.
     Also initializes the MCP server's task group for streamable HTTP transport.
     """
-    # Critical startup steps - must complete before accepting requests
     logger.info("Starting application...")
     await ensure_db(engine)
     await preload_cache(SessionLocal)
-
-    # Warmup AI models BEFORE accepting requests
-    logger.info("Warming up AI models and loading static assets...")
-    async with anyio.create_task_group() as warmup_tg:
-        warmup_tg.start_soon(warmup_colbert, name="colbert-warmup")
-        warmup_tg.start_soon(warmup_crossencoder, name="crossencoder-warmup")
-        warmup_tg.start_soon(load_static_assets, name="static-assets")
-
+    await _warmup_models()
     logger.info("Application startup complete, starting background tasks...")
 
-    # Run MCP lifespan alongside our background tasks
-    # This initializes the MCP session manager's task group
-    # Note: Only the real MCP server has router.lifespan_context; the disabled app
-    # is a plain Starlette app, so we use nullcontext() as a no-op fallback
-    mcp_lifespan = (
-        _mcp_server.router.lifespan_context(_mcp_server)
-        if settings.mcp_server_enabled
-        else nullcontext()
-    )
     async with (
-        mcp_lifespan,
+        _mcp_lifespan_context(),
         anyio.create_task_group() as tg,
     ):
         tg.start_soon(cache_refresh_task, SessionLocal, name="cache-refresh")
@@ -192,10 +175,42 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:  # pylint: disable=unus
 
     logger.info("Background tasks cancelled")
 
-    # Flush in-flight telemetry before disposing resources so the last
-    # interval of metrics isn't lost on graceful shutdown. flush_metrics()
-    # is synchronous and can block up to TELEMETRY_FLUSH_TIMEOUT_MS, so run
-    # it in a worker thread to avoid stalling the event loop.
+    await _flush_telemetry_on_shutdown()
+
+    # Cleanup database connections and MSI authenticator
+    logger.info("Disposing database engine...")
+    await DBEngine.dispose()
+    logger.info("Application shutdown complete")
+
+
+async def _warmup_models() -> None:
+    """Warm AI models and load static assets concurrently before serving traffic."""
+    logger.info("Warming up AI models and loading static assets...")
+    async with anyio.create_task_group() as tg:
+        tg.start_soon(warmup_colbert, name="colbert-warmup")
+        tg.start_soon(warmup_crossencoder, name="crossencoder-warmup")
+        tg.start_soon(load_static_assets, name="static-assets")
+
+
+def _mcp_lifespan_context() -> AbstractAsyncContextManager[object]:
+    """Return the MCP server's lifespan context, or an async no-op when MCP is disabled.
+
+    The disabled MCP app is a plain Starlette app without a router lifespan,
+    so we substitute an empty :class:`AsyncExitStack` (which is itself an
+    async context manager) to keep the ``async with`` site uniform.
+    """
+    if settings.mcp_server_enabled:
+        return _mcp_server.router.lifespan_context(_mcp_server)
+    return AsyncExitStack()
+
+
+async def _flush_telemetry_on_shutdown() -> None:
+    """Flush in-flight telemetry before disposing resources.
+
+    ``flush_metrics()`` is synchronous and may block up to
+    ``TELEMETRY_FLUSH_TIMEOUT_MS``, so we offload it to a worker thread to
+    avoid stalling the event loop during graceful shutdown.
+    """
     try:
         from anyio import to_thread
 
@@ -205,11 +220,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:  # pylint: disable=unus
         logger.info("Telemetry flush on shutdown: success=%s", flushed)
     except Exception:
         logger.exception("Failed to flush telemetry on shutdown")
-
-    # Cleanup database connections and MSI authenticator
-    logger.info("Disposing database engine...")
-    await DBEngine.dispose()
-    logger.info("Application shutdown complete")
 
 
 # ─────────────────────────────────────────────────────────────────────────────

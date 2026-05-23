@@ -6,11 +6,14 @@ import datetime as dt
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import HTMLResponse
 
 from azurerbac.web.dependencies import DashboardDeps, get_dashboard_deps
-from azurerbac.web.services.analytics import get_analytics_from_cache
+from azurerbac.web.services.analytics import (
+    AnalyticsNotAvailableError,
+    get_analytics_from_cache,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -22,10 +25,25 @@ async def analytics_dashboard(
     request: Request,
     deps: Annotated[DashboardDeps, Depends(get_dashboard_deps)],
 ) -> HTMLResponse:
-    """Analytics dashboard page with comprehensive statistics."""
+    """Render the analytics dashboard page with comprehensive statistics.
+
+    Returns:
+        Rendered ``analytics.html`` template populated with chart data.
+
+    Raises:
+        HTTPException: ``503 Service Unavailable`` when the analytics cache
+            has not yet been built (e.g., during cold start).
+    """
     logger.info("Analytics dashboard requested")
 
-    analytics = get_analytics_from_cache()
+    try:
+        analytics = get_analytics_from_cache()
+    except AnalyticsNotAvailableError as exc:
+        logger.warning("Analytics dashboard unavailable: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Analytics are temporarily unavailable. Please try again later.",
+        ) from exc
 
     # Convert daily changes to JSON-serializable format for Chart.js
     daily_chart_data = {

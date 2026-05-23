@@ -560,12 +560,13 @@ class TestGetAnalyticsFromCache:
         assert result is mock_analytics
 
     def test_raises_503_when_analytics_not_available(self) -> None:
-        """Verify HTTPException 503 when cache.analytics is None."""
+        """Verify AnalyticsNotAvailableError when cache.analytics is None."""
         from unittest.mock import MagicMock, patch
 
-        from fastapi import HTTPException
-
-        from azurerbac.web.services.analytics import get_analytics_from_cache
+        from azurerbac.web.services.analytics import (
+            AnalyticsNotAvailableError,
+            get_analytics_from_cache,
+        )
 
         mock_cache = MagicMock()
         mock_cache.analytics = None
@@ -574,9 +575,6 @@ class TestGetAnalyticsFromCache:
 
         with (
             patch("azurerbac.web.services.analytics.get_cache_service", return_value=mock_service),
-            pytest.raises(HTTPException) as exc_info,
+            pytest.raises(AnalyticsNotAvailableError, match="not available"),
         ):
             get_analytics_from_cache()
-
-        assert exc_info.value.status_code == 503
-        assert "not available" in exc_info.value.detail

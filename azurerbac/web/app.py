@@ -192,6 +192,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:  # pylint: disable=unus
 
     logger.info("Background tasks cancelled")
 
+    # Flush in-flight telemetry before disposing resources so the last
+    # interval of metrics isn't lost on graceful shutdown.
+    try:
+        from azurerbac.telemetry import flush_metrics
+
+        flush_metrics()
+    except Exception:
+        logger.exception("Failed to flush telemetry on shutdown")
+
     # Cleanup database connections and MSI authenticator
     logger.info("Disposing database engine...")
     await DBEngine.dispose()

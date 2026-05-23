@@ -2,23 +2,27 @@
 
 from __future__ import annotations
 
-from fastapi import HTTPException, status
-
 from azurerbac.analytics.models import AnalyticsData
 from azurerbac.cache import get_cache_service
+
+
+class AnalyticsNotAvailableError(Exception):
+    """Raised when analytics data is not present in the cache.
+
+    Indicates the cache was not fully initialized at startup. Route
+    handlers should translate this into an HTTP 503 response.
+    """
 
 
 def get_analytics_from_cache() -> AnalyticsData:
     """Get analytics data from cache.
 
     Raises:
-        HTTPException: 503 Service Unavailable if analytics data is not in cache.
-            This indicates the cache was not properly initialized at startup.
+        AnalyticsNotAvailableError: If analytics data is not in cache.
     """
     cache = get_cache_service().cache
     if cache.analytics is None:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Analytics data not available. Cache may not be fully initialized.",
+        raise AnalyticsNotAvailableError(
+            "Analytics data not available. Cache may not be fully initialized."
         )
     return cache.analytics

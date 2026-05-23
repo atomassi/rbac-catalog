@@ -3,7 +3,26 @@ name = "azurerbac"
 description = "Azure RBAC Built-in Role Definitions Monitor"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
+license = { text = "MIT" }
+authors = [{ name = "Andrea Tomassilli" }]
+keywords = ["azure", "rbac", "iam", "roles", "permissions", "least-privilege"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+    "Topic :: System :: Systems Administration",
+]
 dynamic = ["version"]
+
+[project.urls]
+Homepage = "https://github.com/atomassi/rbac-catalog"
+Repository = "https://github.com/atomassi/rbac-catalog"
+Issues = "https://github.com/atomassi/rbac-catalog/issues"
 
 [tool.setuptools.dynamic]
 version = {attr = "azurerbac._version.__version__"}

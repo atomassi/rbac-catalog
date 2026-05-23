@@ -5,7 +5,7 @@ from __future__ import annotations
 import datetime as dt
 import logging
 from dataclasses import asdict, dataclass, field
-from typing import Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -32,6 +32,9 @@ from azurerbac.web.services.dashboard import (
 )
 from azurerbac.web.services.models import PaginationInfo, ScanMetadata, SortField
 
+if TYPE_CHECKING:
+    from azurerbac.web.services.models import RoleWithCounts
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["dashboard"])
@@ -56,7 +59,7 @@ class DashboardContext:
     # Data
     events: list[Any] = field(default_factory=list)
     total_events: int = 0
-    roles: list[Any] = field(default_factory=list)
+    roles: list[RoleWithCounts] = field(default_factory=list)
     total_roles: int = 0
     total_operations: int = 0
     last_scan: dt.datetime | None = None

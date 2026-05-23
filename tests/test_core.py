@@ -29,9 +29,12 @@ class TestSettings:
 
     def test_partial_override(self):
         """Test Settings allows partial override of defaults."""
-        settings = Settings(roles_poll_interval_seconds=120)
-        assert settings.roles_poll_interval_seconds == 120
-        assert settings.db_connection_string == "sqlite+aiosqlite:///./azurerbac.db"
+        # Clear env so we exercise model defaults, not whatever the test
+        # session has injected (e.g. conftest sets DB_CONNECTION_STRING).
+        with patch.dict(os.environ, {}, clear=True):
+            settings = Settings(roles_poll_interval_seconds=120)
+            assert settings.roles_poll_interval_seconds == 120
+            assert settings.db_connection_string == "sqlite+aiosqlite:///./azurerbac.db"
 
     def test_invalid_poll_interval_type(self):
         """Test Settings rejects invalid types."""
@@ -154,6 +157,145 @@ class TestGetSettings:
         with patch.dict(os.environ, {}, clear=True):
             settings = Settings.get()
             assert settings.enabled_ai_engines == expected
+
+
+class TestSettingsValidators:
+    """Tests for Settings field/model validators (pydantic-settings refactor)."""
+
+    @pytest.mark.parametrize(
+        "env_value, expected",
+        [
+            pytest.param("production", "production", id="production_lowercase"),
+            pytest.param("PRODUCTION", "production", id="production_uppercase"),
+            pytest.param(" staging ", "staging", id="staging_whitespace"),
+            pytest.param("ppe", "ppe", id="ppe"),
+            pytest.param("local", "local", id="local_normalized_to_local"),
+            pytest.param("dev", "local", id="unknown_falls_back_to_local"),
+            pytest.param("", "local", id="empty_falls_back_to_local"),
+        ],
+    )
+    def test_environment_name_normalization(self, env_value: str, expected: str):
+        """environment_name is lowercased and unknown values fall back to 'local'."""
+        with patch.dict(os.environ, {"APP_ENVIRONMENT_NAME": env_value}, clear=True):
+            settings = Settings()
+            assert settings.environment_name == expected
+
+    def test_app_insights_cleared_when_local(self):
+        """APPLICATIONINSIGHTS_CONNECTION_STRING is dropped when env is not deployed."""
+        with patch.dict(
+            os.environ,
+            {
+                "APP_ENVIRONMENT_NAME": "local",
+                "APPLICATIONINSIGHTS_CONNECTION_STRING": "InstrumentationKey=abc",
+            },
+            clear=True,
+        ):
+            settings = Settings()
+            assert settings.environment_name == "local"
+            assert settings.app_insights_connection_string == ""
+
+    def test_app_insights_cleared_when_unknown_environment(self):
+        """Unknown environment is treated as local; telemetry must not be shipped."""
+        with patch.dict(
+            os.environ,
+            {
+                "APP_ENVIRONMENT_NAME": "dev",
+                "APPLICATIONINSIGHTS_CONNECTION_STRING": "InstrumentationKey=abc",
+            },
+            clear=True,
+        ):
+            settings = Settings()
+            assert settings.app_insights_connection_string == ""
+
+    @pytest.mark.parametrize("env", ["production", "staging", "ppe"])
+    def test_app_insights_preserved_in_deployed_environments(self, env: str):
+        """APPLICATIONINSIGHTS_CONNECTION_STRING is preserved in deployed envs."""
+        with patch.dict(
+            os.environ,
+            {
+                "APP_ENVIRONMENT_NAME": env,
+                "APPLICATIONINSIGHTS_CONNECTION_STRING": "InstrumentationKey=abc",
+            },
+            clear=True,
+        ):
+            settings = Settings()
+            assert settings.environment_name == env
+            assert settings.app_insights_connection_string == "InstrumentationKey=abc"
+
+    @pytest.mark.parametrize(
+        "env_value, expected",
+        [
+            pytest.param("debug", "DEBUG", id="lowercase_to_upper"),
+            pytest.param("Info", "INFO", id="mixed_case_to_upper"),
+            pytest.param("WARNING", "WARNING", id="already_upper"),
+        ],
+    )
+    def test_log_level_uppercased(self, env_value: str, expected: str):
+        """LOG_LEVEL is uppercased by validator regardless of input casing."""
+        with patch.dict(os.environ, {"LOG_LEVEL": env_value}, clear=True):
+            settings = Settings()
+            assert settings.log_level == expected
+
+    def test_run_scan_on_startup_alias(self):
+        """Legacy RUN_SCAN_ON_STARTUP env var still maps to run_roles_scan_on_startup."""
+        with patch.dict(os.environ, {"RUN_SCAN_ON_STARTUP": "false"}, clear=True):
+            settings = Settings()
+            assert settings.run_roles_scan_on_startup is False
+
+    def test_extra_env_vars_ignored(self):
+        """Unknown env vars do not raise (extra='ignore')."""
+        with patch.dict(
+            os.environ,
+            {"SOME_UNRELATED_VAR": "value", "ANOTHER_ONE": "x"},
+            clear=True,
+        ):
+            # Should not raise.
+            Settings()
+
+    def test_integer_env_var_coerced(self):
+        """Numeric env vars are coerced to int by pydantic-settings."""
+        with patch.dict(
+            os.environ,
+            {"ROLES_POLL_INTERVAL_SECONDS": "900", "MSI_DB_PORT": "6543"},
+            clear=True,
+        ):
+            settings = Settings()
+            assert settings.roles_poll_interval_seconds == 900
+            assert settings.msi_db_port == 6543
+
+    def test_invalid_integer_env_raises(self):
+        """Non-numeric value for an int field raises ValidationError."""
+        with (
+            patch.dict(os.environ, {"ROLES_POLL_INTERVAL_SECONDS": "not-a-number"}, clear=True),
+            pytest.raises(ValidationError),
+        ):
+            Settings()
+
+    def test_empty_int_env_ignored(self):
+        """Empty-string env var for an int field is ignored, not coerced to 0/error."""
+        default = Settings.model_fields["roles_poll_interval_seconds"].default
+        with patch.dict(os.environ, {"ROLES_POLL_INTERVAL_SECONDS": ""}, clear=True):
+            settings = Settings()
+            assert settings.roles_poll_interval_seconds == default
+
+    def test_empty_bool_env_ignored(self):
+        """Empty-string env var for a bool field is ignored, default applies."""
+        default = Settings.model_fields["role_scan_enabled"].default
+        with patch.dict(os.environ, {"ROLE_SCAN_ENABLED": ""}, clear=True):
+            settings = Settings()
+            assert settings.role_scan_enabled is default
+
+    def test_dotenv_skipped_under_pytest(self, tmp_path, monkeypatch):
+        """A local .env file must not influence settings when running under pytest."""
+        env_file = tmp_path / ".env"
+        env_file.write_text("DB_CONNECTION_STRING=postgresql+asyncpg://from-dotenv/db\n")
+        monkeypatch.chdir(tmp_path)
+        # Keep PYTEST_CURRENT_TEST set (it's how Settings detects pytest) but
+        # clear everything else so the .env would be the only source of values.
+        preserved = {"PYTEST_CURRENT_TEST": os.environ.get("PYTEST_CURRENT_TEST", "1")}
+        with patch.dict(os.environ, preserved, clear=True):
+            settings = Settings()
+            assert "from-dotenv" not in settings.db_connection_string
 
 
 class TestDatabaseEngine:

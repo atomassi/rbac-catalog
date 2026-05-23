@@ -13,9 +13,9 @@
 > scripts — stays in this repository under the MIT license. You have two
 > ways to keep using it:
 >
-> - **Run it locally** in a few minutes — see [`docs/run-local.md`](docs/run-local.md).
-> - **Deploy your own copy on Azure** in about 15 minutes — see the
->   step-by-step walkthrough in [`buildout/README.md`](buildout/README.md).
+> - **Run it locally** — see [`docs/run-local.md`](docs/run-local.md).
+> - **Deploy your own copy on Azure** — see the step-by-step walkthrough
+>   in [`buildout/README.md`](buildout/README.md).
 
 ---
 

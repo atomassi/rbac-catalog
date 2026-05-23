@@ -93,7 +93,6 @@ class Settings(BaseSettings):
         default="", alias="APPLICATIONINSIGHTS_CONNECTION_STRING"
     )
     environment_name: str = Field(default="local", alias="APP_ENVIRONMENT_NAME")
-    use_rbac_api: bool = True
     mcp_server_enabled: bool = True
     # Decommission notice toggle. Defaults to off; flip on per-environment
     # via the ``DECOMMISSION_BANNER_ENABLED`` env var (typically as an App

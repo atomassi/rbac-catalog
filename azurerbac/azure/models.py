@@ -164,28 +164,6 @@ class RoleDefinition(BaseModel):
         return _normalize_dict_keys(data, _ROLE_DEFINITION_FIELD_MAP)
 
     @classmethod
-    def from_resource_graph(cls, item: dict[str, Any]) -> RoleDefinition:
-        """Transform a Resource Graph role definition to normalized format."""
-        role_id = item.get("id", "")
-        props = item.get("properties", {})
-
-        # Extract the GUID from the id (last segment)
-        name = role_id.rsplit("/", 1)[-1] if "/" in role_id else role_id
-
-        # Normalize the id path casing (RoleDefinitions -> roleDefinitions)
-        normalized_id = role_id.replace(
-            "/Microsoft.Authorization/RoleDefinitions/",
-            "/Microsoft.Authorization/roleDefinitions/",
-        )
-
-        return cls(
-            id=normalized_id,
-            name=name,
-            type=ROLE_DEFINITION_TYPE,
-            properties=RoleProperties.model_validate(props),
-        )
-
-    @classmethod
     def from_rbac_api(cls, item: dict[str, Any]) -> RoleDefinition:
         """Transform an RBAC API role definition response to normalized format."""
         return cls(

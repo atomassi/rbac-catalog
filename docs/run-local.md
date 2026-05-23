@@ -8,6 +8,7 @@ The commands below use a Bash / Zsh shell (macOS, Linux, WSL). For native Window
 
 - Python 3.12
 - Git
+- A C++ toolchain — required by ColBERT, which JIT-compiles PyTorch extensions on first use. Install Xcode Command Line Tools on macOS (`xcode-select --install`) or `build-essential` on Debian/Ubuntu. Skip this if you run with `ENABLED_AI_ENGINES=tfidf` (see [Run](#run)).
 - Optional: Azure CLI (`az login`) — only needed to populate the catalog with live data from Azure
 
 ## Setup

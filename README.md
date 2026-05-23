@@ -10,9 +10,12 @@
 > **The public site at [rbac-catalog.dev](https://rbac-catalog.dev/) will be decommissioned on June 12, 2026.**
 >
 > The full source — application code, Bicep templates, and post-deploy
-> scripts — stays in this repository under the MIT license. You can stand
-> up your own copy on Azure in about 15 minutes by following the
-> step-by-step walkthrough in [`buildout/README.md`](buildout/README.md).
+> scripts — stays in this repository under the MIT license. You have two
+> ways to keep using it:
+>
+> - **Run it locally** — see [`docs/run-local.md`](docs/run-local.md).
+> - **Deploy your own copy on Azure** — see the step-by-step walkthrough
+>   in [`buildout/README.md`](buildout/README.md).
 
 ---
 
@@ -47,12 +50,6 @@ A comprehensive catalog and monitoring tool for [Azure built-in RBAC roles](http
 | **CI/CD** | GitHub Actions, Azure Container Registry, Docker |
 | **Testing** | pytest, Playwright |
 | **Ops Automation** | Azure Automation |
-
-## Run Locally
-
-Two ways to run the app on your laptop — **native Python** (recommended for development) or **Docker** (no Python toolchain needed). Both serve the UI at <http://localhost:8000> with a local SQLite database.
-
-See [docs/run-local.md](docs/run-local.md) for the full walkthrough — setup, environment variables, populating the catalog from Azure, and troubleshooting.
 
 ## Infrastructure & Costs
 

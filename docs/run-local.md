@@ -2,6 +2,8 @@
 
 Native Python is the recommended path. Docker is a one-liner alternative — see the [Docker](#docker-alternative) section at the bottom.
 
+The commands below use a Bash / Zsh shell (macOS, Linux, WSL). For native Windows PowerShell, see the short [Windows notes](#windows-powershell-notes) at the bottom for the equivalent commands.
+
 ## Prerequisites
 
 - Python 3.12
@@ -101,3 +103,16 @@ docker run --rm -p 8000:8000 \
 **Empty catalog after a scan that looked successful** — set `LOG_LEVEL=DEBUG` and watch the worker logs. The fetcher raises `EmptyFetchResultError` when Azure returns zero rows, which usually means a permissions/auth issue rather than a real empty result.
 
 **Wipe and start over** — delete `./azurerbac.db` (SQLite) or drop the database (`DROP DATABASE azurerbac; CREATE DATABASE azurerbac;` for Postgres). The schema is recreated on next boot.
+
+## Windows (PowerShell) notes
+
+The app runs on native Windows — no Linux-only dependencies. The shell syntax differs from the Bash examples above, and Python is usually installed as `py` (or `python`) rather than `python3.12`:
+
+| Bash / Zsh | PowerShell |
+|---|---|
+| `python3.12 -m venv .venv` | `py -3.12 -m venv .venv` |
+| `source .venv/bin/activate` | `.\.venv\Scripts\Activate.ps1` |
+| `export VAR=value` | `$env:VAR = "value"` |
+| `python -m azurerbac.backgroundjobs.worker &` | Open a second PowerShell window, or `Start-Process python -ArgumentList '-m','azurerbac.backgroundjobs.worker'` |
+| `-v "$PWD/azurerbac.db:/app/azurerbac.db"` | `-v "${PWD}\azurerbac.db:/app/azurerbac.db"` |
+

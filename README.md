@@ -48,6 +48,12 @@ A comprehensive catalog and monitoring tool for [Azure built-in RBAC roles](http
 | **Testing** | pytest, Playwright |
 | **Ops Automation** | Azure Automation |
 
+## Run Locally
+
+Two ways to run the app on your laptop — **native Python** (recommended for development) or **Docker** (no Python toolchain needed). Both serve the UI at <http://localhost:8000> with a local SQLite database.
+
+See [docs/run-local.md](docs/run-local.md) for the full walkthrough — setup, environment variables, populating the catalog from Azure, and troubleshooting.
+
 ## Infrastructure & Costs
 
 The site runs on Azure with Cloudflare CDN.

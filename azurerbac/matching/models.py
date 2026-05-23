@@ -1,10 +1,8 @@
 """Role matching models."""
 
-from __future__ import annotations
-
 from dataclasses import dataclass, field, fields
 from enum import Enum
-from typing import TYPE_CHECKING, NamedTuple
+from typing import TYPE_CHECKING, NamedTuple, Self
 
 from azurerbac.core.types import JsonDict
 
@@ -88,7 +86,7 @@ class PartialCoverageCacheKey(NamedTuple):
         plane: Plane | None,
         actions: list[str],
         not_actions: list[str],
-    ) -> PartialCoverageCacheKey | None:
+    ) -> Self | None:
         if plane is None:
             return None
         return cls(
@@ -133,7 +131,7 @@ class OperationSets:
     all_data: frozenset[str]
 
     @classmethod
-    def from_cache(cls, cache: CacheData) -> OperationSets:
+    def from_cache(cls, cache: "CacheData") -> Self:
         """Build from cached frozensets."""
         return cls(all_control=cache.control_ops_lowered, all_data=cache.data_ops_lowered)
 

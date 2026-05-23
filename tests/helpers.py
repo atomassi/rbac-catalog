@@ -1,7 +1,5 @@
 """Test helper functions and factory builders."""
 
-from __future__ import annotations
-
 from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
@@ -210,7 +208,7 @@ def create_mock_ollama_client(
 # =============================================================================
 
 
-def populate_cache_with_operations(cache: CacheService, operations: list[OperationData]) -> None:
+def populate_cache_with_operations(cache: "CacheService", operations: list[OperationData]) -> None:
     """Populate cache with operations using swap() pattern."""
     from dataclasses import replace
 
@@ -227,7 +225,7 @@ def populate_cache_with_operations(cache: CacheService, operations: list[Operati
     cache.swap(replace(current, source=new_source, indexes=new_indexes))
 
 
-def populate_cache_with_roles(cache: CacheService, roles: list[CachedRole]) -> None:
+def populate_cache_with_roles(cache: "CacheService", roles: list[CachedRole]) -> None:
     """Populate cache with roles using swap() pattern."""
     from dataclasses import replace
 
@@ -237,7 +235,7 @@ def populate_cache_with_roles(cache: CacheService, roles: list[CachedRole]) -> N
     cache.swap(replace(current, source=new_source))
 
 
-def populate_cache_with_events(cache: CacheService, events: list[CachedChangeEvent]) -> None:
+def populate_cache_with_events(cache: "CacheService", events: "list[CachedChangeEvent]") -> None:
     """Populate cache with change events using swap() pattern."""
     from dataclasses import replace
 
@@ -246,7 +244,7 @@ def populate_cache_with_events(cache: CacheService, events: list[CachedChangeEve
     cache.swap(replace(current, source=new_source))
 
 
-def clear_computed_caches(service: CacheService | None = None) -> None:
+def clear_computed_caches(service: "CacheService | None" = None) -> None:
     """Clear computed caches by swapping to cache with empty computed fields."""
     from azurerbac.cache import get_cache_service
     from azurerbac.cache.models import CacheData

@@ -1,7 +1,5 @@
 """Role knowledge base for semantic search."""
 
-from __future__ import annotations
-
 import json
 import logging
 import re
@@ -70,9 +68,9 @@ class RoleKnowledgeBase:
 
     def build_from_roles(
         self,
-        roles: list[RoleDefinition],
+        roles: "list[RoleDefinition]",
         *,
-        cache: CacheService | None = None,
+        cache: "CacheService | None" = None,
     ) -> None:
         """Build searchable knowledge base from role definitions."""
         from azurerbac.cache import get_cache_service

@@ -13,8 +13,6 @@ This module contains negative security tests to verify protection against:
 - Host Header Injection
 """
 
-from __future__ import annotations
-
 from collections.abc import AsyncGenerator
 
 import pytest

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import logging
 
 from azurerbac.azure.http import authenticated_management_async_client, management_url

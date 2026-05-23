@@ -1,7 +1,5 @@
 """Feed generation service for RSS/Atom feeds."""
 
-from __future__ import annotations
-
 import datetime as dt
 import html
 from xml.etree.ElementTree import Element, SubElement, tostring

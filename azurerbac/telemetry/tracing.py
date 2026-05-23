@@ -1,7 +1,5 @@
 """OpenTelemetry tracing context managers for worker operations."""
 
-from __future__ import annotations
-
 import logging
 from types import TracebackType
 from typing import Self

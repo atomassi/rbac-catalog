@@ -1,7 +1,5 @@
 """Comprehensive tests for the web API endpoints and CacheService."""
 
-from __future__ import annotations
-
 import pytest
 
 from azurerbac.azure.models import OperationData, RoleDefinition

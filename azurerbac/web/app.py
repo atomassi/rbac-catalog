@@ -7,8 +7,6 @@ This is the main application module that:
 - Configures middleware (security, caching, logging)
 """
 
-from __future__ import annotations
-
 # IMPORTANT: Configure telemetry BEFORE importing FastAPI to enable auto-instrumentation.
 # The OpenTelemetry auto-instrumentors must patch FastAPI before the module is loaded.
 import logging

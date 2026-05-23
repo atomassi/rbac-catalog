@@ -1,7 +1,5 @@
 """Role Recommendation Service - orchestrates role matching with focused methods."""
 
-from __future__ import annotations
-
 import heapq
 import logging
 from typing import TYPE_CHECKING
@@ -33,7 +31,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def _get_default_cache() -> CacheData:
+def _get_default_cache() -> "CacheData":
     """Get the default cache from the global singleton."""
     from azurerbac.cache import get_cache_service
 
@@ -56,7 +54,7 @@ class RoleRecommendationService:
         self,
         requested_ops_data_flags: dict[str, bool] | None = None,
         *,
-        cache: CacheData | None = None,
+        cache: "CacheData | None" = None,
     ) -> None:
         """Initialize the service.
 

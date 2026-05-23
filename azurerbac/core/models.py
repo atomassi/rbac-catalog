@@ -8,8 +8,6 @@ Tables:
   operation_scan_status - Operation scan metadata
 """
 
-from __future__ import annotations
-
 import datetime as dt
 from typing import TYPE_CHECKING
 
@@ -44,7 +42,7 @@ class Role(Base):
         index=True,
     )
 
-    history: Mapped[list[RoleHistory]] = relationship(
+    history: Mapped[list["RoleHistory"]] = relationship(
         back_populates="role",
         cascade="all, delete-orphan",
         order_by="RoleHistory.version_number.desc()",
@@ -55,12 +53,12 @@ class Role(Base):
         return f"<Role {self.role_id} '{self.role_name}' ({self.status})>"
 
     @property
-    def current_version(self) -> RoleHistory | None:
+    def current_version(self) -> "RoleHistory | None":
         """Get the latest version (highest version_number)."""
         return self.history[0] if self.history else None
 
     @property
-    def last_known_version(self) -> RoleHistory | None:
+    def last_known_version(self) -> "RoleHistory | None":
         """Most recent version with role_json (not NULL). Works for deleted roles."""
         for h in self.history:
             if h.role_json is not None:
@@ -109,13 +107,13 @@ class Role(Base):
         return cv.scan.scan_timestamp if cv and cv.scan else None
 
     @property
-    def role_definition(self) -> RoleDefinition | None:
+    def role_definition(self) -> "RoleDefinition | None":
         """RoleDefinition from current version. None for deleted roles."""
         cv = self.current_version
         return cv.role_definition if cv else None
 
     @property
-    def last_known_definition(self) -> RoleDefinition | None:
+    def last_known_definition(self) -> "RoleDefinition | None":
         """Most recent RoleDefinition, even for deleted roles."""
         lkv = self.last_known_version
         return lkv.role_definition if lkv else None
@@ -172,13 +170,13 @@ class RoleHistory(Base):
     role: Mapped[Role] = relationship(back_populates="history")
 
     # Link to the scan that detected this change
-    scan: Mapped[RoleScanStatus | None] = relationship(lazy="joined")
+    scan: Mapped["RoleScanStatus | None"] = relationship(lazy="joined")
 
     def __repr__(self) -> str:
         return f"<RoleHistory {self.role_id} v{self.version_number} {self.event_type}>"
 
     @property
-    def role_definition(self) -> RoleDefinition | None:
+    def role_definition(self) -> "RoleDefinition | None":
         """Parse role_json through RoleDefinition model.
 
         Returns None for delete events (where role_json is NULL).

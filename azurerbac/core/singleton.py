@@ -1,7 +1,5 @@
 """Thread-safe singleton with double-check locking."""
 
-from __future__ import annotations
-
 import logging
 import threading
 from collections.abc import Callable

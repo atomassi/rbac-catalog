@@ -4,8 +4,6 @@ Combines TF-IDF, embedding, and LLM stages in a progressive pipeline.
 Each stage filters and refines candidates for maximum accuracy.
 """
 
-from __future__ import annotations
-
 import heapq
 import logging
 from typing import Final, override

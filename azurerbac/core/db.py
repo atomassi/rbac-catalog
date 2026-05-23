@@ -1,7 +1,5 @@
-from __future__ import annotations
-
 import logging
-from typing import TYPE_CHECKING, Any, Final
+from typing import TYPE_CHECKING, Any, Final, Self
 
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -27,13 +25,13 @@ POSTGRES_SCOPE: Final[str] = "https://ossrdbms-aad.database.windows.net/.default
 class ManagedIdentityAuthenticator:
     """Singleton async token provider for Azure PostgreSQL authentication."""
 
-    _instance: ThreadSafeSingleton[ManagedIdentityAuthenticator] | None = None
+    _instance: ThreadSafeSingleton[Self] | None = None
 
     def __init__(self) -> None:
         self._credential: ManagedIdentityCredential | None = None
 
     @classmethod
-    def get(cls) -> ManagedIdentityAuthenticator:
+    def get(cls) -> Self:
         """Get the singleton instance."""
         if cls._instance is None:
             cls._instance = ThreadSafeSingleton(cls)
@@ -53,7 +51,7 @@ class ManagedIdentityAuthenticator:
             cls.reset()
 
     @property
-    def credential(self) -> ManagedIdentityCredential:
+    def credential(self) -> "ManagedIdentityCredential":
         """Lazy-load credential to avoid import at module level."""
         if self._credential is None:
             from azure.identity.aio import ManagedIdentityCredential
@@ -119,7 +117,7 @@ class EngineFactory:
     POOL_RECYCLE_MSI = 2700
 
     @classmethod
-    def from_settings(cls, settings: Settings | None = None) -> AsyncEngine:
+    def from_settings(cls, settings: "Settings | None" = None) -> AsyncEngine:
         """Create engine from application settings."""
         if settings is None:
             from azurerbac.settings import Settings
@@ -172,7 +170,7 @@ class EngineFactory:
         # Use singleton authenticator to avoid leaking HTTP sessions
         auth = ManagedIdentityAuthenticator.get()
 
-        async def async_connect(**_: Any) -> asyncpg.Connection:
+        async def async_connect(**_: Any) -> "asyncpg.Connection":
             """Create connection with fresh managed identity token."""
             import asyncpg
 

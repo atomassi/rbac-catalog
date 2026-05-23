@@ -1,7 +1,5 @@
 """Pages service functions."""
 
-from __future__ import annotations
-
 import heapq
 import json
 import logging
@@ -73,7 +71,7 @@ def sort_operations(
     operations: list[OperationData],
     sort: str | OperationSortField,
     order: str | SortOrder,
-    cache: CacheService | None = None,
+    cache: "CacheService | None" = None,
 ) -> list[OperationData]:
     """Sort operations.
 
@@ -98,7 +96,7 @@ def sort_operations(
 
 def add_role_counts(
     operations: list[OperationData],
-    cache: CacheService | None = None,
+    cache: "CacheService | None" = None,
 ) -> list[tuple[OperationData, int]]:
     """Add role counts to operations. Call on paginated subset for efficiency."""
     cache_resolved = _get_cache(cache)
@@ -108,7 +106,7 @@ def add_role_counts(
 def compute_role_effective_permissions(
     role: RoleDefinition,
     all_operations: list[OperationData],
-    cache: CacheService | None = None,
+    cache: "CacheService | None" = None,
 ) -> RoleEffectivePermissions:
     """Compute effective permissions for a role.
 
@@ -229,7 +227,7 @@ def _classify_subset_relationship(
 def _score_candidate(
     *,
     candidate: CachedRole,
-    other_coverage: RoleCoverage,
+    other_coverage: "RoleCoverage",
     current_control: set[str],
     current_data: set[str],
     current_len: int,
@@ -279,7 +277,7 @@ def _score_candidate(
 def compute_related_roles(
     role_id: str,
     limit: int = 12,
-    cache: CacheService | None = None,
+    cache: "CacheService | None" = None,
 ) -> list[RelatedRole]:
     """Compute roles with highest operation overlap using inverted index.
 
@@ -358,7 +356,7 @@ def compute_related_roles(
     return final
 
 
-def _get_cache(cache: CacheService | None) -> CacheService:
+def _get_cache(cache: "CacheService | None") -> "CacheService":
     """Get cache service."""
     if cache is not None:
         return cache
@@ -370,7 +368,7 @@ def _get_cache(cache: CacheService | None) -> CacheService:
 def get_roles_allowing_operation(
     operation_name: str,
     is_data_action: bool,
-    cache: CacheService | None = None,
+    cache: "CacheService | None" = None,
 ) -> list[RoleAllowingOperation]:
     """Find roles allowing a specific operation.
 
@@ -437,13 +435,13 @@ def get_roles_allowing_operation(
 
 
 async def get_role_from_cache_or_db(
-    session_local: async_sessionmaker,
-    role_snapshot_model: type[Role],
-    role_history_model: type[RoleHistory],
+    session_local: "async_sessionmaker",
+    role_snapshot_model: "type[Role]",
+    role_history_model: "type[RoleHistory]",
     role_id: str,
     max_events: int = 200,
     *,
-    cache: CacheService | None = None,
+    cache: "CacheService | None" = None,
 ) -> RoleDetailResult:
     """Get role data from cache or database."""
     from sqlalchemy import func, select
@@ -525,7 +523,7 @@ async def get_role_from_cache_or_db(
 
 
 def build_role_redirect_url(
-    request: Request,
+    request: "Request",
     role_id: str,
     expected_slug: str,
     q: str | None,

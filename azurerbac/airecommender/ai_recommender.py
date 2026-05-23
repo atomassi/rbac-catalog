@@ -1,10 +1,8 @@
 """AI-powered role recommender."""
 
-from __future__ import annotations
-
 import logging
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Self
 
 from pydantic import BaseModel, Field
 
@@ -70,7 +68,7 @@ class AIRecommendation:
         }
 
     @classmethod
-    def from_ranked_role(cls, ranked: RankedRole) -> AIRecommendation:
+    def from_ranked_role(cls, ranked: RankedRole) -> Self:
         return cls(
             role_id=ranked.role_id,
             role_name=ranked.role_name,

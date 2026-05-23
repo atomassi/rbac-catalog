@@ -5,8 +5,6 @@ accurate reranking. Cross-encoders see query+document together,
 achieving 10-15% higher accuracy than bi-encoders alone.
 """
 
-from __future__ import annotations
-
 import logging
 import math
 from typing import TYPE_CHECKING, Final, override
@@ -89,7 +87,7 @@ class CrossEncoderEngine(BaseRecommenderEngine):
         self,
         query: str,
         candidates: list[RankedRole],
-        cross_encoder: CrossEncoder,
+        cross_encoder: "CrossEncoder",
     ) -> list[RankedRole]:
         pairs = []
         for candidate in candidates:
@@ -145,7 +143,7 @@ class CrossEncoderEngine(BaseRecommenderEngine):
             return candidates
 
 
-def _load_cross_encoder() -> CrossEncoder:
+def _load_cross_encoder() -> "CrossEncoder":
     from sentence_transformers import CrossEncoder
 
     logger.debug("Loading cross-encoder model: %s", _CROSS_ENCODER_MODEL)
@@ -154,10 +152,12 @@ def _load_cross_encoder() -> CrossEncoder:
     return model
 
 
-_cross_encoder: ThreadSafeSingleton[CrossEncoder] = ThreadSafeSingleton(factory=_load_cross_encoder)
+_cross_encoder: "ThreadSafeSingleton[CrossEncoder]" = ThreadSafeSingleton(
+    factory=_load_cross_encoder
+)
 
 
-def get_cross_encoder() -> CrossEncoder:
+def get_cross_encoder() -> "CrossEncoder":
     """Get the cross-encoder model singleton."""
     return _cross_encoder.get()
 

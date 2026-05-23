@@ -4,8 +4,6 @@ These tests ensure unit tests don't accidentally import heavyweight ML stacks
 (torch/transformers) unless explicitly opted-in.
 """
 
-from __future__ import annotations
-
 import builtins
 
 

@@ -1,10 +1,8 @@
 """Application configuration via Pydantic Settings."""
 
-from __future__ import annotations
-
 import logging
 import os
-from typing import Annotated, Final
+from typing import Annotated, Final, Self
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import (
@@ -120,7 +118,7 @@ class Settings(BaseSettings):
         return v.upper()
 
     @model_validator(mode="after")
-    def _drop_app_insights_when_local(self) -> Settings:
+    def _drop_app_insights_when_local(self) -> Self:
         # App Insights is only used in deployed envs — drop it when local
         # so tests/local runs don't accidentally ship telemetry. Done as a
         # model-level validator so that `environment_name` is guaranteed to
@@ -163,7 +161,7 @@ class Settings(BaseSettings):
         _settings.reset()
 
     @classmethod
-    def get(cls) -> Settings:
+    def get(cls) -> "Settings":
         return _settings.get()
 
 

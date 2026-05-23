@@ -1,7 +1,5 @@
 """Common utilities for recommendation engines."""
 
-from __future__ import annotations
-
 import logging
 import math
 from typing import TYPE_CHECKING
@@ -24,10 +22,10 @@ _SCORE_RANGE = SCORE_CEILING - SCORE_FLOOR
 
 
 def normalize_candidates(
-    candidates: list[RankedRole],
+    candidates: "list[RankedRole]",
     floor: float = SCORE_FLOOR,
     ceiling: float = SCORE_CEILING,
-) -> list[RankedRole]:
+) -> "list[RankedRole]":
     """Min-max normalize candidate scores to [floor, ceiling]. Mutates in-place."""
     if not candidates:
         return candidates
@@ -51,9 +49,9 @@ def normalize_candidates(
 
 
 def sigmoid_normalize(
-    candidates: list[RankedRole],
+    candidates: "list[RankedRole]",
     params: SigmoidParams,
-) -> list[RankedRole]:
+) -> "list[RankedRole]":
     """Sigmoid-transform candidate scores. Mutates in-place."""
     if not candidates:
         return candidates

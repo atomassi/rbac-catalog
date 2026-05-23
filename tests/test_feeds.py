@@ -2,8 +2,6 @@
 
 # ruff: noqa: S314 - XML parsing is safe here, we're parsing our own test-generated XML
 
-from __future__ import annotations
-
 import datetime as dt
 from unittest.mock import MagicMock
 from xml.etree import ElementTree as ET

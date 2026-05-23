@@ -1,7 +1,5 @@
 """Tests for the Azure API modules (operations and roles)."""
 
-from __future__ import annotations
-
 from typing import Any
 
 import pytest

@@ -7,8 +7,6 @@ generated description. Works well for ambiguous queries.
 Paper: https://arxiv.org/abs/2212.10496
 """
 
-from __future__ import annotations
-
 import logging
 from typing import Final, override
 

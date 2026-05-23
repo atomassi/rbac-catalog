@@ -1,7 +1,5 @@
 """Health check routes."""
 
-from __future__ import annotations
-
 from fastapi import APIRouter
 
 from azurerbac import __version__

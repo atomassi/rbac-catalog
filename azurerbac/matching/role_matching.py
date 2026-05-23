@@ -1,7 +1,5 @@
 """Role matching functions for pattern-based permission analysis."""
 
-from __future__ import annotations
-
 import heapq
 import logging
 from collections.abc import Iterable
@@ -32,7 +30,7 @@ type OperationName = str
 type Pattern = str
 
 
-def _get_cache(caches: CacheData | None = None) -> CacheData:
+def _get_cache(caches: "CacheData | None" = None) -> "CacheData":
     """Get cache data, using provided override or global singleton.
 
     This function centralizes cache access, making it easier to mock in tests
@@ -143,7 +141,7 @@ def get_matching_operations(
     all_operations: AbstractSet[str],
     plane: Plane | None = None,
     *,
-    caches: CacheData | None = None,
+    caches: "CacheData | None" = None,
 ) -> set[str]:
     """Get all operations matching a pattern, with caching.
 
@@ -179,7 +177,7 @@ def _compute_covered_operations(
     matching_ops: set[str],
     all_operations: AbstractSet[str],
     plane: Plane | None,
-    cache: CacheData,
+    cache: "CacheData",
 ) -> set[str]:
     """Compute the set of operations covered by the given actions."""
     covered: set[str] = set()
@@ -199,7 +197,7 @@ def _remove_excluded_operations(
     not_actions: list[str],
     all_operations: AbstractSet[str],
     plane: Plane | None,
-    cache: CacheData,
+    cache: "CacheData",
 ) -> set[str]:
     """Remove operations excluded by notActions from the covered set."""
     if not not_actions:
@@ -224,7 +222,7 @@ def count_wildcard_partial_coverage(
     plane: Plane | None = None,
     max_uncovered_sample: int = MAX_UNCOVERED_SAMPLE,
     *,
-    caches: CacheData | None = None,
+    caches: "CacheData | None" = None,
 ) -> CoverageResult:
     """Count operations matching a wildcard pattern that are granted by the given actions."""
     cache = _get_cache(caches)
@@ -279,7 +277,7 @@ def count_wildcard_matches(
     all_operations: AbstractSet[str],
     plane: Plane | None = None,
     *,
-    caches: CacheData | None = None,
+    caches: "CacheData | None" = None,
 ) -> int:
     """Count how many operations match a wildcard pattern (exact count)."""
     cache = _get_cache(caches)
@@ -296,7 +294,7 @@ def _count_pattern(
     pattern: str,
     all_operations: AbstractSet[str],
     plane: Plane | None,
-    cache: CacheData,
+    cache: "CacheData",
 ) -> int:
     """Count matching operations for a pattern (explicit or wildcard)."""
     if is_wildcard_pattern(pattern):
@@ -310,7 +308,7 @@ def count_net_permissions(
     all_operations: AbstractSet[str],
     plane: Plane | None = None,
     *,
-    caches: CacheData | None = None,
+    caches: "CacheData | None" = None,
 ) -> int:
     """Count the net number of operations granted (actions minus notActions)."""
     if not actions:
@@ -342,7 +340,7 @@ def count_net_permissions(
     return max(0, count)
 
 
-def is_high_privilege_role(role: RoleDefinition) -> bool:
+def is_high_privilege_role(role: "RoleDefinition") -> bool:
     """Check if a role is high-privilege based on its ID or effective permissions.
 
     High-privilege: well-known role IDs OR grants roleAssignments/write without ABAC condition.

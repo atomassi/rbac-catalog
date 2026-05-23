@@ -1,7 +1,5 @@
 """AI recommender exceptions."""
 
-from __future__ import annotations
-
 
 class AIRecommenderError(Exception):
     """Base exception for AI recommender."""

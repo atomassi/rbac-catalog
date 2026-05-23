@@ -1,6 +1,6 @@
 """API request and response models."""
 
-from __future__ import annotations
+from typing import Self
 
 from pydantic import BaseModel, Field
 
@@ -39,7 +39,7 @@ class OperationWithCount(BaseModel):
     role_count: int
 
     @classmethod
-    def from_operation(cls, op: OperationData, role_count: int) -> OperationWithCount:
+    def from_operation(cls, op: OperationData, role_count: int) -> Self:
         """Create from OperationData and role count."""
         return cls(
             name=op.name,

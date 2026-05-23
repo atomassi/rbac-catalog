@@ -5,8 +5,6 @@ lazy initialization and sending of metrics to Azure Application Insights
 via OpenTelemetry.
 """
 
-from __future__ import annotations
-
 import logging
 from typing import Any, ClassVar, Final
 

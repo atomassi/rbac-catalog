@@ -1,7 +1,5 @@
 """Fetch Azure provider operations from the Management API."""
 
-from __future__ import annotations
-
 import logging
 from typing import Any, Final
 

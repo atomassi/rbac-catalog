@@ -1,7 +1,5 @@
 """Static content routes."""
 
-from __future__ import annotations
-
 import logging
 from http import HTTPStatus
 from pathlib import Path

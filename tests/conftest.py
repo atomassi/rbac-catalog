@@ -1,7 +1,5 @@
 """Pytest configuration and shared fixtures."""
 
-from __future__ import annotations
-
 import os
 from collections.abc import AsyncGenerator, Generator
 from unittest.mock import AsyncMock, MagicMock

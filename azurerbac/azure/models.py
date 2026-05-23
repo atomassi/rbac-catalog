@@ -1,9 +1,7 @@
 """Pydantic models for Azure RBAC role definitions and operations."""
 
-from __future__ import annotations
-
 import datetime as dt
-from typing import Any
+from typing import Any, Self
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator, model_validator
 
@@ -164,7 +162,7 @@ class RoleDefinition(BaseModel):
         return _normalize_dict_keys(data, _ROLE_DEFINITION_FIELD_MAP)
 
     @classmethod
-    def from_rbac_api(cls, item: dict[str, Any]) -> RoleDefinition:
+    def from_rbac_api(cls, item: dict[str, Any]) -> Self:
         """Transform an RBAC API role definition response to normalized format."""
         return cls(
             id=item.get("id", ""),
@@ -243,7 +241,7 @@ class OperationData(BaseModel):
     _name_lower: str = PrivateAttr(default="")
 
     @model_validator(mode="after")
-    def _compute_search_text(self) -> OperationData:
+    def _compute_search_text(self) -> Self:
         """Pre-compute lowercased search text for fast matching."""
         self._name_lower = self.name.lower()
         parts = [
@@ -264,7 +262,7 @@ class OperationData(BaseModel):
         provider_display_name: str = "",
         resource_type: str | None = None,
         resource_type_display_name: str | None = None,
-    ) -> OperationData:
+    ) -> Self:
         """Parse operation from Azure API response."""
         return cls.model_validate(
             {

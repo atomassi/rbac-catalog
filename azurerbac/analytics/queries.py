@@ -1,7 +1,5 @@
 """Analytics database queries."""
 
-from __future__ import annotations
-
 import datetime as dt
 import logging
 from collections import Counter
@@ -41,7 +39,7 @@ TOP_N_PROVIDERS: Final = 15
 DAILY_CHANGES_DAYS: Final = 180
 
 
-async def fetch_all_time_stats(session: AsyncSession) -> AllTimeStats:
+async def fetch_all_time_stats(session: "AsyncSession") -> AllTimeStats:
     """Fetch aggregate statistics across all scans."""
     scan_result = await session.execute(
         select(
@@ -65,7 +63,7 @@ async def fetch_all_time_stats(session: AsyncSession) -> AllTimeStats:
     )
 
 
-async def fetch_rolling_stats(session: AsyncSession, window_days: int) -> RollingStats:
+async def fetch_rolling_stats(session: "AsyncSession", window_days: int) -> RollingStats:
     """Fetch statistics for a rolling time window."""
     cutoff = dt.datetime.now(dt.UTC) - dt.timedelta(days=window_days)
 
@@ -95,7 +93,7 @@ async def fetch_rolling_stats(session: AsyncSession, window_days: int) -> Rollin
 
 
 async def fetch_daily_changes(
-    session: AsyncSession,
+    session: "AsyncSession",
     days: int = DAILY_CHANGES_DAYS,
 ) -> list[DailyChanges]:
     """Fetch daily change counts for chart visualization."""
@@ -128,7 +126,7 @@ async def fetch_daily_changes(
 
 
 async def fetch_frequently_updated_roles(
-    session: AsyncSession,
+    session: "AsyncSession",
     limit: int = TOP_N_ROLES,
     min_updates: int = 2,
 ) -> list[FrequentlyUpdatedRole]:
@@ -160,7 +158,7 @@ async def fetch_frequently_updated_roles(
 
 
 async def fetch_recently_updated_roles(
-    session: AsyncSession,
+    session: "AsyncSession",
     limit: int = TOP_N_ROLES,
 ) -> list[RecentlyUpdatedRole]:
     """Fetch most recently updated roles (sorted by date, no minimum updates filter)."""
@@ -188,7 +186,7 @@ async def fetch_recently_updated_roles(
 
 
 async def fetch_recently_created_roles(
-    session: AsyncSession,
+    session: "AsyncSession",
     limit: int = TOP_N_ROLES,
 ) -> list[RecentlyCreatedRole]:
     """Fetch most recently created roles."""
@@ -215,7 +213,7 @@ async def fetch_recently_created_roles(
 
 
 async def fetch_recently_deleted_roles(
-    session: AsyncSession,
+    session: "AsyncSession",
     limit: int = TOP_N_ROLES,
 ) -> list[DeletedRole]:
     """Fetch most recently deleted roles with lifespan calculation."""
@@ -260,7 +258,7 @@ async def fetch_recently_deleted_roles(
 
 
 async def fetch_volatile_roles(
-    session: AsyncSession,
+    session: "AsyncSession",
     threshold: int = VOLATILE_THRESHOLD,
     days: int = 90,
     limit: int = TOP_N_ROLES,
@@ -301,7 +299,7 @@ async def fetch_volatile_roles(
 
 
 async def fetch_permission_change_stats(
-    session: AsyncSession,
+    session: "AsyncSession",
     all_ops_lower: set[str],
 ) -> PermissionChangeStats:
     """Analyze permission changes from diff_json, counting actions added/removed."""
@@ -396,7 +394,7 @@ def compute_top_providers(
 
 
 async def fetch_new_operations_count(
-    session: AsyncSession,
+    session: "AsyncSession",
     days: int = 30,
 ) -> int:
     """Count operations first seen in the last N days."""
@@ -408,7 +406,7 @@ async def fetch_new_operations_count(
 
 
 async def fetch_recent_operations(
-    session: AsyncSession,
+    session: "AsyncSession",
     days: int = 30,
 ) -> list[RecentOperation]:
     """Fetch all recently added operations (first seen in the last N days)."""
@@ -434,7 +432,7 @@ async def fetch_recent_operations(
     ]
 
 
-async def fetch_operations_summary(session: AsyncSession) -> tuple[int, int]:
+async def fetch_operations_summary(session: "AsyncSession") -> tuple[int, int]:
     """Get total operations and unique providers count."""
     result = await session.execute(
         select(
@@ -446,7 +444,7 @@ async def fetch_operations_summary(session: AsyncSession) -> tuple[int, int]:
     return int(row.total_ops or 0), int(row.provider_count or 0)
 
 
-async def fetch_monitoring_health(session: AsyncSession) -> MonitoringHealth:
+async def fetch_monitoring_health(session: "AsyncSession") -> MonitoringHealth:
     """Fetch monitoring system health metrics."""
     scan_result = await session.execute(
         select(
@@ -488,8 +486,8 @@ async def fetch_monitoring_health(session: AsyncSession) -> MonitoringHealth:
 
 
 def compute_top_roles_by_permissions(
-    roles_by_id: dict[str, CachedRole],
-    role_net_permissions: dict[str, RoleNetPermissions],
+    roles_by_id: "dict[str, CachedRole]",
+    role_net_permissions: "dict[str, RoleNetPermissions]",
     limit: int = TOP_N_ROLES,
 ) -> tuple[list[TopRoleByPermissions], list[TopRoleByPermissions]]:
     """Compute roles with the most allowed actions and data actions.

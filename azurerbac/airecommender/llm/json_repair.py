@@ -9,8 +9,6 @@ LLMs often produce invalid JSON with common issues like:
 This module provides robust parsing with automatic repair.
 """
 
-from __future__ import annotations
-
 import json
 import logging
 import re

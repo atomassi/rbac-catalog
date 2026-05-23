@@ -1,7 +1,5 @@
 """LLM recommendation engine using fine-tuned Qwen model."""
 
-from __future__ import annotations
-
 import logging
 from typing import Final, override
 

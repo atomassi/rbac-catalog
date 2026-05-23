@@ -1,7 +1,5 @@
 """Cache service - single class managing in-memory cache."""
 
-from __future__ import annotations
-
 import asyncio
 import fnmatch
 import logging
@@ -90,7 +88,7 @@ class CacheService:
     # DB rebuild operations
     # -------------------------------------------------------------------------
 
-    async def rebuild_in_memory(self, session: AsyncSession) -> bool:
+    async def rebuild_in_memory(self, session: "AsyncSession") -> bool:
         """Build cache from DB and swap into memory. Skips if already in progress."""
         if _REBUILD_LOCK.locked():
             logger.warning("Cache rebuild already in progress, skipping")
@@ -172,7 +170,7 @@ class CacheService:
         track_cache_hit("role_by_id", result is not None, role_id)
         return result
 
-    def get_all_roles(self) -> list[RoleDefinition]:
+    def get_all_roles(self) -> "list[RoleDefinition]":
         result = self._cache.role_definitions
         track_cache_call("get_all_roles")
         return result
@@ -201,7 +199,7 @@ class CacheService:
     # Operation accessors
     # -------------------------------------------------------------------------
 
-    def get_all_operations(self) -> list[OperationData]:
+    def get_all_operations(self) -> "list[OperationData]":
         result = self._cache.all_operations
         track_cache_call("get_all_operations")
         return result
@@ -213,7 +211,7 @@ class CacheService:
 
     def search_operations(
         self, query: str, limit: int = DEFAULT_SEARCH_LIMIT
-    ) -> list[OperationData]:
+    ) -> "list[OperationData]":
         """Search operations using pre-built indexes."""
         cache = self._cache
         if not cache.ops_by_name_lower:
@@ -288,12 +286,12 @@ class CacheService:
     # Request-scoped caches (role pages, operation pages, allowing roles)
     # -------------------------------------------------------------------------
 
-    def get_role_page(self, page_key: str) -> list[RoleWithCounts] | None:
+    def get_role_page(self, page_key: str) -> "list[RoleWithCounts] | None":
         result = self._request_caches.role_pages.get(page_key)
         track_cache_hit("role_page", result is not None, page_key)
         return result
 
-    def set_role_page(self, page_key: str, roles: list[RoleWithCounts]) -> None:
+    def set_role_page(self, page_key: str, roles: "list[RoleWithCounts]") -> None:
         self._request_caches.role_pages[page_key] = roles
 
     def get_role_page_count(self, count_key: str) -> int | None:
@@ -304,12 +302,12 @@ class CacheService:
     def set_role_page_count(self, count_key: str, total: int) -> None:
         self._request_caches.role_page_counts[count_key] = total
 
-    def get_operation_page(self, page_key: str) -> list[OperationWithCount] | None:
+    def get_operation_page(self, page_key: str) -> "list[OperationWithCount] | None":
         result = self._request_caches.operation_pages.get(page_key)
         track_cache_hit("operation_page", result is not None, page_key)
         return result
 
-    def set_operation_page(self, page_key: str, value: list[OperationWithCount]) -> None:
+    def set_operation_page(self, page_key: str, value: "list[OperationWithCount]") -> None:
         self._request_caches.operation_pages[page_key] = value
 
     def get_operation_page_count(self, count_key: str) -> int | None:
@@ -336,20 +334,20 @@ class CacheService:
     def set_related_roles(self, key: str, value: RelatedRoleList) -> None:
         self._request_caches.related_roles[key] = value
 
-    def get_comparison(self, key: str) -> RoleComparison | None:
+    def get_comparison(self, key: str) -> "RoleComparison | None":
         result = self._request_caches.comparisons.get(key)
         track_cache_hit("comparisons", result is not None, key)
         return result
 
-    def set_comparison(self, key: str, value: RoleComparison) -> None:
+    def set_comparison(self, key: str, value: "RoleComparison") -> None:
         self._request_caches.comparisons[key] = value
 
-    def get_effective_perms(self, role_id: str) -> RoleEffectivePermissions | None:
+    def get_effective_perms(self, role_id: str) -> "RoleEffectivePermissions | None":
         result = self._request_caches.effective_perms.get(role_id)
         track_cache_hit("effective_perms", result is not None, role_id)
         return result
 
-    def set_effective_perms(self, role_id: str, value: RoleEffectivePermissions) -> None:
+    def set_effective_perms(self, role_id: str, value: "RoleEffectivePermissions") -> None:
         self._request_caches.effective_perms[role_id] = value
 
     # -------------------------------------------------------------------------

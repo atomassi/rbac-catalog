@@ -6,8 +6,6 @@ seeding and web routes can call it without violating architectural
 boundaries.
 """
 
-from __future__ import annotations
-
 import logging
 from collections.abc import Mapping
 from typing import TYPE_CHECKING
@@ -27,12 +25,12 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-def _extract_abac_conditions(role: CachedRole) -> list[str]:
+def _extract_abac_conditions(role: "CachedRole") -> list[str]:
     """Extract sorted unique ABAC condition expressions from a role."""
     return sorted({p.condition for p in role.definition.properties.permissions if p.condition})
 
 
-def _extract_assignable_scopes(role: CachedRole) -> list[str]:
+def _extract_assignable_scopes(role: "CachedRole") -> list[str]:
     """Extract sorted, de-duplicated assignable scopes from a role."""
     scopes = role.definition.properties.assignable_scopes
     return sorted(set(scopes)) if scopes else ["/"]
@@ -46,10 +44,10 @@ def _extract_assignable_scopes(role: CachedRole) -> list[str]:
 def build_comparison(
     role_a_id: str,
     role_b_id: str,
-    role_a: CachedRole,
-    role_b: CachedRole,
-    cov_a: RoleCoverage | None,
-    cov_b: RoleCoverage | None,
+    role_a: "CachedRole",
+    role_b: "CachedRole",
+    cov_a: "RoleCoverage | None",
+    cov_b: "RoleCoverage | None",
     ops_casing: Mapping[str, str],
 ) -> RoleComparison:
     """Pure computation of a three-way permission diff between two roles.
@@ -105,7 +103,7 @@ def build_comparison(
 def compute_role_comparison(
     role_a_id: str,
     role_b_id: str,
-    cache: CacheService | None = None,
+    cache: "CacheService | None" = None,
 ) -> RoleComparison | None:
     """Compare two roles with caching. Thin wrapper around build_comparison."""
     if role_a_id == role_b_id:

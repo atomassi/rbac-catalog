@@ -9,8 +9,6 @@ Note: Requires a C++ compiler (g++) at runtime to build the segmented_maxsim
 extension. If unavailable, the engine will raise ColBERTInitializationError.
 """
 
-from __future__ import annotations
-
 import logging
 import os
 import threading

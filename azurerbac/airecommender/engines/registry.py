@@ -1,7 +1,5 @@
 """Engine registry for discovery and instantiation."""
 
-from __future__ import annotations
-
 import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING, ClassVar, TypeVar
@@ -22,12 +20,12 @@ _EngineT = TypeVar("_EngineT", bound="BaseRecommenderEngine")
 class EngineRegistry:
     """Registry for recommendation engines with decorator-based registration."""
 
-    _engines: ClassVar[dict[RecommenderMode, type[BaseRecommenderEngine]]] = {}
-    _default_mode: ClassVar[RecommenderMode | None] = None
+    _engines: ClassVar[dict["RecommenderMode", type["BaseRecommenderEngine"]]] = {}
+    _default_mode: ClassVar["RecommenderMode | None"] = None
 
     @classmethod
     def register(
-        cls, mode: RecommenderMode, *, is_default: bool = False
+        cls, mode: "RecommenderMode", *, is_default: bool = False
     ) -> Callable[[type[_EngineT]], type[_EngineT]]:
         def decorator(engine_class: type[_EngineT]) -> type[_EngineT]:
             cls._engines[mode] = engine_class
@@ -41,13 +39,13 @@ class EngineRegistry:
     @classmethod
     def create(
         cls,
-        mode: RecommenderMode,
+        mode: "RecommenderMode",
         *,
-        knowledge_base: RoleKnowledgeBase,
-        ollama_client: OllamaClient | None = None,
-        embedding_model: EmbeddingModel | None = None,
-        tfidf_recommender: EnhancedTFIDFRecommender | None = None,
-    ) -> BaseRecommenderEngine:
+        knowledge_base: "RoleKnowledgeBase",
+        ollama_client: "OllamaClient | None" = None,
+        embedding_model: "EmbeddingModel | None" = None,
+        tfidf_recommender: "EnhancedTFIDFRecommender | None" = None,
+    ) -> "BaseRecommenderEngine":
         engine_class = cls._engines.get(mode)
 
         if engine_class is None:

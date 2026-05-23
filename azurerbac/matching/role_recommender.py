@@ -4,8 +4,6 @@ This module provides the main entry point for role recommendations.
 The heavy lifting is delegated to RoleRecommendationService.
 """
 
-from __future__ import annotations
-
 import logging
 from dataclasses import dataclass
 

@@ -1,7 +1,5 @@
 """Embeddings for semantic similarity search."""
 
-from __future__ import annotations
-
 import json
 import logging
 from functools import lru_cache
@@ -77,7 +75,7 @@ class EmbeddingModel:
         logger.info("Loaded sentence embedding model (MiniLM)")
         return True
 
-    def _require_model(self) -> SentenceTransformer:
+    def _require_model(self) -> "SentenceTransformer":
         if not self._model:
             raise RuntimeError(_MODEL_NOT_LOADED)
         return self._model

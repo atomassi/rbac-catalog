@@ -1,7 +1,5 @@
 """RSS/Atom feed route handlers for changelog subscription."""
 
-from __future__ import annotations
-
 import datetime as dt
 from typing import Annotated
 

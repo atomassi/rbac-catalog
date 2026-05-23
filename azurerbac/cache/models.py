@@ -17,15 +17,13 @@ It's designed for atomic swaps - the entire object is replaced, never mutated.
     └── _request_caches: RequestCaches   # Cheap LRU caches, NOT saved (rebuilt lazily)
 """
 
-from __future__ import annotations
-
 import datetime as dt
 import logging
 import time
 from collections import defaultdict
 from dataclasses import dataclass, field
 from functools import cached_property
-from typing import TYPE_CHECKING, Any, Final
+from typing import TYPE_CHECKING, Any, Final, Self
 from urllib.parse import quote
 
 from cachetools import LRUCache
@@ -80,7 +78,7 @@ CACHE_VERSION: Final[str] = "v9"
 class CachedRole:
     """Cached role with definition and tracking metadata."""
 
-    definition: RoleDefinition
+    definition: "RoleDefinition"
     status: RoleStatus
     last_seen_at: dt.datetime | None = None
 
@@ -147,9 +145,9 @@ class Sitemap:
     def build(
         cls,
         roles_by_id: dict[str, CachedRole],
-        all_operations: list[OperationData],
+        all_operations: "list[OperationData]",
         site_url: str,
-    ) -> Sitemap:
+    ) -> Self:
         """Build sitemap XML from roles and operations.
 
         Args:
@@ -243,7 +241,7 @@ class CacheMetadata:
 class SourceData:
     """Raw data loaded from database (immutable after load)."""
 
-    all_operations: list[OperationData] = field(default_factory=list)
+    all_operations: "list[OperationData]" = field(default_factory=list)
     roles_by_id: dict[str, CachedRole] = field(default_factory=dict)
     all_change_events: list[CachedChangeEvent] = field(default_factory=list)
     unique_providers: list[str] = field(default_factory=list)
@@ -255,8 +253,8 @@ class SourceData:
 class Indexes:
     """Fast lookup structures (deterministic, built from source)."""
 
-    ops_by_name_lower: dict[str, OperationData] = field(default_factory=dict)
-    ops_by_prefix: dict[str, list[OperationData]] = field(default_factory=dict)
+    ops_by_name_lower: "dict[str, OperationData]" = field(default_factory=dict)
+    ops_by_prefix: "dict[str, list[OperationData]]" = field(default_factory=dict)
     ops_by_prefix_by_plane: dict[Plane, dict[str, set[str]]] = field(default_factory=dict)
 
 
@@ -368,7 +366,7 @@ class PopularComparison:
 class PrerenderedContent:
     """Pre-built content to avoid expensive re-computation per request."""
 
-    analytics: AnalyticsData | None = None
+    analytics: "AnalyticsData | None" = None
     sitemap: Sitemap | None = None
     popular_comparisons: list[PopularComparison] = field(default_factory=list)
 
@@ -408,23 +406,23 @@ class CacheData:
         cls,
         *,
         metadata: CacheMetadata | None = None,
-        all_operations: list[OperationData] | None = None,
+        all_operations: "list[OperationData] | None" = None,
         roles_by_id: dict[str, CachedRole] | None = None,
         all_change_events: list[CachedChangeEvent] | None = None,
         unique_providers: list[str] | None = None,
         last_scan: dt.datetime | None = None,
         first_scan: dt.datetime | None = None,
-        ops_by_name_lower: dict[str, OperationData] | None = None,
-        ops_by_prefix: dict[str, list[OperationData]] | None = None,
+        ops_by_name_lower: "dict[str, OperationData] | None" = None,
+        ops_by_prefix: "dict[str, list[OperationData]] | None" = None,
         ops_by_prefix_by_plane: dict[Plane, dict[str, set[str]]] | None = None,
         role_coverage: dict[str, RoleCoverage] | None = None,
         operation_to_roles: dict[str, list[str]] | None = None,
         pattern_match: dict[PatternCacheKey, set[str]] | None = None,
         partial_coverage: dict[PartialCoverageCacheKey, CoverageResult] | None = None,
         wildcard_count: dict[PatternCacheKey, int] | None = None,
-        analytics: AnalyticsData | None = None,
+        analytics: "AnalyticsData | None" = None,
         sitemap: Sitemap | None = None,
-    ) -> CacheData:
+    ) -> Self:
         """Create CacheData with flat arguments (for test convenience)."""
         return cls(
             metadata=metadata or CacheMetadata(),
@@ -460,7 +458,7 @@ class CacheData:
     # Public API: Flat accessors for nested data
     # =========================================================================
     @property
-    def all_operations(self) -> list[OperationData]:
+    def all_operations(self) -> "list[OperationData]":
         return self.source.all_operations
 
     @property
@@ -484,11 +482,11 @@ class CacheData:
         return self.source.first_scan
 
     @property
-    def ops_by_name_lower(self) -> dict[str, OperationData]:
+    def ops_by_name_lower(self) -> "dict[str, OperationData]":
         return self.indexes.ops_by_name_lower
 
     @property
-    def ops_by_prefix(self) -> dict[str, list[OperationData]]:
+    def ops_by_prefix(self) -> "dict[str, list[OperationData]]":
         return self.indexes.ops_by_prefix
 
     @property
@@ -545,7 +543,7 @@ class CacheData:
         return self.computed.wildcard_count
 
     @property
-    def analytics(self) -> AnalyticsData | None:
+    def analytics(self) -> "AnalyticsData | None":
         return self.content.analytics
 
     @property
@@ -595,7 +593,7 @@ class CacheData:
         return self._classified_ops.data
 
     @cached_property
-    def role_definitions(self) -> list[RoleDefinition]:
+    def role_definitions(self) -> "list[RoleDefinition]":
         """All active roles as RoleDefinition objects (cached)."""
         return [r.definition for r in self.roles_by_id.values() if r.status == RoleStatus.ACTIVE]
 
@@ -605,24 +603,24 @@ class CacheData:
         return len(self.role_definitions)
 
 
-def compute_roles_hash(roles: list[RoleDefinition]) -> str:
+def compute_roles_hash(roles: "list[RoleDefinition]") -> str:
     """Compute hash of role data for change detection."""
 
-    def role_key(role: RoleDefinition) -> str:
+    def role_key(role: "RoleDefinition") -> str:
         updated = role.properties.updated_on.isoformat() if role.properties.updated_on else ""
         return f"{role.role_id}:{updated}"
 
     return content_hash("|".join(sorted(role_key(r) for r in roles)))
 
 
-def compute_operations_hash(operations: list[OperationData]) -> str:
+def compute_operations_hash(operations: "list[OperationData]") -> str:
     """Compute hash of operation data for change detection."""
     return content_hash("|".join(sorted(op.name for op in operations)))
 
 
 def build_indexes(
-    operations: list[OperationData],
-) -> tuple[dict[str, OperationData], dict[str, list[OperationData]]]:
+    operations: "list[OperationData]",
+) -> "tuple[dict[str, OperationData], dict[str, list[OperationData]]]":
     """Build operation indexes from raw operation list.
 
     Returns:

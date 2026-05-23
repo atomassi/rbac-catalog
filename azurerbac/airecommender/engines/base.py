@@ -1,12 +1,10 @@
 """Base recommendation engine abstraction."""
 
-from __future__ import annotations
-
 import logging
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING, Final, Self
 
 from azurerbac.core.types import JsonDict
 
@@ -44,7 +42,7 @@ class RankedRole:
         description: str,
         score: float,
         keywords: list[str] | None = None,
-    ) -> RankedRole:
+    ) -> Self:
         return cls(
             role_id=role_id,
             role_name=role_name,
@@ -60,10 +58,10 @@ class BaseRecommenderEngine(ABC):
 
     def __init__(
         self,
-        knowledge_base: RoleKnowledgeBase,
-        ollama_client: OllamaClient | None = None,
-        embedding_model: EmbeddingModel | None = None,
-        tfidf_recommender: EnhancedTFIDFRecommender | None = None,
+        knowledge_base: "RoleKnowledgeBase",
+        ollama_client: "OllamaClient | None" = None,
+        embedding_model: "EmbeddingModel | None" = None,
+        tfidf_recommender: "EnhancedTFIDFRecommender | None" = None,
     ) -> None:
         self.knowledge_base = knowledge_base
         self.ollama_client = ollama_client

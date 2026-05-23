@@ -1,7 +1,5 @@
 """Comprehensive tests for the core modules: config, db, and logging_setup."""
 
-from __future__ import annotations
-
 import datetime as dt
 import logging
 import os

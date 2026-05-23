@@ -1,7 +1,5 @@
 """RAG (Retrieval-Augmented Generation) recommendation engine."""
 
-from __future__ import annotations
-
 import heapq
 import logging
 from typing import Final, override

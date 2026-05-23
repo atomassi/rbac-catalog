@@ -37,7 +37,7 @@ resource acr 'Microsoft.ContainerRegistry/registries@2023-11-01-preview' = {
     anonymousPullEnabled: false
     publicNetworkAccess: 'Enabled'
     // NOTE: ACR's built-in ``policies.retentionPolicy`` is a Premium-SKU
-    // feature and fails deployment on Basic registries. The buildout does
+    // feature and fails deployment on Basic registries. The infra does
     // not provision Automation runbooks, so prune stale manifests out of
     // band when needed (or switch to Premium and re-enable the policy
     // here if/when image volume justifies it).

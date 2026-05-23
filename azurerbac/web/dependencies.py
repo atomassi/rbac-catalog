@@ -1,7 +1,5 @@
 """Dependency injection for FastAPI routes."""
 
-from __future__ import annotations
-
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
@@ -19,29 +17,29 @@ if TYPE_CHECKING:
 class BaseDeps:
     """Common dependencies for all routes."""
 
-    app_cache: CacheService
-    SessionLocal: async_sessionmaker[AsyncSession]
+    app_cache: "CacheService"
+    SessionLocal: "async_sessionmaker[AsyncSession]"
 
 
 @dataclass(slots=True)
 class DashboardDeps(BaseDeps):
     """Dependencies for dashboard routes."""
 
-    Role: type[Role]
-    RoleHistory: type[RoleHistory]
-    RoleScanStatus: type[RoleScanStatus]
-    Operation: type[Operation]
-    templates: Jinja2Templates
+    Role: "type[Role]"
+    RoleHistory: "type[RoleHistory]"
+    RoleScanStatus: "type[RoleScanStatus]"
+    Operation: "type[Operation]"
+    templates: "Jinja2Templates"
 
 
 @dataclass(slots=True)
 class PagesDeps(BaseDeps):
     """Dependencies for page routes."""
 
-    Role: type[Role]
-    RoleHistory: type[RoleHistory]
-    Operation: type[Operation]
-    templates: Jinja2Templates
+    Role: "type[Role]"
+    RoleHistory: "type[RoleHistory]"
+    Operation: "type[Operation]"
+    templates: "Jinja2Templates"
 
 
 def _with_session_local[T: BaseDeps](request: Request, deps: T) -> T:

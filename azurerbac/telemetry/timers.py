@@ -1,7 +1,5 @@
 """Timing utilities for metrics."""
 
-from __future__ import annotations
-
 import time
 from types import TracebackType
 from typing import Self

@@ -1,8 +1,7 @@
 """Dashboard service."""
 
-from __future__ import annotations
-
 import datetime as dt
+from collections.abc import Callable
 from dataclasses import replace
 from typing import TYPE_CHECKING, Any, Final
 
@@ -30,8 +29,6 @@ from azurerbac.web.services.models import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
-
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from azurerbac.cache.service import CacheService
@@ -68,7 +65,7 @@ def _paginate_list[T](items: list[T], params: PaginationParams) -> PaginatedResu
     return PaginatedResult(items=page_items, total_count=total_count, total_pages=total_pages)
 
 
-def _get_default_cache() -> CacheService:
+def _get_default_cache() -> "CacheService":
     """Get the default cache singleton."""
     from azurerbac.cache import get_cache_service
 
@@ -77,7 +74,7 @@ def _get_default_cache() -> CacheService:
 
 def enrich_role_with_counts(
     role: CachedRole,
-    cache: CacheService | None = None,
+    cache: "CacheService | None" = None,
 ) -> RoleWithCounts:
     """Enrich role with action counts from cache."""
     if cache is None:
@@ -151,7 +148,7 @@ def _get_event_sort_key(e: CachedChangeEvent) -> dt.datetime:
 
 def filter_cached_events(
     cached_events: list[CachedChangeEvent],
-    deps: DashboardDeps,
+    deps: "DashboardDeps",
     cutoff: dt.datetime,
     event_type: str | EventTypeFilter,
 ) -> list[CachedChangeEvent]:
@@ -179,7 +176,7 @@ def filter_cached_events(
 
 
 def _build_event_condition(
-    history_model: type[RoleHistory],
+    history_model: "type[RoleHistory]",
     scan_model: type,
     ev_type: str | EventType,
     cutoff: dt.datetime,
@@ -197,11 +194,11 @@ def _build_event_condition(
 
 
 async def fetch_events_from_db(
-    session: AsyncSession,
-    deps: DashboardDeps,
+    session: "AsyncSession",
+    deps: "DashboardDeps",
     cutoff: dt.datetime,
     event_type: str | EventTypeFilter,
-) -> list[RoleHistory]:
+) -> "list[RoleHistory]":
     """Fetch events from database."""
     if event_type == EventTypeFilter.ALL:
         event_types: list[str | EventType] = [
@@ -231,7 +228,7 @@ async def fetch_events_from_db(
         return list(result.scalars().all())
 
 
-def get_common_dashboard_data(deps: DashboardDeps) -> DashboardSummary:
+def get_common_dashboard_data(deps: "DashboardDeps") -> DashboardSummary:
     """Get summary data for dashboard pages."""
     return DashboardSummary(
         total_roles=deps.app_cache.cache.active_roles_count,
@@ -242,8 +239,8 @@ def get_common_dashboard_data(deps: DashboardDeps) -> DashboardSummary:
 
 
 async def ensure_scan_metadata(
-    session: AsyncSession,
-    deps: DashboardDeps,
+    session: "AsyncSession",
+    deps: "DashboardDeps",
     last_scan: dt.datetime | None,
     first_scan: dt.datetime | None,
 ) -> ScanMetadata:
@@ -268,7 +265,7 @@ async def ensure_scan_metadata(
 
 
 def _fetch_roles_from_cache(
-    deps: DashboardDeps,
+    deps: "DashboardDeps",
     status_filter: str | StatusFilter,
     sort: str | SortField,
     order: str | SortOrder,
@@ -321,7 +318,7 @@ def _fetch_roles_from_cache(
 
 
 async def fetch_roles_paginated(
-    deps: DashboardDeps,
+    deps: "DashboardDeps",
     status_filter: str | StatusFilter,
     sort: str | SortField,
     order: str | SortOrder,

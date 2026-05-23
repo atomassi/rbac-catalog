@@ -9,8 +9,6 @@ Centralized configuration for all recommendation engines. This module defines:
 All engine configuration should be defined here to avoid scattered magic numbers.
 """
 
-from __future__ import annotations
-
 import math
 from dataclasses import dataclass
 from typing import Final

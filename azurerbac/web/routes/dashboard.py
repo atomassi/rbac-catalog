@@ -1,7 +1,5 @@
 """Dashboard route handlers."""
 
-from __future__ import annotations
-
 import datetime as dt
 import logging
 from dataclasses import asdict, dataclass, field
@@ -59,7 +57,7 @@ class DashboardContext:
     # Data
     events: list[Any] = field(default_factory=list)
     total_events: int = 0
-    roles: list[RoleWithCounts] = field(default_factory=list)
+    roles: "list[RoleWithCounts]" = field(default_factory=list)
     total_roles: int = 0
     total_operations: int = 0
     last_scan: dt.datetime | None = None

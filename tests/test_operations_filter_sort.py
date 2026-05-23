@@ -1,7 +1,5 @@
 """Tests for operation filtering and sorting functions."""
 
-from __future__ import annotations
-
 from unittest.mock import MagicMock
 
 import pytest

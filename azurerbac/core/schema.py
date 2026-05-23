@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from sqlalchemy import inspect
 from sqlalchemy.engine import Connection
 from sqlalchemy.exc import IntegrityError, ProgrammingError

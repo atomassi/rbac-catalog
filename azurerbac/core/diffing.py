@@ -1,7 +1,5 @@
-from __future__ import annotations
-
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Self
 
 from azurerbac.azure.models import RoleDefinition
 from azurerbac.core.utils import format_iso_z
@@ -19,7 +17,7 @@ class DiffChange:
         return {"path": self.path, "from": self.from_value, "to": self.to_value}
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> DiffChange:
+    def from_dict(cls, data: dict[str, Any]) -> Self:
         """Create a DiffChange from a dictionary."""
         return cls(
             path=data.get("path", ""),
@@ -49,7 +47,7 @@ class RoleDiff:
         return result
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any] | None) -> RoleDiff | None:
+    def from_dict(cls, data: dict[str, Any] | None) -> Self | None:
         """Create a RoleDiff from a dictionary.
 
         Returns None if data is None or empty.

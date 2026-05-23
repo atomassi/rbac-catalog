@@ -1,7 +1,5 @@
 """Monitor for Azure built-in roles."""
 
-from __future__ import annotations
-
 import datetime as dt
 import logging
 from dataclasses import dataclass

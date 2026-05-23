@@ -1,7 +1,5 @@
 """Cache build and computation functions."""
 
-from __future__ import annotations
-
 import logging
 import time
 from collections import defaultdict
@@ -217,7 +215,7 @@ def precompute_all(
     all_change_events: list[CachedChangeEvent] | None = None,
     last_scan: datetime | None = None,
     first_scan: datetime | None = None,
-    analytics: AnalyticsData | None = None,
+    analytics: "AnalyticsData | None" = None,
 ) -> CacheData:
     """Pre-compute all caches and return complete CacheData."""
     start = time.perf_counter()

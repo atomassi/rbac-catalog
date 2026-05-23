@@ -1,7 +1,5 @@
 """Background job worker for scheduled Azure data synchronization."""
 
-from __future__ import annotations
-
 import asyncio
 import logging
 import signal

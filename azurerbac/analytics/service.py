@@ -1,7 +1,5 @@
 """Analytics service."""
 
-from __future__ import annotations
-
 import datetime as dt
 import logging
 from typing import TYPE_CHECKING
@@ -35,11 +33,11 @@ logger = logging.getLogger(__name__)
 
 
 async def build_analytics_from_db(
-    session: AsyncSession,
+    session: "AsyncSession",
     all_ops_lower: set[str] | None = None,
     *,
-    roles_by_id: dict[str, CachedRole] | None = None,
-    role_net_permissions: dict[str, RoleNetPermissions] | None = None,
+    roles_by_id: "dict[str, CachedRole] | None" = None,
+    role_net_permissions: "dict[str, RoleNetPermissions] | None" = None,
 ) -> AnalyticsData:
     """Build analytics from database. Called during cache refresh."""
     logger.info("Building analytics data from database...")

@@ -1,7 +1,5 @@
 """Rate limiting configuration."""
 
-from __future__ import annotations
-
 from fastapi import Request
 from slowapi import Limiter
 

@@ -1,7 +1,5 @@
 """API response factories."""
 
-from __future__ import annotations
-
 from enum import StrEnum
 
 from azurerbac.web.constants import MIN_SEARCH_CHARS

@@ -1,11 +1,9 @@
 """Web service layer models."""
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Self
 
 from azurerbac.core.diffing import RoleDiff
 from azurerbac.core.enums import SortOrder
@@ -68,7 +66,7 @@ class SortField(StrEnum):
     NAME = "name"
 
     @classmethod
-    def from_string(cls, value: str) -> SortField:
+    def from_string(cls, value: str) -> "SortField":
         """Parse string to SortField."""
         try:
             return cls(value)
@@ -97,11 +95,11 @@ class RawPermissions:
 
     __slots__ = ("_permissions",)
 
-    def __init__(self, permissions: list[Permission]) -> None:
+    def __init__(self, permissions: "list[Permission]") -> None:
         self._permissions = permissions
 
     @classmethod
-    def from_permissions(cls, permissions: list[Permission]) -> RawPermissions:
+    def from_permissions(cls, permissions: "list[Permission]") -> Self:
         """Create from a list of Permission objects."""
         return cls(permissions)
 
@@ -166,7 +164,7 @@ class RawPermissions:
 
         return RoleCoverage(control_effective, data_effective)
 
-    def _build_permission_blocks(self) -> list[PermissionBlockView]:
+    def _build_permission_blocks(self) -> list["PermissionBlockView"]:
         """Build permission block views for UI display."""
         return [
             PermissionBlockView(
@@ -187,7 +185,7 @@ class RawPermissions:
         data_effective: list[str],
         *,
         has_conditions: bool,
-    ) -> RoleEffectivePermissions:
+    ) -> "RoleEffectivePermissions":
         """Build RoleEffectivePermissions from computed lists."""
         has_resolved = bool(control_effective or data_effective)
         has_unresolved = self.has_defined_permissions and not has_resolved
@@ -213,9 +211,9 @@ class RolePermissionAnalyzer:
 
     def __init__(
         self,
-        role: RoleDefinition,
+        role: "RoleDefinition",
         *,
-        cache: CacheService | None = None,
+        cache: "CacheService | None" = None,
     ) -> None:
         """Initialize the analyzer."""
         from azurerbac.cache import get_cache_service
@@ -230,7 +228,7 @@ class RolePermissionAnalyzer:
         return self._role.name
 
     @property
-    def permissions(self) -> list[Permission]:
+    def permissions(self) -> "list[Permission]":
         """Get role's permission list."""
         return self._role.properties.permissions
 
@@ -248,7 +246,7 @@ class RolePermissionAnalyzer:
         """Get pre-computed coverage from cache."""
         return self._cache.get_role_coverage(self.role_id)
 
-    def compute_coverage(self, all_operations: list[OperationData]) -> RoleCoverage:
+    def compute_coverage(self, all_operations: "list[OperationData]") -> RoleCoverage:
         """Compute coverage from operation list.
 
         Note: Operations are lowercased to match the cache behavior.
@@ -259,8 +257,8 @@ class RolePermissionAnalyzer:
         return self.raw.compute_effective(all_control_ops, all_data_ops)
 
     def get_effective_permissions(
-        self, all_operations: list[OperationData]
-    ) -> RoleEffectivePermissions:
+        self, all_operations: "list[OperationData]"
+    ) -> "RoleEffectivePermissions":
         """Compute effective permissions for this role."""
         if cached := self.get_cached_coverage():
             control_effective, data_effective = cached
@@ -275,7 +273,7 @@ class RolePermissionAnalyzer:
 
     def find_matching_pattern(
         self, operation_name: str, *, is_data_action: bool
-    ) -> PatternMatchResult:
+    ) -> "PatternMatchResult":
         """Find pattern granting an operation."""
         for perm in self.permissions:
             actions = perm.data_actions if is_data_action else perm.actions
@@ -306,7 +304,7 @@ class PaginationInfo:
         return max(1, (total_items + page_size - 1) // page_size)
 
     @staticmethod
-    def compute(total_items: int, page: int, page_size: int) -> PaginationInfo:
+    def compute(total_items: int, page: int, page_size: int) -> "PaginationInfo":
         """Compute pagination values."""
         tp = PaginationInfo.count_pages(total_items, page_size)
         clamped_page = min(page, tp)
@@ -419,7 +417,7 @@ class RoleAllowingOperation:
         control_count: int,
         data_count: int,
         match_result: PatternMatchResult,
-    ) -> RoleAllowingOperation:
+    ) -> Self:
         """Create from role data and match result."""
         return cls(
             role_id=role_id,
@@ -477,7 +475,7 @@ class DashboardSummary:
 class RoleDetailResult:
     """Role detail data from cache or database."""
 
-    cached_role: CachedRole | None
-    definition: RoleDefinition | None
-    events: list[CachedChangeEvent]
+    cached_role: "CachedRole | None"
+    definition: "RoleDefinition | None"
+    events: "list[CachedChangeEvent]"
     first_scan: datetime | None

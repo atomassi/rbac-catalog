@@ -1,7 +1,5 @@
 """Analytics service helpers for web layer."""
 
-from __future__ import annotations
-
 from azurerbac.analytics.models import AnalyticsData
 from azurerbac.cache import get_cache_service
 

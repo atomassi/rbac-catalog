@@ -14,7 +14,7 @@ from __future__ import annotations
 import logging
 import os
 from collections.abc import AsyncIterator
-from contextlib import AbstractAsyncContextManager, asynccontextmanager, nullcontext
+from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontextmanager
 from pathlib import Path
 
 if not os.environ.get("PYTEST_CURRENT_TEST"):
@@ -193,14 +193,15 @@ async def _warmup_models() -> None:
 
 
 def _mcp_lifespan_context() -> AbstractAsyncContextManager[object]:
-    """Return the MCP server's lifespan context, or a no-op when MCP is disabled.
+    """Return the MCP server's lifespan context, or an async no-op when MCP is disabled.
 
     The disabled MCP app is a plain Starlette app without a router lifespan,
-    so we substitute ``nullcontext()`` to keep the ``async with`` site uniform.
+    so we substitute an empty :class:`AsyncExitStack` (which is itself an
+    async context manager) to keep the ``async with`` site uniform.
     """
     if settings.mcp_server_enabled:
         return _mcp_server.router.lifespan_context(_mcp_server)
-    return nullcontext()
+    return AsyncExitStack()
 
 
 async def _flush_telemetry_on_shutdown() -> None:

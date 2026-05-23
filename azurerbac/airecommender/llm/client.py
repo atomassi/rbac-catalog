@@ -10,7 +10,7 @@ from typing import Final
 import httpx
 from tenacity import (
     retry,
-    retry_if_exception_type,
+    retry_if_exception,
     stop_after_attempt,
     wait_exponential,
 )
@@ -58,6 +58,20 @@ _ROLE_SUFFIXES: Final[tuple[str, ...]] = (
     "administrator",
     "user",
 )
+
+
+# Retry only on transient failures: network/timeout errors and server-side
+# HTTP responses (5xx) or rate-limiting (429). Other 4xx errors are caller
+# bugs (bad model name, malformed payload) and re-trying just adds latency.
+_RETRYABLE_STATUS_CODES: Final[frozenset[int]] = frozenset({429, 500, 502, 503, 504})
+
+
+def _is_retryable_ollama_error(exc: BaseException) -> bool:
+    if isinstance(exc, httpx.TransportError):
+        return True
+    if isinstance(exc, httpx.HTTPStatusError):
+        return exc.response.status_code in _RETRYABLE_STATUS_CODES
+    return False
 
 
 @dataclass(slots=True)
@@ -148,7 +162,7 @@ class OllamaClient:
             return None
 
     @retry(
-        retry=retry_if_exception_type((httpx.TransportError, httpx.HTTPStatusError)),
+        retry=retry_if_exception(_is_retryable_ollama_error),
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=1, max=8),
         reraise=True,

@@ -343,7 +343,7 @@ class TestGenerateWithRetry:
             result = connected_client.generate("test prompt")
             assert result == "test response"
 
-    def test_generate_retries_on_url_error(self, connected_client):
+    def test_generate_retries_on_transport_error(self, connected_client):
         """Test that transport errors trigger retry and succeed on second attempt."""
         mock_response = MagicMock()
         mock_response.json.return_value = {"response": "success after retry"}

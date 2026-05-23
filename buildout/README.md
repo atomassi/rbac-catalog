@@ -1,6 +1,6 @@
 # Buildout — deploy the Azure RBAC Catalog from scratch
 
-Bicep templates + helper scripts to provision the Azure buildoutstructure for
+Bicep templates + helper scripts to provision the Azure infrastructure for
 the Azure RBAC Catalog. Plan for **~15 minutes** end-to-end.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for design rationale.
@@ -200,7 +200,7 @@ variable will work — including:
 
 ## Continuous deployment
 
-The buildout stops at "buildoutstructure ready". Wiring up continuous deployment
+The buildout stops at "infrastructure ready". Wiring up continuous deployment
 to the App Service is intentionally out of scope so you can use whichever
 pipeline you prefer:
 

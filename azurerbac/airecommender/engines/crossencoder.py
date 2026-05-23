@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 import math
-from typing import Any, Final, override
+from typing import TYPE_CHECKING, Final, override
 
 from azurerbac.airecommender.engines.base import BaseRecommenderEngine, RankedRole
 from azurerbac.airecommender.engines.common import normalize_candidates
@@ -17,6 +17,9 @@ from azurerbac.airecommender.engines.config import CROSSENCODER_THRESHOLDS, CROS
 from azurerbac.airecommender.engines.registry import EngineRegistry
 from azurerbac.airecommender.modes import RecommenderMode
 from azurerbac.core.singleton import ThreadSafeSingleton
+
+if TYPE_CHECKING:
+    from sentence_transformers import CrossEncoder
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +89,7 @@ class CrossEncoderEngine(BaseRecommenderEngine):
         self,
         query: str,
         candidates: list[RankedRole],
-        cross_encoder: Any,
+        cross_encoder: CrossEncoder,
     ) -> list[RankedRole]:
         pairs = []
         for candidate in candidates:
@@ -142,7 +145,7 @@ class CrossEncoderEngine(BaseRecommenderEngine):
             return candidates
 
 
-def _load_cross_encoder() -> Any:
+def _load_cross_encoder() -> CrossEncoder:
     from sentence_transformers import CrossEncoder
 
     logger.debug("Loading cross-encoder model: %s", _CROSS_ENCODER_MODEL)
@@ -151,10 +154,10 @@ def _load_cross_encoder() -> Any:
     return model
 
 
-_cross_encoder: ThreadSafeSingleton[Any] = ThreadSafeSingleton(factory=_load_cross_encoder)
+_cross_encoder: ThreadSafeSingleton[CrossEncoder] = ThreadSafeSingleton(factory=_load_cross_encoder)
 
 
-def get_cross_encoder() -> Any:
+def get_cross_encoder() -> CrossEncoder:
     """Get the cross-encoder model singleton."""
     return _cross_encoder.get()
 

@@ -29,7 +29,11 @@ if TYPE_CHECKING:
 
     from azurerbac.azure.models import OperationData, RoleDefinition
     from azurerbac.comparer import RoleComparison
-    from azurerbac.web.services.models import RelatedRole, RoleAllowingOperation
+    from azurerbac.web.services.models import (
+        RelatedRole,
+        RoleAllowingOperation,
+        RoleEffectivePermissions,
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -322,12 +326,12 @@ class CacheService:
     def set_comparison(self, key: str, value: RoleComparison) -> None:
         self._request_caches.comparisons[key] = value
 
-    def get_effective_perms(self, role_id: str) -> Any | None:
+    def get_effective_perms(self, role_id: str) -> RoleEffectivePermissions | None:
         result = self._request_caches.effective_perms.get(role_id)
         track_cache_hit("effective_perms", result is not None, role_id)
         return result
 
-    def set_effective_perms(self, role_id: str, value: Any) -> None:
+    def set_effective_perms(self, role_id: str, value: RoleEffectivePermissions) -> None:
         self._request_caches.effective_perms[role_id] = value
 
     # -------------------------------------------------------------------------

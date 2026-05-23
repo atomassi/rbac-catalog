@@ -16,7 +16,7 @@ import os
 import threading
 import warnings
 from pathlib import Path
-from typing import Any, Final, override
+from typing import TYPE_CHECKING, Any, Final, override
 
 # Suppress warnings for serverless/containerized environments
 os.environ.setdefault("GIT_PYTHON_REFRESH", "quiet")
@@ -31,6 +31,9 @@ from azurerbac.airecommender.engines.registry import EngineRegistry
 from azurerbac.airecommender.knowledge import extract_keywords
 from azurerbac.airecommender.modes import RecommenderMode
 from azurerbac.core.singleton import ThreadSafeSingleton
+
+if TYPE_CHECKING:
+    from ragatouille import RAGPretrainedModel
 
 logger = logging.getLogger(__name__)
 
@@ -160,7 +163,7 @@ class ColBERTIndex:
     """Wrapper for ColBERT index using RAGatouille."""
 
     def __init__(self) -> None:
-        self._rag: Any = None
+        self._rag: RAGPretrainedModel | None = None
         self._is_loaded = False
         self._lock = threading.Lock()
 
@@ -218,7 +221,9 @@ class ColBERTIndex:
 
         # Step 2: Initialize searcher
         try:
-            model = self._rag.model
+            # RAGatouille exposes searcher init only via internal attributes;
+            # cast to Any to suppress type-checker noise on undocumented API.
+            model: Any = self._rag.model  # type: ignore[reportUnknownMemberType]
             model_index = model.model_index
 
             if model_index.searcher is None:

@@ -5,6 +5,7 @@ from __future__ import annotations
 import heapq
 import json
 import logging
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, Final
 
 from azurerbac.azure.models import OperationData, RoleDefinition
@@ -60,7 +61,7 @@ def filter_operations(
 
 
 # Sort key functions for OperationData objects
-_OPERATION_SORT_KEYS: Final[dict[str | OperationSortField, Any]] = {
+_OPERATION_SORT_KEYS: Final[dict[str | OperationSortField, Callable[[OperationData], Any]]] = {
     OperationSortField.PROVIDER: lambda x: (x.provider_display_name or "").lower(),
     OperationSortField.TYPE: lambda x: x.is_data_action,
     OperationSortField.NAME: lambda x: x.name.lower(),

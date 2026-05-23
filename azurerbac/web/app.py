@@ -193,11 +193,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:  # pylint: disable=unus
     logger.info("Background tasks cancelled")
 
     # Flush in-flight telemetry before disposing resources so the last
-    # interval of metrics isn't lost on graceful shutdown.
+    # interval of metrics isn't lost on graceful shutdown. flush_metrics()
+    # is synchronous and can block up to TELEMETRY_FLUSH_TIMEOUT_MS, so run
+    # it in a worker thread to avoid stalling the event loop.
     try:
+        from anyio import to_thread
+
         from azurerbac.telemetry import flush_metrics
 
-        flush_metrics()
+        flushed = await to_thread.run_sync(flush_metrics)
+        logger.info("Telemetry flush on shutdown: success=%s", flushed)
     except Exception:
         logger.exception("Failed to flush telemetry on shutdown")
 

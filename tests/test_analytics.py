@@ -559,8 +559,9 @@ class TestGetAnalyticsFromCache:
 
         assert result is mock_analytics
 
-    def test_raises_503_when_analytics_not_available(self) -> None:
-        """Verify AnalyticsNotAvailableError when cache.analytics is None."""
+    def test_raises_analytics_not_available_error_when_cache_empty(self) -> None:
+        """Verify AnalyticsNotAvailableError is raised by the service layer
+        when cache.analytics is None (route translates this to HTTP 503)."""
         from unittest.mock import MagicMock, patch
 
         from azurerbac.web.services.analytics import (
@@ -578,3 +579,35 @@ class TestGetAnalyticsFromCache:
             pytest.raises(AnalyticsNotAvailableError, match="not available"),
         ):
             get_analytics_from_cache()
+
+
+class TestAnalyticsRouteErrorDisclosure:
+    """End-to-end regression test: /analytics returns a generic 503 and never
+    leaks the underlying AnalyticsNotAvailableError message to the client."""
+
+    _INTERNAL_DETAIL = "Analytics data not available. Cache may not be fully initialized."
+
+    @pytest.mark.asyncio
+    async def test_503_response_does_not_leak_internal_detail(self) -> None:
+        from unittest.mock import patch
+
+        from httpx import ASGITransport, AsyncClient
+
+        from azurerbac.web import app as app_module
+        from azurerbac.web.services.analytics import AnalyticsNotAvailableError
+
+        with patch(
+            "azurerbac.web.routes.analytics.get_analytics_from_cache",
+            side_effect=AnalyticsNotAvailableError(self._INTERNAL_DETAIL),
+        ):
+            transport = ASGITransport(app=app_module.app)
+            async with AsyncClient(transport=transport, base_url="http://test") as ac:
+                response = await ac.get("/analytics")
+
+        assert response.status_code == 503
+        body = response.text
+        assert "Analytics are temporarily unavailable" in body
+        # Internal cache-state hint must not be reflected to the client.
+        assert self._INTERNAL_DETAIL not in body
+        assert "Cache may not be fully initialized" not in body
+        assert "AnalyticsNotAvailableError" not in body

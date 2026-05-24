@@ -55,11 +55,11 @@ A comprehensive catalog and monitoring tool for [Azure built-in RBAC roles](http
 
 ## Infrastructure & Costs
 
-The site is designed around a hard **~$150/month Azure budget cap**.
+The site is designed around a **hard cap of $150/month** on Azure spend.
 That budget shapes every architectural choice: SKUs, what runs as a
 managed service vs. on a VM, why there's no Kubernetes, why Ollama runs
 on a B2ms and the GPU is on-demand only. The result is a small,
-single-region, single-tenant deployment with no autoscaling and no high
+single-region, single-tenant deployment with no autoscaling, no high
 availability — adequate for a low-traffic public catalog, deliberately
 under-provisioned for anything else. Note that nearly half the bill goes
 to the always-on VM serving the local LLM.
@@ -114,7 +114,10 @@ flowchart TD
     style Clients fill:none,stroke:none
 ```
 
-### Cost
+### Current Cost
+
+> [!TIP]
+> A lot of the spending in the table below is optional. A minimal deployment — App Service (B1), PostgreSQL (B1ms), ACR Basic, App Insights, Cloudflare Free, and no Ollama/GPU VMs — runs comfortably under **$50/month**. The AI features that depend on the local LLM are then unavailable, but the rest of the catalog works as-is.
 
 | Service | $/month | Notes |
 |---------|--------:|-------|
@@ -126,7 +129,7 @@ flowchart TD
 | Automation Account | $0 | Basic SKU, within the 500 min/month free tier. |
 | Ollama VM (inference) | ~$50 | B2ms (2 vCPU, 8 GiB), always-on. Runs the fine-tuned Qwen 0.5B model. |
 | GPU VM (training/finetuning) | on-demand (~$1/hour) | NV12ads A10 v5 (1× NVIDIA A10). Started only for finetuning runs. |
-| **Total** | **~$120** | |
+| **Total** | **~$115** | |
 
 ## AI Recommendation Modes
 

@@ -119,7 +119,7 @@ flowchart TD
 | Service | $/month | Notes |
 |---------|--------:|-------|
 | Cloudflare | $0 | Free plan — fronts the App Service with global CDN caching, TLS termination, DDoS protection, custom security rules, rate limiting, and OpenAPI schema validation at the edge. |
-| App Service | ~$45 | P0v3 Linux, single instance. Cheapest tier that supports deployment slots. |
+| App Service | ~$45 | P0v3 Linux, single instance. Cheapest SKU that supports deployment slots. |
 | PostgreSQL | ~$13 | Flexible Server, B1ms (Burstable, 1 vCPU / 2 GiB). |
 | Container Registry | ~$5 | Basic SKU. |
 | App Insights + Log Analytics | ~$2 | Pay-per-GB ingestion, 30-day retention. |

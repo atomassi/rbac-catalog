@@ -55,7 +55,19 @@ A comprehensive catalog and monitoring tool for [Azure built-in RBAC roles](http
 
 ## Infrastructure & Costs
 
-The site runs on Azure with Cloudflare CDN.
+The site is designed around a hard **~$150/month Azure budget cap**.
+That budget shapes every architectural choice: SKUs, what runs as a
+managed service vs. on a VM, why there's no Kubernetes, why Ollama runs
+on a B2ms and the GPU is on-demand only. The result is a small,
+single-region, single-tenant deployment with no autoscaling and no high
+availability — adequate for a low-traffic public catalog, deliberately
+under-provisioned for anything else. Note that nearly half the bill goes
+to the always-on VM serving the local LLM.
+
+The Ollama and GPU VMs are **optional** — the site itself runs fine
+without them. They're included here because part of the goal of this
+project was to experiment with self-hosted LLMs, Unsloth fine-tuning,
+and serving via Ollama.
 
 ### Architecture
 
@@ -74,7 +86,7 @@ flowchart TD
         AS[App Service]:::azure
         PG[(PostgreSQL)]:::db
         INSIGHTS[App Insights]:::monitor
-        OL[Ollama VM<br/>B2a v2]:::ollama
+        OL[Ollama VM<br/>B2ms]:::ollama
         GPU[GPU VM<br/>NVIDIA A10]:::gpu
     end
     
@@ -104,22 +116,22 @@ flowchart TD
 
 ### Cost
 
-| Service | $/month |
-|---------|--------:|
-| Cloudflare | $0 |
-| App Service | ~$45 |
-| PostgreSQL | ~$13 |
-| Container Registry | ~$5 |
-| App Insights + Log Analytics | ~$5 |
-| Automation Account | < $1 |
-| Ollama VM (inference) | ~$32 |
-| GPU VM (training/finetuning) | on-demand (~$1/hour) |
-| **Total** | **~$100** |
+| Service | $/month | Notes |
+|---------|--------:|-------|
+| Cloudflare | $0 | Free plan — fronts the App Service with global CDN caching, TLS termination, and DDoS protection at the edge. |
+| App Service | ~$45 | P0v3 Linux, single instance. Cheapest tier that supports deployment slots. |
+| PostgreSQL | ~$13 | Flexible Server, B1ms (Burstable, 1 vCPU / 2 GiB). |
+| Container Registry | ~$5 | Basic SKU. |
+| App Insights + Log Analytics | ~$2 | Pay-per-GB ingestion, 30-day retention. |
+| Automation Account | $0 | Basic SKU, within the 500 min/month free tier. |
+| Ollama VM (inference) | ~$50 | B2ms (2 vCPU, 8 GiB), always-on. Runs the fine-tuned Qwen 0.5B model. |
+| GPU VM (training/finetuning) | on-demand (~$1/hour) | NV12ads A10 v5 (1× NVIDIA A10). Started only for finetuning runs. |
+| **Total** | **~$120** | |
 
 ## AI Recommendation Modes
 
 > [!NOTE]
-> The AI modes are experimental—built for learning and experimenting with different recommendation approaches. Results should be verified. Access them via the "Show AI Tools" toggle on the Recommend page.
+> The AI modes are experimental — built as a playground for trying out different recommendation approaches and for learning LLM fine-tuning ([Unsloth](https://unsloth.ai/docs) + Qwen, served via [Ollama](https://ollama.com/)). Results should be verified. Access them via the "Show AI Tools" toggle on the Recommend page.
 
 The AI Role Recommender supports **8 different modes**, each with different speed/accuracy trade-offs:
 
@@ -138,19 +150,7 @@ See [docs/ai-recommender.md](docs/ai-recommender.md) for the LLM fine-tuning app
 
 ## MCP Server Integration
 
-Azure RBAC Catalog exposes an [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server for AI assistants like GitHub Copilot, Claude, and Cursor. This allows AI tools to query Azure RBAC data directly.
-
-### Endpoint
-
-```
-https://rbac-catalog.dev/mcp/
-```
-
-The server uses Streamable HTTP transport (stateless mode with JSON responses) for scalable communication.
-
-### VS Code / GitHub Copilot Setup
-
-Create `.vscode/mcp.json` in your workspace:
+Azure RBAC Catalog exposes an [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server at `https://rbac-catalog.dev/mcp/` for AI assistants like GitHub Copilot, Claude, and Cursor. Add it to VS Code by creating `.vscode/mcp.json`:
 
 ```json
 {
@@ -163,18 +163,9 @@ Create `.vscode/mcp.json` in your workspace:
 }
 ```
 
-### Example usage
+Then ask your assistant something like *"Find the least-privilege role for reading Key Vault secrets"*.
 
-Once configured, ask your AI assistant questions like:
-
-- "What permissions does the Storage Blob Data Contributor role have?"
-- "Compare Storage Blob Data Contributor and Storage Blob Data Owner"
-- "Which roles allow `Microsoft.Storage/storageAccounts/blobServices/containers/blobs/read` and `Microsoft.Storage/storageAccounts/blobServices/containers/blobs/tags/read`?"
-- "What operations correspond to `Microsoft.Storage/*`?"
-- "Describe role `b7e6dc6d-f1e8-4753-8033-0f276bb0955b`"
-- "Find the least-privilege role for reading Key Vault secrets"
-
-See [docs/mcp.md](docs/mcp.md) for the full tool reference, more example queries, direct invocation examples, and rate-limiting details.
+See [docs/mcp.md](docs/mcp.md) for the full tool reference, example queries, direct invocations, and rate-limiting details.
 
 ## Testing
 
@@ -233,7 +224,7 @@ azurerbac/
 ├── telemetry/       # Application Insights integration
 └── web/             # FastAPI app, routes, templates
 
-infra/            # Bicep IaC + scripts to deploy your own copy to Azure
+infra/               # Bicep IaC + scripts to deploy your own copy to Azure
 scripts/             # Deployment and smoke test scripts
 tests/               # Unit tests
 e2e/                 # Playwright end-to-end tests

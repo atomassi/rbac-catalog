@@ -7,31 +7,32 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for design rationale.
 
 ---
 
-## Put it behind a reverse proxy / CDN for production
-
-The infra provisions the App Service with its default
-`*.azurewebsites.net` hostname. That's fine for **dev, staging, internal
-tools, prototypes, and low-risk apps**. For an internet-facing production
-deployment, you should put **Cloudflare** or **Azure Front Door + WAF** in
-front and restrict the App Service so users can't reach it directly.
-
-You get:
-
-- **WAF** (OWASP rule set, custom rules).
-- **DDoS protection** at the edge.
-- **TLS termination & certificate management.**
-- **Bot filtering and edge rate-limiting.**
-- **Caching + global anycast** routing for latency / failover.
-- **Origin hiding** — the App Service IP / hostname is never exposed.
-- **Cleaner DNS** (use your custom domain; drop the `*.azurewebsites.net`
-  default).
-
-### References
-
-- [Azure Front Door overview](https://learn.microsoft.com/azure/frontdoor/front-door-overview)
-- [App Service access restrictions](https://learn.microsoft.com/azure/app-service/app-service-ip-restrictions)
-- [Private endpoint for App Service](https://learn.microsoft.com/azure/app-service/networking/private-endpoint)
-- [Cloudflare — protect your origin server](https://developers.cloudflare.com/fundamentals/security/protect-your-origin-server/)
+> [!TIP]
+> ### Put it behind a reverse proxy / CDN for production
+>
+> The infra provisions the App Service with its default
+> `*.azurewebsites.net` hostname. That's fine for **dev, staging, internal
+> tools, prototypes, and low-risk apps**. For an internet-facing production
+> deployment, you should put **Cloudflare** or **Azure Front Door + WAF** in
+> front and restrict the App Service so users can't reach it directly.
+>
+> You get:
+>
+> - **WAF** (OWASP rule set, custom rules).
+> - **DDoS protection** at the edge.
+> - **TLS termination & certificate management.**
+> - **Bot filtering and edge rate-limiting.**
+> - **Caching + global anycast** routing for latency / failover.
+> - **Origin hiding** — the App Service IP / hostname is never exposed.
+> - **Cleaner DNS** (use your custom domain; drop the `*.azurewebsites.net`
+>   default).
+>
+> **References**
+>
+> - [Azure Front Door overview](https://learn.microsoft.com/azure/frontdoor/front-door-overview)
+> - [App Service access restrictions](https://learn.microsoft.com/azure/app-service/app-service-ip-restrictions)
+> - [Private endpoint for App Service](https://learn.microsoft.com/azure/app-service/networking/private-endpoint)
+> - [Cloudflare — protect your origin server](https://developers.cloudflare.com/fundamentals/security/protect-your-origin-server/)
 
 ---
 

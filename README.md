@@ -57,17 +57,14 @@ A comprehensive catalog and monitoring tool for [Azure built-in RBAC roles](http
 
 The site is designed around a **hard cap of $150/month** on Azure spend.
 That budget shapes every architectural choice: SKUs, what runs as a
-managed service vs. on a VM, why there's no Kubernetes, why Ollama runs
-on a B2ms and the GPU is on-demand only. The result is a small,
-single-region, single-tenant deployment with no autoscaling, no high
-availability — adequate for a low-traffic public catalog, deliberately
-under-provisioned for anything else. Note that nearly half the bill goes
-to the always-on VM serving the local LLM.
+managed service vs. on a VM, no Kubernetes, no autoscaling, no high
+availability. Adequate for a low-traffic public catalog; deliberately
+under-provisioned for anything else.
 
-The Ollama and GPU VMs are **optional** — the site itself runs fine
-without them. They're included here because part of the goal of this
-project was to experiment with self-hosted LLMs, Unsloth fine-tuning,
-and serving via Ollama.
+The Ollama and GPU VMs are **optional** — the site runs fine without
+them. They're included because part of the goal of this project was
+to experiment with self-hosted LLMs, Unsloth fine-tuning, and serving
+via Ollama.
 
 ### Architecture
 

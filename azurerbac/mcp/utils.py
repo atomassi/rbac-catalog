@@ -93,7 +93,9 @@ def validate_input(
         raise ValidationError(f"Input too long. Maximum {max_length} characters allowed.")
     if len(stripped) < min_length:
         raise ValidationError(f"{field_name} must be at least {min_length} characters")
-    if not stripped.isprintable():
+    # Check printability with only spaces trimmed, so edge control characters
+    # (e.g. a trailing newline) are rejected instead of stripped away.
+    if not value.strip(" ").isprintable():
         raise ValidationError(f"Invalid {field_name.lower()} format")
     return stripped
 

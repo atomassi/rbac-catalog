@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -86,6 +87,7 @@ class AIRoleRecommender:
     __slots__ = (
         "_embedding_model",
         "_enhanced_tfidf",
+        "_init_lock",
         "_initialized",
         "_knowledge_base",
         "_ollama_client",
@@ -99,6 +101,7 @@ class AIRoleRecommender:
         self._embedding_model: EmbeddingModel | None = None
         self._initialized = False
         self._roles_hash: str | None = None
+        self._init_lock = threading.Lock()
 
     def _init_enhanced_tfidf(self, roles: list[RoleDefinition]) -> None:
         try:
@@ -137,12 +140,17 @@ class AIRoleRecommender:
     def initialize(self, roles: list[RoleDefinition]) -> None:
         current_hash = self._compute_roles_hash(roles)
 
-        if self._initialized and self._roles_hash == current_hash:
-            logger.debug("AI recommender already initialized (hash=%s)", current_hash)
-            return
+        # Serialize concurrent initialization: callers may race when the
+        # recommender is invoked from worker threads (anyio.to_thread).
+        with self._init_lock:
+            if self._initialized and self._roles_hash == current_hash:
+                logger.debug("AI recommender already initialized (hash=%s)", current_hash)
+                return
 
-        logger.info("Initializing AI recommender with %d roles...", len(roles))
+            logger.info("Initializing AI recommender with %d roles...", len(roles))
+            self._initialize_locked(roles, current_hash)
 
+    def _initialize_locked(self, roles: list[RoleDefinition], current_hash: str) -> None:
         self._knowledge_base = RoleKnowledgeBase()
         self._knowledge_base.load_from_file()
         self._knowledge_base.build_from_roles(roles)

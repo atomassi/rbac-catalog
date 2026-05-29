@@ -463,14 +463,22 @@ class MCPServer:
                 # CPU-bound: offload to a worker thread so a single
                 # recommendation request does not stall the event loop
                 # (and the rest of the site mounted in the same app).
-                matches = await to_thread.run_sync(
-                    partial(
-                        recommend_roles,
-                        requested_operations=sanitized_ops,
-                        max_results=min(max_results, MAX_RECOMMEND_LIMIT),
-                        requested_ops_data_flags=data_flags or None,
+                try:
+                    matches = await to_thread.run_sync(
+                        partial(
+                            recommend_roles,
+                            requested_operations=sanitized_ops,
+                            max_results=min(max_results, MAX_RECOMMEND_LIMIT),
+                            requested_ops_data_flags=data_flags or None,
+                        )
                     )
-                )
+                except Exception:
+                    logger.exception("Role recommendation failed")
+                    timer.fail()
+                    # Do not echo the underlying exception back to the remote
+                    # MCP client: log details server-side only and return a
+                    # fixed message instead of letting it surface as a 500.
+                    return "Role recommendation failed. Please try again later."
                 timer.result_count = len(matches)
 
             if not matches:

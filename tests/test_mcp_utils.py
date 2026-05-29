@@ -133,7 +133,7 @@ class TestInputValidation:
     """Tests for input validation functions."""
 
     @pytest.mark.parametrize(
-        ("value", "expected"),
+        ("value", "is_control"),
         [
             pytest.param("hello world", False, id="safe_plain"),
             pytest.param("Microsoft.Storage/read", False, id="safe_dotted"),
@@ -145,9 +145,14 @@ class TestInputValidation:
             pytest.param("_single", False, id="single_underscore"),
         ],
     )
-    def test_non_printable_detected(self, value: str, expected: bool):
-        """Control characters are rejected; ordinary printable text is allowed."""
-        assert (not value.isprintable()) is expected
+    def test_non_printable_detected(self, value: str, is_control: bool):
+        """``validate_input`` rejects control characters and accepts ordinary
+        printable text (returning it unchanged)."""
+        if is_control:
+            with pytest.raises(ValidationError, match="Invalid"):
+                validate_input(value, max_length=100, min_length=1)
+        else:
+            assert validate_input(value, max_length=100, min_length=1) == value
 
     @pytest.mark.parametrize(
         ("value", "max_len", "min_len", "label", "expected"),
@@ -196,3 +201,14 @@ class TestPrintableValidation:
     )
     def test_accepts_printable(self, value: str) -> None:
         assert validate_input(value, max_length=100, min_length=1) == value
+
+    @pytest.mark.parametrize(
+        "value",
+        ["hello\n", "\thello", "hello\r", "hi\x0bthere"],
+        ids=["trailing_newline", "leading_tab", "trailing_cr", "vertical_tab"],
+    )
+    def test_rejects_edge_control_chars(self, value: str) -> None:
+        """Control characters at the edges must be rejected, not silently
+        removed by ``str.strip()`` before the printability check."""
+        with pytest.raises(ValidationError, match="Invalid"):
+            validate_input(value, max_length=100, min_length=1)

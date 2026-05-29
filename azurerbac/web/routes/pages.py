@@ -18,6 +18,7 @@ from azurerbac.web.constants import (
     DEFAULT_DAYS,
     DEFAULT_LIMIT,
     DEFAULT_PAGE,
+    GITHUB_ISSUES_URL,
     MAX_DAYS,
     MAX_PAGE_NUMBER,
     MAX_PAGE_SIZE,
@@ -380,5 +381,6 @@ async def about_page(
             "tab": "about",
             "total_roles": roles_count,
             "total_operations": ops_count,
+            "github_issues_url": GITHUB_ISSUES_URL,
         },
     )

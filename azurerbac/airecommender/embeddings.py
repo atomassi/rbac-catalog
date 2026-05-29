@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Callable
 from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
@@ -32,6 +33,11 @@ class EmbeddingModel:
         self._embeddings: dict[str, list[float]] = {}
         self._matrix: np.ndarray | None = None
         self._doc_ids: list[str] = []
+        # Per-instance cache bound to the method so ``self`` stays out of the
+        # cache key and instances stay garbage-collectable (avoids B019).
+        self.encode_single_cached: Callable[[str], tuple[float, ...]] = lru_cache(maxsize=512)(
+            self._encode_single_tuple
+        )
 
     @property
     def is_loaded(self) -> bool:
@@ -91,9 +97,8 @@ class EmbeddingModel:
         """Encode a single text into an embedding vector."""
         return self._require_model().encode(text, show_progress_bar=False).tolist()
 
-    @lru_cache(maxsize=512)  # noqa: B019 - singleton class, no memory leak
-    def encode_single_cached(self, text: str) -> tuple[float, ...]:
-        """Encode with LRU caching. Returns tuple for hashability."""
+    def _encode_single_tuple(self, text: str) -> tuple[float, ...]:
+        """Encode a single text, returning a tuple for cache hashability."""
         return tuple(self.encode_single(text))
 
     def build_embeddings(self, documents: dict[str, str], cache_hash: str | None = None) -> None:

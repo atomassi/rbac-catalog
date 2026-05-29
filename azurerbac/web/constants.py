@@ -97,11 +97,8 @@ DECOMMISSION_BANNER_VERSION: Final[str] = "2026-05-decommission-v4"
 DECOMMISSION_BANNER_FEEDBACK_URL: Final[str] = "https://forms.gle/N323bjAWGKJzUWb49"
 DECOMMISSION_BANNER_MESSAGE: Final[str] = (
     "This site is being decommissioned on <strong>June 12, 2026</strong>. "
-    "It's open source — run it yourself or browse the code at "
+    "It's "
     '<a href="https://github.com/atomassi/rbac-catalog" '
-    'class="underline font-medium hover:no-underline">github.com/atomassi/rbac-catalog</a>. '
-    "You can also bookmark the "
-    '<a href="https://learn.microsoft.com/azure/role-based-access-control/built-in-roles" '
-    'class="underline font-medium hover:no-underline">Azure built-in roles reference</a> '
-    "on Microsoft Learn."
+    'class="underline font-medium hover:no-underline">open source</a>, '
+    "so you can host your own copy."
 )

@@ -321,6 +321,57 @@ class TestParseJsonWithRepair:
 
 
 # =============================================================================
+# Connection Tests
+# =============================================================================
+
+
+class TestTryConnect:
+    """Tests for OllamaClient.try_connect model selection."""
+
+    @staticmethod
+    def _mock_response(models: list[str]) -> MagicMock:
+        response = MagicMock()
+        response.raise_for_status = MagicMock()
+        response.json.return_value = {"models": [{"name": name} for name in models]}
+        return response
+
+    def test_connects_when_configured_model_present(self, client):
+        client.model = "qwen-rbac-v5"
+        with patch("httpx.get", return_value=self._mock_response(["qwen-rbac-v5"])):
+            assert client.try_connect() is True
+        assert client.is_connected is True
+        assert client.model == "qwen-rbac-v5"
+
+    def test_connects_on_base_tag_match(self, client):
+        client.model = "qwen-rbac-v5"
+        with patch("httpx.get", return_value=self._mock_response(["qwen-rbac-v5:latest"])):
+            assert client.try_connect() is True
+
+    def test_fails_closed_when_model_absent(self, client):
+        """An arbitrary available model must NOT be substituted for the
+        configured fine-tuned model: connecting would serve unreliable
+        recommendations. The client stays disconnected instead.
+        """
+        client.model = "qwen-rbac-v5"
+        with patch("httpx.get", return_value=self._mock_response(["llama3", "codellama"])):
+            assert client.try_connect() is False
+        assert client.is_connected is False
+        # Configured model is left untouched (no silent substitution)
+        assert client.model == "qwen-rbac-v5"
+
+    def test_fails_when_no_models_available(self, client):
+        client.model = "qwen-rbac-v5"
+        with patch("httpx.get", return_value=self._mock_response([])):
+            assert client.try_connect() is False
+        assert client.is_connected is False
+
+    def test_returns_false_on_http_error(self, client):
+        with patch("httpx.get", side_effect=httpx.ConnectError("refused")):
+            assert client.try_connect() is False
+        assert client.is_connected is False
+
+
+# =============================================================================
 # Retry Logic Tests
 # =============================================================================
 

@@ -114,13 +114,13 @@ class OllamaClient:
                 self._connected = True
                 logger.info("Connected to Ollama server with model: %s", self.model)
                 return True
-            logger.warning("Ollama model '%s' not found. Available: %s", self.model, models)
-            # Try to use first available model
-            if models:
-                self._connected = True
-                self.model = models[0]
-                logger.info("Using available Ollama model: %s", self.model)
-                return True
+            # Fail closed: substituting an arbitrary model would serve
+            # unreliable RBAC recommendations, so stay disconnected.
+            logger.warning(
+                "Configured Ollama model '%s' not found (available: %s); LLM engine disabled.",
+                self.model,
+                models,
+            )
             return False
 
         except httpx.HTTPError as e:

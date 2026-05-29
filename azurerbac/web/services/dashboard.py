@@ -44,28 +44,12 @@ _MIN_DATETIME: Final[dt.datetime] = dt.datetime.min.replace(tzinfo=dt.UTC)
 # Sentinel for roles with no net permissions in cache
 _ZERO_PERMS: Final[RoleNetPermissions] = RoleNetPermissions(0, 0)
 
-_ROLE_SORT_KEYS: Final[dict[SortField, Callable[[RoleWithCounts], Any]]] = {
-    SortField.ACTIONS: lambda r: r.actions_count,
-    SortField.DATA_ACTIONS: lambda r: r.data_actions_count,
-    SortField.ID: lambda r: r.role_id.lower(),
-    SortField.UPDATED: lambda r: r.updated_on or _MIN_DATETIME,
-    SortField.NAME: lambda r: r.role_name.lower(),
-}
-
 # Sort key functions for CachedRole (pre-enrichment sorting)
 _CACHED_ROLE_SORT_KEYS: Final[dict[SortField, Callable[[CachedRole], Any]]] = {
     SortField.ID: lambda r: r.role_id.lower(),
     SortField.UPDATED: lambda r: r.updated_on or _MIN_DATETIME,
     SortField.NAME: lambda r: r.role_name.lower(),
 }
-
-
-def _paginate_list[T](items: list[T], params: PaginationParams) -> PaginatedResult[T]:
-    """Apply pagination to a list."""
-    total_count = len(items)
-    total_pages = PaginationInfo.count_pages(total_count, params.page_size)
-    page_items = items[params.offset : params.offset + params.page_size]
-    return PaginatedResult(items=page_items, total_count=total_count, total_pages=total_pages)
 
 
 def _get_default_cache() -> CacheService:
@@ -96,18 +80,6 @@ def enrich_role_with_counts(
         actions_count=actions_count,
         data_actions_count=data_actions_count,
     )
-
-
-def _sort_enriched_roles(
-    enriched_roles: list[RoleWithCounts],
-    *,
-    sort: str | SortField,
-    order: str | SortOrder,
-) -> None:
-    """Sort enriched roles in-place."""
-    sort_field = SortField.from_string(str(sort))
-    key_func = _ROLE_SORT_KEYS.get(sort_field, _ROLE_SORT_KEYS[SortField.NAME])
-    enriched_roles.sort(key=key_func, reverse=(order == SortOrder.DESC))
 
 
 def _matches_status(role_status: str, status_filter: str | StatusFilter) -> bool:

@@ -2,22 +2,17 @@
 
 from __future__ import annotations
 
-import heapq
 import logging
 from collections.abc import Iterable
 from collections.abc import Set as AbstractSet
-from functools import lru_cache
 from typing import TYPE_CHECKING
 
 from azurerbac.core.constants import (
     HIGH_PRIVILEGE_OPERATION,
     HIGH_PRIVILEGE_ROLE_IDS,
-    MAX_UNCOVERED_SAMPLE,
 )
 from azurerbac.core.patterns import is_wildcard_pattern, matches_pattern
 from azurerbac.matching.models import (
-    CoverageResult,
-    PartialCoverageCacheKey,
     PatternCacheKey,
     Plane,
 )
@@ -43,75 +38,6 @@ def _get_cache(caches: CacheData | None = None) -> CacheData:
     from azurerbac.cache import get_cache_service
 
     return get_cache_service().cache
-
-
-def _suffix_pattern_covers(role_pattern: str, requested_pattern: str) -> bool:
-    """Check if a suffix pattern (*/suffix) covers the requested pattern.
-
-    Example: '*/read' covers 'Microsoft.Storage/accounts/read'
-    """
-    if not role_pattern.startswith("*/"):
-        return False
-    return requested_pattern.endswith(role_pattern[1:])
-
-
-def _prefix_pattern_covers(role_pattern: str, requested_pattern: str) -> bool:
-    """Check if a prefix pattern (prefix/*) covers the requested pattern.
-
-    Example: 'Microsoft.Storage/*' covers 'Microsoft.Storage/accounts/read'
-    """
-    if not role_pattern.endswith("/*"):
-        return False
-    return requested_pattern.startswith(role_pattern[:-1])
-
-
-def _segment_pattern_covers(role_pattern: str, requested_pattern: str) -> bool:
-    """Check if role pattern covers requested by comparing path segments.
-
-    Example: 'Microsoft.Storage/*/read' covers 'Microsoft.Storage/accounts/read'
-    """
-    role_parts = role_pattern.lower().split("/")
-    requested_parts = requested_pattern.lower().split("/")
-
-    if len(role_parts) > len(requested_parts):
-        return False
-
-    for i, role_seg in enumerate(role_parts):
-        if role_seg == "*":
-            # Trailing wildcard matches everything after
-            if i == len(role_parts) - 1:
-                return True
-            continue
-
-        if i >= len(requested_parts):
-            return False
-
-        req_seg = requested_parts[i]
-        # Requested has wildcard but role has specific - role can't cover
-        if req_seg == "*" and role_seg != "*":
-            return False
-        # Segments must match (or role has wildcard, handled above)
-        if req_seg not in (role_seg, "*"):
-            return False
-
-    return True
-
-
-@lru_cache(maxsize=50000)
-def pattern_covers_pattern(role_pattern: str, requested_pattern: str) -> bool:
-    """Check if a role's action pattern covers a requested wildcard pattern.
-
-    Memoized with LRU cache since pattern-to-pattern relationships are
-    immutable and frequently recomputed during role matching.
-    """
-    if role_pattern in ("*", requested_pattern):
-        return True
-
-    return (
-        _suffix_pattern_covers(role_pattern, requested_pattern)
-        or _prefix_pattern_covers(role_pattern, requested_pattern)
-        or _segment_pattern_covers(role_pattern, requested_pattern)
-    )
 
 
 def operation_matches_any_pattern(operation: OperationName, patterns: Iterable[Pattern]) -> bool:
@@ -172,97 +98,6 @@ def get_matching_operations(
         cache.pattern_match[key] = matching
 
     return matching
-
-
-def _compute_covered_operations(
-    actions: list[str],
-    matching_ops: set[str],
-    all_operations: AbstractSet[str],
-    plane: Plane | None,
-    cache: CacheData,
-) -> set[str]:
-    """Compute the set of operations covered by the given actions."""
-    covered: set[str] = set()
-    for action in actions:
-        if action == "*":
-            return matching_ops.copy()
-        if is_wildcard_pattern(action):
-            action_matches = get_matching_operations(action, all_operations, plane, caches=cache)
-            covered.update(action_matches)
-        elif action in all_operations:
-            covered.add(action)
-    return covered
-
-
-def _remove_excluded_operations(
-    covered: set[str],
-    not_actions: list[str],
-    all_operations: AbstractSet[str],
-    plane: Plane | None,
-    cache: CacheData,
-) -> set[str]:
-    """Remove operations excluded by notActions from the covered set."""
-    if not not_actions:
-        return covered
-    result = covered.copy()
-    for not_action in not_actions:
-        if not_action == "*":
-            return set()
-        if is_wildcard_pattern(not_action):
-            not_matches = get_matching_operations(not_action, all_operations, plane, caches=cache)
-            result -= not_matches
-        else:
-            result.discard(not_action)
-    return result
-
-
-def count_wildcard_partial_coverage(
-    requested_pattern: str,
-    actions: list[str],
-    not_actions: list[str],
-    all_operations: AbstractSet[str],
-    plane: Plane | None = None,
-    max_uncovered_sample: int = MAX_UNCOVERED_SAMPLE,
-    *,
-    caches: CacheData | None = None,
-) -> CoverageResult:
-    """Count operations matching a wildcard pattern that are granted by the given actions."""
-    cache = _get_cache(caches)
-    partial_cache_key = PartialCoverageCacheKey.build(
-        requested_pattern, plane, actions, not_actions
-    )
-
-    if partial_cache_key is not None:
-        cached = cache.partial_coverage.get(partial_cache_key)
-        if cached is not None:
-            return cached
-
-    matching_ops = get_matching_operations(requested_pattern, all_operations, plane, caches=cache)
-    total_count = len(matching_ops)
-
-    if total_count == 0:
-        result = CoverageResult(0, 0, 0, [])
-        if partial_cache_key is not None:
-            cache.partial_coverage[partial_cache_key] = result
-        return result
-
-    covered_by_actions = _compute_covered_operations(
-        actions, matching_ops, all_operations, plane, cache
-    )
-    covered_by_actions = _remove_excluded_operations(
-        covered_by_actions, not_actions, all_operations, plane, cache
-    )
-
-    covered_ops = matching_ops & covered_by_actions
-    covered_count = len(covered_ops)
-    uncovered_ops = matching_ops - covered_ops
-    uncovered_count = len(uncovered_ops)
-    uncovered_samples = heapq.nsmallest(max_uncovered_sample, uncovered_ops)
-
-    result = CoverageResult(covered_count, total_count, uncovered_count, uncovered_samples)
-    if partial_cache_key is not None:
-        cache.partial_coverage[partial_cache_key] = result
-    return result
 
 
 def count_operations_matching_pattern(

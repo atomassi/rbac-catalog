@@ -571,59 +571,6 @@ class TestDeletedRoleProperties:
 class TestMatchingModels:
     """Tests for matching module models."""
 
-    @pytest.mark.parametrize(
-        "plane,actions,not_actions,expected_none",
-        [
-            pytest.param(
-                None,
-                ["Microsoft.Storage/*"],
-                [],
-                True,
-                id="none_plane_returns_none",
-            ),
-            pytest.param(
-                "CONTROL",
-                ["Microsoft.Storage/*"],
-                [],
-                False,
-                id="control_plane_returns_key",
-            ),
-            pytest.param(
-                "DATA",
-                ["Microsoft.Storage/*"],
-                ["*/delete"],
-                False,
-                id="data_plane_with_not_actions",
-            ),
-        ],
-    )
-    def test_partial_coverage_cache_key_build(
-        self,
-        plane: str | None,
-        actions: list[str],
-        not_actions: list[str],
-        expected_none: bool,
-    ):
-        """Test PartialCoverageCacheKey.build with various inputs."""
-        from azurerbac.matching.models import PartialCoverageCacheKey, Plane
-
-        plane_enum = Plane[plane] if plane else None
-        result = PartialCoverageCacheKey.build(
-            pattern="Microsoft.Storage/*",
-            plane=plane_enum,
-            actions=actions,
-            not_actions=not_actions,
-        )
-
-        if expected_none:
-            assert result is None
-        else:
-            assert result is not None
-            assert result.pattern == "Microsoft.Storage/*"
-            assert result.plane == plane_enum
-            assert result.actions == tuple(sorted(actions))
-            assert result.not_actions == tuple(sorted(not_actions))
-
     def test_classified_operations_all_requested_property(self):
         """Test ClassifiedOperations.all_requested union property."""
         from azurerbac.matching.models import ClassifiedOperations

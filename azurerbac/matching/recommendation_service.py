@@ -111,7 +111,6 @@ class RoleRecommendationService:
         """Get current cache entry counts."""
         return CacheStats(
             pattern_match=len(self._cache.pattern_match),
-            partial_coverage=len(self._cache.partial_coverage),
             role_coverage=len(self._cache.role_coverage),
             wildcard_count=len(self._cache.wildcard_count),
         )

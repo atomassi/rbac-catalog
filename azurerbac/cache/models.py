@@ -10,7 +10,7 @@ It's designed for atomic swaps - the entire object is replaced, never mutated.
     ├── source: SourceData               # Raw DB data (immutable after load)
     ├── indexes: Indexes                 # Fast lookups (deterministic from source)
     ├── analysis: RoleAnalysis           # Expensive precomputation (built once at refresh)
-    ├── computed: ComputedCaches         # Expensive caches, SAVED to disk
+    ├── computed: ComputedCaches         # Expensive caches, memoized in-memory (rebuilt on swap)
     └── content: PrerenderedContent      # Pre-built responses (analytics, sitemap)
 
     CacheContainer (mutable wrapper)
@@ -380,7 +380,7 @@ class CacheData:
         ├── source          # Raw DB data (roles, operations, events)
         ├── indexes         # Lookup indexes (ops_by_name, ops_by_prefix)
         ├── analysis        # Precomputed (role_coverage, operation_to_roles)
-        ├── computed        # Expensive caches, SAVED to disk
+        ├── computed        # Expensive caches, memoized in-memory (rebuilt on swap)
         └── content         # Pre-rendered (analytics, sitemap)
 
     Note: RequestCaches (role_pages, operation_pages, etc.) live on CacheContainer,
@@ -394,7 +394,7 @@ class CacheData:
     source: SourceData = field(default_factory=SourceData)  # From DB
     indexes: Indexes = field(default_factory=Indexes)  # Built from source
     analysis: RoleAnalysis = field(default_factory=RoleAnalysis)  # Built from source + indexes
-    computed: ComputedCaches = field(default_factory=ComputedCaches)  # Persisted to disk
+    computed: ComputedCaches = field(default_factory=ComputedCaches)  # Memoized in-memory
     content: PrerenderedContent = field(default_factory=PrerenderedContent)  # Pre-built responses
 
     # =========================================================================

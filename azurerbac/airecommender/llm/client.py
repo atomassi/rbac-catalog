@@ -110,12 +110,14 @@ class OllamaClient:
             data = response.json()
             models = [m.get("name", "") for m in data.get("models", [])]
 
-            if self.model in models or any(self.model.split(":")[0] in m for m in models):
+            base = self.model.split(":")[0]
+            if self.model in models or any(base == m.split(":")[0] for m in models):
                 self._connected = True
                 logger.info("Connected to Ollama server with model: %s", self.model)
                 return True
             # Fail closed: substituting an arbitrary model would serve
             # unreliable RBAC recommendations, so stay disconnected.
+            self._connected = False
             logger.warning(
                 "Configured Ollama model '%s' not found (available: %s); LLM engine disabled.",
                 self.model,
@@ -124,9 +126,11 @@ class OllamaClient:
             return False
 
         except httpx.HTTPError as e:
+            self._connected = False
             logger.exception("Ollama server not available at %s: %s", self.base_url, e)
             return False
         except Exception as e:
+            self._connected = False
             logger.exception("Failed to connect to Ollama: %s", e)
             return False
 

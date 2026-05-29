@@ -365,7 +365,32 @@ class TestTryConnect:
             assert client.try_connect() is False
         assert client.is_connected is False
 
+    def test_fails_closed_when_only_superstring_model_present(self, client):
+        """A model whose base name merely *contains* the configured base
+        (e.g. ``not-qwen-rbac-v5``) must not be treated as a match.
+        """
+        client.model = "qwen-rbac-v5"
+        with patch("httpx.get", return_value=self._mock_response(["not-qwen-rbac-v5"])):
+            assert client.try_connect() is False
+        assert client.is_connected is False
+
     def test_returns_false_on_http_error(self, client):
+        with patch("httpx.get", side_effect=httpx.ConnectError("refused")):
+            assert client.try_connect() is False
+        assert client.is_connected is False
+
+    def test_clears_connected_on_failure_after_prior_connect(self, client):
+        """A previously connected client must drop ``_connected`` when a
+        later ``try_connect()`` can no longer find the model or reach the
+        server, so ``generate()`` does not run against a bad state.
+        """
+        client.model = "qwen-rbac-v5"
+        client._connected = True
+        with patch("httpx.get", return_value=self._mock_response(["llama3"])):
+            assert client.try_connect() is False
+        assert client.is_connected is False
+
+        client._connected = True
         with patch("httpx.get", side_effect=httpx.ConnectError("refused")):
             assert client.try_connect() is False
         assert client.is_connected is False

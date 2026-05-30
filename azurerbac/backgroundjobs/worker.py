@@ -96,7 +96,7 @@ class Worker:
         """Clean up resources on shutdown."""
         if self._scheduler is not None:
             logger.info("Shutting down scheduler...")
-            self._scheduler.shutdown(wait=True)
+            await asyncio.to_thread(self._scheduler.shutdown, wait=True)
         logger.info("Disposing database engine...")
         await DBEngine.dispose()
         logger.info("Worker shutdown complete")

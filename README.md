@@ -6,9 +6,6 @@
 [![Python](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
-Browse, search, and track every Azure built-in RBAC role, with least-privilege
-tooling and AI-assisted role recommendations.
-
 > [!IMPORTANT]
 > **The public site at [rbac-catalog.dev](https://rbac-catalog.dev/) will be decommissioned on June 12, 2026.**
 >
@@ -24,13 +21,7 @@ tooling and AI-assisted role recommendations.
 
 **Live site:** [rbac-catalog.dev](https://rbac-catalog.dev/)
 
-Azure ships 800+ built-in RBAC roles and tens of thousands of resource
-provider operations, and they change without notice. Azure RBAC Catalog
-makes that surface easy to explore and audit: browse roles and their
-permissions, look up which roles grant a given operation, find the
-least-privilege role for a set of operations, track what Microsoft adds
-or changes over time, and get AI-assisted role recommendations from a
-plain-language description.
+A comprehensive catalog and monitoring tool for [Azure built-in RBAC roles](https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles). Browse roles, explore their permissions, track changes over time, find least-privilege roles based on operation requirements, and get AI-powered role recommendations.
 
 [![Azure RBAC Catalog demo](docs/images/demo.webp)](https://rbac-catalog.dev/)
 
@@ -114,12 +105,10 @@ For prerequisites, environment variables, and the full walkthrough, see
 
 ## Infrastructure & Costs
 
-The whole stack is built around a **hard cap of $150/month** on Azure
-spend. That budget drives every architectural decision: which SKUs to
-pick, what runs as a managed service versus on a plain VM, and what to
-leave out entirely (no Kubernetes, no autoscaling, no high availability).
-The result is sized for a low-traffic public catalog and deliberately
-under-provisioned for anything heavier.
+The architecture favors simplicity over scale: managed Azure services do
+the heavy lifting, with a single VM reserved for self-hosted inference to
+control costs. There's no Kubernetes, no autoscaling, and no multi-region failover, just
+the moving parts a low-traffic public catalog actually needs.
 
 The Ollama and GPU VMs are **optional**, and the site runs fine without
 them. They exist because one goal of this project was to experiment with
@@ -174,7 +163,7 @@ flowchart TD
 ### Current Cost
 
 > [!TIP]
-> A lot of the spending in the table below is optional. A minimal deployment (App Service B1, PostgreSQL B1ms, ACR Basic, App Insights, Cloudflare Free, and no Ollama/GPU VMs) runs comfortably under **$50/month**. The AI features that depend on the local LLM are then unavailable, but the rest of the catalog works as-is.
+> A lot of the spending in the table below is optional. A minimal deployment (App Service B1, PostgreSQL B1ms, ACR Basic, App Insights, Cloudflare Free, and no Ollama/GPU VMs) runs comfortably under **$60/month**. The AI features that depend on the local LLM are then unavailable, but the rest of the catalog works as-is.
 
 | Service | $/month | Notes |
 |---------|--------:|-------|

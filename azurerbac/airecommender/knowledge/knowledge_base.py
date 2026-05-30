@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
 from azurerbac.airecommender.knowledge.azure_knowledge import USE_CASE_PATTERNS
+from azurerbac.core.patterns import WILDCARD
 from azurerbac.core.types import JsonDict
 
 if TYPE_CHECKING:
@@ -173,7 +174,7 @@ def _build_role_to_patterns_index() -> dict[str, list[str]]:
 
 def _filter_wildcards(actions: Iterable[str]) -> set[str]:
     """Filter out wildcard patterns from actions."""
-    return {a for a in actions if "*" not in a}
+    return {a for a in actions if WILDCARD not in a}
 
 
 def _build_document_text(
@@ -202,7 +203,7 @@ _OPERATION_SPLIT_PATTERN: Final[re.Pattern[str]] = re.compile(r"[/.]")
 _CAMEL_CASE_PATTERN: Final[re.Pattern[str]] = re.compile(r"[a-z]+")
 
 # Tokens to skip when extracting keywords
-_SKIP_TOKENS: Final[frozenset[str]] = frozenset({"microsoft", "*", ""})
+_SKIP_TOKENS: Final[frozenset[str]] = frozenset({"microsoft", WILDCARD, ""})
 
 
 def extract_operation_keywords(operations: Iterable[str]) -> list[str]:

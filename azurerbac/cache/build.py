@@ -31,7 +31,7 @@ from azurerbac.cache.models import (
     compute_roles_hash,
 )
 from azurerbac.core.constants import POPULAR_COMPARE_PAIRS, RoleStatus
-from azurerbac.core.patterns import is_wildcard_pattern, matches_pattern
+from azurerbac.core.patterns import WILDCARD, is_wildcard_pattern, matches_pattern
 from azurerbac.core.utils import truncate_microseconds
 from azurerbac.matching.models import (
     Plane,
@@ -93,7 +93,7 @@ def _add_operations_for_patterns(
 ) -> None:
     """Add operations matching patterns to destination set (lowered)."""
     for pattern in patterns:
-        if pattern == "*":
+        if pattern == WILDCARD:
             dst.update(ops_lower_to_orig.keys())
         elif is_wildcard_pattern(pattern):
             dst.update(get_matching_operations(pattern, all_ops, plane, pattern_match))
@@ -109,7 +109,7 @@ def _precompute_common_patterns(
     pattern_match: dict[PatternCacheKey, set[str]],
 ) -> None:
     """Precompute common wildcard patterns."""
-    common_patterns = ["*/read", "*/write", "*/delete", "*/action", "*/listkeys/action", "*"]
+    common_patterns = ["*/read", "*/write", "*/delete", "*/action", "*/listkeys/action", WILDCARD]
     for pattern in common_patterns:
         get_matching_operations(pattern, all_control_ops, Plane.CONTROL, pattern_match)
         get_matching_operations(pattern, all_data_ops, Plane.DATA, pattern_match)

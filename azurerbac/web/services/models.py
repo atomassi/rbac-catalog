@@ -133,7 +133,7 @@ class RawPermissions:
     @property
     def has_wildcards(self) -> bool:
         """Check if any patterns contain wildcards."""
-        return any(is_wildcard_pattern(p) or p == "*" for p in self.all_patterns)
+        return any(is_wildcard_pattern(p) for p in self.all_patterns)
 
     @property
     def has_defined_permissions(self) -> bool:

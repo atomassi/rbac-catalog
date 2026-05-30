@@ -11,7 +11,7 @@ from azurerbac.core.constants import (
     HIGH_PRIVILEGE_OPERATION,
     HIGH_PRIVILEGE_ROLE_IDS,
 )
-from azurerbac.core.patterns import is_wildcard_pattern, matches_pattern
+from azurerbac.core.patterns import WILDCARD, is_wildcard_pattern, matches_pattern
 from azurerbac.matching.models import (
     PatternCacheKey,
     Plane,
@@ -42,7 +42,7 @@ def _get_cache(caches: CacheData | None = None) -> CacheData:
 
 def operation_matches_any_pattern(operation: OperationName, patterns: Iterable[Pattern]) -> bool:
     """Check if an operation matches any of the given patterns."""
-    return any(p == "*" or matches_pattern(operation, p) for p in patterns)
+    return any(matches_pattern(operation, p) for p in patterns)
 
 
 def check_operation_allowed(
@@ -153,8 +153,7 @@ def count_net_permissions(
 
     cache = _get_cache(caches)
 
-    # Handle wildcard * that matches everything
-    if "*" in actions:
+    if WILDCARD in actions:
         if not not_actions:
             return len(all_operations)
         excluded = sum(_count_pattern(p, all_operations, plane, cache) for p in not_actions)

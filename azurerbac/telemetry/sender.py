@@ -66,6 +66,16 @@ class MetricsSender:
         return {"environment": cls._environment}
 
     @classmethod
+    def _build_attributes(cls, properties: dict[str, Any] | None) -> dict[str, str]:
+        """Coerce caller properties to string dimensions, dropping ``None`` values.
+
+        ``None`` is dropped (rather than stringified to ``"None"``) so absent
+        dimensions don't pollute Application Insights with literal ``"None"``.
+        """
+        coerced = {k: str(v) for k, v in (properties or {}).items() if v is not None}
+        return coerced | cls._base_attributes()
+
+    @classmethod
     def _get_histogram(cls, name: str, description: str, unit: str = "s") -> Any:
         """Get or create a histogram for the given name."""
         if name not in cls._histograms:
@@ -86,7 +96,7 @@ class MetricsSender:
             return
 
         try:
-            attributes = {k: str(v) for k, v in (properties or {}).items()} | cls._base_attributes()
+            attributes = cls._build_attributes(properties)
 
             # Use Gauge for current value reporting
             if name not in cls._gauges:
@@ -111,7 +121,7 @@ class MetricsSender:
             return
 
         try:
-            attributes = {k: str(v) for k, v in (properties or {}).items()} | cls._base_attributes()
+            attributes = cls._build_attributes(properties)
             histogram = cls._get_histogram(name, f"Histogram: {name}")
             histogram.record(value, attributes)
         except Exception as e:
@@ -129,7 +139,7 @@ class MetricsSender:
             return
 
         try:
-            attributes = {k: str(v) for k, v in (properties or {}).items()} | cls._base_attributes()
+            attributes = cls._build_attributes(properties)
 
             if name not in cls._counters:
                 cls._counters[name] = cls._meter.create_counter(

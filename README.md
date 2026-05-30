@@ -25,6 +25,15 @@ A comprehensive catalog and monitoring tool for [Azure built-in RBAC roles](http
 
 [![Azure RBAC Catalog demo](docs/images/demo.webp)](https://rbac-catalog.dev/)
 
+> [!WARNING]
+> **Disclaimer** — This is a personal project for educational purposes only and is
+> **not affiliated with, sponsored by, or endorsed by Microsoft**. It is unreviewed,
+> may contain bugs, and its core logic (permission computation, role matching, AI
+> recommendations) may produce incorrect or misleading results — so you should not
+> rely on its output as a source of truth. It is provided "as is" without warranty of any kind.
+> Always consult the [official Microsoft documentation](https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles)
+> and test in a non-production environment before making RBAC changes.
+
 ## Contents
 
 - [Features](#features)

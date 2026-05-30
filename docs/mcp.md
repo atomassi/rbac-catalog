@@ -11,8 +11,8 @@ The server speaks MCP over streamable HTTP at `https://rbac-catalog.dev/mcp/`. A
 | `search_operations` | `query`, `limit` | Search Azure operations by name/pattern (supports wildcards like `Microsoft.Storage/*/read`) |
 | `search_roles` | `query`, `limit` | Search roles by name or description |
 | `get_role` | `role_id_or_name` | Get detailed role info including all permissions |
-| `get_role_permissions` | `role_id_or_name` | Get the expanded list of actual operations a role grants |
-| `recommend_roles` | `operations`, `max_results` | Find least-privilege roles for specific operations |
+| `get_role_permissions` | `role_id_or_name`, `include_data_actions` | Get the expanded list of actual operations a role grants |
+| `recommend_roles` | `operations`, `wildcards_control`, `wildcards_data`, `max_results` | Find least-privilege roles for specific operations |
 | `ai_recommend` | `query`, `top_k` | Natural-language role recommendations |
 
 ## Example queries

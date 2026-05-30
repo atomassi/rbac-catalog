@@ -6,7 +6,7 @@ The commands below use a Bash / Zsh shell (macOS, Linux, WSL). For native Window
 
 ## Prerequisites
 
-- Python 3.12
+- **Python 3.12** — required. One of the AI recommendation modes (ColBERT, via [RAGatouille](https://github.com/AnswerDotAI/RAGatouille)) depends on [`voyager`](https://github.com/spotify/voyager), which only ships wheels up to Python 3.12. Other versions are untested and known to fail to install. Verify with `python3.12 --version` before continuing.
 - Git
 - A C++ toolchain — required by ColBERT, which JIT-compiles PyTorch extensions on first use. Install Xcode Command Line Tools on macOS (`xcode-select --install`) or `build-essential` on Debian/Ubuntu. Skip this if you run with `ENABLED_AI_ENGINES=tfidf` (see [Run](#run)).
 - Optional: Azure CLI (`az login`) — only needed to populate the catalog with live data from Azure

@@ -2,16 +2,18 @@
 
 This is the full reference for the [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server exposed by Azure RBAC Catalog. The short version (endpoint + VS Code setup) lives in the [main README](../README.md#mcp-server-integration).
 
+The server speaks MCP over streamable HTTP at `https://rbac-catalog.dev/mcp/`. Any MCP-capable client (GitHub Copilot, Claude, Cursor) can connect to it without an API key; usage is governed by the [rate limits](#rate-limiting) below.
+
 ## Available Tools
 
-| Tool | Description |
-|------|-------------|
-| `search_operations` | Search Azure operations by name/pattern (supports wildcards like `Microsoft.Storage/*/read`) |
-| `search_roles` | Search roles by name or description |
-| `get_role` | Get detailed role info including all permissions |
-| `get_role_permissions` | Get expanded list of actual operations a role grants |
-| `recommend_roles` | Find least-privilege roles for specific operations |
-| `ai_recommend` | Natural language role recommendations |
+| Tool | Parameters | Description |
+|------|------------|-------------|
+| `search_operations` | `query`, `limit` | Search Azure operations by name/pattern (supports wildcards like `Microsoft.Storage/*/read`) |
+| `search_roles` | `query`, `limit` | Search roles by name or description |
+| `get_role` | `role_id_or_name` | Get detailed role info including all permissions |
+| `get_role_permissions` | `role_id_or_name`, `include_data_actions` | Get the expanded list of actual operations a role grants |
+| `recommend_roles` | `operations`, `wildcards_control`, `wildcards_data`, `max_results` | Find least-privilege roles for specific operations |
+| `ai_recommend` | `query`, `top_k` | Natural-language role recommendations |
 
 ## Example queries
 

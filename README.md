@@ -9,8 +9,8 @@
 > [!IMPORTANT]
 > **The public site at [rbac-catalog.dev](https://rbac-catalog.dev/) will be decommissioned on June 12, 2026.**
 >
-> The full source — application code, Bicep templates, and post-deploy
-> scripts — stays in this repository under the MIT license. You have two
+> The full source (application code, Bicep templates, and post-deploy
+> scripts) stays in this repository under the MIT license. You have two
 > ways to keep using it:
 >
 > - **Run it locally** — see [`docs/run-local.md`](docs/run-local.md).
@@ -23,7 +23,21 @@
 
 A comprehensive catalog and monitoring tool for [Azure built-in RBAC roles](https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles). Browse roles, explore their permissions, track changes over time, find least-privilege roles based on operation requirements, and get AI-powered role recommendations.
 
-[![Azure RBAC Catalog screenshot](docs/images/homepage.png)](https://rbac-catalog.dev/)
+[![Azure RBAC Catalog demo](docs/images/demo.webp)](https://rbac-catalog.dev/)
+
+## Contents
+
+- [Features](#features)
+- [Quick Start](#quick-start)
+- [Documentation](#documentation)
+- [Tech Stack](#tech-stack)
+- [Infrastructure & Costs](#infrastructure--costs)
+- [AI Recommendation Modes](#ai-recommendation-modes)
+- [MCP Server Integration](#mcp-server-integration)
+- [Testing](#testing)
+- [Deployment](#deployment)
+- [Project Structure](#project-structure)
+- [References](#references)
 
 ## Features
 
@@ -40,6 +54,42 @@ A comprehensive catalog and monitoring tool for [Azure built-in RBAC roles](http
 - **MCP Server** — Integrate with AI agents (Copilot, Claude) via Model Context Protocol
 - **RSS/Atom Feeds** — Subscribe to role changes in your favorite feed reader
 
+## Quick Start
+
+Run the catalog locally in a few minutes. You need **Python 3.12** and **Git**.
+
+```bash
+git clone https://github.com/atomassi/rbac-catalog.git
+cd rbac-catalog
+python3.12 -m venv .venv && source .venv/bin/activate
+pip install --upgrade pip && pip install -r requirements.txt
+
+# Boot fast with only the lightweight recommender engine
+ENABLED_AI_ENGINES=tfidf uvicorn azurerbac.web.app:app --port 8000 --reload
+```
+
+Open <http://localhost:8000>. The UI and search work immediately; the catalog
+stays empty until the background worker runs its first scan. To populate it with
+live data, run `az login` once, then start the worker in a second terminal:
+
+```bash
+python -m azurerbac.backgroundjobs.worker
+```
+
+Prefer containers? `docker build -t azurerbac:local --build-arg VERSION=local-dev . && docker run --rm -p 8000:8000 azurerbac:local`.
+
+For prerequisites, environment variables, and the full walkthrough, see
+[`docs/run-local.md`](docs/run-local.md).
+
+## Documentation
+
+| Guide | What it covers |
+|-------|----------------|
+| [`docs/run-local.md`](docs/run-local.md) | Running the app locally with native Python or Docker |
+| [`infra/README.md`](infra/README.md) | Deploying your own copy on Azure with Bicep |
+| [`docs/ai-recommender.md`](docs/ai-recommender.md) | How the AI modes and LLM fine-tuning work |
+| [`docs/mcp.md`](docs/mcp.md) | MCP server tools, example queries, and rate limits |
+
 ## Tech Stack
 
 | Layer | Technologies |
@@ -55,16 +105,15 @@ A comprehensive catalog and monitoring tool for [Azure built-in RBAC roles](http
 
 ## Infrastructure & Costs
 
-The site is designed around a **hard cap of $150/month** on Azure spend.
-That budget shapes every architectural choice: SKUs, what runs as a
-managed service vs. on a VM, no Kubernetes, no autoscaling, no high
-availability. Adequate for a low-traffic public catalog; deliberately
-under-provisioned for anything else.
+The architecture favors simplicity over scale: managed Azure services do
+the heavy lifting, with a single VM reserved for self-hosted inference to
+control costs. There's no Kubernetes, no autoscaling, and no multi-region failover, just
+the moving parts a low-traffic public catalog actually needs.
 
-The Ollama and GPU VMs are **optional** — the site runs fine without
-them. They're included because part of the goal of this project was
-to experiment with self-hosted LLMs, Unsloth fine-tuning, and serving
-via Ollama.
+The Ollama and GPU VMs are **optional**, and the site runs fine without
+them. They exist because one goal of this project was to experiment with
+self-hosted LLMs, fine-tuning with Unsloth, and serving the result
+through Ollama.
 
 ### Architecture
 
@@ -114,7 +163,7 @@ flowchart TD
 ### Current Cost
 
 > [!TIP]
-> A lot of the spending in the table below is optional. A minimal deployment — App Service (B1), PostgreSQL (B1ms), ACR Basic, App Insights, Cloudflare Free, and no Ollama/GPU VMs — runs comfortably under **$50/month**. The AI features that depend on the local LLM are then unavailable, but the rest of the catalog works as-is.
+> A lot of the spending in the table below is optional. A minimal deployment (App Service B1, PostgreSQL B1ms, ACR Basic, App Insights, Cloudflare Free, and no Ollama/GPU VMs) runs comfortably under **$60/month**. The AI features that depend on the local LLM are then unavailable, but the rest of the catalog works as-is.
 
 | Service | $/month | Notes |
 |---------|--------:|-------|
@@ -131,7 +180,7 @@ flowchart TD
 ## AI Recommendation Modes
 
 > [!NOTE]
-> The AI modes are experimental — built as a playground for trying out different recommendation approaches and for learning LLM fine-tuning ([Unsloth](https://unsloth.ai/docs) + Qwen, served via [Ollama](https://ollama.com/)). Results should be verified. Access them via the "Show AI Tools" toggle on the Recommend page.
+> The AI modes are experimental, built as a playground for trying out different recommendation approaches and for learning LLM fine-tuning ([Unsloth](https://unsloth.ai/docs) + Qwen, served via [Ollama](https://ollama.com/)). Results should be verified. Access them via the "Show AI Tools" toggle on the Recommend page.
 
 The AI Role Recommender supports **8 different modes**, each with different speed/accuracy trade-offs:
 

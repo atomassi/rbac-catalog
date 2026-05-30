@@ -4,8 +4,10 @@ import heapq
 import logging
 import time
 from collections import OrderedDict
+from functools import partial
 from itertools import islice
 
+from anyio import to_thread
 from mcp.server.fastmcp import Context, FastMCP
 from starlette.applications import Starlette
 
@@ -406,7 +408,7 @@ class MCPServer:
             return "\n".join(lines)
 
         @self._mcp.tool(description=RECOMMEND_ROLES_DESC)
-        def recommend_roles_tool(
+        async def recommend_roles_tool(
             operations: list[str] | None = None,
             wildcards_control: list[str] | None = None,
             wildcards_data: list[str] | None = None,
@@ -458,11 +460,25 @@ class MCPServer:
                     timer.fail()
                     return str(e)
 
-                matches = recommend_roles(
-                    requested_operations=sanitized_ops,
-                    max_results=min(max_results, MAX_RECOMMEND_LIMIT),
-                    requested_ops_data_flags=data_flags or None,
-                )
+                # CPU-bound: offload to a worker thread so a single
+                # recommendation request does not stall the event loop
+                # (and the rest of the site mounted in the same app).
+                try:
+                    matches = await to_thread.run_sync(
+                        partial(
+                            recommend_roles,
+                            requested_operations=sanitized_ops,
+                            max_results=min(max_results, MAX_RECOMMEND_LIMIT),
+                            requested_ops_data_flags=data_flags or None,
+                        )
+                    )
+                except Exception:
+                    logger.exception("Role recommendation failed")
+                    timer.fail()
+                    # Do not echo the underlying exception back to the remote
+                    # MCP client: log details server-side only and return a
+                    # fixed message instead of letting it surface as a 500.
+                    return "Role recommendation failed. Please try again later."
                 timer.result_count = len(matches)
 
             if not matches:
@@ -481,7 +497,7 @@ class MCPServer:
             return "\n".join(lines)
 
         @self._mcp.tool(description=AI_RECOMMEND_DESC)
-        def ai_recommend(
+        async def ai_recommend(
             query: str, top_k: int = DEFAULT_AI_RECOMMEND_LIMIT, ctx: Context | None = None
         ) -> str:
             session_id = self._get_client_key(ctx)
@@ -512,11 +528,16 @@ class MCPServer:
                         if enabled
                         else RecommenderMode.TFIDF.value
                     )
-                    recommendations, mode = ai_recommend_roles(
-                        query=query,
-                        roles=self._cache.get_all_roles(),
-                        top_k=top_k,
-                        requested_mode=mcp_mode,
+                    # CPU-bound (and may run a model / LLM call): offload to
+                    # a worker thread to keep the shared event loop responsive.
+                    recommendations, mode = await to_thread.run_sync(
+                        partial(
+                            ai_recommend_roles,
+                            query=query,
+                            roles=self._cache.get_all_roles(),
+                            top_k=top_k,
+                            requested_mode=mcp_mode,
+                        )
                     )
                 except Exception:
                     logger.exception("AI recommendation failed")

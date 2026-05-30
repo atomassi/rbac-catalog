@@ -1,23 +1,11 @@
 """Rate limiting and input validation for MCP server."""
 
-import re
 import time
 from collections import OrderedDict
 from dataclasses import dataclass
 from types import TracebackType
-from typing import Final
 
 from azurerbac.telemetry import track_duration, track_event, track_gauge
-
-_SUSPICIOUS_PATTERN: Final = re.compile(
-    r"[<>{}\\;`$]"  # HTML, template, shell metacharacters
-    r"|(\.\./)"  # Path traversal
-    r"|(__)"  # Python dunder
-    r"|(--)"  # SQL comment
-    r"|(\|\|)"  # Logical OR
-    r"|(&&)"  # Logical AND
-    r"|(\x00)"  # Null byte
-)
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,24 +77,25 @@ class TokenBucketRateLimiter:
         self._buckets.move_to_end(bucket_id)
 
 
-def is_suspicious(value: str) -> bool:
-    """Detect injection patterns."""
-    return bool(_SUSPICIOUS_PATTERN.search(value))
-
-
 def validate_input(
     value: str,
     max_length: int,
     min_length: int = 0,
     field_name: str = "Input",
 ) -> str:
-    """Validate and sanitize input. Raises ValidationError on failure."""
+    """Validate and normalize free-text input. Raises ``ValidationError`` on failure.
+
+    Input hygiene only (length bounds + must be printable), not an injection
+    defense: callers feed the result into read-only in-memory lookups.
+    """
     stripped = value.strip()
     if len(stripped) > max_length:
         raise ValidationError(f"Input too long. Maximum {max_length} characters allowed.")
     if len(stripped) < min_length:
         raise ValidationError(f"{field_name} must be at least {min_length} characters")
-    if is_suspicious(stripped):
+    # Check printability with only spaces trimmed, so edge control characters
+    # (e.g. a trailing newline) are rejected instead of stripped away.
+    if not value.strip(" ").isprintable():
         raise ValidationError(f"Invalid {field_name.lower()} format")
     return stripped
 

@@ -6,7 +6,6 @@ from azurerbac.mcp.utils import (
     TokenBucketRateLimiter,
     ToolTimer,
     ValidationError,
-    is_suspicious,
     validate_input,
 )
 
@@ -18,6 +17,5 @@ __all__ = [
     "ValidationError",
     "create_disabled_mcp_app",
     "create_mcp_server",
-    "is_suspicious",
     "validate_input",
 ]

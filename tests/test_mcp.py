@@ -1,5 +1,7 @@
 """Tests for MCP server implementation."""
 
+import asyncio
+import inspect
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -358,9 +360,16 @@ class TestDisabledMCPApp:
 
 
 def _call_tool(server: MCPServer, tool_name: str, **kwargs: object) -> str:
-    """Call a registered MCP tool by name via its internal function."""
+    """Call a registered MCP tool by name via its internal function.
+
+    Handles both sync and async tool handlers transparently so callers can
+    invoke any tool without worrying about its coroutine status.
+    """
     tool = server._mcp._tool_manager._tools[tool_name]
-    return tool.fn(**kwargs)
+    result = tool.fn(**kwargs)
+    if inspect.isawaitable(result):
+        return asyncio.run(result)  # type: ignore[arg-type]
+    return result  # type: ignore[return-value]
 
 
 # =============================================================================
@@ -640,7 +649,7 @@ class TestRecommendRolesTool:
         result = _call_tool(
             mcp_server,
             "recommend_roles_tool",
-            operations=["<script>alert(1)</script>"],
+            operations=["bad\x00null"],
             ctx=None,
         )
         assert "Invalid" in result

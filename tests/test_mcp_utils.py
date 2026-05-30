@@ -5,10 +5,8 @@ import time
 import pytest
 
 from azurerbac.mcp.utils import (
-    _SUSPICIOUS_PATTERN,
     TokenBucketRateLimiter,
     ValidationError,
-    is_suspicious,
     validate_input,
 )
 
@@ -135,25 +133,26 @@ class TestInputValidation:
     """Tests for input validation functions."""
 
     @pytest.mark.parametrize(
-        ("value", "expected"),
+        ("value", "is_control"),
         [
             pytest.param("hello world", False, id="safe_plain"),
             pytest.param("Microsoft.Storage/read", False, id="safe_dotted"),
-            pytest.param("<script>", True, id="html_script"),
-            pytest.param("test>value", True, id="html_gt"),
-            pytest.param("{{config}}", True, id="template_braces"),
-            pytest.param("{%import%}", True, id="template_percent"),
-            pytest.param("test;ls", True, id="command_semicolon"),
-            pytest.param("`whoami`", True, id="command_backtick"),
-            pytest.param("$HOME", True, id="command_dollar"),
-            pytest.param("../../../etc", True, id="path_traversal"),
-            pytest.param("__class__", True, id="dunder"),
+            pytest.param("<script>", False, id="html_now_allowed"),
+            pytest.param("line\nbreak", True, id="control_newline"),
+            pytest.param("null\x00byte", True, id="control_null"),
+            pytest.param("tab\tsep", True, id="control_tab"),
+            pytest.param("café", False, id="unicode_printable"),
             pytest.param("_single", False, id="single_underscore"),
         ],
     )
-    def test_is_suspicious(self, value: str, expected: bool):
-        """Test suspicious input detection for various patterns."""
-        assert is_suspicious(value) is expected
+    def test_non_printable_detected(self, value: str, is_control: bool):
+        """``validate_input`` rejects control characters and accepts ordinary
+        printable text (returning it unchanged)."""
+        if is_control:
+            with pytest.raises(ValidationError, match="Invalid"):
+                validate_input(value, max_length=100, min_length=1)
+        else:
+            assert validate_input(value, max_length=100, min_length=1) == value
 
     @pytest.mark.parametrize(
         ("value", "max_len", "min_len", "label", "expected"),
@@ -174,7 +173,7 @@ class TestInputValidation:
         [
             pytest.param("a", 100, 2, "Query", "at least 2 characters", id="too_short"),
             pytest.param("hello world", 5, 1, "Query", "Maximum 5 characters", id="too_long"),
-            pytest.param("<script>", 100, 1, "Query", "Invalid query format", id="suspicious"),
+            pytest.param("bad\x00null", 100, 1, "Query", "Invalid query format", id="control"),
         ],
     )
     def test_validate_raises(self, value: str, max_len: int, min_len: int, label: str, match: str):
@@ -183,32 +182,33 @@ class TestInputValidation:
             validate_input(value, max_len, min_len, label)
 
 
-class TestSuspiciousPattern:
-    """Tests for _SUSPICIOUS_PATTERN regex."""
+class TestPrintableValidation:
+    """Tests for printable-character input validation."""
 
     @pytest.mark.parametrize(
         "value",
-        ["<", ">", "{", "}", "\\", ";", "`", "$", "../", "__"],
-        ids=[
-            "lt",
-            "gt",
-            "lbrace",
-            "rbrace",
-            "backslash",
-            "semicolon",
-            "backtick",
-            "dollar",
-            "path_traversal",
-            "dunder",
-        ],
+        ["line\nbreak", "null\x00byte", "tab\tsep", "bell\x07"],
+        ids=["newline", "null", "tab", "bell"],
     )
-    def test_matches_suspicious(self, value: str) -> None:
-        assert _SUSPICIOUS_PATTERN.search(value) is not None
+    def test_rejects_control_chars(self, value: str) -> None:
+        with pytest.raises(ValidationError, match="Invalid"):
+            validate_input(value, max_length=100, min_length=1)
 
     @pytest.mark.parametrize(
         "value",
-        ["hello", "Microsoft.Storage", "_single", "normal-text", "foo_bar"],
-        ids=["plain", "dotted", "single_underscore", "hyphenated", "snake_case"],
+        ["hello", "Microsoft.Storage", "_single", "normal-text", "foo_bar", "café", "<x>"],
+        ids=["plain", "dotted", "single_underscore", "hyphenated", "snake_case", "unicode", "html"],
     )
-    def test_safe_chars(self, value: str) -> None:
-        assert _SUSPICIOUS_PATTERN.search(value) is None
+    def test_accepts_printable(self, value: str) -> None:
+        assert validate_input(value, max_length=100, min_length=1) == value
+
+    @pytest.mark.parametrize(
+        "value",
+        ["hello\n", "\thello", "hello\r", "hi\x0bthere"],
+        ids=["trailing_newline", "leading_tab", "trailing_cr", "vertical_tab"],
+    )
+    def test_rejects_edge_control_chars(self, value: str) -> None:
+        """Control characters at the edges must be rejected, not silently
+        removed by ``str.strip()`` before the printability check."""
+        with pytest.raises(ValidationError, match="Invalid"):
+            validate_input(value, max_length=100, min_length=1)

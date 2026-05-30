@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import logging
+
 from sqlalchemy import inspect
 from sqlalchemy.engine import Connection
 from sqlalchemy.exc import IntegrityError, ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from .models import Base
+
+logger = logging.getLogger(__name__)
 
 
 async def ensure_db(engine: AsyncEngine, *, sentinel_table: str = "roles") -> None:
@@ -18,5 +22,8 @@ async def ensure_db(engine: AsyncEngine, *, sentinel_table: str = "roles") -> No
 
             if not await conn.run_sync(_table_exists):
                 await conn.run_sync(Base.metadata.create_all)
-    except (IntegrityError, ProgrammingError):
-        pass  # Race condition: another process created tables
+    except (IntegrityError, ProgrammingError) as exc:
+        # Usually a benign race (tables created concurrently), but
+        # ProgrammingError also covers real misconfig (permission denied,
+        # syntax errors) — log so startup failures stay diagnosable.
+        logger.debug("ensure_db ignored %s: %s", type(exc).__name__, exc)

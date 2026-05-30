@@ -56,6 +56,7 @@ from azurerbac.web.constants import (
 )
 from azurerbac.web.dependencies import BaseDeps, DashboardDeps, PagesDeps
 from azurerbac.web.filters import diff_lines, format_date, format_datetime, full_json_diff
+from azurerbac.web.limiter import limiter
 from azurerbac.web.middleware import (
     RequestBodySizeLimitMiddleware,
     add_cache_headers,
@@ -282,8 +283,6 @@ app.mount("/mcp", _mcp_server)
 app.include_router(feeds_routes.router)
 
 # Register rate limiter state and exception handler
-from azurerbac.web.limiter import limiter
-
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
 

@@ -54,7 +54,6 @@ class CacheStats(NamedTuple):
     """Cache entry counts for logging/debugging."""
 
     pattern_match: int
-    partial_coverage: int
     role_coverage: int
     wildcard_count: int
 
@@ -71,32 +70,6 @@ class PatternCacheKey(NamedTuple):
 
     pattern: str
     plane: Plane
-
-
-class PartialCoverageCacheKey(NamedTuple):
-    """Cache key for partial coverage lookups."""
-
-    pattern: str
-    plane: Plane
-    actions: tuple[str, ...]
-    not_actions: tuple[str, ...]
-
-    @classmethod
-    def build(
-        cls,
-        pattern: str,
-        plane: Plane | None,
-        actions: list[str],
-        not_actions: list[str],
-    ) -> PartialCoverageCacheKey | None:
-        if plane is None:
-            return None
-        return cls(
-            pattern=pattern,
-            plane=plane,
-            actions=tuple(sorted(actions)),
-            not_actions=tuple(sorted(not_actions)),
-        )
 
 
 @dataclass(frozen=True, slots=True)

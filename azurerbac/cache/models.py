@@ -10,7 +10,7 @@ It's designed for atomic swaps - the entire object is replaced, never mutated.
     ├── source: SourceData               # Raw DB data (immutable after load)
     ├── indexes: Indexes                 # Fast lookups (deterministic from source)
     ├── analysis: RoleAnalysis           # Expensive precomputation (built once at refresh)
-    ├── computed: ComputedCaches         # Expensive caches, SAVED to disk
+    ├── computed: ComputedCaches         # Expensive caches, memoized in-memory (rebuilt on swap)
     └── content: PrerenderedContent      # Pre-built responses (analytics, sitemap)
 
     CacheContainer (mutable wrapper)
@@ -34,8 +34,6 @@ from azurerbac.core.constants import POPULAR_COMPARE_PAIRS, RoleStatus
 from azurerbac.core.types import JsonDict
 from azurerbac.core.utils import content_hash
 from azurerbac.matching.models import (
-    CoverageResult,
-    PartialCoverageCacheKey,
     PatternCacheKey,
     Plane,
     RoleCoverage,
@@ -303,15 +301,14 @@ _EFFECTIVE_PERMS_CACHE_MAX_SIZE: Final[int] = 1000
 
 @dataclass
 class ComputedCaches:
-    """Deterministic caches - expensive to compute, SAVED to disk.
+    """Deterministic caches - expensive to compute, lazily populated.
 
     These caches are built from source data and are expensive to recompute
-    (e.g., wildcard expansion across 20K+ operations). They are persisted
-    to disk and loaded on restart.
+    (e.g., wildcard expansion across 20K+ operations). They are memoized
+    in-memory for the lifetime of a cache snapshot and rebuilt on each swap.
     """
 
     pattern_match: dict[PatternCacheKey, set[str]] = field(default_factory=dict)
-    partial_coverage: dict[PartialCoverageCacheKey, CoverageResult] = field(default_factory=dict)
     wildcard_count: dict[PatternCacheKey, int] = field(default_factory=dict)
 
 
@@ -383,7 +380,7 @@ class CacheData:
         ├── source          # Raw DB data (roles, operations, events)
         ├── indexes         # Lookup indexes (ops_by_name, ops_by_prefix)
         ├── analysis        # Precomputed (role_coverage, operation_to_roles)
-        ├── computed        # Expensive caches, SAVED to disk
+        ├── computed        # Expensive caches, memoized in-memory (rebuilt on swap)
         └── content         # Pre-rendered (analytics, sitemap)
 
     Note: RequestCaches (role_pages, operation_pages, etc.) live on CacheContainer,
@@ -397,7 +394,7 @@ class CacheData:
     source: SourceData = field(default_factory=SourceData)  # From DB
     indexes: Indexes = field(default_factory=Indexes)  # Built from source
     analysis: RoleAnalysis = field(default_factory=RoleAnalysis)  # Built from source + indexes
-    computed: ComputedCaches = field(default_factory=ComputedCaches)  # Persisted to disk
+    computed: ComputedCaches = field(default_factory=ComputedCaches)  # Memoized in-memory
     content: PrerenderedContent = field(default_factory=PrerenderedContent)  # Pre-built responses
 
     # =========================================================================
@@ -420,7 +417,6 @@ class CacheData:
         role_coverage: dict[str, RoleCoverage] | None = None,
         operation_to_roles: dict[str, list[str]] | None = None,
         pattern_match: dict[PatternCacheKey, set[str]] | None = None,
-        partial_coverage: dict[PartialCoverageCacheKey, CoverageResult] | None = None,
         wildcard_count: dict[PatternCacheKey, int] | None = None,
         analytics: AnalyticsData | None = None,
         sitemap: Sitemap | None = None,
@@ -447,7 +443,6 @@ class CacheData:
             ),
             computed=ComputedCaches(
                 pattern_match=pattern_match or {},
-                partial_coverage=partial_coverage or {},
                 wildcard_count=wildcard_count or {},
             ),
             content=PrerenderedContent(
@@ -535,10 +530,6 @@ class CacheData:
     @property
     def pattern_match(self) -> dict[PatternCacheKey, set[str]]:
         return self.computed.pattern_match
-
-    @property
-    def partial_coverage(self) -> dict[PartialCoverageCacheKey, CoverageResult]:
-        return self.computed.partial_coverage
 
     @property
     def wildcard_count(self) -> dict[PatternCacheKey, int]:

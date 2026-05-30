@@ -49,11 +49,6 @@ class OperationChangeProcessor:
         return len(self._ops_by_name)
 
     @property
-    def duplicates_skipped(self) -> int:
-        """Number of duplicate operations skipped."""
-        return self._duplicates
-
-    @property
     def providers(self) -> set[str]:
         """Unique provider names from fetched operations."""
         return {

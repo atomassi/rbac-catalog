@@ -17,14 +17,14 @@ project space.
 - **Suggest a feature** — open an issue describing the use case before sending a
   large PR, so we can agree on the approach.
 - **Send a fix** — small, focused pull requests are easiest to review.
-- **Report a vulnerability** — do **not** open a public issue. Follow
-  [SECURITY.md](SECURITY.md).
+- **Report a vulnerability** — follow [SECURITY.md](SECURITY.md). You may open a
+  GitHub issue for awareness, but **do not include working exploit details**.
 
 ## Development setup
 
-Requires **Python 3.12** (other versions are untested — see
-[`docs/run-local.md`](docs/run-local.md) for the full rationale) and Node 20 for
-the frontend tooling.
+Requires **Python 3.12, 3.13, or 3.14** (all supported and tested in CI — see
+[`docs/run-local.md`](docs/run-local.md) for details) and Node 20 for the
+frontend tooling.
 
 ```bash
 git clone https://github.com/atomassi/rbac-catalog.git

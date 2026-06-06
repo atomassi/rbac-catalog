@@ -5383,7 +5383,7 @@
           "targets": [
             {
               "azureLogAnalytics": {
-                "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where name == \"cache_refresh_duration_seconds\"\n| extend duration_s = todouble(customDimensions.duration_seconds)\n| summarize avg_duration = avg(duration_s) by bin(timestamp, $__interval)\n| order by timestamp asc",
+                "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where name == \"cache_refresh_duration_seconds\"\n| extend duration_s = value\n| summarize avg_duration = avg(duration_s) by bin(timestamp, $__interval)\n| order by timestamp asc",
                 "resource": "/subscriptions/__SUBSCRIPTION_ID__/resourceGroups/__RESOURCE_GROUP__/providers/microsoft.insights/components/__APP_INSIGHTS_NAME__",
                 "resultFormat": "time_series"
               },

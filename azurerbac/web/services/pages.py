@@ -448,7 +448,7 @@ async def get_role_from_cache_or_db(
     """Get role data from cache or database."""
     from sqlalchemy import func, select
 
-    from azurerbac.telemetry import TimedDbQuery
+    from azurerbac.telemetry import DbFallbackType, DbQueryName, TimedDbQuery
 
     cache_resolved = _get_cache(cache)
 
@@ -467,7 +467,9 @@ async def get_role_from_cache_or_db(
 
     # Cache miss - fall back to database (tracked via TimedDbQuery)
     async with session_local() as session:
-        async with TimedDbQuery("fetch_role_by_id", fallback_type="role_detail") as timer:
+        async with TimedDbQuery(
+            DbQueryName.FETCH_ROLE_BY_ID, fallback_type=DbFallbackType.ROLE_DETAIL
+        ) as timer:
             role = await session.get(role_snapshot_model, role_id)
             timer.rows = 1 if role else 0
         if role is None:
@@ -488,12 +490,16 @@ async def get_role_from_cache_or_db(
         # Get first scan timestamp from RoleScanStatus
         from azurerbac.core import RoleScanStatus
 
-        async with TimedDbQuery("fetch_first_scan_timestamp", fallback_type="role_detail"):
+        async with TimedDbQuery(
+            DbQueryName.FETCH_FIRST_SCAN_TIMESTAMP, fallback_type=DbFallbackType.ROLE_DETAIL
+        ):
             first_scan = await session.scalar(select(func.min(RoleScanStatus.scan_timestamp)))
         first_scan = truncate_microseconds(first_scan)
 
         # Get history entries for this role - RoleHistory has role_id directly
-        async with TimedDbQuery("fetch_role_history", fallback_type="role_detail") as timer:
+        async with TimedDbQuery(
+            DbQueryName.FETCH_ROLE_HISTORY, fallback_type=DbFallbackType.ROLE_DETAIL
+        ) as timer:
             events_result = await session.execute(
                 select(role_history_model)
                 .where(role_history_model.role_id == role_id)

@@ -1,9 +1,12 @@
 """Telemetry: Application Insights metrics and logging."""
 
+from .dimensions import CacheType, DbFallbackType, DbQueryName, MCPRateLimitType
 from .logging import configure_logging, sanitize_for_log
+from .metric_names import MetricName
 from .metrics import (
     flush_metrics,
     track_ai_recommendation,
+    track_ai_recommendation_error,
     track_cache_call,
     track_cache_hit,
     track_cache_refresh,
@@ -21,12 +24,18 @@ from .timers import TimedDbQuery
 from .tracing import WorkerOperationContext
 
 __all__ = [
+    "CacheType",
+    "DbFallbackType",
+    "DbQueryName",
+    "MCPRateLimitType",
+    "MetricName",
     "TimedDbQuery",
     "WorkerOperationContext",
     "configure_logging",
     "flush_metrics",
     "sanitize_for_log",
     "track_ai_recommendation",
+    "track_ai_recommendation_error",
     "track_cache_call",
     "track_cache_hit",
     "track_cache_refresh",

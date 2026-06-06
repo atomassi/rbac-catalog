@@ -36,10 +36,9 @@ async def preload_cache(session_factory: async_sessionmaker[_AsyncSession]) -> N
     logger.info("Roles: %d | Operations: %d", roles_count, operations_count)
 
     # Track startup metrics to Application Insights
-    from azurerbac.telemetry import track_cache_refresh, track_startup
+    from azurerbac.telemetry import track_startup
 
     track_startup(elapsed, roles_count, operations_count)
-    track_cache_refresh(elapsed, "startup", roles_count, operations_count)
 
 
 async def cache_refresh_task(session_factory: async_sessionmaker[_AsyncSession]) -> None:
@@ -63,21 +62,16 @@ async def cache_refresh_task(session_factory: async_sessionmaker[_AsyncSession])
                         elapsed = time.perf_counter() - start_time
                         logger.info("Background: periodic rebuild completed in %.2fs", elapsed)
 
-                        track_cache_refresh(
-                            elapsed,
-                            "periodic",
-                            service.cache.metadata.roles_count,
-                            service.cache.metadata.operations_count,
-                        )
+                        track_cache_refresh(elapsed)
                     else:
                         logger.warning("Background: periodic rebuild skipped or failed")
-                        track_cache_refresh_failure("periodic", "rebuild_in_memory returned False")
+                        track_cache_refresh_failure("rebuild_in_memory returned False")
 
             except anyio.get_cancelled_exc_class():
                 raise  # Re-raise to allow clean shutdown
             except Exception as e:
                 logger.exception("Background: cache refresh error: %s", e)
-                track_cache_refresh_failure("background_task", str(e))
+                track_cache_refresh_failure(type(e).__name__)
 
     except anyio.get_cancelled_exc_class():
         logger.info("Background: shutting down cache refresh task")

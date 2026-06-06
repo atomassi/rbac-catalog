@@ -831,7 +831,6 @@ class TestPreloadCacheIntegration:
         with (
             patch("azurerbac.web.services.startup.get_cache_service", return_value=mock_service),
             patch("azurerbac.telemetry.track_startup"),
-            patch("azurerbac.telemetry.track_cache_refresh"),
         ):
             from azurerbac.web.services.startup import preload_cache
 

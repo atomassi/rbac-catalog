@@ -51,7 +51,7 @@ from azurerbac.mcp.constants import (
 )
 from azurerbac.mcp.utils import TokenBucketRateLimiter, ToolTimer, ValidationError, validate_input
 from azurerbac.settings import Settings
-from azurerbac.telemetry import track_event
+from azurerbac.telemetry import MCPRateLimitType, MetricName, track_event
 
 logger = logging.getLogger(__name__)
 
@@ -81,18 +81,18 @@ class MCPServer:
             if SITE_URL not in self._mcp.settings.transport_security.allowed_origins:
                 self._mcp.settings.transport_security.allowed_origins.append(SITE_URL)
         self._register_tools()
-        track_event("mcp_server_initialized", {})
+        track_event(MetricName.MCP_SERVER_INITIALIZED, {})
         logger.info("MCP server '%s' initialized", MCP_SERVER_NAME)
 
     def streamable_http_app(self) -> Starlette:
         """Get Starlette Streamable HTTP app (modern MCP transport)."""
         return self._mcp.streamable_http_app()
 
-    def _timer(self, tool_name: str, session_id: str = "unknown") -> ToolTimer:
-        return ToolTimer(tool_name, session_id)
+    def _timer(self, tool_name: str) -> ToolTimer:
+        return ToolTimer(tool_name)
 
-    def _track_rate_limit(self, tool_name: str, limit_type: str) -> None:
-        track_event("mcp_rate_limit", {"tool": tool_name, "type": limit_type})
+    def _track_rate_limit(self, tool_name: str, limit_type: MCPRateLimitType) -> None:
+        track_event(MetricName.MCP_RATE_LIMIT, {"tool": tool_name, "type": limit_type})
 
     @staticmethod
     def _get_client_key(ctx: Context | None) -> str:
@@ -159,6 +159,15 @@ class MCPServer:
 
     def _check_rate_limit(self, tool_name: str, session_id: str = "default") -> str | None:
         """Check rate limits. Returns error message or None if allowed."""
+        # Emit the tool-call signal that powers the "active sessions" dashboard.
+        # session_id is recorded as a log property (App Insights
+        # ``traces.customDimensions``), NOT a metric dimension: it is unbounded and
+        # client-supplied (the ``mcp-session-id`` header), which is safe as a
+        # high-cardinality log field but would blow up a pre-aggregated metric series.
+        logger.info(
+            "MCP tool call",
+            extra={"mcp_event": "tool_call", "tool": tool_name, "session_id": session_id},
+        )
         logger.debug("Rate limit check: tool=%s, session=%s", tool_name, session_id)
         now = time.monotonic()
         if self._session_last_activity:
@@ -170,7 +179,7 @@ class MCPServer:
             and len(self._session_last_activity) >= RATE_LIMIT_MAX_SESSIONS
         ):
             logger.warning("Max sessions reached, rejecting: %s", session_id)
-            self._track_rate_limit(tool_name, "max_sessions")
+            self._track_rate_limit(tool_name, MCPRateLimitType.MAX_SESSIONS)
             return f"Server at capacity ({RATE_LIMIT_MAX_SESSIONS} sessions). Try later."
 
         self._session_last_activity[session_id] = now
@@ -180,14 +189,14 @@ class MCPServer:
         result = self._global_limiter.is_allowed("global")
         if not result.allowed:
             logger.warning("Global rate limit exceeded for %s", tool_name)
-            self._track_rate_limit(tool_name, "global")
+            self._track_rate_limit(tool_name, MCPRateLimitType.GLOBAL)
             return f"Server under high load. Please wait {result.wait_seconds:.0f} seconds."
 
         # Session limit
         result = self._session_limiter.is_allowed(session_id)
         if not result.allowed:
             logger.warning("Session rate limit exceeded for %s", tool_name)
-            self._track_rate_limit(tool_name, "session")
+            self._track_rate_limit(tool_name, MCPRateLimitType.SESSION)
             return f"Rate limit exceeded. Please wait {result.wait_seconds:.0f} seconds."
 
         return None
@@ -230,7 +239,7 @@ class MCPServer:
             if err := self._check_rate_limit("search_operations", session_id):
                 return err
 
-            with self._timer("search_operations", session_id) as timer:
+            with self._timer("search_operations") as timer:
                 try:
                     query = validate_input(query, MAX_QUERY_LENGTH, MIN_QUERY_LENGTH, "Query")
                 except ValidationError as e:
@@ -269,7 +278,7 @@ class MCPServer:
             if err := self._check_rate_limit("search_roles", session_id):
                 return err
 
-            with self._timer("search_roles", session_id) as timer:
+            with self._timer("search_roles") as timer:
                 try:
                     query = validate_input(query, MAX_QUERY_LENGTH, MIN_QUERY_LENGTH, "Query")
                 except ValidationError as e:
@@ -315,7 +324,7 @@ class MCPServer:
             if err := self._check_rate_limit("get_role", session_id):
                 return err
 
-            with self._timer("get_role", session_id) as timer:
+            with self._timer("get_role") as timer:
                 try:
                     role_id_or_name = validate_input(
                         role_id_or_name, MAX_ROLE_ID_LENGTH, 1, "Role identifier"
@@ -370,7 +379,7 @@ class MCPServer:
             if err := self._check_rate_limit("get_role_permissions", session_id):
                 return err
 
-            with self._timer("get_role_permissions", session_id) as timer:
+            with self._timer("get_role_permissions") as timer:
                 try:
                     role_id_or_name = validate_input(
                         role_id_or_name, MAX_ROLE_ID_LENGTH, 1, "Role identifier"
@@ -426,7 +435,7 @@ class MCPServer:
             if err := self._check_rate_limit("recommend_roles_tool", session_id):
                 return err
 
-            with self._timer("recommend_roles_tool", session_id) as timer:
+            with self._timer("recommend_roles_tool") as timer:
                 all_ops = (operations or []) + (wildcards_control or []) + (wildcards_data or [])
                 if not all_ops:
                     timer.fail()
@@ -510,7 +519,7 @@ class MCPServer:
             if err := self._check_rate_limit("ai_recommend", session_id):
                 return err
 
-            with self._timer("ai_recommend", session_id) as timer:
+            with self._timer("ai_recommend") as timer:
                 try:
                     query = validate_input(query, MAX_AI_QUERY_LENGTH, MIN_AI_QUERY_LENGTH, "Query")
                 except ValidationError as e:

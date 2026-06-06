@@ -1242,8 +1242,10 @@ class TestEmbeddingModelOptimizations:
         def mock_encode(text, show_progress_bar=False):
             import zlib
 
-            # Seed from a stable content hash (deterministic across processes and
-            # collision-free for distinct texts, unlike hash(text) % 1000).
+            # Seed from a stable content hash: deterministic across processes
+            # and spread over the full 32-bit space, so distinct texts get
+            # different seeds with overwhelming probability (unlike
+            # hash(text) % 1000, which is process-randomized and collides often).
             def _seed(value: str) -> int:
                 return zlib.crc32(value.encode("utf-8")) & 0xFFFFFFFF
 

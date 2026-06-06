@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import re
 from collections.abc import Iterable
-from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
 from azurerbac.airecommender.knowledge.azure_knowledge import USE_CASE_PATTERNS
@@ -19,8 +17,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_MODELS_DIR: Final[Path] = Path(__file__).parent.parent / "models"
-_KB_PATH: Final[Path] = _MODELS_DIR / "knowledge_base.json"
 _FUZZY_THRESHOLD: Final[float] = 0.7
 _MAX_DOC_KEYWORDS: Final[int] = 15
 
@@ -28,10 +24,9 @@ _MAX_DOC_KEYWORDS: Final[int] = 15
 class RoleKnowledgeBase:
     """Knowledge base for role recommendations."""
 
-    __slots__ = ("_knowledge_base", "_name_to_role_id", "_name_word_sets", "_role_documents")
+    __slots__ = ("_name_to_role_id", "_name_word_sets", "_role_documents")
 
     def __init__(self) -> None:
-        self._knowledge_base: JsonDict = {}
         self._role_documents: dict[str, JsonDict] = {}
         self._name_to_role_id: dict[str, str] = {}
         self._name_word_sets: dict[str, frozenset[str]] = {}
@@ -40,34 +35,16 @@ class RoleKnowledgeBase:
     def role_documents(self) -> dict[str, JsonDict]:
         return self._role_documents
 
-    @property
-    def knowledge_base(self) -> JsonDict:
-        return self._knowledge_base
-
     def get_all_role_names(self) -> list[str]:
-        """Get all known role names."""
-        role_names = list(self._knowledge_base.get("role_details", {}).keys())
+        """Get all known role names (built from live role definitions)."""
+        role_names: list[str] = []
+        seen: set[str] = set()
         for doc in self._role_documents.values():
             name = doc.get("role_name", "")
-            if name and name not in role_names:
+            if name and name not in seen:
+                seen.add(name)
                 role_names.append(name)
         return role_names
-
-    def load_from_file(self) -> bool:
-        """Load pre-built knowledge base from disk. Returns True on success."""
-        if not _KB_PATH.exists():
-            logger.info("Knowledge base not found. Run build_knowledge.py to generate it.")
-            return False
-
-        try:
-            self._knowledge_base = json.loads(_KB_PATH.read_text(encoding="utf-8"))
-            logger.info(
-                "Loaded knowledge base: %d roles", self._knowledge_base.get("total_roles", 0)
-            )
-            return True
-        except (OSError, json.JSONDecodeError) as e:
-            logger.exception("Failed to load knowledge base: %s", e)
-            return False
 
     def build_from_roles(
         self,

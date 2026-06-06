@@ -42,7 +42,7 @@ When generating or modifying code, GitHub Copilot should:
 | **Backend** | Python 3.12+, FastAPI, SQLAlchemy 2.0, Pydantic v2 |
 | **Frontend** | Jinja2 templates, Tailwind CSS, Alpine.js (MPA, not SPA) |
 | **Database** | PostgreSQL 14+ (asyncpg for async, aiosqlite for testing) |
-| **AI/ML** | sentence-transformers, ColBERT, Ollama (Qwen fine-tuned) |
+| **AI/ML** | sentence-transformers, Ollama (Qwen fine-tuned) |
 | **Testing** | pytest (unit), Playwright (E2E) |
 | **Linting** | Ruff (linting + formatting), Pyright (type checking) |
 | **CI/CD** | GitHub Actions, Docker, Azure Container Registry |
@@ -223,16 +223,15 @@ Key SQLAlchemy models in `azurerbac/core/models.py`:
 
 ## AI Recommendation Modes
 
-The recommender supports 8 modes with increasing sophistication:
+The recommender supports 7 modes with increasing sophistication:
 
 1. **TF-IDF** — Enhanced keyword matching with BM25
 2. **Semantic** — Sentence embedding cosine similarity
-3. **ColBERT** — Token-level late interaction
-4. **Cross-Encoder** — Neural reranking of candidates
-5. **LLM** — Fine-tuned Qwen model inference
-6. **RAG** — Retrieval-augmented generation
-7. **HyDE** — Hypothetical document embeddings
-8. **Hybrid** — Multi-stage pipeline combining modes
+3. **Cross-Encoder** — Neural reranking of candidates
+4. **LLM** — Fine-tuned Qwen model inference
+5. **RAG** — Retrieval-augmented generation
+6. **HyDE** — Hypothetical document embeddings
+7. **Hybrid** — Multi-stage pipeline combining modes
 
 ### AI Implementation Guidelines
 
@@ -255,7 +254,7 @@ The recommender supports 8 modes with increasing sophistication:
 
 When asked to design or modify functionality:
 
-- When modifying AI logic, explain the trade-offs between modes (Semantic vs. ColBERT vs. LLM) before writing code
+- When modifying AI logic, explain the trade-offs between modes (Semantic vs. Cross-Encoder vs. LLM) before writing code
 - If a feature requires a new database table, suggest the SQLAlchemy model in `core/models.py` AND the migration approach
 - If a change requires modifying multiple files, list all affected files in the summary
 - Propose the minimal viable change first; do not suggest large rewrites unless explicitly requested

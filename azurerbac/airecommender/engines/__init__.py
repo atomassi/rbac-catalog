@@ -1,7 +1,6 @@
 """Recommendation engines package."""
 
 from azurerbac.airecommender.engines.base import BaseRecommenderEngine, RankedRole
-from azurerbac.airecommender.engines.colbert import ColBERTEngine, ColBERTInitializationError
 from azurerbac.airecommender.engines.common import (
     cosine_similarity,
     normalize_candidates,
@@ -24,8 +23,6 @@ from azurerbac.airecommender.engines.tfidf import TFIDFEngine
 __all__ = [
     "BM25Index",
     "BaseRecommenderEngine",
-    "ColBERTEngine",
-    "ColBERTInitializationError",
     "CrossEncoderEngine",
     "EngineRegistry",
     "EnhancedTFIDFRecommender",

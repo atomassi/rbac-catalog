@@ -102,7 +102,7 @@ For prerequisites, environment variables, and the full walkthrough, see
 | **Backend** | Python 3.12+, FastAPI, SQLAlchemy, Pydantic |
 | **Frontend** | Jinja2 templates, Tailwind CSS, Alpine.js |
 | **Database** | PostgreSQL |
-| **AI/ML** | PyTorch, Ollama, sentence-transformers, ColBERT, Qwen (fine-tuned) |
+| **AI/ML** | PyTorch, Ollama, sentence-transformers, Qwen (fine-tuned) |
 | **Hosting** | Azure App Service, Cloudflare CDN |
 | **CI/CD** | GitHub Actions, Azure Container Registry, Docker |
 | **Testing** | pytest, Playwright |
@@ -197,13 +197,12 @@ flowchart TD
 > [!NOTE]
 > The AI modes are experimental, built as a playground for trying out different recommendation approaches and for learning LLM fine-tuning ([Unsloth](https://unsloth.ai/docs) + Qwen, served via [Ollama](https://ollama.com/)). Results should be verified. Access them via the "Show AI Tools" toggle on the Recommend page.
 
-The AI Role Recommender supports **8 different modes**, each with different speed/accuracy trade-offs:
+The AI Role Recommender supports **7 different modes**, each with different speed/accuracy trade-offs:
 
 | Mode | Description | Requires |
 |------|-------------|----------|
 | **TF-IDF** | Enhanced TF-IDF + BM25 keyword matching | CPU only |
 | **Semantic** | Pure sentence embedding similarity | Embeddings |
-| **ColBERT** | Token-level late interaction for precise matching | ColBERT index |
 | **Cross-Encoder** | Bi-encoder retrieval + neural reranking | Embeddings |
 | **LLM** | Fine-tuned Qwen model direct inference | Ollama |
 | **RAG** | Retrieval-Augmented Generation with LLM reranking | Embeddings + Ollama |
@@ -299,7 +298,6 @@ e2e/                 # Playwright end-to-end tests
 
 - **TF-IDF/BM25**: Robertson & Zaragoza, [The Probabilistic Relevance Framework: BM25 and Beyond](https://www.staff.city.ac.uk/~sbrp622/papers/foundations_bm25_review.pdf) (2009)
 - **Sentence-BERT**: Reimers & Gurevych, [Sentence Embeddings using Siamese BERT-Networks](https://arxiv.org/abs/1908.10084) (2019)
-- **ColBERT**: Khattab & Zaharia, [Efficient and Effective Passage Search via Contextualized Late Interaction](https://arxiv.org/abs/2004.12832) (2020)
 - **Cross-Encoder**: Humeau et al., [Poly-encoders: Architectures and Pre-training Strategies](https://arxiv.org/abs/1905.01969) (2019)
 - **Qwen**: Bai et al., [Qwen Technical Report](https://arxiv.org/abs/2309.16609) (2023)
 - **RAG**: Lewis et al., [Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks](https://arxiv.org/abs/2005.11401) (2020)

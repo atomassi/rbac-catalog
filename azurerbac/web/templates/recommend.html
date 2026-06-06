@@ -314,8 +314,8 @@
                             <div class="flex items-center gap-2 text-sm">
                                 <span class="text-purple-600 dark:text-purple-400 font-medium">Engine:</span>
                                 <div class="flex bg-purple-100 dark:bg-slate-700 rounded-lg p-0.5">
-                                    {% set engine_labels = {"llm": "LLM", "rag": "RAG", "hybrid": "Hybrid", "semantic": "Semantic", "crossencoder": "Rerank", "colbert": "ColBERT", "hyde": "HyDE", "tfidf": "TF-IDF"} %}
-                                    {% set engine_titles = {"llm": "Fine-tuned Qwen model (~1s)", "rag": "Embeddings + LLM reranking", "hybrid": "TF-IDF → Embeddings → LLM", "semantic": "Embeddings only (~200ms)", "crossencoder": "Neural reranking (~300ms)", "colbert": "Token-level matching (~150ms)", "hyde": "Hypothetical docs (~1.5s)", "tfidf": "Keywords only (~50ms)"} %}
+                                    {% set engine_labels = {"llm": "LLM", "rag": "RAG", "hybrid": "Hybrid", "semantic": "Semantic", "crossencoder": "Rerank", "hyde": "HyDE", "tfidf": "TF-IDF"} %}
+                                    {% set engine_titles = {"llm": "Fine-tuned Qwen model (~1s)", "rag": "Embeddings + LLM reranking", "hybrid": "TF-IDF → Embeddings → LLM", "semantic": "Embeddings only (~200ms)", "crossencoder": "Neural reranking (~300ms)", "hyde": "Hypothetical docs (~1.5s)", "tfidf": "Keywords only (~50ms)"} %}
                                     {% for engine in enabled_engines %}
                                     <button 
                                         id="mode-{{ engine }}-btn"
@@ -733,11 +733,6 @@
                 text: 'Cross-encoder scores query+role pairs together',
                 link: 'https://www.sbert.net/examples/applications/cross-encoder/README.html',
                 linkText: 'Cross-encoder explained'
-            },
-            colbert: {
-                text: 'Token-level late interaction for precise term matching',
-                link: 'https://arxiv.org/abs/2004.12832',
-                linkText: 'ColBERT paper'
             },
             hyde: {
                 text: 'LLM generates hypothetical role, then searches embeddings',
@@ -1766,7 +1761,6 @@
                 'hybrid': 'Hybrid (TF-IDF → Embeddings → LLM)',
                 'semantic': 'Semantic Search (Pure Embeddings)',
                 'crossencoder': 'Cross-Encoder Reranking',
-                'colbert': 'ColBERT (Token-level Matching)',
                 'hyde': 'HyDE (Hypothetical Document)'
             };
             const actualMode = modeMap[engine.mode] || 'TF-IDF';

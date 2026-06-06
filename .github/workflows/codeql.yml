@@ -21,10 +21,9 @@ jobs:
     permissions:
       # Required to upload code scanning results.
       security-events: write
-      # Required to read the Actions metadata / private packages during analysis.
+      # Required to read the Actions metadata during analysis.
       actions: read
       contents: read
-      packages: read
     strategy:
       fail-fast: false
       matrix:

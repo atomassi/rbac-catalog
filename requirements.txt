@@ -8,7 +8,6 @@ pydantic==2.13.4
 pydantic-settings==2.14.1
 cachetools==6.2.6
 jinja2==3.1.6
-python-multipart==0.0.30
 apscheduler==3.11.2
 slowapi==0.1.9
 azure-identity==1.25.3
@@ -20,19 +19,18 @@ httpx==0.28.1
 pytest==9.0.3
 pytest-asyncio==1.4.0
 pytest-cov==6.3.0
+# Telemetry: azure-monitor-opentelemetry exact-pins the opentelemetry-* train; keep sub-packages unpinned (see #333/#335).
 azure-monitor-opentelemetry==1.8.7
-opentelemetry-instrumentation-fastapi==0.61b0
-opentelemetry-instrumentation-logging==0.61b0
-opentelemetry-api==1.40.0
-opentelemetry-sdk==1.40.0
-opentelemetry-semantic-conventions==0.61b0
+opentelemetry-api
+opentelemetry-sdk
+opentelemetry-instrumentation-logging
 typing_extensions>=4.15.0
 
 # PyTorch - use CPU-only on Linux (Azure deployment), standard on macOS
 # macOS wheels are CPU-only already (no +cpu local tag exists for darwin).
 --extra-index-url https://download.pytorch.org/whl/cpu
 torch==2.12.0; sys_platform == "darwin"
-torch==2.11.0+cpu; sys_platform == "linux"
+torch==2.12.0+cpu; sys_platform == "linux"
 
 # Scientific computing for sparse matrices
 scipy==1.17.1

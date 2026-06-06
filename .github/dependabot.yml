@@ -18,10 +18,6 @@ updates:
       - "python"
     commit-message:
       prefix: "chore(deps)"
-    # Ignore pre-release versions (alpha, beta, rc)
-    ignore:
-      - dependency-name: "*"
-        update-types: ["version-update:semver-prerelease"]
     groups:
       # Critical framework dependencies - review carefully
       python-frameworks:
@@ -99,10 +95,21 @@ updates:
         update-types:
           - "minor"
           - "patch"
-    # Ignore major version updates for stability (review manually)
     ignore:
+      # Major version updates are reviewed and applied manually for stability.
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
+      # Pre-release versions (alpha/beta/rc) are opt-in only.
+      - dependency-name: "*"
+        update-types: ["version-update:semver-prerelease"]
+      # opentelemetry-* sub-packages are exact-pinned by azure-monitor-opentelemetry;
+      # bumping them independently breaks resolution (see #333, #335). Let
+      # azure-monitor-opentelemetry drive the entire OpenTelemetry train.
+      - dependency-name: "opentelemetry-*"
+      # torch uses a platform split with a +cpu local tag on Linux only; Dependabot
+      # rewrites the macOS line to torch==X+cpu (no such darwin wheel exists), which
+      # breaks local installs (see #334). Bump torch manually.
+      - dependency-name: "torch"
 
   # npm dependencies (for Playwright, Tailwind, etc.)
   - package-ecosystem: "npm"

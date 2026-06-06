@@ -50,7 +50,7 @@ azurerbac/.cache/
 # Large ML models (downloaded at runtime or too large for git)
 azurerbac/airecommender/models/all-MiniLM-L6-v2/
 
-# Self-regenerating embeddings cache (rebuilt at runtime from the MiniLM model)
+# Generated embeddings snapshot (rebuilt from the live data at startup; hash-based self-heal)
 azurerbac/airecommender/models/role_embeddings.json
 
 # Generated version file

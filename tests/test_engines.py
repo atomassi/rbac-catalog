@@ -1240,16 +1240,23 @@ class TestEmbeddingModelOptimizations:
 
         # Return predictable embeddings (384 dims like MiniLM)
         def mock_encode(text, show_progress_bar=False):
+            import zlib
+
+            # Seed from a stable content hash: deterministic across processes
+            # and spread over the full 32-bit space, so distinct texts get
+            # different seeds with overwhelming probability (unlike
+            # hash(text) % 1000, which is process-randomized and collides often).
+            def _seed(value: str) -> int:
+                return zlib.crc32(value.encode("utf-8")) & 0xFFFFFFFF
+
             # Handle both single string and list of strings
             if isinstance(text, list):
                 embeddings = []
                 for t in text:
-                    hash_val = hash(t) % 1000
-                    np.random.seed(hash_val)
+                    np.random.seed(_seed(t))
                     embeddings.append(np.random.randn(384).astype(np.float32))
                 return np.array(embeddings)
-            hash_val = hash(text) % 1000
-            np.random.seed(hash_val)
+            np.random.seed(_seed(text))
             return np.random.randn(384).astype(np.float32)
 
         model._model.encode = mock_encode

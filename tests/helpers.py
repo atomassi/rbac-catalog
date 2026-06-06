@@ -223,7 +223,6 @@ def populate_cache_with_operations(cache: CacheService, operations: list[Operati
     new_indexes = Indexes(
         ops_by_name_lower=ops_by_name_lower,
         ops_by_prefix=ops_by_prefix,
-        ops_by_prefix_by_plane={},
     )
     cache.swap(replace(current, source=new_source, indexes=new_indexes))
 

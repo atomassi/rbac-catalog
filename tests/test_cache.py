@@ -13,13 +13,10 @@ from azurerbac.cache import (
     CacheMetadata,
     CacheService,
     PatternCacheKey,
-    compute_operations_hash,
-    compute_roles_hash,
     get_cache_service,
 )
 from azurerbac.cache.build import (
     _build_operation_to_roles,
-    build_operations_prefix_index,
     get_matching_operations,
 )
 from azurerbac.cache.models import PopularComparison
@@ -364,70 +361,6 @@ class TestLowerOptimization:
         unknown_ops = ["unknown.operation/read"]
         restored_unknown = service.restore_operation_casing(unknown_ops)
         assert restored_unknown == ["unknown.operation/read"]
-
-
-# =============================================================================
-# build_operations_prefix_index Tests
-# =============================================================================
-
-
-class TestBuildOperationsPrefixIndex:
-    """Tests for build_operations_prefix_index function."""
-
-    def test_builds_correct_index(self, operation_names: set[str]):
-        """Test that index groups operations by provider prefix."""
-        cache: dict[Plane, dict[str, set[str]]] = {}
-        result = build_operations_prefix_index(operation_names, Plane.CONTROL, cache)
-
-        assert "microsoft.storage/" in result
-        assert "microsoft.compute/" in result
-        assert "microsoft.keyvault/" in result
-
-        # Check Storage operations
-        storage_ops = result["microsoft.storage/"]
-        assert "Microsoft.Storage/storageAccounts/read" in storage_ops
-        assert "Microsoft.Storage/storageAccounts/write" in storage_ops
-        assert len(storage_ops) == 4  # read, write, delete, listKeys
-
-    def test_caches_results(self, operation_names: set[str]):
-        """Test that results are cached with separate keys per plane."""
-        cache: dict[Plane, dict[str, set[str]]] = {}
-
-        result1 = build_operations_prefix_index(operation_names, Plane.CONTROL, cache)
-        assert Plane.CONTROL in cache
-
-        result2 = build_operations_prefix_index(operation_names, Plane.CONTROL, cache)
-        assert result1 is result2
-
-        # Different plane creates separate cache entry
-        build_operations_prefix_index(operation_names, Plane.DATA, cache)
-        assert Plane.DATA in cache
-
-    @pytest.mark.parametrize(
-        ("ops", "expected_result"),
-        [
-            pytest.param(set(), {}, id="empty_set"),
-            pytest.param(
-                {"SimpleOperation", "Microsoft.Storage/read"},
-                {"microsoft.storage/": {"Microsoft.Storage/read"}},
-                id="ignores_no_slash_ops",
-            ),
-        ],
-    )
-    def test_edge_cases(self, ops: set[str], expected_result: dict[str, set[str]]):
-        """Test edge cases: empty set and operations without slash."""
-        cache: dict[Plane, dict[str, set[str]]] = {}
-        result = build_operations_prefix_index(ops, Plane.CONTROL, cache)
-        assert result == expected_result
-
-    def test_lowered_prefix_keys(self, operation_names: set[str]):
-        """Test that prefix keys are lowered."""
-        cache: dict[Plane, dict[str, set[str]]] = {}
-        result = build_operations_prefix_index(operation_names, Plane.CONTROL, cache)
-
-        for key in result:
-            assert key == key.lower()
-            assert key.endswith("/")
 
 
 # =============================================================================
@@ -837,129 +770,6 @@ class TestPreloadCacheIntegration:
             await preload_cache(mock_session_local)
 
         mock_service.rebuild_in_memory.assert_awaited_once_with(mock_session)
-
-
-# =============================================================================
-# Test Fixtures for Hash Computation Tests
-# =============================================================================
-
-
-@pytest.fixture
-def roles_for_hashing():
-    """Sample role data for hash computation tests.
-
-    Uses minimal structure with updatedOn for modification detection tests.
-    Returns RoleDefinition objects as required by compute_roles_hash.
-    """
-    from azurerbac.azure.models import RoleDefinition
-
-    role_dicts = [
-        {
-            "name": "role-1",
-            "properties": {
-                "roleName": "Reader",
-                "type": "BuiltInRole",
-                "updatedOn": "2024-01-01T00:00:00Z",
-            },
-        },
-        {
-            "name": "role-2",
-            "properties": {
-                "roleName": "Contributor",
-                "type": "BuiltInRole",
-                "updatedOn": "2024-01-02T00:00:00Z",
-            },
-        },
-    ]
-    return [RoleDefinition.model_validate(r) for r in role_dicts]
-
-
-@pytest.fixture
-def operations_for_hashing():
-    """Sample operation data for hash computation tests."""
-    return [
-        OperationData(name="Microsoft.Storage/read", isDataAction=False),
-        OperationData(name="Microsoft.Compute/write", isDataAction=False),
-        OperationData(name="Microsoft.KeyVault/secrets/read", isDataAction=True),
-    ]
-
-
-# =============================================================================
-# Tests for Hash Computation
-# =============================================================================
-
-
-class TestHashComputation:
-    """Tests for hash computation functions."""
-
-    @pytest.mark.parametrize(
-        "hash_func",
-        [
-            pytest.param(compute_roles_hash, id="roles"),
-            pytest.param(compute_operations_hash, id="operations"),
-        ],
-    )
-    def test_hash_empty_list(self, hash_func):
-        """Empty list produces a valid hash."""
-        result = hash_func([])
-        assert isinstance(result, str)
-        assert len(result) == 32  # Full MD5 hex digest
-
-    def test_compute_roles_hash_deterministic(self, roles_for_hashing):
-        """Same roles produce same hash."""
-        hash1 = compute_roles_hash(roles_for_hashing)
-        hash2 = compute_roles_hash(roles_for_hashing)
-        assert hash1 == hash2
-
-    def test_compute_roles_hash_order_independent(self, roles_for_hashing):
-        """Hash is the same regardless of role order."""
-        hash1 = compute_roles_hash(roles_for_hashing)
-        hash2 = compute_roles_hash(list(reversed(roles_for_hashing)))
-        assert hash1 == hash2
-
-    def test_compute_roles_hash_changes_on_update(self, roles_for_hashing):
-        """Hash changes when role data changes."""
-        from azurerbac.azure.models import RoleDefinition
-
-        hash1 = compute_roles_hash(roles_for_hashing)
-
-        # Create a new role with different updatedOn
-        modified_role_dict = {
-            "name": "role-1",
-            "properties": {
-                "roleName": "Reader",
-                "type": "BuiltInRole",
-                "updatedOn": "2024-12-01T00:00:00Z",
-            },
-        }
-        modified_roles = [RoleDefinition.model_validate(modified_role_dict), roles_for_hashing[1]]
-        hash2 = compute_roles_hash(modified_roles)
-
-        assert hash1 != hash2
-
-    def test_compute_operations_hash_deterministic(self, operations_for_hashing):
-        """Same operations produce same hash."""
-        hash1 = compute_operations_hash(operations_for_hashing)
-        hash2 = compute_operations_hash(operations_for_hashing)
-        assert hash1 == hash2
-
-    def test_compute_operations_hash_order_independent(self, operations_for_hashing):
-        """Hash is the same regardless of operation order."""
-        hash1 = compute_operations_hash(operations_for_hashing)
-        hash2 = compute_operations_hash(list(reversed(operations_for_hashing)))
-        assert hash1 == hash2
-
-    def test_compute_operations_hash_changes_on_new_op(self, operations_for_hashing):
-        """Hash changes when operation is added."""
-        hash1 = compute_operations_hash(operations_for_hashing)
-
-        modified_ops = [
-            *operations_for_hashing,
-            OperationData(name="New/operation", isDataAction=False),
-        ]
-        hash2 = compute_operations_hash(modified_ops)
-
-        assert hash1 != hash2
 
 
 # =============================================================================

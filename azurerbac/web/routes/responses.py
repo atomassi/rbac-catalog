@@ -44,8 +44,7 @@ def empty_search_response(message: str) -> OperationSearchResponse:
 def ai_error_response(
     error: str,
     mode: str | None = None,
-    available: bool = False,
 ) -> AIRecommendResponse:
     """Create AI error response."""
-    engine = AIEngineInfo(mode=mode, available=available) if mode else None
+    engine = AIEngineInfo(mode=mode) if mode else None
     return AIRecommendResponse(error=error, recommendations=[], engine=engine)

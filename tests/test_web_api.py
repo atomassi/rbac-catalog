@@ -831,24 +831,23 @@ class TestResponseFactories:
         assert result.message == message
 
     @pytest.mark.parametrize(
-        ("error", "mode", "available"),
+        ("error", "mode"),
         [
-            pytest.param("Engine unavailable", "tfidf", True, id="with_mode_available"),
-            pytest.param("Query too short", "semantic", False, id="with_mode_unavailable"),
-            pytest.param("Error occurred", None, False, id="no_mode"),
+            pytest.param("Engine unavailable", "tfidf", id="with_mode"),
+            pytest.param("Query too short", "semantic", id="with_other_mode"),
+            pytest.param("Error occurred", None, id="no_mode"),
         ],
     )
-    def test_ai_error_response(self, error: str, mode: str | None, available: bool):
+    def test_ai_error_response(self, error: str, mode: str | None):
         """Test ai_error_response creates correct response."""
         from azurerbac.web.routes.responses import ai_error_response
 
-        result = ai_error_response(error, mode, available)
+        result = ai_error_response(error, mode)
         assert result.error == error
         assert result.recommendations == []
         if mode:
             assert result.engine is not None
             assert result.engine.mode == mode
-            assert result.engine.available == available
         else:
             assert result.engine is None
 

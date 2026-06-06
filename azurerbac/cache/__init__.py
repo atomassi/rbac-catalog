@@ -7,8 +7,6 @@ from azurerbac.cache.models import (
     CachedRole,
     CacheMetadata,
     PatternCacheKey,
-    compute_operations_hash,
-    compute_roles_hash,
 )
 from azurerbac.cache.service import CacheService, get_cache_service
 
@@ -19,8 +17,6 @@ __all__ = [
     "CachedChangeEvent",
     "CachedRole",
     "PatternCacheKey",
-    "compute_operations_hash",
-    "compute_roles_hash",
     "get_cache_service",
     "precompute_all",
 ]

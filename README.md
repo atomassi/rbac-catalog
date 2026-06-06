@@ -76,7 +76,12 @@ live data, run `az login` once, then start the worker in a second terminal:
 python -m azurerbac.backgroundjobs.worker
 ```
 
-Prefer containers? `docker build -t azurerbac:local --build-arg VERSION=local-dev . && docker run --rm -p 8000:8000 azurerbac:local`.
+Prefer containers? Build and run the image instead:
+
+```bash
+docker build -t azurerbac:local --build-arg VERSION=local-dev .
+docker run --rm -p 8000:8000 azurerbac:local
+```
 
 For prerequisites, environment variables, and the full walkthrough, see
 [`docs/run-local.md`](docs/run-local.md).
@@ -85,10 +90,10 @@ For prerequisites, environment variables, and the full walkthrough, see
 
 | Guide | What it covers |
 |-------|----------------|
-| [`docs/run-local.md`](docs/run-local.md) | Running the app locally with native Python or Docker |
-| [`infra/README.md`](infra/README.md) | Deploying your own copy on Azure with Bicep |
-| [`docs/ai-recommender.md`](docs/ai-recommender.md) | How the AI modes and LLM fine-tuning work |
-| [`docs/mcp.md`](docs/mcp.md) | MCP server tools, example queries, and rate limits |
+| [`docs/run-local.md`](docs/run-local.md) | Run the app locally with native Python or Docker — prerequisites, environment variables, and the full walkthrough |
+| [`infra/README.md`](infra/README.md) | Deploy your own copy on Azure with the Bicep templates, step by step |
+| [`docs/ai-recommender.md`](docs/ai-recommender.md) | How the 8 AI modes work, plus the LLM fine-tuning pipeline (Unsloth + Qwen) |
+| [`docs/mcp.md`](docs/mcp.md) | MCP server tools, example queries, direct invocations, and rate limits |
 
 ## Tech Stack
 
@@ -105,14 +110,14 @@ For prerequisites, environment variables, and the full walkthrough, see
 
 ## Infrastructure & Costs
 
-The architecture favors simplicity over scale: managed Azure services do
-the heavy lifting, with a single VM reserved for self-hosted inference to
-control costs. There's no Kubernetes, no autoscaling, and no multi-region failover, just
-the moving parts a low-traffic public catalog actually needs.
+The architecture favors simplicity over scale: managed Azure services do the
+heavy lifting, fronted by Cloudflare's free tier and backed by a single
+PostgreSQL instance. There's no Kubernetes, no autoscaling, and no multi-region
+failover — just the moving parts a low-traffic public catalog actually needs.
 
-The Ollama and GPU VMs are **optional**, and the site runs fine without
-them. They exist because one goal of this project was to experiment with
-self-hosted LLMs, fine-tuning with Unsloth, and serving the result
+Self-hosted LLM inference runs on two **optional** VMs that the catalog works
+fine without. They exist because one goal of this project was to experiment with
+self-hosted LLMs end to end: fine-tuning with Unsloth and serving the result
 through Ollama.
 
 ### Architecture
@@ -163,7 +168,9 @@ flowchart TD
 ### Current Cost
 
 > [!TIP]
-> A lot of the spending in the table below is optional. A minimal deployment (App Service B1, PostgreSQL B1ms, ACR Basic, App Insights, Cloudflare Free, and no Ollama/GPU VMs) runs comfortably under **$60/month**. The AI features that depend on the local LLM are then unavailable, but the rest of the catalog works as-is.
+> The catalog runs comfortably on the **core** services below for **~$65/month**. The **optional** self-hosted inference VMs roughly double the bill; skip them and the AI features that depend on the local LLM are simply unavailable, while the rest of the catalog works as-is.
+
+**Core services** — required to run the catalog:
 
 | Service | $/month | Notes |
 |---------|--------:|-------|
@@ -173,9 +180,17 @@ flowchart TD
 | Container Registry | ~$5 | Basic SKU. |
 | App Insights + Log Analytics | ~$2 | Pay-per-GB ingestion, 30-day retention. |
 | Automation Account | $0 | Basic SKU, within the 500 min/month free tier. |
+| **Subtotal** | **~$65** | |
+
+**Optional services** — self-hosted LLM inference and fine-tuning:
+
+| Service | $/month | Notes |
+|---------|--------:|-------|
 | Ollama VM (inference) | ~$50 | B2ms (2 vCPU, 8 GiB), always-on. Runs the fine-tuned Qwen 0.5B model. |
 | GPU VM (training/finetuning) | on-demand (~$1/hour) | NV12ads A10 v5 (1× NVIDIA A10). Started only for finetuning runs. |
-| **Total** | **~$115** | |
+| **Subtotal** | **~$50** | |
+
+**Total (all services): ~$115/month.**
 
 ## AI Recommendation Modes
 
@@ -219,7 +234,7 @@ See [docs/mcp.md](docs/mcp.md) for the full tool reference, example queries, dir
 ## Testing
 
 ```bash
-# Unit tests (runs on Python 3.12-3.13)
+# Unit tests (Python 3.12)
 pytest tests/ -q --cov=azurerbac
 
 # E2E tests
@@ -263,6 +278,7 @@ This ensures every production deployment is validated before users see it.
 ```
 azurerbac/
 ├── airecommender/   # AI recommendation engines (8 modes)
+├── analytics/       # Permission distribution, change-over-time, and provider stats
 ├── azure/           # Azure SDK integration (roles, operations)
 ├── backgroundjobs/  # Scheduled tasks and background workers
 ├── cache/           # Caching layer for roles and operations
@@ -288,3 +304,4 @@ e2e/                 # Playwright end-to-end tests
 - **Qwen**: Bai et al., [Qwen Technical Report](https://arxiv.org/abs/2309.16609) (2023)
 - **RAG**: Lewis et al., [Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks](https://arxiv.org/abs/2005.11401) (2020)
 - **HyDE**: Gao et al., [Precise Zero-Shot Dense Retrieval without Relevance Labels](https://arxiv.org/abs/2212.10496) (2022)
+

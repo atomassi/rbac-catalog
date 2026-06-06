@@ -1,5 +1,13 @@
 name: CodeQL
 
+# Advanced CodeQL setup. Pushes, schedule, and same-repo PRs upload results
+# directly. Pull requests from forks get a read-only GITHUB_TOKEN and cannot
+# upload SARIF, so their results are staged here and published by the companion
+# `codeql-upload-fork.yml` workflow (deferred privileged upload via workflow_run).
+# This is GitHub's documented approach for forked-PR code scanning:
+#   https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_run
+#   https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflows-in-forked-repositories
+
 on:
   push:
     branches: [main]
@@ -19,11 +27,18 @@ jobs:
     name: Analyze (${{ matrix.language }})
     runs-on: ubuntu-latest
     permissions:
-      # Required to upload code scanning results.
+      # Upload code scanning results for trusted events (push, schedule, and
+      # same-repo pull requests). On pull_request runs from a fork GITHUB_TOKEN
+      # is forced read-only and this upload is skipped; the SARIF is handed off
+      # to the companion `codeql-upload-fork.yml` workflow instead.
       security-events: write
       # Required to read the Actions metadata during analysis.
       actions: read
       contents: read
+    # True only for pull requests opened from a forked repository, where the
+    # token cannot upload SARIF and the upload must be deferred.
+    env:
+      IS_FORK_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork }}
     strategy:
       fail-fast: false
       matrix:
@@ -50,3 +65,40 @@ jobs:
         uses: github/codeql-action/analyze@c35d1b164463ee62a100735382aaaa525c5d3496  # codeql-bundle-v2.25.6
         with:
           category: "/language:${{ matrix.language }}"
+          # Always write the SARIF locally so fork PRs can stage it as an
+          # artifact for deferred upload.
+          output: ${{ runner.temp }}/codeql-sarif
+          # Upload directly for trusted events; for fork PRs skip the upload
+          # (token is read-only) and let codeql-upload-fork.yml publish it.
+          upload: ${{ env.IS_FORK_PR == 'true' && 'never' || 'always' }}
+
+      # ---- Fork PRs only: stage the SARIF + trusted PR metadata as an artifact.
+      # The metadata is produced by the base repository's workflow definition
+      # from GitHub-provided event context (fork code never executes here, since
+      # analysis uses build-mode: none), so these values are trustworthy.
+      - name: Stage SARIF for deferred upload
+        if: env.IS_FORK_PR == 'true'
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          MERGE_SHA: ${{ github.sha }}
+          LANGUAGE: ${{ matrix.language }}
+        run: |
+          set -euo pipefail
+          staging="${RUNNER_TEMP}/staging"
+          mkdir -p "${staging}/sarif"
+          cp "${RUNNER_TEMP}/codeql-sarif"/*.sarif "${staging}/sarif/"
+          jq -n \
+            --argjson pr_number "${PR_NUMBER}" \
+            --arg merge_sha "${MERGE_SHA}" \
+            --arg language "${LANGUAGE}" \
+            '{pr_number: $pr_number, merge_sha: $merge_sha, language: $language}' \
+            > "${staging}/metadata.json"
+
+      - name: Upload staged SARIF artifact
+        if: env.IS_FORK_PR == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: codeql-fork-sarif-${{ matrix.language }}
+          path: ${{ runner.temp }}/staging
+          retention-days: 1
+          if-no-files-found: error

@@ -1,0 +1,111 @@
+name: CodeQL upload (fork PRs)
+
+# Deferred SARIF upload for CodeQL runs triggered by pull requests from forks.
+#
+# On a `pull_request` run from a fork, GITHUB_TOKEN is forced read-only, so the
+# CodeQL workflow cannot upload its SARIF. That workflow instead stages the
+# SARIF (plus GitHub-provided PR metadata) as an artifact. This workflow runs in
+# the trusted base-repository context with `security-events: write` and performs
+# the upload, so fork PRs can satisfy the `main` code-scanning ruleset.
+#
+# SECURITY: This workflow must never check out or execute code from the fork. It
+# only consumes the SARIF data artifact and uploads it. The original analysis
+# uses build-mode: none (no fork code runs), and the staged metadata is written
+# by the base repo's workflow from GitHub event context — not by the fork.
+#
+# This is the GitHub-documented approach for taking a privileged action after an
+# intentionally unprivileged (fork PR) workflow:
+#   - workflow_run grants secrets/write tokens even when the triggering workflow
+#     could not, and is the recommended way to consume its artifacts:
+#     https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_run
+#   - Fork PRs receive a read-only GITHUB_TOKEN (so CodeQL cannot upload there):
+#     https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflows-in-forked-repositories
+#   - Security guidance (never run untrusted code under workflow_run):
+#     https://securitylab.github.com/research/github-actions-preventing-pwn-requests
+#
+# NOTE: workflow_run only triggers from the workflow file on the default branch,
+# so this uploader takes effect once merged to `main`.
+
+on:
+  workflow_run:
+    workflows: ["CodeQL"]
+    types: [completed]
+
+# No permissions by default; the upload job opts into the minimum it needs.
+permissions: {}
+
+jobs:
+  upload:
+    name: Upload SARIF (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    # Only act on completed pull_request runs that succeeded. Same-repo PRs and
+    # push/schedule runs upload directly in the CodeQL workflow and produce no
+    # artifact, so the steps below simply no-op for them.
+    if: >-
+      github.event.workflow_run.event == 'pull_request'
+      && github.event.workflow_run.conclusion == 'success'
+    permissions:
+      security-events: write  # Required to upload code scanning results.
+      actions: read           # Required to download the artifact from the triggering run.
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [python, javascript-typescript]
+    steps:
+      - name: Download staged SARIF artifact
+        id: download
+        # No artifact exists for same-repo PRs; treat that as "nothing to do".
+        continue-on-error: true
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4.3.0
+        with:
+          name: codeql-fork-sarif-${{ matrix.language }}
+          path: sarif-artifact
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      - name: Validate metadata and bind to triggering PR
+        id: meta
+        if: steps.download.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          EXPECTED_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          EXPECTED_LANGUAGE: ${{ matrix.language }}
+        run: |
+          set -euo pipefail
+          meta="sarif-artifact/metadata.json"
+          test -f "${meta}"
+          pr_number="$(jq -r '.pr_number' "${meta}")"
+          merge_sha="$(jq -r '.merge_sha' "${meta}")"
+          language="$(jq -r '.language' "${meta}")"
+
+          # Defensively validate the staged values before using them in an API
+          # call or in the ref we upload against.
+          [[ "${pr_number}" =~ ^[0-9]+$ ]] || { echo "::error::invalid pr_number"; exit 1; }
+          [[ "${merge_sha}" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::invalid merge_sha"; exit 1; }
+          [[ "${language}" == "${EXPECTED_LANGUAGE}" ]] || { echo "::error::language mismatch"; exit 1; }
+
+          # Bind the staged SARIF to the PR that actually triggered this run so
+          # results can never be mis-attributed to an unrelated pull request.
+          actual_head="$(gh api "repos/${REPO}/pulls/${pr_number}" --jq '.head.sha')"
+          if [[ "${actual_head}" != "${EXPECTED_HEAD_SHA}" ]]; then
+            echo "::error::PR #${pr_number} head (${actual_head}) does not match the triggering run (${EXPECTED_HEAD_SHA}); refusing to upload."
+            exit 1
+          fi
+
+          {
+            echo "pr_number=${pr_number}"
+            echo "merge_sha=${merge_sha}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Upload SARIF to code scanning
+        if: steps.download.outcome == 'success'
+        uses: github/codeql-action/upload-sarif@c35d1b164463ee62a100735382aaaa525c5d3496  # codeql-bundle-v2.25.6
+        with:
+          # Directory of SARIF files staged by the CodeQL workflow.
+          sarif_file: sarif-artifact/sarif
+          # Re-attach the results to the PR's merge ref/commit that was analyzed.
+          ref: refs/pull/${{ steps.meta.outputs.pr_number }}/merge
+          sha: ${{ steps.meta.outputs.merge_sha }}
+          category: "/language:${{ matrix.language }}"

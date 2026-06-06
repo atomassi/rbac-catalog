@@ -190,7 +190,7 @@ flowchart TD
 | GPU VM (training/finetuning) | on-demand (~$1/hour) | NV12ads A10 v5 (1× NVIDIA A10). Started only for finetuning runs. |
 | **Subtotal** | **~$50** | |
 
-**Total (all services): ~$115/month.**
+**Total: ~$115/month** baseline (core + always-on Ollama VM). The GPU VM is excluded — it's billed only while a finetuning run is active, at ~$1/hour, so add roughly that per GPU-hour on top.
 
 ## AI Recommendation Modes
 

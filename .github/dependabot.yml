@@ -75,15 +75,6 @@ updates:
         update-types:
           - "minor"
           - "patch"
-      # LangChain/RAG dependencies
-      python-langchain:
-        patterns:
-          - "langchain*"
-          - "langsmith"
-          - "llama-*"
-        update-types:
-          - "minor"
-          - "patch"
       # HTTP clients
       python-http:
         patterns:

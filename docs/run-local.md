@@ -6,7 +6,7 @@ The commands below use a Bash / Zsh shell (macOS, Linux, WSL). For native Window
 
 ## Prerequisites
 
-- **Python 3.12** — the supported and tested version. Verify with `python3.12 --version` before continuing.
+- **Python 3.12, 3.13, or 3.14** — all supported and tested. Verify with `python3 --version` before continuing. The examples below use `python3.12`; substitute `python3.13`/`python3.14` if you prefer a newer interpreter.
 - Git
 - Optional: Azure CLI (`az login`) — only needed to populate the catalog with live data from Azure
 

@@ -3,7 +3,7 @@
 [![Build](https://github.com/atomassi/rbac-catalog/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/atomassi/rbac-catalog/actions/workflows/build.yml)
 [![Deploy](https://github.com/atomassi/rbac-catalog/actions/workflows/deploy.yml/badge.svg)](https://github.com/atomassi/rbac-catalog/actions/workflows/deploy.yml)
 [![Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/atomassi/56d5c381b196c9c18db9fedbecb79220/raw/coverage.json&cacheSeconds=3600)](https://github.com/atomassi/rbac-catalog/actions/workflows/build.yml)
-[![Python](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/)
+[![Python](https://img.shields.io/badge/python-3.12%20%7C%203.13%20%7C%203.14-blue.svg)](https://www.python.org/downloads/)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
 > [!IMPORTANT]
@@ -56,7 +56,7 @@ A comprehensive catalog and monitoring tool for [Azure built-in RBAC roles](http
 
 ## Quick Start
 
-Run the catalog locally in a few minutes. You need **Python 3.12** and **Git**.
+Run the catalog locally in a few minutes. You need **Python 3.12, 3.13, or 3.14** and **Git**.
 
 ```bash
 git clone https://github.com/atomassi/rbac-catalog.git
@@ -233,7 +233,7 @@ See [docs/mcp.md](docs/mcp.md) for the full tool reference, example queries, dir
 ## Testing
 
 ```bash
-# Unit tests (Python 3.12)
+# Unit tests (Python 3.12, 3.13, or 3.14)
 pytest tests/ -q --cov=azurerbac
 
 # E2E tests

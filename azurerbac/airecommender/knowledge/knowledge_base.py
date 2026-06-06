@@ -38,9 +38,11 @@ class RoleKnowledgeBase:
     def get_all_role_names(self) -> list[str]:
         """Get all known role names (built from live role definitions)."""
         role_names: list[str] = []
+        seen: set[str] = set()
         for doc in self._role_documents.values():
             name = doc.get("role_name", "")
-            if name and name not in role_names:
+            if name and name not in seen:
+                seen.add(name)
                 role_names.append(name)
         return role_names
 

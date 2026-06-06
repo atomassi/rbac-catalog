@@ -62,11 +62,7 @@ async def cache_refresh_task(session_factory: async_sessionmaker[_AsyncSession])
                         elapsed = time.perf_counter() - start_time
                         logger.info("Background: periodic rebuild completed in %.2fs", elapsed)
 
-                        track_cache_refresh(
-                            elapsed,
-                            service.cache.metadata.roles_count,
-                            service.cache.metadata.operations_count,
-                        )
+                        track_cache_refresh(elapsed)
                     else:
                         logger.warning("Background: periodic rebuild skipped or failed")
                         track_cache_refresh_failure("rebuild_in_memory returned False")

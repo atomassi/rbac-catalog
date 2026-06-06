@@ -135,7 +135,6 @@ class AIEngineInfo(BaseModel):
     """Metadata about the AI recommender engine used."""
 
     mode: str
-    fallback: bool | None = None
     available: bool | None = None
     missing_components: list[str] | None = None
 

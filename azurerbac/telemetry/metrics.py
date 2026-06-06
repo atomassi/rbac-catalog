@@ -169,22 +169,13 @@ def track_startup(
     track_event(MetricName.STARTUP_EVENT, props)
 
 
-def track_cache_refresh(
-    duration_seconds: float,
-    roles_count: int,
-    operations_count: int,
-) -> None:
+def track_cache_refresh(duration_seconds: float) -> None:
     """Track cache refresh metrics."""
     if not _metrics_enabled():
         return
     track_duration(MetricName.IN_MEMORY_CACHE_REFRESH_DURATION_SECONDS, duration_seconds)
     track_event(MetricName.IN_MEMORY_CACHE_REFRESH_EVENT)
-    logger.info(
-        "Tracked cache refresh: %.2fs, %d roles, %d operations",
-        duration_seconds,
-        roles_count,
-        operations_count,
-    )
+    logger.info("Tracked cache refresh: %.2fs", duration_seconds)
 
 
 def track_role_scan(

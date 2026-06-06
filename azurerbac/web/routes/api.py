@@ -176,7 +176,7 @@ async def ai_recommend_endpoint(
     roles = deps.app_cache.get_all_roles()
 
     try:
-        recommendations, actual_mode = await to_thread.run_sync(
+        recommendations, mode = await to_thread.run_sync(
             partial(
                 ai_recommend_roles,
                 query=query,
@@ -202,15 +202,14 @@ async def ai_recommend_endpoint(
         return ai_error_response(ErrorMessages.GENERIC_ERROR)
 
     logger.info(
-        "AI recommendation: query='%s' requested=%s actual=%s results=%d",
+        "AI recommendation: query='%s' mode=%s results=%d",
         sanitize_for_log(query, max_length=50),
-        requested_mode,
-        actual_mode,
+        mode,
         len(recommendations),
     )
 
     track_ai_recommendation(
-        mode=actual_mode,
+        mode=mode,
         result_count=len(recommendations),
     )
 
@@ -218,5 +217,5 @@ async def ai_recommend_endpoint(
         query=query,
         recommendations=[AIRecommendationItem.model_validate(r) for r in recommendations],
         total=len(recommendations),
-        engine=AIEngineInfo(mode=actual_mode, fallback=actual_mode != requested_mode),
+        engine=AIEngineInfo(mode=mode),
     )

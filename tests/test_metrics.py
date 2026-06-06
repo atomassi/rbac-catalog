@@ -251,7 +251,7 @@ class TestMetricsLocalMode:
         [
             ("track_gauge", ("test_metric", 42.0, {"dim": "value"})),
             ("track_startup", (5.0, 100, 5000)),
-            ("track_cache_refresh", (3.0, 100, 5000)),
+            ("track_cache_refresh", (3.0,)),
             ("track_role_scan", (100, 5, 3, 2)),
             ("track_operations_scan", (5000,)),
         ],
@@ -366,7 +366,7 @@ class TestMetricsDimensions:
     def test_track_cache_refresh_emits_without_error(self, local_env):
         """track_cache_refresh should emit duration and event metrics."""
         metrics_module = local_env
-        metrics_module.track_cache_refresh(1.0, 100, 5000)
+        metrics_module.track_cache_refresh(1.0)
 
 
 # =============================================================================

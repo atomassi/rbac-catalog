@@ -286,7 +286,7 @@ def compute_related_roles(
     Uses composite similarity: Jaccard overlap (90%), scope match (5%),
     condition similarity (5%).
     """
-    from azurerbac.core.constants import RoleStatus
+    from azurerbac.core.enums import RoleStatus
 
     if limit <= 0:
         return []

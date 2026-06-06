@@ -23,7 +23,7 @@ from azurerbac.cache.build import (
     get_matching_operations,
 )
 from azurerbac.cache.models import PopularComparison
-from azurerbac.core.constants import EventType, RoleStatus
+from azurerbac.core.enums import EventType, RoleStatus
 from azurerbac.matching.models import Plane, RoleCoverage
 
 

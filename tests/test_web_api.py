@@ -6,7 +6,7 @@ import pytest
 
 from azurerbac.azure.models import OperationData, RoleDefinition
 from azurerbac.cache.models import CachedRole
-from azurerbac.core.constants import RoleStatus
+from azurerbac.core.enums import RoleStatus
 from tests.helpers import populate_cache_with_operations
 
 

@@ -30,7 +30,8 @@ from urllib.parse import quote
 
 from cachetools import LRUCache
 
-from azurerbac.core.constants import POPULAR_COMPARE_PAIRS, RoleStatus
+from azurerbac.core.constants import POPULAR_COMPARE_PAIRS
+from azurerbac.core.enums import EventType, RoleStatus
 from azurerbac.core.types import JsonDict
 from azurerbac.core.utils import content_hash
 from azurerbac.matching.models import (
@@ -114,7 +115,7 @@ class CachedChangeEvent:
     id: int
     role_id: str
     role_name: str
-    event_type: str
+    event_type: EventType
     scan_timestamp: dt.datetime | None = None
     azure_updated_on: dt.datetime | None = None
     summary: str | None = None

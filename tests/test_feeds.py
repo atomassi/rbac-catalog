@@ -11,7 +11,7 @@ from xml.etree import ElementTree as ET
 import pytest
 
 from azurerbac.cache.models import CachedChangeEvent
-from azurerbac.core.constants import EventType
+from azurerbac.core.enums import EventType
 from azurerbac.web.services.feeds import (
     _build_rich_content,
     build_atom_feed,

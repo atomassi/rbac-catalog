@@ -11,7 +11,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from azurerbac.cache.models import CachedChangeEvent
-from azurerbac.core.constants import EventType, RoleStatus
+from azurerbac.core.enums import EventType, RoleStatus
 from tests.helpers import make_cached_role
 
 # =============================================================================
@@ -27,7 +27,7 @@ class TestEnrichRoleWithCounts:
 
     def test_enrich_role_fallback_returns_zeros(self):
         """Test enriching role returns zeros when cache misses (role_json is now in RoleHistory)."""
-        from azurerbac.core.constants import RoleStatus
+        from azurerbac.core.enums import RoleStatus
         from azurerbac.web.services.dashboard import enrich_role_with_counts
 
         role = MagicMock()
@@ -48,7 +48,7 @@ class TestEnrichRoleWithCounts:
 
     def test_enrich_role_uses_cache(self):
         """Test enriching role uses cache when available."""
-        from azurerbac.core.constants import RoleStatus
+        from azurerbac.core.enums import RoleStatus
         from azurerbac.matching.models import RoleNetPermissions
         from azurerbac.web.services.dashboard import enrich_role_with_counts
 

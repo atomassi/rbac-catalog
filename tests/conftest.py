@@ -26,7 +26,7 @@ from sqlalchemy.ext.asyncio import (
 from azurerbac.azure.models import OperationData, RoleDefinition
 from azurerbac.cache.models import CachedRole
 from azurerbac.core import Base
-from azurerbac.core.constants import RoleStatus
+from azurerbac.core.enums import RoleStatus
 
 # Import factory functions from helpers for use in fixtures
 from tests.helpers import (

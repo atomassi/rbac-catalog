@@ -10,8 +10,8 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.sql.elements import ColumnElement
 
 from azurerbac.cache.models import CachedChangeEvent, CachedRole
-from azurerbac.core.constants import DEFAULT_ROLE_TYPE, EventType
-from azurerbac.core.enums import EventTypeFilter, SortOrder, StatusFilter
+from azurerbac.core.constants import DEFAULT_ROLE_TYPE
+from azurerbac.core.enums import EventType, EventTypeFilter, SortOrder, StatusFilter
 from azurerbac.core.utils import (
     ensure_utc,
     normalize_uuid_or_none,

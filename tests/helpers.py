@@ -7,7 +7,8 @@ from unittest.mock import MagicMock
 
 from azurerbac.azure.models import OperationData, RoleDefinition
 from azurerbac.cache.models import CachedRole
-from azurerbac.core.constants import ROLE_DEFINITION_TYPE, RoleStatus
+from azurerbac.core.constants import ROLE_DEFINITION_TYPE
+from azurerbac.core.enums import RoleStatus
 
 if TYPE_CHECKING:
     from azurerbac.cache import CacheService

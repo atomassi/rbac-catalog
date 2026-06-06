@@ -8,7 +8,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING
 
 from azurerbac.core.diffing import RoleDiff
-from azurerbac.core.enums import SortOrder
+from azurerbac.core.enums import EventType, SortOrder
 from azurerbac.core.patterns import (
     expand_patterns_to_operations,
     is_wildcard_pattern,
@@ -390,7 +390,7 @@ class EnrichedChangeEvent:
 
     scan_timestamp: datetime | None
     azure_updated_on: datetime | None
-    event_type: str
+    event_type: EventType
     summary: str | None
     diff: RoleDiff | None
     diff_pretty: str

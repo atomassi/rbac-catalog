@@ -19,7 +19,12 @@ from azurerbac.airecommender.modes import RecommenderMode
 from azurerbac.core.constants import DEFAULT_SEARCH_LIMIT
 from azurerbac.core.patterns import is_wildcard_pattern
 from azurerbac.matching import recommend_roles
-from azurerbac.telemetry import sanitize_for_log, track_ai_recommendation, track_role_recommendation
+from azurerbac.telemetry import (
+    sanitize_for_log,
+    track_ai_recommendation,
+    track_ai_recommendation_error,
+    track_role_recommendation,
+)
 from azurerbac.web.constants import (
     AI_RATE_LIMIT_PER_MINUTE,
     MAX_QUERY_LENGTH,
@@ -182,18 +187,18 @@ async def ai_recommend_endpoint(
         )
     except EngineNotAvailableError as e:
         logger.warning("Engine not available: mode=%s missing=%s", e.mode, e.missing_components)
-        track_ai_recommendation(mode=requested_mode, result_count=0, is_error=True)
+        track_ai_recommendation_error(mode=requested_mode, error=type(e).__name__)
         return ai_error_response(
             ErrorMessages.engine_unavailable((e.mode or "Selected").upper()),
             mode=e.mode,
         )
-    except ColBERTInitializationError:
+    except ColBERTInitializationError as e:
         logger.warning("ColBERT initialization failed")
-        track_ai_recommendation(mode=requested_mode, result_count=0, is_error=True)
+        track_ai_recommendation_error(mode=requested_mode, error=type(e).__name__)
         return ai_error_response(ErrorMessages.engine_unavailable("COLBERT"), mode="colbert")
-    except Exception:
+    except Exception as e:
         logger.exception("AI recommendation failed")
-        track_ai_recommendation(mode=requested_mode, result_count=0, is_error=True)
+        track_ai_recommendation_error(mode=requested_mode, error=type(e).__name__)
         return ai_error_response(ErrorMessages.GENERIC_ERROR)
 
     logger.info(

@@ -18,7 +18,7 @@ from azurerbac.core.utils import (
     truncate_microseconds,
 )
 from azurerbac.matching.models import RoleNetPermissions
-from azurerbac.telemetry import TimedDbQuery
+from azurerbac.telemetry import DbFallbackType, DbQueryName, TimedDbQuery
 from azurerbac.web.services.models import (
     DashboardSummary,
     PaginatedResult,
@@ -189,7 +189,9 @@ async def fetch_events_from_db(
         for et in event_types
     ]
 
-    async with TimedDbQuery("fetch_recent_changes", fallback_type="recent_changes"):
+    async with TimedDbQuery(
+        DbQueryName.FETCH_RECENT_CHANGES, fallback_type=DbFallbackType.RECENT_CHANGES
+    ):
         result = await session.execute(
             select(deps.RoleHistory)
             .join(
@@ -221,7 +223,9 @@ async def ensure_scan_metadata(
 ) -> ScanMetadata:
     """Ensure scan timestamps are populated from DB if not cached."""
     if last_scan is None:
-        async with TimedDbQuery("fetch_last_scan", fallback_type="scan_metadata"):
+        async with TimedDbQuery(
+            DbQueryName.FETCH_LAST_SCAN, fallback_type=DbFallbackType.SCAN_METADATA
+        ):
             last_scan = await session.scalar(
                 select(deps.RoleScanStatus.scan_timestamp)
                 .order_by(deps.RoleScanStatus.scan_timestamp.desc())
@@ -231,7 +235,9 @@ async def ensure_scan_metadata(
         deps.app_cache.set_metadata(last_scan=last_scan)
 
     if first_scan is None:
-        async with TimedDbQuery("fetch_first_scan", fallback_type="scan_metadata"):
+        async with TimedDbQuery(
+            DbQueryName.FETCH_FIRST_SCAN, fallback_type=DbFallbackType.SCAN_METADATA
+        ):
             first_scan = await session.scalar(select(func.min(deps.RoleScanStatus.scan_timestamp)))
         first_scan = truncate_microseconds(first_scan)
         deps.app_cache.set_metadata(first_scan=first_scan)

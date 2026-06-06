@@ -346,12 +346,12 @@ async def build_from_db(session: AsyncSession) -> CacheData:
     from sqlalchemy import func, select
 
     from azurerbac.core import Operation, Role, RoleHistory, RoleScanStatus
-    from azurerbac.telemetry import TimedDbQuery
+    from azurerbac.telemetry import DbQueryName, TimedDbQuery
 
     logger.info("Building cache from database...")
 
     # Fetch ALL roles (active and deleted) for roles_by_id index
-    async with TimedDbQuery("fetch_all_roles") as timer:
+    async with TimedDbQuery(DbQueryName.FETCH_ALL_ROLES) as timer:
         all_roles_result = await session.execute(select(Role))
         all_roles = list(all_roles_result.scalars().all())
         timer.rows = len(all_roles)
@@ -359,13 +359,13 @@ async def build_from_db(session: AsyncSession) -> CacheData:
     logger.debug("Loaded %d roles from database", len(all_roles))
 
     # Fetch all operations
-    async with TimedDbQuery("fetch_all_operations") as timer:
+    async with TimedDbQuery(DbQueryName.FETCH_ALL_OPERATIONS) as timer:
         ops_result = await session.execute(select(Operation))
         all_ops = list(ops_result.scalars().all())
         timer.rows = len(all_ops)
 
     # Fetch all history events
-    async with TimedDbQuery("fetch_all_history_events") as timer:
+    async with TimedDbQuery(DbQueryName.FETCH_ALL_HISTORY_EVENTS) as timer:
         events_result = await session.execute(
             select(RoleHistory).order_by(RoleHistory.scan_id.desc())
         )
@@ -373,7 +373,7 @@ async def build_from_db(session: AsyncSession) -> CacheData:
         timer.rows = len(all_events)
 
     # Get scan status
-    async with TimedDbQuery("fetch_scan_status"):
+    async with TimedDbQuery(DbQueryName.FETCH_SCAN_STATUS):
         last_scan = await session.scalar(
             select(RoleScanStatus.scan_timestamp)
             .order_by(RoleScanStatus.scan_timestamp.desc())

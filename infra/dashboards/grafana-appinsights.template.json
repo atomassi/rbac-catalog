@@ -3944,7 +3944,7 @@
           "targets": [
             {
               "azureLogAnalytics": {
-                "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where name == \"ai_recommendation\"\n| extend mode = tostring(customDimensions.actual_mode)\n| extend status = tostring(customDimensions.status)\n| summarize count() by bin(timestamp, $__interval), mode, status\n| order by timestamp asc",
+                "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where name in (\"ai_recommendation\", \"ai_recommendation_error\")\n| extend mode = tostring(customDimensions.mode)\n| extend status = iff(name == \"ai_recommendation_error\", \"error\", \"success\")\n| summarize count() by bin(timestamp, $__interval), mode, status\n| order by timestamp asc",
                 "resource": "/subscriptions/__SUBSCRIPTION_ID__/resourceGroups/__RESOURCE_GROUP__/providers/microsoft.insights/components/__APP_INSIGHTS_NAME__",
                 "resultFormat": "time_series"
               },
@@ -4095,7 +4095,7 @@
           "targets": [
             {
               "azureLogAnalytics": {
-                "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where name == \"ai_recommendation\"\n| extend mode = tostring(customDimensions.actual_mode)\n| extend status = tostring(customDimensions.status)\n| extend fallback = tobool(customDimensions.fallback)\n| extend result_count = toint(customDimensions.result_count)\n| summarize calls = count(), successes = countif(status == \"success\"), fallbacks = countif(fallback), avg_results = round(avg(result_count), 1) by mode\n| extend success_rate = round(100.0 * successes / calls, 1)\n| extend fallback_rate = round(100.0 * fallbacks / calls, 1)\n| project mode, calls, success_rate, fallback_rate, avg_results\n| order by calls desc",
+                "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where name in (\"ai_recommendation\", \"ai_recommendation_error\")\n| extend mode = tostring(customDimensions.mode)\n| extend result_count = toint(customDimensions.result_count)\n| summarize calls = count(), successes = countif(name == \"ai_recommendation\"), avg_results = round(avg(result_count), 1) by mode\n| extend success_rate = round(100.0 * successes / calls, 1)\n| project mode, calls, success_rate, avg_results\n| order by calls desc",
                 "resource": "/subscriptions/__SUBSCRIPTION_ID__/resourceGroups/__RESOURCE_GROUP__/providers/microsoft.insights/components/__APP_INSIGHTS_NAME__",
                 "resultFormat": "table"
               },
@@ -4284,7 +4284,7 @@
           "targets": [
             {
               "azureLogAnalytics": {
-                "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where name == \"ai_recommendation\"\n| extend mode = tostring(customDimensions.actual_mode)\n| summarize calls = count() by mode\n| order by calls desc",
+                "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where name in (\"ai_recommendation\", \"ai_recommendation_error\")\n| extend mode = tostring(customDimensions.mode)\n| summarize calls = count() by mode\n| order by calls desc",
                 "resource": "/subscriptions/__SUBSCRIPTION_ID__/resourceGroups/__RESOURCE_GROUP__/providers/microsoft.insights/components/__APP_INSIGHTS_NAME__",
                 "resultFormat": "table"
               },
@@ -4389,7 +4389,7 @@
           "targets": [
             {
               "azureLogAnalytics": {
-                "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where name == \"ai_recommendation\"\n| extend status = tostring(customDimensions.status)\n| summarize calls = count() by status\n| order by calls desc",
+                "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where name in (\"ai_recommendation\", \"ai_recommendation_error\")\n| extend status = iff(name == \"ai_recommendation_error\", \"error\", \"success\")\n| summarize calls = count() by status\n| order by calls desc",
                 "resource": "/subscriptions/__SUBSCRIPTION_ID__/resourceGroups/__RESOURCE_GROUP__/providers/microsoft.insights/components/__APP_INSIGHTS_NAME__",
                 "resultFormat": "table"
               },
@@ -4479,7 +4479,7 @@
           "targets": [
             {
               "azureLogAnalytics": {
-                "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where name == \"ai_recommendation\"\n| where tostring(customDimensions.status) == \"error\"\n| extend mode = tostring(customDimensions.actual_mode)\n| extend error = tostring(customDimensions.error)\n| summarize count = count() by mode, error\n| order by count desc",
+                "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where name == \"ai_recommendation_error\"\n| extend mode = tostring(customDimensions.mode)\n| extend error = tostring(customDimensions.error)\n| summarize count = count() by mode, error\n| order by count desc",
                 "resource": "/subscriptions/__SUBSCRIPTION_ID__/resourceGroups/__RESOURCE_GROUP__/providers/microsoft.insights/components/__APP_INSIGHTS_NAME__",
                 "resultFormat": "table"
               },
@@ -4952,7 +4952,7 @@
           "targets": [
             {
               "azureLogAnalytics": {
-                "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where name == \"db_query_event\"\n| extend duration_ms = todouble(customDimensions.duration_ms)\n| summarize p95_ms = round(percentile(duration_ms, 95), 1)",
+                "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where name == \"db_query_duration_seconds\"\n| extend duration_ms = round(value * 1000, 1)\n| summarize p95_ms = round(percentile(duration_ms, 95), 1)",
                 "resource": "/subscriptions/__SUBSCRIPTION_ID__/resourceGroups/__RESOURCE_GROUP__/providers/microsoft.insights/components/__APP_INSIGHTS_NAME__",
                 "resultFormat": "table"
               },
@@ -5173,7 +5173,7 @@
           "targets": [
             {
               "azureLogAnalytics": {
-                "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where name == \"db_query_event\"\n| extend query_name = tostring(customDimensions.query)\n| extend duration_ms = todouble(customDimensions.duration_ms)\n| summarize p95_ms = percentile(duration_ms, 95) by bin(timestamp, $__interval), query_name\n| order by timestamp asc",
+                "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where name == \"db_query_duration_seconds\"\n| extend query_name = tostring(customDimensions.query)\n| extend duration_ms = round(value * 1000, 1)\n| summarize p95_ms = percentile(duration_ms, 95) by bin(timestamp, $__interval), query_name\n| order by timestamp asc",
                 "resource": "/subscriptions/__SUBSCRIPTION_ID__/resourceGroups/__RESOURCE_GROUP__/providers/microsoft.insights/components/__APP_INSIGHTS_NAME__",
                 "resultFormat": "time_series"
               },
@@ -5323,7 +5323,7 @@
           "targets": [
             {
               "azureLogAnalytics": {
-                "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where name == \"db_query_event\"\n| extend query_name = tostring(customDimensions.query)\n| extend duration_ms = todouble(customDimensions.duration_ms)\n| extend rows = toint(customDimensions.rows)\n| summarize calls = count(), avg_ms = round(avg(duration_ms), 1), p95_ms = round(percentile(duration_ms, 95), 1), max_ms = round(max(duration_ms), 1), avg_rows = round(avg(rows), 0) by query_name\n| order by p95_ms desc",
+                "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where name == \"db_query_duration_seconds\"\n| extend query_name = tostring(customDimensions.query)\n| extend duration_ms = round(value * 1000, 1)\n| extend rows = toint(customDimensions.rows)\n| summarize calls = count(), avg_ms = round(avg(duration_ms), 1), p95_ms = round(percentile(duration_ms, 95), 1), max_ms = round(max(duration_ms), 1), avg_rows = round(avg(rows), 0) by query_name\n| order by p95_ms desc",
                 "resource": "/subscriptions/__SUBSCRIPTION_ID__/resourceGroups/__RESOURCE_GROUP__/providers/microsoft.insights/components/__APP_INSIGHTS_NAME__",
                 "resultFormat": "table"
               },
@@ -5383,7 +5383,7 @@
           "targets": [
             {
               "azureLogAnalytics": {
-                "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where name == \"cache_refresh_duration_seconds\"\n| extend source = tostring(customDimensions.source)\n| extend duration_s = todouble(customDimensions.duration_seconds)\n| summarize avg_duration = avg(duration_s) by bin(timestamp, $__interval), source\n| order by timestamp asc",
+                "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where name == \"cache_refresh_duration_seconds\"\n| extend duration_s = todouble(customDimensions.duration_seconds)\n| summarize avg_duration = avg(duration_s) by bin(timestamp, $__interval)\n| order by timestamp asc",
                 "resource": "/subscriptions/__SUBSCRIPTION_ID__/resourceGroups/__RESOURCE_GROUP__/providers/microsoft.insights/components/__APP_INSIGHTS_NAME__",
                 "resultFormat": "time_series"
               },
@@ -5559,7 +5559,7 @@
           "targets": [
             {
               "azureLogAnalytics": {
-                "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where name == \"db_query_event\"\n| extend query_name = tostring(customDimensions.query)\n| extend duration_ms = todouble(customDimensions.duration_ms)\n| extend rows = toint(customDimensions.rows)\n| project timestamp, query_name, duration_ms, rows\n| order by duration_ms desc\n| take 15",
+                "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where name == \"db_query_duration_seconds\"\n| extend query_name = tostring(customDimensions.query)\n| extend duration_ms = round(value * 1000, 1)\n| extend rows = toint(customDimensions.rows)\n| project timestamp, query_name, duration_ms, rows\n| order by duration_ms desc\n| take 15",
                 "resource": "/subscriptions/__SUBSCRIPTION_ID__/resourceGroups/__RESOURCE_GROUP__/providers/microsoft.insights/components/__APP_INSIGHTS_NAME__",
                 "resultFormat": "table"
               },
@@ -6100,7 +6100,7 @@
           "azureLogAnalytics": {
             "dashboardTime": false,
             "mode": "raw",
-            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where name == 'mcp_tool_call'\n| extend session_id = tostring(customDimensions.session_id)\n| summarize active_sessions = dcount(session_id)\n\n",
+            "query": "traces\n| where $__timeFilter(timestamp)\n| where customDimensions.mcp_event == 'tool_call'\n| extend session_id = tostring(customDimensions.session_id)\n| summarize active_sessions = dcount(session_id)\n\n",
             "resources": [
               "/subscriptions/__SUBSCRIPTION_ID__/resourceGroups/__RESOURCE_GROUP__/providers/microsoft.insights/components/__APP_INSIGHTS_NAME__"
             ],
@@ -6659,7 +6659,7 @@
           "azureLogAnalytics": {
             "dashboardTime": false,
             "mode": "raw",
-            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where name == 'mcp_tool_call'\n| extend session_id = tostring(customDimensions.session_id)\n| summarize active_sessions = dcount(session_id) by bin(timestamp, $__interval)\n| order by timestamp asc",
+            "query": "traces\n| where $__timeFilter(timestamp)\n| where customDimensions.mcp_event == 'tool_call'\n| extend session_id = tostring(customDimensions.session_id)\n| summarize active_sessions = dcount(session_id) by bin(timestamp, $__interval)\n| order by timestamp asc",
             "resources": [
               "/subscriptions/__SUBSCRIPTION_ID__/resourceGroups/__RESOURCE_GROUP__/providers/microsoft.insights/components/__APP_INSIGHTS_NAME__"
             ],

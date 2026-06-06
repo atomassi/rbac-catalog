@@ -22,7 +22,7 @@ from azurerbac.core.constants import DEFAULT_SEARCH_LIMIT, RoleStatus
 from azurerbac.core.patterns import is_wildcard_pattern
 from azurerbac.core.singleton import ThreadSafeSingleton
 from azurerbac.matching.models import RoleCoverage, RoleNetPermissions
-from azurerbac.telemetry import track_cache_call, track_cache_hit
+from azurerbac.telemetry import CacheType, track_cache_call, track_cache_hit
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -169,7 +169,7 @@ class CacheService:
 
     def get_role_by_id(self, role_id: str) -> CachedRole | None:
         result = self._cache.roles_by_id.get(role_id)
-        track_cache_hit("role_by_id", result is not None, role_id)
+        track_cache_hit(CacheType.ROLE_BY_ID, result is not None, role_id)
         return result
 
     def get_all_roles(self) -> list[RoleDefinition]:
@@ -179,18 +179,18 @@ class CacheService:
 
     def get_role_coverage(self, role_id: str) -> RoleCoverage | None:
         result = self._cache.role_coverage.get(role_id)
-        track_cache_hit("role_coverage", result is not None, role_id)
+        track_cache_hit(CacheType.ROLE_COVERAGE, result is not None, role_id)
         return result
 
     def get_role_net_permissions(self, role_id: str) -> RoleNetPermissions | None:
         result = self._cache.role_net_permissions.get(role_id)
-        track_cache_hit("role_net_permissions", result is not None, role_id)
+        track_cache_hit(CacheType.ROLE_NET_PERMISSIONS, result is not None, role_id)
         return result
 
     def get_roles_for_operation(self, operation_name: str) -> list[str]:
         key = operation_name.lower()
         result = self._cache.operation_to_roles.get(key)
-        track_cache_hit("operation_to_roles", result is not None, key)
+        track_cache_hit(CacheType.OPERATION_TO_ROLES, result is not None, key)
         return result if result is not None else []
 
     def get_operation_role_count(self, operation_name: str) -> int:
@@ -268,7 +268,7 @@ class CacheService:
 
     def get_filtered_events(self, cache_key: str) -> list[CachedChangeEvent] | None:
         result = self._request_caches.filtered_events.get(cache_key)
-        track_cache_hit("filtered_events", result is not None, cache_key)
+        track_cache_hit(CacheType.FILTERED_EVENTS, result is not None, cache_key)
         return result
 
     def set_filtered_events(self, cache_key: str, events: list[CachedChangeEvent]) -> None:
@@ -290,7 +290,7 @@ class CacheService:
 
     def get_role_page(self, page_key: str) -> list[RoleWithCounts] | None:
         result = self._request_caches.role_pages.get(page_key)
-        track_cache_hit("role_page", result is not None, page_key)
+        track_cache_hit(CacheType.ROLE_PAGE, result is not None, page_key)
         return result
 
     def set_role_page(self, page_key: str, roles: list[RoleWithCounts]) -> None:
@@ -298,7 +298,7 @@ class CacheService:
 
     def get_role_page_count(self, count_key: str) -> int | None:
         result = self._request_caches.role_page_counts.get(count_key)
-        track_cache_hit("role_page_count", result is not None, count_key)
+        track_cache_hit(CacheType.ROLE_PAGE_COUNT, result is not None, count_key)
         return result
 
     def set_role_page_count(self, count_key: str, total: int) -> None:
@@ -306,7 +306,7 @@ class CacheService:
 
     def get_operation_page(self, page_key: str) -> list[OperationWithCount] | None:
         result = self._request_caches.operation_pages.get(page_key)
-        track_cache_hit("operation_page", result is not None, page_key)
+        track_cache_hit(CacheType.OPERATION_PAGE, result is not None, page_key)
         return result
 
     def set_operation_page(self, page_key: str, value: list[OperationWithCount]) -> None:
@@ -314,7 +314,7 @@ class CacheService:
 
     def get_operation_page_count(self, count_key: str) -> int | None:
         result = self._request_caches.operation_page_counts.get(count_key)
-        track_cache_hit("operation_page_count", result is not None, count_key)
+        track_cache_hit(CacheType.OPERATION_PAGE_COUNT, result is not None, count_key)
         return result
 
     def set_operation_page_count(self, count_key: str, total: int) -> None:
@@ -322,7 +322,7 @@ class CacheService:
 
     def get_allowing_roles(self, key: str) -> RoleAllowingOperationList | None:
         result = self._request_caches.allowing_roles.get(key)
-        track_cache_hit("allowing_roles", result is not None, key)
+        track_cache_hit(CacheType.ALLOWING_ROLES, result is not None, key)
         return result
 
     def set_allowing_roles(self, key: str, value: RoleAllowingOperationList) -> None:
@@ -330,7 +330,7 @@ class CacheService:
 
     def get_related_roles(self, key: str) -> RelatedRoleList | None:
         result = self._request_caches.related_roles.get(key)
-        track_cache_hit("related_roles", result is not None, key)
+        track_cache_hit(CacheType.RELATED_ROLES, result is not None, key)
         return result
 
     def set_related_roles(self, key: str, value: RelatedRoleList) -> None:
@@ -338,7 +338,7 @@ class CacheService:
 
     def get_comparison(self, key: str) -> RoleComparison | None:
         result = self._request_caches.comparisons.get(key)
-        track_cache_hit("comparisons", result is not None, key)
+        track_cache_hit(CacheType.COMPARISONS, result is not None, key)
         return result
 
     def set_comparison(self, key: str, value: RoleComparison) -> None:
@@ -346,7 +346,7 @@ class CacheService:
 
     def get_effective_perms(self, role_id: str) -> RoleEffectivePermissions | None:
         result = self._request_caches.effective_perms.get(role_id)
-        track_cache_hit("effective_perms", result is not None, role_id)
+        track_cache_hit(CacheType.EFFECTIVE_PERMS, result is not None, role_id)
         return result
 
     def set_effective_perms(self, role_id: str, value: RoleEffectivePermissions) -> None:

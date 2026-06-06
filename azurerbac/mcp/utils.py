@@ -103,11 +103,10 @@ def validate_input(
 class ToolTimer:
     """Context manager for tool execution metrics."""
 
-    __slots__ = ("_success", "result_count", "session_id", "start", "tool_name")
+    __slots__ = ("_success", "result_count", "start", "tool_name")
 
-    def __init__(self, tool_name: str, session_id: str = "unknown") -> None:
+    def __init__(self, tool_name: str) -> None:
         self.tool_name = tool_name
-        self.session_id = session_id
         self.start = time.perf_counter()
         self.result_count = 0
         self._success = True
@@ -133,7 +132,6 @@ class ToolTimer:
         props = {
             "tool": self.tool_name,
             "success": str(self._success),
-            "session_id": self.session_id,
         }
         track_event("mcp_tool_call", props)
         track_duration("mcp_tool_duration_seconds", duration, props)

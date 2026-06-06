@@ -54,8 +54,8 @@ ruff format --check azurerbac/
 # Static type checking (standard mode)
 pyright azurerbac/
 
-# Python unit tests with coverage (must stay >= 50%, same gate as CI)
-pytest tests/ -q --cov=azurerbac --cov-report=term --cov-fail-under=50
+# Python unit tests with coverage (must stay >= 80%, same gate as CI)
+pytest tests/ -q --cov=azurerbac --cov-report=term --cov-fail-under=80
 
 # JavaScript type check + unit tests
 npm run check:js

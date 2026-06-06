@@ -75,7 +75,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run tests
-        run: pytest tests/ -q --tb=short --cov=azurerbac --cov-report=term --cov-report=xml --cov-fail-under=50
+        run: pytest tests/ -q --tb=short --cov=azurerbac --cov-report=term --cov-report=xml --cov-fail-under=80
         env:
           DB_CONNECTION_STRING: "sqlite+aiosqlite:///:memory:"
 

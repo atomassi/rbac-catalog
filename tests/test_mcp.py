@@ -699,7 +699,7 @@ class TestAiRecommendTool:
                     "matched_keywords": ["storage", "blob"],
                 }
             ],
-            "colbert",
+            "crossencoder",
         )
         result = _call_tool(
             mcp_server,
@@ -708,12 +708,12 @@ class TestAiRecommendTool:
             ctx=None,
         )
         assert "Storage Blob Reader" in result
-        assert "colbert" in result
+        assert "crossencoder" in result
         assert "0.95" in result
 
     @patch("azurerbac.mcp.server.ai_recommend_roles")
     def test_no_recommendations(self, mock_ai: MagicMock, mcp_server: MCPServer) -> None:
-        mock_ai.return_value = ([], "colbert")
+        mock_ai.return_value = ([], "crossencoder")
         result = _call_tool(
             mcp_server, "ai_recommend", query="something very obscure query", ctx=None
         )

@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 _VALID_ENVIRONMENTS: Final = frozenset({"production", "staging", "ppe"})
 _VALID_AI_ENGINES: Final = frozenset(
-    {"tfidf", "llm", "rag", "hybrid", "semantic", "crossencoder", "colbert", "hyde"}
+    {"tfidf", "llm", "rag", "hybrid", "semantic", "crossencoder", "hyde"}
 )
 
 
@@ -103,7 +103,7 @@ class Settings(BaseSettings):
     # ``NoDecode`` keeps pydantic-settings from JSON-parsing the env value
     # before our ``_split_engines`` validator gets to do CSV/SCSV parsing.
     enabled_ai_engines: Annotated[list[str], NoDecode] = Field(
-        default=["crossencoder", "colbert", "semantic", "llm", "rag", "hyde", "tfidf"],
+        default=["crossencoder", "semantic", "llm", "rag", "hyde", "tfidf"],
         description="AI recommendation engines to expose in the UI.",
     )
 

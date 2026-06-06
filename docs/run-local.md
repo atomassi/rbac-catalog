@@ -6,9 +6,8 @@ The commands below use a Bash / Zsh shell (macOS, Linux, WSL). For native Window
 
 ## Prerequisites
 
-- **Python 3.12** — required. One of the AI recommendation modes (ColBERT, via [RAGatouille](https://github.com/AnswerDotAI/RAGatouille)) depends on [`voyager`](https://github.com/spotify/voyager), which only ships wheels up to Python 3.12. Other versions are untested and known to fail to install. Verify with `python3.12 --version` before continuing.
+- **Python 3.12, 3.13, or 3.14** — all supported and tested. Verify with `python3 --version` before continuing. The examples below use `python3.12`; substitute `python3.13`/`python3.14` if you prefer a newer interpreter.
 - Git
-- A C++ toolchain — required by ColBERT, which JIT-compiles PyTorch extensions on first use. Install Xcode Command Line Tools on macOS (`xcode-select --install`) or `build-essential` on Debian/Ubuntu. Skip this if you run with `ENABLED_AI_ENGINES=tfidf` (see [Run](#run)).
 - Optional: Azure CLI (`az login`) — only needed to populate the catalog with live data from Azure
 
 ## Setup
@@ -40,7 +39,7 @@ uvicorn azurerbac.web.app:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 > [!TIP]
-> First startup loads ColBERT + sentence-transformers + PyTorch — several hundred MB. To skip the heavy engines and boot in a few seconds, set `ENABLED_AI_ENGINES=tfidf`. Comma-separate to enable more (e.g. `tfidf,semantic`).
+> First startup loads sentence-transformers + PyTorch — several hundred MB. To skip the heavy engines and boot in a few seconds, set `ENABLED_AI_ENGINES=tfidf`. Comma-separate to enable more (e.g. `tfidf,semantic`).
 
 ## Populating the catalog
 
@@ -63,7 +62,7 @@ The app reads all configuration from environment variables. For local runs, an o
 |---|---|---|
 | `DB_CONNECTION_STRING` | `sqlite+aiosqlite:///./azurerbac.db` | Switch to `postgresql+asyncpg://...` to use Postgres instead. |
 | `LOG_LEVEL` | `INFO` | Set to `DEBUG` for verbose logs. |
-| `ENABLED_AI_ENGINES` | `crossencoder,colbert,semantic,llm,rag,hyde,tfidf` | Comma-separated subset of `tfidf,semantic,colbert,crossencoder,llm,rag,hyde,hybrid`. Set to `tfidf` for fast boot. |
+| `ENABLED_AI_ENGINES` | `crossencoder,semantic,llm,rag,hyde,tfidf` | Comma-separated subset of `tfidf,semantic,crossencoder,llm,rag,hyde,hybrid`. Set to `tfidf` for fast boot. |
 | `RUN_SCAN_ON_STARTUP` | `true` | Worker runs a roles scan immediately on startup. Set to `false` to only run on the regular poll interval. |
 | `RUN_OPERATIONS_SCAN_ON_STARTUP` | `true` | Same, for operations. |
 | `ROLE_SCAN_ENABLED` | `true` | Set to `false` to disable the worker's role scanner. |

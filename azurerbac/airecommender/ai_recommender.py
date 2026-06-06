@@ -152,7 +152,6 @@ class AIRoleRecommender:
 
     def _initialize_locked(self, roles: list[RoleDefinition], current_hash: str) -> None:
         self._knowledge_base = RoleKnowledgeBase()
-        self._knowledge_base.load_from_file()
         self._knowledge_base.build_from_roles(roles)
 
         self._ollama_client = OllamaClient()
@@ -201,12 +200,6 @@ class AIRoleRecommender:
             not self._embedding_model or not self._embedding_model.is_loaded
         ):
             missing.append("sentence-transformers")
-
-        if mode == RecommenderMode.COLBERT:
-            import importlib.util
-
-            if importlib.util.find_spec("ragatouille") is None:
-                missing.append("ragatouille")
 
         return missing
 

@@ -75,7 +75,6 @@ from azurerbac.web.services.startup import (
     cache_refresh_task,
     ensure_db,
     preload_cache,
-    warmup_colbert,
     warmup_crossencoder,
 )
 from azurerbac.web.utils import urlencode_path
@@ -188,7 +187,6 @@ async def _warmup_models() -> None:
     """Warm AI models and load static assets concurrently before serving traffic."""
     logger.info("Warming up AI models and loading static assets...")
     async with anyio.create_task_group() as tg:
-        tg.start_soon(warmup_colbert, name="colbert-warmup")
         tg.start_soon(warmup_crossencoder, name="crossencoder-warmup")
         tg.start_soon(load_static_assets, name="static-assets")
 

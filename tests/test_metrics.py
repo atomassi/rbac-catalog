@@ -302,14 +302,14 @@ class TestTrackFunctions:
         # Should not raise (no-op when local)
         metrics_module.track_ai_recommendation("tfidf", 5)
         metrics_module.track_ai_recommendation("semantic", 0)
-        metrics_module.track_ai_recommendation("colbert", 10)
+        metrics_module.track_ai_recommendation("crossencoder", 10)
 
     def test_track_ai_recommendation_error_logs_correctly(self, local_env):
         """track_ai_recommendation_error should log and handle parameters."""
         metrics_module = local_env
         # Should not raise (no-op when local)
         metrics_module.track_ai_recommendation_error("semantic", "EngineNotAvailableError")
-        metrics_module.track_ai_recommendation_error("colbert", "ColBERTInitializationError")
+        metrics_module.track_ai_recommendation_error("crossencoder", "EngineNotAvailableError")
 
     def test_track_role_recommendation_logs_correctly(self, local_env):
         """track_role_recommendation should log and handle parameters."""

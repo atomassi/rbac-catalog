@@ -18,10 +18,6 @@ updates:
       - "python"
     commit-message:
       prefix: "chore(deps)"
-    # Ignore pre-release versions (alpha, beta, rc)
-    ignore:
-      - dependency-name: "*"
-        update-types: ["version-update:semver-prerelease"]
     groups:
       # Critical framework dependencies - review carefully
       python-frameworks:
@@ -75,17 +71,6 @@ updates:
         update-types:
           - "minor"
           - "patch"
-      # LangChain/RAG dependencies
-      python-langchain:
-        patterns:
-          - "langchain*"
-          - "langsmith"
-          - "llama-*"
-          - "RAGatouille"
-          - "colbert-ai"
-        update-types:
-          - "minor"
-          - "patch"
       # HTTP clients
       python-http:
         patterns:
@@ -110,10 +95,14 @@ updates:
         update-types:
           - "minor"
           - "patch"
-    # Ignore major version updates for stability (review manually)
     ignore:
+      # Major version updates are reviewed and applied manually.
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
+      # opentelemetry-* is exact-pinned by azure-monitor-opentelemetry; let it drive the train.
+      - dependency-name: "opentelemetry-*"
+      # torch uses a Linux-only +cpu tag; Dependabot mangles the macOS line, so bump it manually.
+      - dependency-name: "torch"
 
   # npm dependencies (for Playwright, Tailwind, etc.)
   - package-ecosystem: "npm"

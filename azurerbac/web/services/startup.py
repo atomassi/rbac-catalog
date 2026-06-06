@@ -103,13 +103,6 @@ async def _warmup_engine(name: str, factory: Callable[[], object]) -> None:
     await to_thread.run_sync(_warmup)
 
 
-async def warmup_colbert() -> None:
-    """Pre-warm ColBERT engine."""
-    from azurerbac.airecommender.engines.colbert import get_colbert_index
-
-    await _warmup_engine("COLBERT", lambda: get_colbert_index().warmup())
-
-
 async def warmup_crossencoder() -> None:
     """Pre-warm CrossEncoder model."""
     from azurerbac.airecommender.engines.crossencoder import get_cross_encoder

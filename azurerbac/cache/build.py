@@ -27,8 +27,6 @@ from azurerbac.cache.models import (
     Sitemap,
     SourceData,
     build_indexes,
-    compute_operations_hash,
-    compute_roles_hash,
 )
 from azurerbac.core.constants import POPULAR_COMPARE_PAIRS
 from azurerbac.core.enums import RoleStatus
@@ -60,27 +58,6 @@ def get_matching_operations(
     matching = {op.lower() for op in ops if matches_pattern(op, pattern)}
     pattern_cache[key] = matching
     return matching
-
-
-def build_operations_prefix_index(
-    ops: set[str],
-    plane: Plane,
-    prefix_cache: dict[Plane, dict[str, set[str]]],
-) -> dict[str, set[str]]:
-    """Build index of operations by provider prefix."""
-    if plane in prefix_cache:
-        return prefix_cache[plane]
-
-    index: defaultdict[str, set[str]] = defaultdict(set)
-    for op in ops:
-        slash_idx = op.find("/")
-        if slash_idx > 0:
-            prefix = op[: slash_idx + 1].lower()
-            index[prefix].add(op)
-
-    result = dict(index)
-    prefix_cache[plane] = result
-    return result
 
 
 def _add_operations_for_patterns(
@@ -235,7 +212,6 @@ def precompute_all(
 
     # Build computed data into temporary dicts
     pattern_match: dict[PatternCacheKey, set[str]] = {}
-    operations_by_prefix_computed: dict[Plane, dict[str, set[str]]] = {}
     role_coverage: dict[str, RoleCoverage] = {}
 
     # Separate control and data plane operations
@@ -247,11 +223,6 @@ def precompute_all(
     # Build lowered lookup sets for case-insensitive matching
     control_ops_lower_to_orig = {op.lower(): op for op in all_control_ops}
     data_ops_lower_to_orig = {op.lower(): op for op in all_data_ops}
-
-    # Build prefix indexes
-    logger.debug("Building prefix indexes...")
-    build_operations_prefix_index(all_control_ops, Plane.CONTROL, operations_by_prefix_computed)
-    build_operations_prefix_index(all_data_ops, Plane.DATA, operations_by_prefix_computed)
 
     # 1. Precompute common patterns
     logger.debug("Precomputing common patterns...")
@@ -315,7 +286,6 @@ def precompute_all(
         indexes=Indexes(
             ops_by_name_lower=ops_by_name_lower,
             ops_by_prefix=ops_by_prefix,
-            ops_by_prefix_by_plane=operations_by_prefix_computed,
         ),
         analysis=RoleAnalysis(
             role_coverage=role_coverage,
@@ -438,16 +408,10 @@ async def build_from_db(session: AsyncSession) -> CacheData:
             )
         )
 
-    # Compute hashes
-    roles_hash = compute_roles_hash(role_definitions)
-    operations_hash = compute_operations_hash(all_operations)
-
     # Create metadata
     metadata = CacheMetadata(
         roles_count=len(role_definitions),
         operations_count=len(all_operations),
-        roles_hash=roles_hash,
-        operations_hash=operations_hash,
     )
 
     # Precompute all caches (without analytics yet)

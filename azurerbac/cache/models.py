@@ -6,7 +6,7 @@ CacheData is the unified cache container holding all application state.
 It's designed for atomic swaps - the entire object is replaced, never mutated.
 
     CacheData (immutable snapshot)
-    ├── metadata: CacheMetadata          # Versioning and invalidation
+    ├── metadata: CacheMetadata          # Version + snapshot counts
     ├── source: SourceData               # Raw DB data (immutable after load)
     ├── indexes: Indexes                 # Fast lookups (deterministic from source)
     ├── analysis: RoleAnalysis           # Expensive precomputation (built once at refresh)
@@ -33,10 +33,8 @@ from cachetools import LRUCache
 from azurerbac.core.constants import POPULAR_COMPARE_PAIRS
 from azurerbac.core.enums import EventType, RoleStatus
 from azurerbac.core.types import JsonDict
-from azurerbac.core.utils import content_hash
 from azurerbac.matching.models import (
     PatternCacheKey,
-    Plane,
     RoleCoverage,
     RoleNetPermissions,
 )
@@ -228,13 +226,11 @@ class Sitemap:
 
 @dataclass(slots=True)
 class CacheMetadata:
-    """Metadata for cache invalidation."""
+    """Describes the current cache snapshot (format version and counts)."""
 
     version: str = CACHE_VERSION
     roles_count: int = 0
     operations_count: int = 0
-    roles_hash: str = ""
-    operations_hash: str = ""
     created_at: float = field(default_factory=time.time)
 
 
@@ -256,7 +252,6 @@ class Indexes:
 
     ops_by_name_lower: dict[str, OperationData] = field(default_factory=dict)
     ops_by_prefix: dict[str, list[OperationData]] = field(default_factory=dict)
-    ops_by_prefix_by_plane: dict[Plane, dict[str, set[str]]] = field(default_factory=dict)
 
 
 @dataclass(slots=True)
@@ -377,7 +372,7 @@ class CacheData:
 
     Structure:
         CacheData
-        ├── metadata        # Version, hashes (for invalidation)
+        ├── metadata        # Version + snapshot counts
         ├── source          # Raw DB data (roles, operations, events)
         ├── indexes         # Lookup indexes (ops_by_name, ops_by_prefix)
         ├── analysis        # Precomputed (role_coverage, operation_to_roles)
@@ -388,7 +383,7 @@ class CacheData:
     not here, since they're mutable LRU caches that get cleared on swap.
     """
 
-    # Metadata (for versioning and invalidation)
+    # Metadata (format version and snapshot counts)
     metadata: CacheMetadata = field(default_factory=CacheMetadata)
 
     # Data layers (ordered by lifecycle)
@@ -414,7 +409,6 @@ class CacheData:
         first_scan: dt.datetime | None = None,
         ops_by_name_lower: dict[str, OperationData] | None = None,
         ops_by_prefix: dict[str, list[OperationData]] | None = None,
-        ops_by_prefix_by_plane: dict[Plane, dict[str, set[str]]] | None = None,
         role_coverage: dict[str, RoleCoverage] | None = None,
         operation_to_roles: dict[str, list[str]] | None = None,
         pattern_match: dict[PatternCacheKey, set[str]] | None = None,
@@ -436,7 +430,6 @@ class CacheData:
             indexes=Indexes(
                 ops_by_name_lower=ops_by_name_lower or {},
                 ops_by_prefix=ops_by_prefix or {},
-                ops_by_prefix_by_plane=ops_by_prefix_by_plane or {},
             ),
             analysis=RoleAnalysis(
                 role_coverage=role_coverage or {},
@@ -486,10 +479,6 @@ class CacheData:
     @property
     def ops_by_prefix(self) -> dict[str, list[OperationData]]:
         return self.indexes.ops_by_prefix
-
-    @property
-    def ops_by_prefix_by_plane(self) -> dict[Plane, dict[str, set[str]]]:
-        return self.indexes.ops_by_prefix_by_plane
 
     @property
     def role_coverage(self) -> dict[str, RoleCoverage]:
@@ -595,21 +584,6 @@ class CacheData:
     def active_roles_count(self) -> int:
         """Count of active (non-deleted) roles."""
         return len(self.role_definitions)
-
-
-def compute_roles_hash(roles: list[RoleDefinition]) -> str:
-    """Compute hash of role data for change detection."""
-
-    def role_key(role: RoleDefinition) -> str:
-        updated = role.properties.updated_on.isoformat() if role.properties.updated_on else ""
-        return f"{role.role_id}:{updated}"
-
-    return content_hash("|".join(sorted(role_key(r) for r in roles)))
-
-
-def compute_operations_hash(operations: list[OperationData]) -> str:
-    """Compute hash of operation data for change detection."""
-    return content_hash("|".join(sorted(op.name for op in operations)))
 
 
 def build_indexes(

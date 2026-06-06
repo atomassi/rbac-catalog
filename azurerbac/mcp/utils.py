@@ -5,7 +5,7 @@ from collections import OrderedDict
 from dataclasses import dataclass
 from types import TracebackType
 
-from azurerbac.telemetry import track_duration, track_event, track_gauge
+from azurerbac.telemetry import MetricName, track_duration, track_event, track_gauge
 
 
 @dataclass(frozen=True, slots=True)
@@ -133,7 +133,7 @@ class ToolTimer:
             "tool": self.tool_name,
             "success": str(self._success),
         }
-        track_event("mcp_tool_call", props)
-        track_duration("mcp_tool_duration_seconds", duration, props)
+        track_event(MetricName.MCP_TOOL_CALL, props)
+        track_duration(MetricName.MCP_TOOL_DURATION_SECONDS, duration, props)
         if self.result_count > 0:
-            track_gauge("mcp_tool_result_count", self.result_count, props)
+            track_gauge(MetricName.MCP_TOOL_RESULT_COUNT, self.result_count, props)

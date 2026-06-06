@@ -51,7 +51,7 @@ from azurerbac.mcp.constants import (
 )
 from azurerbac.mcp.utils import TokenBucketRateLimiter, ToolTimer, ValidationError, validate_input
 from azurerbac.settings import Settings
-from azurerbac.telemetry import track_event
+from azurerbac.telemetry import MCPRateLimitType, MetricName, track_event
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +81,7 @@ class MCPServer:
             if SITE_URL not in self._mcp.settings.transport_security.allowed_origins:
                 self._mcp.settings.transport_security.allowed_origins.append(SITE_URL)
         self._register_tools()
-        track_event("mcp_server_initialized", {})
+        track_event(MetricName.MCP_SERVER_INITIALIZED, {})
         logger.info("MCP server '%s' initialized", MCP_SERVER_NAME)
 
     def streamable_http_app(self) -> Starlette:
@@ -91,8 +91,8 @@ class MCPServer:
     def _timer(self, tool_name: str) -> ToolTimer:
         return ToolTimer(tool_name)
 
-    def _track_rate_limit(self, tool_name: str, limit_type: str) -> None:
-        track_event("mcp_rate_limit", {"tool": tool_name, "type": limit_type})
+    def _track_rate_limit(self, tool_name: str, limit_type: MCPRateLimitType) -> None:
+        track_event(MetricName.MCP_RATE_LIMIT, {"tool": tool_name, "type": limit_type})
 
     @staticmethod
     def _get_client_key(ctx: Context | None) -> str:
@@ -179,7 +179,7 @@ class MCPServer:
             and len(self._session_last_activity) >= RATE_LIMIT_MAX_SESSIONS
         ):
             logger.warning("Max sessions reached, rejecting: %s", session_id)
-            self._track_rate_limit(tool_name, "max_sessions")
+            self._track_rate_limit(tool_name, MCPRateLimitType.MAX_SESSIONS)
             return f"Server at capacity ({RATE_LIMIT_MAX_SESSIONS} sessions). Try later."
 
         self._session_last_activity[session_id] = now
@@ -189,14 +189,14 @@ class MCPServer:
         result = self._global_limiter.is_allowed("global")
         if not result.allowed:
             logger.warning("Global rate limit exceeded for %s", tool_name)
-            self._track_rate_limit(tool_name, "global")
+            self._track_rate_limit(tool_name, MCPRateLimitType.GLOBAL)
             return f"Server under high load. Please wait {result.wait_seconds:.0f} seconds."
 
         # Session limit
         result = self._session_limiter.is_allowed(session_id)
         if not result.allowed:
             logger.warning("Session rate limit exceeded for %s", tool_name)
-            self._track_rate_limit(tool_name, "session")
+            self._track_rate_limit(tool_name, MCPRateLimitType.SESSION)
             return f"Rate limit exceeded. Please wait {result.wait_seconds:.0f} seconds."
 
         return None

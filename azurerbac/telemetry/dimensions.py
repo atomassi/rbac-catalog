@@ -36,6 +36,14 @@ class DbFallbackType(StrEnum):
     ROLE_DETAIL = "role_detail"
 
 
+class MCPRateLimitType(StrEnum):
+    """``type`` dimension for the ``mcp_rate_limit`` metric."""
+
+    MAX_SESSIONS = "max_sessions"
+    GLOBAL = "global"
+    SESSION = "session"
+
+
 class DbQueryName(StrEnum):
     """``query`` dimension for the ``db_query`` metrics."""
 

@@ -53,3 +53,10 @@ class MetricName(StrEnum):
     DB_QUERY_EVENT = "db_query_event"
     DB_QUERY_ERROR_DURATION_SECONDS = "db_query_error_duration_seconds"
     DB_QUERY_ERROR_EVENT = "db_query_error_event"
+
+    # MCP server
+    MCP_SERVER_INITIALIZED = "mcp_server_initialized"
+    MCP_TOOL_CALL = "mcp_tool_call"
+    MCP_TOOL_DURATION_SECONDS = "mcp_tool_duration_seconds"
+    MCP_TOOL_RESULT_COUNT = "mcp_tool_result_count"
+    MCP_RATE_LIMIT = "mcp_rate_limit"

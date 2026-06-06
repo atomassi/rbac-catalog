@@ -99,9 +99,6 @@ updates:
       # Major version updates are reviewed and applied manually.
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
-      # Pre-release versions (alpha/beta/rc) are opt-in only.
-      - dependency-name: "*"
-        update-types: ["version-update:semver-prerelease"]
       # opentelemetry-* is exact-pinned by azure-monitor-opentelemetry; let it drive the train.
       - dependency-name: "opentelemetry-*"
       # torch uses a Linux-only +cpu tag; Dependabot mangles the macOS line, so bump it manually.

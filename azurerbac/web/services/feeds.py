@@ -8,6 +8,7 @@ from xml.etree.ElementTree import Element, SubElement, tostring
 
 from azurerbac.cache import CacheService
 from azurerbac.cache.models import CachedChangeEvent
+from azurerbac.core.enums import EventType
 
 
 def _build_rich_content(event: CachedChangeEvent, site_url: str) -> str:
@@ -26,7 +27,7 @@ def _build_rich_content(event: CachedChangeEvent, site_url: str) -> str:
     parts.append(f"<p><strong>Role ID:</strong> <code>{role_id_escaped}</code></p>")
 
     # Summary of changed fields (only for updates, not creates/deletes)
-    if event.summary and event.event_type == "updated":
+    if event.summary and event.event_type == EventType.UPDATED:
         escaped_summary = html.escape(event.summary)
         parts.append(f"<p><strong>Changed fields:</strong> {escaped_summary}</p>")
 

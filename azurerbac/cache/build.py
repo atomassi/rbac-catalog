@@ -30,7 +30,8 @@ from azurerbac.cache.models import (
     compute_operations_hash,
     compute_roles_hash,
 )
-from azurerbac.core.constants import POPULAR_COMPARE_PAIRS, RoleStatus
+from azurerbac.core.constants import POPULAR_COMPARE_PAIRS
+from azurerbac.core.enums import RoleStatus
 from azurerbac.core.patterns import WILDCARD, is_wildcard_pattern, matches_pattern
 from azurerbac.core.utils import truncate_microseconds
 from azurerbac.matching.models import (

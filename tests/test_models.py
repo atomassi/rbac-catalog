@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy import select
 
 from azurerbac.core import Role, RoleHistory
-from azurerbac.core.constants import EventType, RoleStatus
+from azurerbac.core.enums import EventType, RoleStatus
 
 
 def _make_role_json(role_name: str, role_type: str = "BuiltInRole") -> dict:

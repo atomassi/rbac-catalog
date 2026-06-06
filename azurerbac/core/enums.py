@@ -10,18 +10,34 @@ class SortOrder(StrEnum):
     DESC = "desc"
 
 
-class StatusFilter(StrEnum):
-    """Role status filter."""
+class EventType(StrEnum):
+    """Role change event types."""
+
+    CREATED = "created"
+    INITIAL_SCAN = "initial_scan"
+    UPDATED = "updated"
+    DELETED = "deleted"
+
+
+class RoleStatus(StrEnum):
+    """Role lifecycle status."""
 
     ACTIVE = "active"
     DELETED = "deleted"
+
+
+class StatusFilter(StrEnum):
+    """Role status filter (adds an ``ALL`` sentinel over ``RoleStatus``)."""
+
+    ACTIVE = RoleStatus.ACTIVE.value
+    DELETED = RoleStatus.DELETED.value
     ALL = "all"
 
 
 class EventTypeFilter(StrEnum):
-    """Event type filter."""
+    """Event type filter (adds an ``ALL`` sentinel over ``EventType``)."""
 
-    CREATED = "created"
-    UPDATED = "updated"
-    DELETED = "deleted"
+    CREATED = EventType.CREATED.value
+    UPDATED = EventType.UPDATED.value
+    DELETED = EventType.DELETED.value
     ALL = "all"

@@ -9,7 +9,7 @@ from sqlalchemy import select
 from azurerbac.azure.models import RoleDefinition
 from azurerbac.backgroundjobs.roles_monitor import apply_role_scan
 from azurerbac.core import Role, RoleHistory
-from azurerbac.core.constants import EventType, RoleStatus
+from azurerbac.core.enums import EventType, RoleStatus
 
 
 def _make_role(

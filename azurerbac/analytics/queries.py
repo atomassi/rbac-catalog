@@ -23,7 +23,7 @@ from azurerbac.analytics.models import (
     RollingStats,
     TopRoleByPermissions,
 )
-from azurerbac.core.constants import EventType, RoleStatus
+from azurerbac.core.enums import EventType, RoleStatus
 from azurerbac.core.models import Operation, Role, RoleHistory, RoleScanStatus
 from azurerbac.core.patterns import expand_patterns_to_operations
 

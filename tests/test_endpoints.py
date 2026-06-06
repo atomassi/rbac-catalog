@@ -4,7 +4,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from azurerbac.core import Operation, Role, RoleHistory, RoleScanStatus
-from azurerbac.core.constants import EventType, RoleStatus
+from azurerbac.core.enums import EventType, RoleStatus
 
 
 def _make_test_snapshot(
@@ -50,7 +50,7 @@ async def test_client(async_session_maker):
     from azurerbac.cache import get_cache_service
     from azurerbac.cache.build import precompute_all
     from azurerbac.cache.models import CachedRole
-    from azurerbac.core.constants import RoleStatus
+    from azurerbac.core.enums import RoleStatus
     from azurerbac.web import app as app_module
     from azurerbac.web.dependencies import (
         BaseDeps,

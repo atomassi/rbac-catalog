@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from azurerbac.cache.models import CachedChangeEvent
-from azurerbac.core.constants import EventType
+from azurerbac.core.enums import EventType
 
 # =============================================================================
 # Fixtures

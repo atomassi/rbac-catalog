@@ -18,7 +18,8 @@ from azurerbac.cache.models import (
     RequestCaches,
     Sitemap,
 )
-from azurerbac.core.constants import DEFAULT_SEARCH_LIMIT, RoleStatus
+from azurerbac.core.constants import DEFAULT_SEARCH_LIMIT
+from azurerbac.core.enums import RoleStatus
 from azurerbac.core.patterns import is_wildcard_pattern
 from azurerbac.core.singleton import ThreadSafeSingleton
 from azurerbac.matching.models import RoleCoverage, RoleNetPermissions

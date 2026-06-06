@@ -10,7 +10,8 @@ import pytest
 
 from azurerbac.azure.models import OperationData, RoleDefinition
 from azurerbac.cache.models import CachedChangeEvent, CachedRole
-from azurerbac.core.constants import ROLE_DEFINITION_TYPE, EventType, RoleStatus
+from azurerbac.core.constants import ROLE_DEFINITION_TYPE
+from azurerbac.core.enums import EventType, RoleStatus
 from azurerbac.matching.models import RoleCoverage
 from tests.helpers import make_cached_role, make_role_definition
 
@@ -319,7 +320,7 @@ class TestGetRolesAllowingOperationServices:
     def test_finds_roles_by_operation(self):
         """Test finding roles that allow an operation via inverted index."""
         from azurerbac.cache.models import CachedRole
-        from azurerbac.core.constants import RoleStatus
+        from azurerbac.core.enums import RoleStatus
         from azurerbac.matching.models import RoleNetPermissions
         from azurerbac.web.services.pages import get_roles_allowing_operation
 
@@ -377,7 +378,7 @@ class TestGetRolesAllowingOperationServices:
     def test_caches_result(self):
         """Test that results are cached."""
         from azurerbac.cache.models import CachedRole
-        from azurerbac.core.constants import RoleStatus
+        from azurerbac.core.enums import RoleStatus
         from azurerbac.matching.models import RoleNetPermissions
         from azurerbac.web.services.pages import get_roles_allowing_operation
 
@@ -428,7 +429,7 @@ class TestGetRolesAllowingOperationServices:
     def test_raises_on_missing_net_permissions(self):
         """Test that RuntimeError is raised when role missing net_perms."""
         from azurerbac.cache.models import CachedRole
-        from azurerbac.core.constants import RoleStatus
+        from azurerbac.core.enums import RoleStatus
         from azurerbac.web.services.pages import get_roles_allowing_operation
 
         mock_app_cache = MagicMock()

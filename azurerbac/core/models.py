@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy import JSON, Boolean, DateTime, Enum, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
-from .constants import EventType, RoleStatus
+from .enums import EventType, RoleStatus
 
 if TYPE_CHECKING:
     from azurerbac.azure.models import RoleDefinition
@@ -158,7 +158,15 @@ class RoleHistory(Base):
     # Denormalized for historical accuracy and query efficiency
     role_name: Mapped[str] = mapped_column(String(256), index=True)
 
-    event_type: Mapped[EventType] = mapped_column(String(32), index=True)
+    event_type: Mapped[EventType] = mapped_column(
+        Enum(
+            EventType,
+            native_enum=False,
+            values_callable=lambda e: [x.value for x in e],
+            length=32,
+        ),
+        index=True,
+    )
 
     # The full role definition JSON (NULL for delete events)
     role_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)

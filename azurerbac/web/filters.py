@@ -5,7 +5,8 @@ from __future__ import annotations
 import difflib
 import json
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Final
+from enum import StrEnum
+from typing import TYPE_CHECKING, Any, Final, TypedDict
 
 if TYPE_CHECKING:
     from azurerbac.core.diffing import DiffChange
@@ -16,6 +17,21 @@ _CODE_ADDED: Final = "+ "
 _CODE_UNCHANGED: Final = "  "
 
 
+class DiffLineType(StrEnum):
+    """Classification of a rendered diff line."""
+
+    REMOVED = "removed"
+    ADDED = "added"
+    UNCHANGED = "unchanged"
+
+
+class DiffLine(TypedDict):
+    """A single processed diff line for template rendering."""
+
+    type: DiffLineType
+    text: str
+
+
 def _json_to_str(value: Any) -> str:
     """Convert value to JSON string, or empty if None."""
     if value is None:
@@ -23,9 +39,9 @@ def _json_to_str(value: Any) -> str:
     return json.dumps(value, indent=2, sort_keys=True, default=str)
 
 
-def _process_ndiff(diff_lines: list[str]) -> list[dict]:
+def _process_ndiff(diff_lines: list[str]) -> list[DiffLine]:
     """Process ndiff output into {type, text} dicts."""
-    result = []
+    result: list[DiffLine] = []
     i = 0
     while i < len(diff_lines):
         line = diff_lines[i]
@@ -52,23 +68,23 @@ def _process_ndiff(diff_lines: list[str]) -> list[dict]:
                 next_text = next_line[2:]
 
             if next_code == _CODE_ADDED and text.rstrip(",") == next_text.rstrip(","):
-                result.append({"type": "unchanged", "text": next_text})
+                result.append({"type": DiffLineType.UNCHANGED, "text": next_text})
                 i = next_idx + 1
                 continue
 
         if code == _CODE_REMOVED:
-            result.append({"type": "removed", "text": text})
+            result.append({"type": DiffLineType.REMOVED, "text": text})
         elif code == _CODE_ADDED:
-            result.append({"type": "added", "text": text})
+            result.append({"type": DiffLineType.ADDED, "text": text})
         elif code == _CODE_UNCHANGED:
-            result.append({"type": "unchanged", "text": text})
+            result.append({"type": DiffLineType.UNCHANGED, "text": text})
 
         i += 1
 
     return result
 
 
-def diff_lines(change: DiffChange) -> list[dict]:
+def diff_lines(change: DiffChange) -> list[DiffLine]:
     """Compute unified diff between from_value and to_value in a DiffChange."""
     old_str = _json_to_str(change.from_value)
     new_str = _json_to_str(change.to_value)
@@ -80,7 +96,7 @@ def diff_lines(change: DiffChange) -> list[dict]:
     return _process_ndiff(diff)
 
 
-def full_json_diff(before_json: dict | None, after_json: dict | None) -> list[dict]:
+def full_json_diff(before_json: dict | None, after_json: dict | None) -> list[DiffLine]:
     """Compute unified diff between two JSON objects."""
     before_str = _json_to_str(before_json)
     after_str = _json_to_str(after_json)

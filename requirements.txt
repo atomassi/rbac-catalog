@@ -19,7 +19,7 @@ httpx==0.28.1
 pytest==9.0.3
 pytest-asyncio==1.4.0
 pytest-cov==6.3.0
-# Telemetry: azure-monitor-opentelemetry exact-pins the opentelemetry-* train; keep sub-packages unpinned (see #333/#335).
+# Telemetry: azure-monitor-opentelemetry exact-pins the opentelemetry-* train; keep sub-packages unpinned.
 azure-monitor-opentelemetry==1.8.7
 opentelemetry-api
 opentelemetry-sdk

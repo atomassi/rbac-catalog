@@ -96,19 +96,15 @@ updates:
           - "minor"
           - "patch"
     ignore:
-      # Major version updates are reviewed and applied manually for stability.
+      # Major version updates are reviewed and applied manually.
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
       # Pre-release versions (alpha/beta/rc) are opt-in only.
       - dependency-name: "*"
         update-types: ["version-update:semver-prerelease"]
-      # opentelemetry-* sub-packages are exact-pinned by azure-monitor-opentelemetry;
-      # bumping them independently breaks resolution (see #333, #335). Let
-      # azure-monitor-opentelemetry drive the entire OpenTelemetry train.
+      # opentelemetry-* is exact-pinned by azure-monitor-opentelemetry; let it drive the train.
       - dependency-name: "opentelemetry-*"
-      # torch uses a platform split with a +cpu local tag on Linux only; Dependabot
-      # rewrites the macOS line to torch==X+cpu (no such darwin wheel exists), which
-      # breaks local installs (see #334). Bump torch manually.
+      # torch uses a Linux-only +cpu tag; Dependabot mangles the macOS line, so bump it manually.
       - dependency-name: "torch"
 
   # npm dependencies (for Playwright, Tailwind, etc.)

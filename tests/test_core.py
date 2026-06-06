@@ -60,9 +60,9 @@ class TestSettings:
         [
             pytest.param(["rag", "hybrid", "tfidf"], ["rag", "hybrid", "tfidf"], id="custom_valid"),
             pytest.param(
-                ["tfidf", "llm", "rag", "hybrid", "semantic", "crossencoder", "colbert", "hyde"],
-                ["tfidf", "llm", "rag", "hybrid", "semantic", "crossencoder", "colbert", "hyde"],
-                id="all_eight_valid",
+                ["tfidf", "llm", "rag", "hybrid", "semantic", "crossencoder", "hyde"],
+                ["tfidf", "llm", "rag", "hybrid", "semantic", "crossencoder", "hyde"],
+                id="all_seven_valid",
             ),
             pytest.param(["llm", "bogus", "tfidf", "nope"], ["llm", "tfidf"], id="filters_invalid"),
             pytest.param(["fake", "invalid"], ["tfidf"], id="all_invalid_fallback"),
@@ -131,11 +131,11 @@ class TestGetSettings:
         [
             pytest.param("rag,hybrid,tfidf", ["rag", "hybrid", "tfidf"], id="comma_separated"),
             pytest.param(
-                "llm;semantic;colbert", ["llm", "semantic", "colbert"], id="semicolon_separated"
+                "llm;semantic;hyde", ["llm", "semantic", "hyde"], id="semicolon_separated"
             ),
             pytest.param(
-                "llm,semantic;colbert,tfidf",
-                ["llm", "semantic", "colbert", "tfidf"],
+                "llm,semantic;hyde,tfidf",
+                ["llm", "semantic", "hyde", "tfidf"],
                 id="mixed_delimiters",
             ),
             pytest.param(

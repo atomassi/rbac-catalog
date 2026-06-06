@@ -44,7 +44,6 @@ flowchart LR
 |--------|---------------------------|
 | **TF-IDF** | BM25 keyword matching |
 | **Semantic** | Embeds into vectors, cosine similarity |
-| **ColBERT** | Token-level MaxSim matching |
 | **LLM** | Doesn't use it — fine-tuned model predicts directly |
 
 ## Hybrid Pipeline

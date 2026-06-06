@@ -11,7 +11,6 @@ _MODE_DESCRIPTIONS: Final[dict[str, str]] = {
     "hybrid": "Hybrid: TF-IDF → Embeddings → LLM",
     "semantic": "Semantic Search: Pure embedding similarity",
     "crossencoder": "Cross-Encoder: Neural reranking (~300ms)",
-    "colbert": "ColBERT: Token-level late interaction (~150ms)",
     "hyde": "HyDE: Hypothetical document embeddings",
 }
 
@@ -39,9 +38,6 @@ class RecommenderMode(StrEnum):
 
     CROSSENCODER = "crossencoder"
     """Cross-Encoder Reranking - Bi-encoder retrieval + cross-encoder reranking (~300ms)."""
-
-    COLBERT = "colbert"
-    """ColBERT - Token-level late interaction for precise matching (~150ms)."""
 
     HYDE = "hyde"
     """HyDE - Hypothetical document generation + semantic search (~1.5s)."""

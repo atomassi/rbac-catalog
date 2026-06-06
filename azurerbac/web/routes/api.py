@@ -14,7 +14,6 @@ from azurerbac.airecommender import (
     EngineNotAvailableError,
     ai_recommend_roles,
 )
-from azurerbac.airecommender.engines import ColBERTInitializationError
 from azurerbac.airecommender.modes import RecommenderMode
 from azurerbac.core.constants import DEFAULT_SEARCH_LIMIT
 from azurerbac.core.patterns import is_wildcard_pattern
@@ -192,10 +191,6 @@ async def ai_recommend_endpoint(
             ErrorMessages.engine_unavailable((e.mode or "Selected").upper()),
             mode=e.mode,
         )
-    except ColBERTInitializationError as e:
-        logger.warning("ColBERT initialization failed")
-        track_ai_recommendation_error(mode=requested_mode, error=type(e).__name__)
-        return ai_error_response(ErrorMessages.engine_unavailable("COLBERT"), mode="colbert")
     except Exception as e:
         logger.exception("AI recommendation failed")
         track_ai_recommendation_error(mode=requested_mode, error=type(e).__name__)

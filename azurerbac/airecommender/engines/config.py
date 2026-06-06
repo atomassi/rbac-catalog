@@ -33,9 +33,6 @@ SEMANTIC_THRESHOLDS: Final = EngineThresholds(min_confidence=0.3)
 # Cross-encoder reranking (logit scores, can be negative)
 CROSSENCODER_THRESHOLDS: Final = EngineThresholds(min_confidence=0.1)
 
-# ColBERT MaxSim scores (typically 0-40+ range)
-COLBERT_THRESHOLDS: Final = EngineThresholds(min_confidence=0.1)
-
 # HyDE hypothetical document embeddings
 HYDE_THRESHOLDS: Final = EngineThresholds(min_confidence=0.2)
 
@@ -113,19 +110,6 @@ class SigmoidParams:
 
     output_max: float = 0.97
     """Maximum output score."""
-
-
-# ColBERT MaxSim scores typically range 15-35 based on empirical testing:
-# - Raw scores ~28+ are excellent matches (->90-97%)
-# - Raw scores ~22-28 are good matches (->80-90%)
-# - Raw scores ~15-22 are moderate matches (->55-80%)
-# - Raw scores <15 are poor matches (->30-55%)
-COLBERT_SIGMOID: Final = SigmoidParams(
-    midpoint=18.0,
-    steepness=0.30,
-    output_min=0.30,
-    output_max=0.97,
-)
 
 
 @dataclass(frozen=True, slots=True)

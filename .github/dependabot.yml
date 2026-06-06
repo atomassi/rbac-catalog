@@ -81,8 +81,6 @@ updates:
           - "langchain*"
           - "langsmith"
           - "llama-*"
-          - "RAGatouille"
-          - "colbert-ai"
         update-types:
           - "minor"
           - "patch"

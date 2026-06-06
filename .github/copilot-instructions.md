@@ -23,7 +23,7 @@ When generating or modifying code, GitHub Copilot should:
 - Match existing naming conventions and file structure exactly
 - Generate production-ready code (no TODOs, no placeholders)
 - Assume this is a long-lived, audited codebase (clarity > cleverness)
-- When creating new API endpoints, reference `azurerbac/web/dependencies.py` for auth and database injection patterns
+- When creating new API endpoints, reference `azurerbac/web/dependencies.py` for the cache and database injection patterns
 
 ## Repository Summary
 
@@ -53,12 +53,14 @@ When generating or modifying code, GitHub Copilot should:
 | Module | Purpose |
 |--------|---------|
 | `airecommender/` | AI recommendation engines (8 modes) |
+| `analytics/` | Permission distribution, change-over-time, and provider statistics |
 | `azure/` | Azure SDK integration (roles, operations) |
 | `backgroundjobs/` | Scheduled tasks and monitoring |
 | `cache/` | In-memory caching layer |
 | `comparer/` | Role comparison logic (three-way permission diffs) |
 | `core/` | Database models, constants, utilities |
 | `matching/` | Role matching and recommendation service |
+| `mcp/` | MCP server exposing RBAC tools to AI assistants |
 | `telemetry/` | OpenTelemetry logging and metrics |
 | `web/` | FastAPI app, routes, templates |
 
@@ -70,8 +72,10 @@ Copilot must respect the following module boundaries:
 - `core/` — Domain logic and database models
 - `azure/` — External Azure API interaction only
 - `airecommender/` — AI logic; must not depend on web or FastAPI
+- `analytics/` — Read-only aggregation over core models; must not depend on web or FastAPI
 - `comparer/` — Role comparison logic; must not depend on web or FastAPI
 - `matching/` — Role matching logic; orchestrates airecommender and cache
+- `mcp/` — MCP protocol server; orchestrates cache, matching, and airecommender (top-level consumer, like web)
 - `backgroundjobs/` — Scheduled tasks; may import from core and azure
 - `cache/` — May not import from `web/`
 - Database models must not import FastAPI or web-layer code
@@ -80,6 +84,8 @@ Dependencies must point inward:
 - `web → comparer → core` ✔️
 - `web → matching → core` ✔️
 - `web → core` ✔️
+- `analytics → core` ✔️
+- `mcp → matching → core` ✔️
 - `backgroundjobs → core` ✔️
 - `airecommender → core` ✔️
 - `core` must not depend on higher layers ❌
@@ -113,16 +119,22 @@ async def get_roles(db: AsyncSession) -> list[Role]:
 
 ### Dependency Injection
 
-FastAPI dependencies are defined in `azurerbac/web/dependencies.py`:
+Routes receive a frozen dataclass of dependencies (cache + session factory) via
+`Depends` — there is no per-request `get_db()`. The deps classes and providers
+live in `azurerbac/web/dependencies.py` (`BaseDeps`, `DashboardDeps`, `PagesDeps`
+with `get_api_deps` / `get_dashboard_deps` / `get_pages_deps`):
 
 ```python
-async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    async with AsyncSessionLocal() as session:
-        yield session
-
-@router.get("/roles")
-async def list_roles(db: AsyncSession = Depends(get_db)):
-    ...
+@router.get("/operations/search")
+async def api_search_operations(
+    request: Request,
+    deps: Annotated[BaseDeps, Depends(get_api_deps)],
+) -> OperationSearchResponse:
+    # Prefer the in-memory cache for reads:
+    matching = deps.app_cache.search_operations(q, limit=limit)
+    # Open a session only when the cache can't answer:
+    async with deps.SessionLocal() as session:
+        ...
 ```
 
 ### Type Hints
@@ -178,8 +190,8 @@ Use absolute imports from the package root:
 
 ```python
 from azurerbac.core.models import Role, RoleHistory
-from azurerbac.cache.app_cache import get_cached_roles
-from azurerbac.web.dependencies import get_db
+from azurerbac.cache import CacheService
+from azurerbac.web.dependencies import BaseDeps, get_api_deps
 ```
 
 ### Naming Conventions
@@ -195,7 +207,8 @@ from azurerbac.web.dependencies import get_db
 - `pyproject.toml` — Ruff, Pyright, pytest configuration
 - `requirements.txt` — Python dependencies (pinned versions)
 - `tailwind.config.js` — Tailwind CSS configuration
-- `playwright.config.js` — Playwright E2E test configuration
+- `playwright.config.ts` — Playwright E2E test configuration
+- `vitest.config.js` — Vitest configuration for frontend unit tests
 - `.github/dependabot.yml` — Automated dependency updates
 
 ## Database Models
@@ -223,9 +236,9 @@ The recommender supports 8 modes with increasing sophistication:
 
 ### AI Implementation Guidelines
 
-- **TF-IDF/BM25** — Managed in `enhanced_tfidf.py`. Do not add neural logic here
-- **Vector Search** — Use `sentence-transformers` in `role_recommender.py`
-- **Orchestration** — `ai_recommender.py` is the only place for multi-stage (Hybrid) logic
+- **TF-IDF/BM25** — Managed in `airecommender/engines/enhanced_tfidf.py` (and `tfidf.py`). Do not add neural logic here
+- **Vector search** — `airecommender/engines/semantic.py` uses `sentence-transformers` for embedding cosine similarity
+- **Orchestration** — `airecommender/ai_recommender.py` selects engines via `EngineRegistry`; the multi-stage Hybrid pipeline lives in `airecommender/engines/hybrid.py`
 - Prefer deterministic methods (TF-IDF, embeddings) over LLMs unless required
 - LLMs must not be used for authorization or security decisions
 - AI outputs must not be persisted without a deterministic identifier or version metadata

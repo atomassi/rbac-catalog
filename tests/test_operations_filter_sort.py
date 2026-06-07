@@ -6,8 +6,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from azurerbac.azure.models import OperationData
-from azurerbac.web.services.pages import (
+from rbaccatalog.azure.models import OperationData
+from rbaccatalog.web.services.pages import (
     OperationSearchParams,
     filter_operations,
     sort_operations,
@@ -231,7 +231,7 @@ class TestSortOperations:
         self, sample_operations: list[OperationData], mock_app_cache: MagicMock, order: str
     ):
         """Test sorting by role count."""
-        from azurerbac.web.services.pages import add_role_counts
+        from rbaccatalog.web.services.pages import add_role_counts
 
         result = sort_operations(sample_operations, "roles", order, mock_app_cache)
         # add_role_counts to get the counts for verification

@@ -67,7 +67,7 @@ python3.12 -m venv .venv && source .venv/bin/activate
 pip install --upgrade pip && pip install -r requirements.txt
 
 # Boot fast with only the lightweight recommender engine
-ENABLED_AI_ENGINES=tfidf uvicorn azurerbac.web.app:app --port 8000 --reload
+ENABLED_AI_ENGINES=tfidf uvicorn rbaccatalog.web.app:app --port 8000 --reload
 ```
 
 Open <http://localhost:8000>. The UI and search work immediately; the catalog
@@ -75,14 +75,14 @@ stays empty until the background worker runs its first scan. To populate it with
 live data, run `az login` once, then start the worker in a second terminal:
 
 ```bash
-python -m azurerbac.backgroundjobs.worker
+python -m rbaccatalog.backgroundjobs.worker
 ```
 
 Prefer containers? Build and run the image instead:
 
 ```bash
-docker build -t azurerbac:local --build-arg VERSION=local-dev .
-docker run --rm -p 8000:8000 azurerbac:local
+docker build -t rbaccatalog:local --build-arg VERSION=local-dev .
+docker run --rm -p 8000:8000 rbaccatalog:local
 ```
 
 For prerequisites, environment variables, and the full walkthrough, see
@@ -236,7 +236,7 @@ See [docs/mcp.md](docs/mcp.md) for the full tool reference, example queries, dir
 
 ```bash
 # Unit tests (Python 3.12, 3.13, or 3.14)
-pytest tests/ -q --cov=azurerbac
+pytest tests/ -q --cov=rbaccatalog
 
 # E2E tests
 npm ci
@@ -277,7 +277,7 @@ This ensures every production deployment is validated before users see it.
 ## Project Structure
 
 ```
-azurerbac/
+rbaccatalog/
 ├── airecommender/   # AI recommendation engines (8 modes)
 ├── analytics/       # Permission distribution, change-over-time, and provider stats
 ├── azure/           # Azure SDK integration (roles, operations)

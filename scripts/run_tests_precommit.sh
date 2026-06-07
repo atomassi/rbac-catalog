@@ -94,7 +94,7 @@ run_e2e() {
     DB_CONNECTION_STRING="sqlite+aiosqlite:///${E2E_DB}" \
     ENABLE_ROLE_SCAN=false \
     ENABLE_OPERATIONS_SCAN=false \
-        uvicorn azurerbac.web.app:app --host 127.0.0.1 --port "$PORT" > /dev/null 2>&1 &
+        uvicorn rbaccatalog.web.app:app --host 127.0.0.1 --port "$PORT" > /dev/null 2>&1 &
     SERVER_PID=$!
     
     wait_for_server || exit 1

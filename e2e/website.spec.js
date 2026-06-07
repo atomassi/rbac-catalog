@@ -1089,7 +1089,7 @@ test.describe('AI Mode Toggle', () => {
     // Enable via toggle label
     await page.locator('label[for="ai-toggle"]').first().click();
     await expect(aiSection).toBeVisible();
-    expect(await page.evaluate(() => sessionStorage.getItem('azurerbac_ai_mode'))).toBe('1');
+    expect(await page.evaluate(() => sessionStorage.getItem('rbaccatalog_ai_mode'))).toBe('1');
   });
 
   test('should persist AI mode across page loads', async ({ page }) => {
@@ -1101,7 +1101,7 @@ test.describe('AI Mode Toggle', () => {
     // Navigate away and back
     await page.goto('/recommend');
     await page.waitForLoadState('domcontentloaded');
-    expect(await page.evaluate(() => sessionStorage.getItem('azurerbac_ai_mode'))).toBe('1');
+    expect(await page.evaluate(() => sessionStorage.getItem('rbaccatalog_ai_mode'))).toBe('1');
     const aiSection = page.locator('#ai-assistant-section');
     await expect(aiSection).toBeVisible();
   });
@@ -1111,7 +1111,7 @@ test.describe('AI Mode Toggle', () => {
     await page.evaluate(() => sessionStorage.clear());
     await page.goto('/recommend');
     await page.waitForLoadState('domcontentloaded');
-    expect(await page.evaluate(() => sessionStorage.getItem('azurerbac_ai_mode'))).toBeNull();
+    expect(await page.evaluate(() => sessionStorage.getItem('rbaccatalog_ai_mode'))).toBeNull();
     const aiSection = page.locator('#ai-assistant-section');
     await expect(aiSection).toBeHidden();
   });

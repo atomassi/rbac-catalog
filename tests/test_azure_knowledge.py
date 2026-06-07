@@ -2,7 +2,7 @@
 
 import pytest
 
-from azurerbac.airecommender.knowledge import (
+from rbaccatalog.airecommender.knowledge import (
     AZURE_SERVICE_SYNONYMS,
     PERMISSION_LEVELS,
     expand_query_with_synonyms,
@@ -159,7 +159,7 @@ class TestExtractOperationKeywords:
 
     def test_extracts_keywords_from_operation(self):
         """Test basic keyword extraction from Azure operation name."""
-        from azurerbac.airecommender.knowledge.knowledge_base import extract_operation_keywords
+        from rbaccatalog.airecommender.knowledge.knowledge_base import extract_operation_keywords
 
         ops = ["Microsoft.Storage/storageAccounts/read"]
         keywords = extract_operation_keywords(ops)
@@ -170,14 +170,14 @@ class TestExtractOperationKeywords:
 
     def test_handles_empty_list(self):
         """Test with empty operation list."""
-        from azurerbac.airecommender.knowledge.knowledge_base import extract_operation_keywords
+        from rbaccatalog.airecommender.knowledge.knowledge_base import extract_operation_keywords
 
         keywords = extract_operation_keywords([])
         assert keywords == []
 
     def test_handles_set_input(self):
         """Test that function accepts both list and set."""
-        from azurerbac.airecommender.knowledge.knowledge_base import extract_operation_keywords
+        from rbaccatalog.airecommender.knowledge.knowledge_base import extract_operation_keywords
 
         ops = {"Microsoft.Compute/virtualMachines/start/action"}
         keywords = extract_operation_keywords(ops)

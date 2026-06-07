@@ -29,7 +29,7 @@ env:
   RESOURCE_GROUP: builtinroles
   ACR_NAME: azurerbacregistry
   ACR_LOGIN_SERVER: azurerbacregistry.azurecr.io
-  IMAGE_NAME: azurerbac
+  IMAGE_NAME: rbaccatalog
   PPE_SLOT: ppe
   PPE_URL: https://azurerbac-builtinroles-ppe.azurewebsites.net
 

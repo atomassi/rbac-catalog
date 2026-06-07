@@ -10,7 +10,7 @@ import builtins
 
 
 def test_try_load_skips_heavy_imports_under_pytest(monkeypatch):
-    from azurerbac.airecommender.embeddings import EmbeddingModel
+    from rbaccatalog.airecommender.embeddings import EmbeddingModel
 
     monkeypatch.delenv("AZURERBAC_ENABLE_EMBEDDINGS_IN_TESTS", raising=False)
 

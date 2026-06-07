@@ -3,7 +3,7 @@
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from azurerbac.web.middleware import (
+from rbaccatalog.web.middleware import (
     NEW_DOMAIN,
 )
 
@@ -12,7 +12,7 @@ from azurerbac.web.middleware import (
 async def test_client(async_session_maker):
     """Create a test client with in-memory database."""
     # Lazy import to avoid loading .env during test collection
-    from azurerbac.web import app as app_module
+    from rbaccatalog.web import app as app_module
 
     test_session_maker = async_session_maker
     original_session = app_module.app.state.session_local
@@ -265,7 +265,7 @@ class TestRequestBodySizeLimit:
     @pytest.mark.asyncio
     async def test_oversize_content_length_rejected_with_413(self, test_client):
         """A POST with Content-Length above the cap must be rejected fast."""
-        from azurerbac.web.constants import MAX_REQUEST_BODY_BYTES
+        from rbaccatalog.web.constants import MAX_REQUEST_BODY_BYTES
 
         client, _ = test_client
         # Send a small body but advertise a huge Content-Length
@@ -308,7 +308,7 @@ class TestRequestBodySizeLimit:
         against missing/lying ``Content-Length`` and chunked uploads.
         Done as a pure ASGI test because httpx always sets Content-Length.
         """
-        from azurerbac.web.middleware import RequestBodySizeLimitMiddleware
+        from rbaccatalog.web.middleware import RequestBodySizeLimitMiddleware
 
         async def downstream(scope, receive, send):
             # Drain the body to force the wrapper to run
@@ -378,7 +378,7 @@ class TestRequestBodySizeLimit:
     @pytest.mark.asyncio
     async def test_rejection_includes_connection_close(self, test_client):
         """413 responses must include ``Connection: close`` to prevent socket reuse abuse."""
-        from azurerbac.web.constants import MAX_REQUEST_BODY_BYTES
+        from rbaccatalog.web.constants import MAX_REQUEST_BODY_BYTES
 
         client, _ = test_client
         response = await client.post(
@@ -395,7 +395,7 @@ class TestRequestBodySizeLimit:
     @pytest.mark.asyncio
     async def test_downstream_response_suppressed_after_413(self):
         """If downstream tries to respond after our 413, those messages must be dropped."""
-        from azurerbac.web.middleware import RequestBodySizeLimitMiddleware
+        from rbaccatalog.web.middleware import RequestBodySizeLimitMiddleware
 
         async def downstream(scope, receive, send):
             # Read until disconnect, then try to respond anyway (simulating
@@ -434,7 +434,7 @@ class TestRequestBodySizeLimit:
     @pytest.mark.asyncio
     async def test_receive_returns_disconnect_after_cap(self):
         """After cap is exceeded, subsequent receive() calls must yield http.disconnect."""
-        from azurerbac.web.middleware import RequestBodySizeLimitMiddleware
+        from rbaccatalog.web.middleware import RequestBodySizeLimitMiddleware
 
         captured_messages = []
 
@@ -467,7 +467,7 @@ class TestRequestBodySizeLimit:
         """
         import asyncio
 
-        from azurerbac.web.middleware import RequestBodySizeLimitMiddleware
+        from rbaccatalog.web.middleware import RequestBodySizeLimitMiddleware
 
         async def downstream(scope, receive, send):
             raise asyncio.CancelledError
@@ -492,7 +492,7 @@ class TestRequestBodySizeLimit:
         Otherwise we'd commit a double-start ASGI protocol violation. The
         existing response wins; the connection just disconnects.
         """
-        from azurerbac.web.middleware import RequestBodySizeLimitMiddleware
+        from rbaccatalog.web.middleware import RequestBodySizeLimitMiddleware
 
         async def streaming_downstream(scope, receive, send):
             # Start responding BEFORE consuming the body.
@@ -524,7 +524,7 @@ class TestRequestBodySizeLimit:
     async def test_none_body_does_not_crash(self):
         """A buggy server sending ``body=None`` (off-spec but possible) must
         not crash with TypeError — we defensively coerce to b''."""
-        from azurerbac.web.middleware import RequestBodySizeLimitMiddleware
+        from rbaccatalog.web.middleware import RequestBodySizeLimitMiddleware
 
         captured = []
 

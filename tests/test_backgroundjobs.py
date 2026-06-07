@@ -6,10 +6,10 @@ from datetime import timedelta
 import pytest
 from sqlalchemy import select
 
-from azurerbac.azure.models import RoleDefinition
-from azurerbac.backgroundjobs.roles_monitor import apply_role_scan
-from azurerbac.core import Role, RoleHistory
-from azurerbac.core.enums import EventType, RoleStatus
+from rbaccatalog.azure.models import RoleDefinition
+from rbaccatalog.backgroundjobs.roles_monitor import apply_role_scan
+from rbaccatalog.core import Role, RoleHistory
+from rbaccatalog.core.enums import EventType, RoleStatus
 
 
 def _make_role(
@@ -256,7 +256,7 @@ class TestApplyRoleScan:
             )
         ]
 
-        with caplog.at_level(logging.INFO, logger="azurerbac.backgroundjobs.roles_monitor"):
+        with caplog.at_level(logging.INFO, logger="rbaccatalog.backgroundjobs.roles_monitor"):
             stats = await apply_role_scan(db_session, roles_v2)
 
         # Should be rejected (no update)
@@ -398,7 +398,7 @@ def _make_operation(
     **extra,
 ):
     """Helper to create an OperationData object."""
-    from azurerbac.azure.models import OperationData
+    from rbaccatalog.azure.models import OperationData
 
     return OperationData(
         name=name,
@@ -418,7 +418,7 @@ class TestApplyOperationsScan:
     @pytest.mark.asyncio
     async def test_creates_new_operations(self, db_session):
         """Test adding new operations."""
-        from azurerbac.backgroundjobs.operations_monitor import apply_operations_scan
+        from rbaccatalog.backgroundjobs.operations_monitor import apply_operations_scan
 
         operations = [
             _make_operation("Microsoft.Test/resources/read", "Read Test Resources"),
@@ -434,7 +434,7 @@ class TestApplyOperationsScan:
     @pytest.mark.asyncio
     async def test_handles_empty_list(self, db_session):
         """Test scanning with empty operations list."""
-        from azurerbac.backgroundjobs.operations_monitor import apply_operations_scan
+        from rbaccatalog.backgroundjobs.operations_monitor import apply_operations_scan
 
         stats = await apply_operations_scan(db_session, [])
         assert stats.created == 0
@@ -444,7 +444,7 @@ class TestApplyOperationsScan:
     @pytest.mark.asyncio
     async def test_updates_existing_operation(self, db_session):
         """Test that changed operations are updated."""
-        from azurerbac.backgroundjobs.operations_monitor import apply_operations_scan
+        from rbaccatalog.backgroundjobs.operations_monitor import apply_operations_scan
 
         # First scan
         operations_v1 = [_make_operation("Microsoft.Test/read", "Read")]
@@ -460,7 +460,7 @@ class TestApplyOperationsScan:
     @pytest.mark.asyncio
     async def test_deduplicates_operations(self, db_session):
         """Test that duplicate operations are deduplicated (keeps last)."""
-        from azurerbac.backgroundjobs.operations_monitor import apply_operations_scan
+        from rbaccatalog.backgroundjobs.operations_monitor import apply_operations_scan
 
         operations = [
             _make_operation("Microsoft.Test/read", "First"),
@@ -477,7 +477,7 @@ class TestApplyOperationsScan:
     @pytest.mark.asyncio
     async def test_counts_unique_providers(self, db_session):
         """Test that providers are counted correctly."""
-        from azurerbac.backgroundjobs.operations_monitor import apply_operations_scan
+        from rbaccatalog.backgroundjobs.operations_monitor import apply_operations_scan
 
         operations = [
             _make_operation("Microsoft.Compute/read", provider_display_name="Compute"),
@@ -492,8 +492,8 @@ class TestApplyOperationsScan:
     @pytest.mark.asyncio
     async def test_skips_operations_without_name(self, db_session):
         """Test that operations without a name are skipped."""
-        from azurerbac.azure.models import OperationData
-        from azurerbac.backgroundjobs.operations_monitor import apply_operations_scan
+        from rbaccatalog.azure.models import OperationData
+        from rbaccatalog.backgroundjobs.operations_monitor import apply_operations_scan
 
         operations = [
             OperationData(
@@ -524,20 +524,20 @@ class TestWorkerImports:
 
     def test_worker_imports_engine_correctly(self):
         """Verify worker uses DBEngine.get() from core."""
-        from azurerbac.backgroundjobs import worker
+        from rbaccatalog.backgroundjobs import worker
 
         # Check that DBEngine is imported (not create_engine)
         assert hasattr(worker, "DBEngine") or "DBEngine" in dir(worker)
 
     def test_worker_main_is_async(self):
         """Verify main() is an async function."""
-        from azurerbac.backgroundjobs.worker import main
+        from rbaccatalog.backgroundjobs.worker import main
 
         assert asyncio.iscoroutinefunction(main)
 
     def test_worker_class_exists(self):
         """Verify Worker class exists and has required methods."""
-        from azurerbac.backgroundjobs.worker import Worker
+        from rbaccatalog.backgroundjobs.worker import Worker
 
         worker = Worker()
         assert hasattr(worker, "run_job")
@@ -549,7 +549,7 @@ class TestWorkerImports:
         """Verify Job abstract class has required abstract methods."""
         import inspect
 
-        from azurerbac.backgroundjobs.jobs import Job
+        from rbaccatalog.backgroundjobs.jobs import Job
 
         # Check abstract methods/properties exist
         assert hasattr(Job, "name")
@@ -564,7 +564,7 @@ class TestEmptyFetchResultError:
 
     def test_empty_fetch_result_error_message(self):
         """Test EmptyFetchResultError has correct message."""
-        from azurerbac.backgroundjobs.exceptions import EmptyFetchResultError
+        from rbaccatalog.backgroundjobs.exceptions import EmptyFetchResultError
 
         error = EmptyFetchResultError("role-scan")
         assert "role-scan" in str(error)
@@ -574,9 +574,9 @@ class TestEmptyFetchResultError:
     @pytest.mark.asyncio
     async def test_run_job_fails_on_empty_fetch(self, db_session):
         """Test that run job handles EmptyFetchResultError when fetch returns empty list."""
-        from azurerbac.backgroundjobs.exceptions import EmptyFetchResultError
-        from azurerbac.backgroundjobs.jobs import Job
-        from azurerbac.backgroundjobs.worker import Worker
+        from rbaccatalog.backgroundjobs.exceptions import EmptyFetchResultError
+        from rbaccatalog.backgroundjobs.jobs import Job
+        from rbaccatalog.backgroundjobs.worker import Worker
 
         class EmptyFetchJob(Job):
             @property
@@ -603,8 +603,8 @@ class TestEmptyFetchResultError:
     @pytest.mark.asyncio
     async def test_run_job_succeeds_with_results(self, db_session):
         """Test that run job succeeds when job runs without error."""
-        from azurerbac.backgroundjobs.jobs import Job
-        from azurerbac.backgroundjobs.worker import Worker
+        from rbaccatalog.backgroundjobs.jobs import Job
+        from rbaccatalog.backgroundjobs.worker import Worker
 
         run_called = False
 
@@ -637,7 +637,7 @@ class TestCreateJobs:
     """Tests for create_jobs function."""
 
     def test_creates_both_jobs(self):
-        from azurerbac.backgroundjobs.jobs import create_jobs
+        from rbaccatalog.backgroundjobs.jobs import create_jobs
 
         jobs = create_jobs()
 
@@ -647,7 +647,7 @@ class TestCreateJobs:
         assert "operations-scan" in job_names
 
     def test_jobs_are_job_instances(self):
-        from azurerbac.backgroundjobs.jobs import Job, create_jobs
+        from rbaccatalog.backgroundjobs.jobs import Job, create_jobs
 
         jobs = create_jobs()
 
@@ -661,8 +661,8 @@ class TestWorker:
     """Tests for Worker class methods."""
 
     def test_setup_scheduler_creates_scheduler_with_enabled_jobs(self):
-        from azurerbac.backgroundjobs.jobs import Job
-        from azurerbac.backgroundjobs.worker import Worker
+        from rbaccatalog.backgroundjobs.jobs import Job
+        from rbaccatalog.backgroundjobs.worker import Worker
 
         class EnabledJob(Job):
             @property
@@ -719,8 +719,8 @@ class TestWorker:
         self, job_enabled: bool, should_raise: bool, expect_run_called: bool
     ):
         """run_job should handle enabled/disabled jobs and catch exceptions."""
-        from azurerbac.backgroundjobs.jobs import Job
-        from azurerbac.backgroundjobs.worker import Worker
+        from rbaccatalog.backgroundjobs.jobs import Job
+        from rbaccatalog.backgroundjobs.worker import Worker
 
         run_called = False
 
@@ -762,7 +762,7 @@ class TestWorker:
         """Worker should use provided settings or default to Settings.get()."""
         from unittest.mock import MagicMock
 
-        from azurerbac.backgroundjobs.worker import Worker
+        from rbaccatalog.backgroundjobs.worker import Worker
 
         if use_custom_settings:
             custom_settings = MagicMock()
@@ -790,13 +790,13 @@ class TestWorker:
         """_cleanup should handle scheduler presence/absence gracefully."""
         from unittest.mock import MagicMock, patch
 
-        from azurerbac.backgroundjobs.worker import Worker
+        from rbaccatalog.backgroundjobs.worker import Worker
 
         worker = Worker()
         mock_scheduler = MagicMock() if has_scheduler else None
         worker._scheduler = mock_scheduler
 
-        with patch("azurerbac.backgroundjobs.worker.DBEngine") as mock_engine:
+        with patch("rbaccatalog.backgroundjobs.worker.DBEngine") as mock_engine:
             mock_engine.dispose = MagicMock(return_value=asyncio.Future())
             mock_engine.dispose.return_value.set_result(None)
             await worker._cleanup()
@@ -820,7 +820,7 @@ class TestWorker:
         """_run_startup_jobs should respect settings flags."""
         from unittest.mock import AsyncMock, MagicMock
 
-        from azurerbac.backgroundjobs.worker import Worker
+        from rbaccatalog.backgroundjobs.worker import Worker
 
         mock_settings = MagicMock()
         mock_settings.run_roles_scan_on_startup = run_roles
@@ -855,14 +855,14 @@ class TestWorker:
         import signal
         from unittest.mock import MagicMock, patch
 
-        from azurerbac.backgroundjobs.worker import Worker
+        from rbaccatalog.backgroundjobs.worker import Worker
 
         worker = Worker()
         worker._shutdown_event = asyncio.Event() if has_event else None
 
         mock_loop = MagicMock()
         with patch(
-            "azurerbac.backgroundjobs.worker.asyncio.get_running_loop",
+            "rbaccatalog.backgroundjobs.worker.asyncio.get_running_loop",
             return_value=mock_loop,
         ):
             worker._setup_shutdown_handler()

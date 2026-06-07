@@ -2,7 +2,7 @@
 
 import pytest
 
-from azurerbac.web.routes.models import OperationItem, RecommendRolesRequest
+from rbaccatalog.web.routes.models import OperationItem, RecommendRolesRequest
 
 
 class TestRecommendRolesRequest:

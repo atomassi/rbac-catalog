@@ -39,7 +39,7 @@ Run the app locally (full instructions in [`docs/run-local.md`](docs/run-local.m
 
 ```bash
 # Boot fast by disabling the heavy AI engines:
-ENABLED_AI_ENGINES=tfidf uvicorn azurerbac.web.app:app --reload --port 8000
+ENABLED_AI_ENGINES=tfidf uvicorn rbaccatalog.web.app:app --reload --port 8000
 ```
 
 ## Before you open a pull request
@@ -48,14 +48,14 @@ Run the same checks CI runs. All of these must pass:
 
 ```bash
 # Python lint + format
-ruff check azurerbac/
-ruff format --check azurerbac/
+ruff check rbaccatalog/
+ruff format --check rbaccatalog/
 
 # Static type checking (standard mode)
-pyright azurerbac/
+pyright rbaccatalog/
 
 # Python unit tests with coverage (must stay >= 80%, same gate as CI)
-pytest tests/ -q --cov=azurerbac --cov-report=term --cov-fail-under=80
+pytest tests/ -q --cov=rbaccatalog --cov-report=term --cov-fail-under=80
 
 # JavaScript type check + unit tests
 npm run check:js
@@ -77,7 +77,7 @@ essentials:
 - **Async-only** — no synchronous I/O. Use `httpx` and `asyncio.sleep()`, never
   `requests` or `time.sleep()`.
 - **Full type hints** on every function; Pyright runs in `standard` mode.
-- **Absolute imports** from `azurerbac.*` — no relative imports.
+- **Absolute imports** from `rbaccatalog.*` — no relative imports.
 - **Respect module boundaries** — dependencies point inward
   (`web → matching → core`); `core` must not import higher layers.
 - **No new dependencies** without discussing it in an issue first.

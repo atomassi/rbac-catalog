@@ -12,7 +12,7 @@ from unittest.mock import patch
 import pytest
 from pydantic import ValidationError
 
-from azurerbac.settings import Settings
+from rbaccatalog.settings import Settings
 
 
 class TestSettings:
@@ -34,7 +34,7 @@ class TestSettings:
         with patch.dict(os.environ, {}, clear=True):
             settings = Settings(roles_poll_interval_seconds=120)
             assert settings.roles_poll_interval_seconds == 120
-            assert settings.db_connection_string == "sqlite+aiosqlite:///./azurerbac.db"
+            assert settings.db_connection_string == "sqlite+aiosqlite:///./rbaccatalog.db"
 
     def test_invalid_poll_interval_type(self):
         """Test Settings rejects invalid types."""
@@ -43,7 +43,7 @@ class TestSettings:
 
     def test_enabled_ai_engines_defaults(self):
         """Test enabled_ai_engines defaults are non-empty, valid, and include the fallback."""
-        from azurerbac.settings import _VALID_AI_ENGINES
+        from rbaccatalog.settings import _VALID_AI_ENGINES
 
         settings = Settings()
         assert len(settings.enabled_ai_engines) > 0, "defaults must not be empty"
@@ -306,7 +306,7 @@ class TestDatabaseEngine:
         """Test creating SQLite async engine and session produces working DB access."""
         from sqlalchemy import text
 
-        from azurerbac.core.db import EngineFactory, create_sessionmaker
+        from rbaccatalog.core.db import EngineFactory, create_sessionmaker
 
         engine = EngineFactory.from_connection_string("sqlite+aiosqlite:///:memory:")
         assert "sqlite" in str(engine.url)
@@ -322,14 +322,14 @@ class TestDatabaseEngine:
 
     def test_from_connection_string_sqlite(self):
         """Test creating SQLite engine from connection string."""
-        from azurerbac.core.db import EngineFactory
+        from rbaccatalog.core.db import EngineFactory
 
         engine = EngineFactory.from_connection_string("sqlite+aiosqlite:///:memory:")
         assert "sqlite" in str(engine.url)
 
     def test_from_connection_string_postgres(self):
         """Test PostgreSQL engine creation from connection string."""
-        from azurerbac.core.db import EngineFactory
+        from rbaccatalog.core.db import EngineFactory
 
         engine = EngineFactory.from_connection_string(
             "postgresql+asyncpg://user:pass@localhost:5432/db",
@@ -340,7 +340,7 @@ class TestDatabaseEngine:
 
     def test_from_managed_identity(self):
         """Test PostgreSQL engine creation with managed identity uses async_creator."""
-        from azurerbac.core.db import EngineFactory
+        from rbaccatalog.core.db import EngineFactory
 
         engine = EngineFactory.from_managed_identity(
             host="server.postgres.database.azure.com",
@@ -358,7 +358,7 @@ class TestManagedIdentityAuthenticator:
 
     def test_credential_lazy_loaded(self):
         """Test credential is not loaded until first access."""
-        from azurerbac.core.db import ManagedIdentityAuthenticator
+        from rbaccatalog.core.db import ManagedIdentityAuthenticator
 
         auth = ManagedIdentityAuthenticator()
         assert auth._credential is None
@@ -368,7 +368,7 @@ class TestManagedIdentityAuthenticator:
         """Test get_token fetches token from Azure credential."""
         from unittest.mock import AsyncMock, MagicMock
 
-        from azurerbac.core.db import ManagedIdentityAuthenticator
+        from rbaccatalog.core.db import ManagedIdentityAuthenticator
 
         auth = ManagedIdentityAuthenticator()
 
@@ -390,7 +390,7 @@ class TestManagedIdentityAuthenticator:
         """Test _close properly cleans up the credential."""
         from unittest.mock import AsyncMock
 
-        from azurerbac.core.db import ManagedIdentityAuthenticator
+        from rbaccatalog.core.db import ManagedIdentityAuthenticator
 
         auth = ManagedIdentityAuthenticator()
 
@@ -405,7 +405,7 @@ class TestManagedIdentityAuthenticator:
     @pytest.mark.asyncio
     async def test_close_handles_no_credential(self):
         """Test _close is safe when no credential exists."""
-        from azurerbac.core.db import ManagedIdentityAuthenticator
+        from rbaccatalog.core.db import ManagedIdentityAuthenticator
 
         auth = ManagedIdentityAuthenticator()
         # Should not raise
@@ -418,7 +418,7 @@ class TestLoggingSetup:
 
     def test_configure_creates_log_file_locally(self):
         """Test that configure_logging creates a log file when running locally."""
-        import azurerbac.telemetry.logging as logging_module
+        import rbaccatalog.telemetry.logging as logging_module
 
         with tempfile.TemporaryDirectory() as tmpdir:
             # Patch the LOGS_DIR to use temp directory
@@ -445,7 +445,7 @@ class TestLoggingSetup:
 
     def test_log_filename_format(self):
         """Test log filename is {component}.log."""
-        import azurerbac.telemetry.logging as logging_module
+        import rbaccatalog.telemetry.logging as logging_module
 
         with tempfile.TemporaryDirectory() as tmpdir:
             original_logs_dir = logging_module.LOGS_DIR
@@ -467,7 +467,7 @@ class TestLoggingSetup:
 
     def test_respects_log_level_env(self):
         """Test that LOG_LEVEL environment variable is respected."""
-        import azurerbac.telemetry.logging as logging_module
+        import rbaccatalog.telemetry.logging as logging_module
 
         with tempfile.TemporaryDirectory() as tmpdir:
             original_logs_dir = logging_module.LOGS_DIR
@@ -488,7 +488,7 @@ class TestLoggingSetup:
 
     def test_default_log_level_is_info(self):
         """Test default log level is INFO."""
-        import azurerbac.telemetry.logging as logging_module
+        import rbaccatalog.telemetry.logging as logging_module
 
         with tempfile.TemporaryDirectory() as tmpdir:
             original_logs_dir = logging_module.LOGS_DIR
@@ -510,7 +510,7 @@ class TestLoggingSetup:
 
     def test_creates_logs_directory(self):
         """Test that logs directory is created if it doesn't exist."""
-        import azurerbac.telemetry.logging as logging_module
+        import rbaccatalog.telemetry.logging as logging_module
 
         with tempfile.TemporaryDirectory() as tmpdir:
             logs_dir = Path(tmpdir) / "nested" / "logs"
@@ -535,7 +535,7 @@ class TestLoggingSetup:
         """Test that no file handler is created in Azure App Service."""
         import importlib
 
-        import azurerbac.telemetry.logging as logging_module
+        import rbaccatalog.telemetry.logging as logging_module
 
         # Reload logging to pick up environment changes
         # Clear APPLICATIONINSIGHTS_CONNECTION_STRING to avoid sending real telemetry
@@ -561,7 +561,7 @@ class TestLoggingSetup:
 
     def test_has_stream_handler_locally(self):
         """Test that StreamHandler is created locally."""
-        import azurerbac.telemetry.logging as logging_module
+        import rbaccatalog.telemetry.logging as logging_module
 
         with tempfile.TemporaryDirectory() as tmpdir:
             original_logs_dir = logging_module.LOGS_DIR
@@ -612,7 +612,7 @@ class TestCredentialFilter:
     )
     def test_credential_filter_redacts_sensitive_data(self, message, sensitive_text):
         """Test that sensitive data (tokens, passwords, API keys) are redacted from logs."""
-        import azurerbac.telemetry.logging as logging_module
+        import rbaccatalog.telemetry.logging as logging_module
 
         filter_instance = logging_module._CredentialFilter()
         record = logging.LogRecord(
@@ -630,7 +630,7 @@ class TestCredentialFilter:
 
     def test_credential_filter_passes_normal_messages(self):
         """Test that normal messages are not modified."""
-        import azurerbac.telemetry.logging as logging_module
+        import rbaccatalog.telemetry.logging as logging_module
 
         filter_instance = logging_module._CredentialFilter()
         original_msg = "Normal log message without sensitive data"
@@ -652,7 +652,7 @@ class TestLoggingEdgeCases:
 
     def test_invalid_log_level_falls_back_to_info(self):
         """Test that invalid LOG_LEVEL falls back to INFO."""
-        import azurerbac.telemetry.logging as logging_module
+        import rbaccatalog.telemetry.logging as logging_module
 
         with tempfile.TemporaryDirectory() as tmpdir:
             original_logs_dir = logging_module.LOGS_DIR
@@ -674,7 +674,7 @@ class TestLoggingEdgeCases:
 
     def test_multiple_calls_only_configures_once(self):
         """Test that calling configure_logging multiple times only configures once."""
-        import azurerbac.telemetry.logging as logging_module
+        import rbaccatalog.telemetry.logging as logging_module
 
         with tempfile.TemporaryDirectory() as tmpdir:
             original_logs_dir = logging_module.LOGS_DIR
@@ -706,8 +706,8 @@ class TestConfigIntegration:
 
     def test_settings_used_in_engine_creation(self):
         """Test that settings can be used to create database engine."""
-        from azurerbac.core.db import EngineFactory
-        from azurerbac.settings import Settings
+        from rbaccatalog.core.db import EngineFactory
+        from rbaccatalog.settings import Settings
 
         settings = Settings(db_connection_string="sqlite+aiosqlite:///:memory:")
         engine = EngineFactory.from_connection_string(settings.db_connection_string)
@@ -718,8 +718,8 @@ class TestConfigIntegration:
         """Test complete workflow: settings -> engine -> session -> query."""
         from sqlalchemy import text
 
-        from azurerbac.core.db import EngineFactory, create_sessionmaker
-        from azurerbac.settings import Settings
+        from rbaccatalog.core.db import EngineFactory, create_sessionmaker
+        from rbaccatalog.settings import Settings
 
         settings = Settings(db_connection_string="sqlite+aiosqlite:///:memory:")
         engine = EngineFactory.from_connection_string(settings.db_connection_string)
@@ -759,7 +759,7 @@ class TestUtils:
     )
     def test_normalize_uuid_or_none(self, input_uuid, expected):
         """Test normalize_uuid_or_none with various inputs."""
-        from azurerbac.core.utils import normalize_uuid_or_none
+        from rbaccatalog.core.utils import normalize_uuid_or_none
 
         assert normalize_uuid_or_none(input_uuid) == expected
 
@@ -781,7 +781,7 @@ class TestUtils:
     )
     def test_ensure_utc(self, input_dt, expected_tzinfo):
         """Test ensure_utc with various inputs."""
-        from azurerbac.core.utils import ensure_utc
+        from rbaccatalog.core.utils import ensure_utc
 
         result = ensure_utc(input_dt)
         if input_dt is None:
@@ -819,13 +819,13 @@ class TestUtils:
     )
     def test_format_iso_z(self, input_dt, expected):
         """Test format_iso_z produces ISO 8601 with 'Z' suffix and milliseconds precision."""
-        from azurerbac.core.utils import format_iso_z
+        from rbaccatalog.core.utils import format_iso_z
 
         assert format_iso_z(input_dt) == expected
 
     def test_format_iso_z_replaces_plus_suffix(self):
         """Test format_iso_z correctly replaces +00:00 with Z."""
-        from azurerbac.core.utils import format_iso_z
+        from rbaccatalog.core.utils import format_iso_z
 
         aware = dt.datetime(2025, 12, 17, 9, 58, 12, 949000, tzinfo=dt.UTC)
         # Verify isoformat produces +00:00
@@ -858,7 +858,7 @@ class TestPatternUtilities:
     )
     def test_is_wildcard_pattern(self, pattern: str, expected: bool):
         """Test is_wildcard_pattern detection."""
-        from azurerbac.core.patterns import is_wildcard_pattern
+        from rbaccatalog.core.patterns import is_wildcard_pattern
 
         assert is_wildcard_pattern(pattern) == expected
 
@@ -927,14 +927,14 @@ class TestPatternUtilities:
         self, patterns: list[str], all_ops: set[str], expected_count: int
     ):
         """Test expand_patterns_to_operations with various patterns."""
-        from azurerbac.core.patterns import expand_patterns_to_operations
+        from rbaccatalog.core.patterns import expand_patterns_to_operations
 
         result = expand_patterns_to_operations(patterns, all_ops)
         assert len(result) == expected_count
 
     def test_expand_patterns_with_multiple_patterns(self):
         """Test expanding multiple patterns at once."""
-        from azurerbac.core.patterns import expand_patterns_to_operations
+        from rbaccatalog.core.patterns import expand_patterns_to_operations
 
         patterns = ["Microsoft.Storage/*", "Microsoft.Compute/*"]
         all_ops = {

@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 
-from azurerbac.airecommender.llm.client import OllamaClient
+from rbaccatalog.airecommender.llm.client import OllamaClient
 
 
 @pytest.fixture
@@ -202,7 +202,7 @@ class TestParseJsonWithRepair:
     )
     def test_json_extraction_and_repair(self, raw: str, expected_role: str):
         """Test JSON parsing with extraction and repair for various formats."""
-        from azurerbac.airecommender.llm.json_repair import parse_json_with_repair
+        from rbaccatalog.airecommender.llm.json_repair import parse_json_with_repair
 
         result = parse_json_with_repair(raw)
         assert result is not None
@@ -210,7 +210,7 @@ class TestParseJsonWithRepair:
 
     def test_valid_json_with_arrays(self):
         """Test parsing valid JSON with arrays."""
-        from azurerbac.airecommender.llm.json_repair import parse_json_with_repair
+        from rbaccatalog.airecommender.llm.json_repair import parse_json_with_repair
 
         raw = '{"role": "Reader", "signals_matched": ["read", "view"]}'
         result = parse_json_with_repair(raw)
@@ -219,7 +219,7 @@ class TestParseJsonWithRepair:
 
     def test_regex_fallback_with_confidence(self):
         """Test regex fallback extracts confidence class too."""
-        from azurerbac.airecommender.llm.json_repair import parse_json_with_repair
+        from rbaccatalog.airecommender.llm.json_repair import parse_json_with_repair
 
         raw = '{"role": "Reader", "confidence_class": "medium", invalid'
         result = parse_json_with_repair(raw)
@@ -229,7 +229,7 @@ class TestParseJsonWithRepair:
 
     def test_completely_invalid_returns_none(self):
         """Test completely invalid input returns None."""
-        from azurerbac.airecommender.llm.json_repair import parse_json_with_repair
+        from rbaccatalog.airecommender.llm.json_repair import parse_json_with_repair
 
         raw = "This is not JSON at all, just plain text"
         result = parse_json_with_repair(raw)
@@ -237,7 +237,7 @@ class TestParseJsonWithRepair:
 
     def test_nested_array_repair(self):
         """Test repairing nested array syntax issues."""
-        from azurerbac.airecommender.llm.json_repair import parse_json_with_repair
+        from rbaccatalog.airecommender.llm.json_repair import parse_json_with_repair
 
         # ["a"], ["b"] should become ["a", "b"]
         raw = '{"role": "Reader", "signals_matched": ["read"], ["view"]}'
@@ -248,7 +248,7 @@ class TestParseJsonWithRepair:
 
     def test_missing_quote_in_array(self):
         """Test repairing missing quotes in array."""
-        from azurerbac.airecommender.llm.json_repair import parse_json_with_repair
+        from rbaccatalog.airecommender.llm.json_repair import parse_json_with_repair
 
         raw = '{"role": "Reader", "signals_matched": ["read]}'
         result = parse_json_with_repair(raw)
@@ -257,7 +257,7 @@ class TestParseJsonWithRepair:
 
     def test_unquoted_array_items(self):
         """Test repair of unquoted array items."""
-        from azurerbac.airecommender.llm.json_repair import parse_json_with_repair
+        from rbaccatalog.airecommender.llm.json_repair import parse_json_with_repair
 
         raw = '{"role": "Reader", "signals_matched": [read, view]}'
         result = parse_json_with_repair(raw)
@@ -267,7 +267,7 @@ class TestParseJsonWithRepair:
 
     def test_markdown_json_block(self):
         """Test JSON extraction from markdown code block."""
-        from azurerbac.airecommender.llm.json_repair import parse_json_with_repair
+        from rbaccatalog.airecommender.llm.json_repair import parse_json_with_repair
 
         # Note: markdown extraction is handled in recommend_roles before
         # calling parse_json_with_repair, but we test the inner function here
@@ -278,21 +278,21 @@ class TestParseJsonWithRepair:
 
     def test_empty_string(self):
         """Test empty string returns None."""
-        from azurerbac.airecommender.llm.json_repair import parse_json_with_repair
+        from rbaccatalog.airecommender.llm.json_repair import parse_json_with_repair
 
         result = parse_json_with_repair("")
         assert result is None
 
     def test_empty_json_object(self):
         """Test empty JSON object."""
-        from azurerbac.airecommender.llm.json_repair import parse_json_with_repair
+        from rbaccatalog.airecommender.llm.json_repair import parse_json_with_repair
 
         result = parse_json_with_repair("{}")
         assert result == {}
 
     def test_regex_fallback_default_confidence(self):
         """Test regex fallback uses 'low' as default confidence."""
-        from azurerbac.airecommender.llm.json_repair import parse_json_with_repair
+        from rbaccatalog.airecommender.llm.json_repair import parse_json_with_repair
 
         raw = '{"role": "Reader" broken'
         result = parse_json_with_repair(raw)
@@ -304,7 +304,7 @@ class TestParseJsonWithRepair:
 
     def test_complex_valid_json(self):
         """Test parsing complex but valid JSON structure."""
-        from azurerbac.airecommender.llm.json_repair import parse_json_with_repair
+        from rbaccatalog.airecommender.llm.json_repair import parse_json_with_repair
 
         raw = """{
             "role": "Storage Blob Data Contributor",
@@ -452,7 +452,7 @@ class TestGenerateWithRetry:
 
     def test_generate_uses_default_timeout(self, connected_client):
         """Test that generate uses the default timeout constant."""
-        from azurerbac.airecommender.llm.client import DEFAULT_TIMEOUT_SECONDS
+        from rbaccatalog.airecommender.llm.client import DEFAULT_TIMEOUT_SECONDS
 
         mock_response = MagicMock()
         mock_response.json.return_value = {"response": "test"}
@@ -534,14 +534,14 @@ class TestExtractJsonFromMarkdown:
     )
     def test_markdown_extraction(self, raw_input: str, expected_output: str):
         """Test extraction of JSON from various markdown formats."""
-        from azurerbac.airecommender.llm.json_repair import extract_json_from_markdown
+        from rbaccatalog.airecommender.llm.json_repair import extract_json_from_markdown
 
         result = extract_json_from_markdown(raw_input)
         assert result.strip() == expected_output.strip()
 
     def test_multiple_code_blocks_extracts_first(self):
         """Test that only the first code block is extracted."""
-        from azurerbac.airecommender.llm.json_repair import extract_json_from_markdown
+        from rbaccatalog.airecommender.llm.json_repair import extract_json_from_markdown
 
         raw = '```json\n{"first": true}\n```\n\n```json\n{"second": true}\n```'
         result = extract_json_from_markdown(raw)

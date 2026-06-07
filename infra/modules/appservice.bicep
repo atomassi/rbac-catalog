@@ -159,7 +159,7 @@ var ppeAppSettings     = concat(commonAppSettings, scanDisabledSettings, [
 ])
 
 var commonSiteConfigBase = {
-  linuxFxVersion: 'DOCKER|${acrLoginServer}/azurerbac:${imageTag}'
+  linuxFxVersion: 'DOCKER|${acrLoginServer}/rbaccatalog:${imageTag}'
   acrUseManagedIdentityCreds: true
   alwaysOn: sku != 'B1' && sku != 'F1'
   http20Enabled: true

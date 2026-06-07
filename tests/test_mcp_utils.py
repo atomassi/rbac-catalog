@@ -4,7 +4,7 @@ import time
 
 import pytest
 
-from azurerbac.mcp.utils import (
+from rbaccatalog.mcp.utils import (
     TokenBucketRateLimiter,
     ValidationError,
     validate_input,

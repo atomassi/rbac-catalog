@@ -19,8 +19,9 @@ on:
 
 run-name: PPE Deploy - ${{ inputs.branch }} (${{ inputs.duration }}m)
 
+# Least-privilege default: read-only workflow token. The deploy job opts in to
+# id-token: write below for Azure OIDC login.
 permissions:
-  id-token: write
   contents: read
 
 env:
@@ -42,6 +43,9 @@ jobs:
   deploy-ppe:
     name: Deploy to PPE
     runs-on: ubuntu-latest
+    permissions:
+      contents: read    # Check out the repository
+      id-token: write   # Request the OIDC JWT for Azure login
     environment:
       name: ppe
       url: ${{ env.PPE_URL }}

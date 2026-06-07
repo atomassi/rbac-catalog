@@ -2,7 +2,8 @@
 # Version from git tag, passed via: --build-arg VERSION=$(git describe --tags --always)
 ARG VERSION=0.0.0-dev
 
-FROM python:3.12-slim
+# Base image pinned by digest for reproducible builds.
+FROM python:3.12-slim@sha256:090ba77e2958f6af52a5341f788b50b032dd4ca28377d2893dcf1ecbdfdfe203
 
 WORKDIR /app
 

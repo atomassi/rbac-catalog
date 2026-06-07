@@ -849,21 +849,28 @@
     </div>
     
     <script>
-        // Navigate only to server-generated root-relative paths (e.g.
-        // "/recent?..."). The <select> option values come from build_recent_url,
-        // which always emits a leading-slash path. Anything that is not a
-        // root-relative path is rejected: scheme-relative ("//host"), backslash
-        // tricks ("/\\host"), absolute URLs ("https://host/..."), and
-        // "javascript:" URLs — so a tampered option value cannot redirect
-        // off-site or execute script.
+        // Navigate only to server-generated paths under the "/recent" route.
+        // The <select> option values come from build_recent_url, which always
+        // emits a leading-slash "/recent..." path. The raw value is parsed
+        // against the current origin and must resolve to the same origin and the
+        // "/recent" prefix; only the parsed pathname/search/hash are used, so
+        // scheme-relative ("//host"), absolute ("https://host/..."), and
+        // "javascript:" URLs cannot redirect off-site or execute script.
         function navigateToRelative(value) {
             if (typeof value !== 'string') return;
-            const path = value.trim();
-            // Require a single leading "/" followed by a non-slash, non-backslash
-            // character. Rejects "//evil.com", "/\\evil.com", "https://...",
-            // "javascript:...", and empty/whitespace values.
-            if (!/^\/[^/\\]/.test(path)) return;
-            window.location.assign(path);
+            const raw = value.trim();
+            if (!raw) return;
+            let url;
+            try {
+                // Parse relative input against current origin to canonicalize.
+                url = new URL(raw, window.location.origin);
+            } catch {
+                return;
+            }
+            // Enforce same-origin and the expected route prefix only.
+            if (url.origin !== window.location.origin) return;
+            if (!url.pathname.startsWith('/recent')) return;
+            window.location.assign(url.pathname + url.search + url.hash);
         }
 
         // Clear search query on page refresh, but preserve when coming back from role detail

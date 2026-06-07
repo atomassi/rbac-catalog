@@ -44,6 +44,7 @@ jobs:
     name: Deploy to PPE
     runs-on: ubuntu-latest
     permissions:
+      contents: read    # Check out the repository
       id-token: write   # Request the OIDC JWT for Azure login
     environment:
       name: ppe

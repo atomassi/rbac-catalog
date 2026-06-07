@@ -181,6 +181,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: build-and-push
     permissions:
+      contents: read    # Check out the repository
       id-token: write   # Request the OIDC JWT for Azure login
     environment:
       name: staging

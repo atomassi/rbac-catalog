@@ -38,16 +38,19 @@ jobs:
   upload:
     name: Upload SARIF (${{ matrix.language }})
     runs-on: ubuntu-latest
-    # Only act on completed pull_request runs that succeeded. Same-repo PRs and
-    # push/schedule runs upload directly in the CodeQL workflow and produce no
-    # artifact, so the steps below simply no-op for them.
+    # Act on any completed pull_request run that was not cancelled. We avoid
+    # gating on conclusion == 'success' because the CodeQL matrix runs with
+    # fail-fast: false: one language can fail while another produced a valid
+    # SARIF artifact. The steps below already no-op when no artifact exists
+    # (e.g. same-repo PRs, or the failed leg), so this is safe.
     if: >-
       github.event.workflow_run.event == 'pull_request'
-      && github.event.workflow_run.conclusion == 'success'
+      && github.event.workflow_run.conclusion != 'cancelled'
     permissions:
       security-events: write  # Required to upload code scanning results.
       actions: read           # Required to download the artifact from the triggering run.
       contents: read
+      pull-requests: read     # Required to read the triggering PR's head SHA via the API.
     strategy:
       fail-fast: false
       matrix:

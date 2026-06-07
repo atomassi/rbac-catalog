@@ -10,8 +10,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from azurerbac.cache.models import CachedChangeEvent
-from azurerbac.core.constants import EventType, RoleStatus
+from rbaccatalog.cache.models import CachedChangeEvent
+from rbaccatalog.core.enums import EventType, RoleStatus
 from tests.helpers import make_cached_role
 
 # =============================================================================
@@ -27,8 +27,8 @@ class TestEnrichRoleWithCounts:
 
     def test_enrich_role_fallback_returns_zeros(self):
         """Test enriching role returns zeros when cache misses (role_json is now in RoleHistory)."""
-        from azurerbac.core.constants import RoleStatus
-        from azurerbac.web.services.dashboard import enrich_role_with_counts
+        from rbaccatalog.core.enums import RoleStatus
+        from rbaccatalog.web.services.dashboard import enrich_role_with_counts
 
         role = MagicMock()
         role.role_id = "test-role-id"
@@ -48,9 +48,9 @@ class TestEnrichRoleWithCounts:
 
     def test_enrich_role_uses_cache(self):
         """Test enriching role uses cache when available."""
-        from azurerbac.core.constants import RoleStatus
-        from azurerbac.matching.models import RoleNetPermissions
-        from azurerbac.web.services.dashboard import enrich_role_with_counts
+        from rbaccatalog.core.enums import RoleStatus
+        from rbaccatalog.matching.models import RoleNetPermissions
+        from rbaccatalog.web.services.dashboard import enrich_role_with_counts
 
         role = MagicMock()
         role.role_id = "test-role-id"
@@ -73,7 +73,7 @@ class TestFilterCachedEvents:
 
     def test_filter_all_events_respects_cutoff(self):
         """Test that 'all' returns only recent events across types."""
-        from azurerbac.web.services.dashboard import filter_cached_events
+        from rbaccatalog.web.services.dashboard import filter_cached_events
 
         now = dt.datetime.now(UTC)
         cutoff = now - dt.timedelta(days=5)
@@ -123,7 +123,7 @@ class TestFilterCachedEvents:
 
 def _mock_enrich_role(r):
     """Create a RoleWithCounts for mocking enrich_role_with_counts."""
-    from azurerbac.web.services.models import RoleWithCounts
+    from rbaccatalog.web.services.models import RoleWithCounts
 
     status_value = r.status.value if hasattr(r.status, "value") else str(r.status)
     return RoleWithCounts(
@@ -142,7 +142,7 @@ class TestSearchRolesInCache:
 
     def test_search_by_name(self):
         """Test searching roles by name."""
-        from azurerbac.web.services.dashboard import search_roles_in_cache
+        from rbaccatalog.web.services.dashboard import search_roles_in_cache
 
         cached_roles = {
             "id1": make_cached_role("id1", "Storage Reader"),
@@ -150,7 +150,7 @@ class TestSearchRolesInCache:
             "id3": make_cached_role("id3", "Network Admin"),
         }
 
-        with patch("azurerbac.web.services.dashboard.enrich_role_with_counts") as mock_enrich:
+        with patch("rbaccatalog.web.services.dashboard.enrich_role_with_counts") as mock_enrich:
             mock_enrich.side_effect = _mock_enrich_role
 
             result = search_roles_in_cache(
@@ -169,14 +169,14 @@ class TestSearchRolesInCache:
 
     def test_search_ranks_exact_match_first(self):
         """Test that exact matches are ranked first."""
-        from azurerbac.web.services.dashboard import search_roles_in_cache
+        from rbaccatalog.web.services.dashboard import search_roles_in_cache
 
         cached_roles = {
             "id1": make_cached_role("id1", "Reader"),
             "id2": make_cached_role("id2", "Storage Reader"),
         }
 
-        with patch("azurerbac.web.services.dashboard.enrich_role_with_counts") as mock_enrich:
+        with patch("rbaccatalog.web.services.dashboard.enrich_role_with_counts") as mock_enrich:
             mock_enrich.side_effect = _mock_enrich_role
 
             result = search_roles_in_cache(
@@ -195,14 +195,14 @@ class TestSearchRolesInCache:
 
     def test_search_respects_status_filter(self):
         """Test that status filter is applied."""
-        from azurerbac.web.services.dashboard import search_roles_in_cache
+        from rbaccatalog.web.services.dashboard import search_roles_in_cache
 
         cached_roles = {
             "id1": make_cached_role("id1", "Test Role 1", "active"),
             "id2": make_cached_role("id2", "Test Role 2", "deleted"),
         }
 
-        with patch("azurerbac.web.services.dashboard.enrich_role_with_counts") as mock_enrich:
+        with patch("rbaccatalog.web.services.dashboard.enrich_role_with_counts") as mock_enrich:
             mock_enrich.side_effect = _mock_enrich_role
 
             # Filter for active only
@@ -221,7 +221,7 @@ class TestSearchRolesInCache:
 
     def test_search_by_role_id(self):
         """Test searching by role ID (GUID)."""
-        from azurerbac.web.services.dashboard import search_roles_in_cache
+        from rbaccatalog.web.services.dashboard import search_roles_in_cache
 
         test_guid = "12345678-1234-1234-1234-123456789abc"
         cached_roles = {
@@ -229,7 +229,7 @@ class TestSearchRolesInCache:
             "other-id": make_cached_role("other-id", "Other Role"),
         }
 
-        with patch("azurerbac.web.services.dashboard.enrich_role_with_counts") as mock_enrich:
+        with patch("rbaccatalog.web.services.dashboard.enrich_role_with_counts") as mock_enrich:
             mock_enrich.side_effect = _mock_enrich_role
 
             result = search_roles_in_cache(
@@ -251,13 +251,13 @@ class TestRecentPageDefaults:
 
     def test_default_days_is_30(self):
         """Verify DEFAULT_DAYS is 30 (was 15)."""
-        from azurerbac.web.constants import DEFAULT_DAYS
+        from rbaccatalog.web.constants import DEFAULT_DAYS
 
         assert DEFAULT_DAYS == 30
 
     def test_default_limit_is_25(self):
         """Verify DEFAULT_LIMIT is 25 for pagination."""
-        from azurerbac.web.constants import DEFAULT_LIMIT
+        from rbaccatalog.web.constants import DEFAULT_LIMIT
 
         assert DEFAULT_LIMIT == 25
 
@@ -272,7 +272,7 @@ class TestRecentPageDefaults:
     )
     def test_supported_page_sizes(self, limit, expected):
         """Verify page sizes 25, 100, 500, 1000 are within MAX_PAGE_SIZE."""
-        from azurerbac.web.constants import MAX_PAGE_SIZE
+        from rbaccatalog.web.constants import MAX_PAGE_SIZE
 
         assert limit <= MAX_PAGE_SIZE
         assert limit == expected
@@ -316,7 +316,7 @@ class TestRecentPagePagination:
 
     def test_filter_cached_events_pagination_integration(self):
         """Test that filter_cached_events returns list that can be paginated."""
-        from azurerbac.web.services.dashboard import filter_cached_events
+        from rbaccatalog.web.services.dashboard import filter_cached_events
 
         now = dt.datetime.now(UTC)
         cutoff = now - dt.timedelta(days=30)

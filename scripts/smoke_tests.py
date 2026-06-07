@@ -138,7 +138,6 @@ AI_RECOMMENDER_TESTS: Final = [
         "AI: CrossEncoder mode",
         {"query": "manage security policies", "top_k": 3, "recommender_mode": "crossencoder"},
     ),
-    ("AI: ColBERT mode", {"query": "backup databases", "top_k": 3, "recommender_mode": "colbert"}),
     ("AI: RAG mode", {"query": "deploy applications", "top_k": 3, "recommender_mode": "rag"}),
     ("AI: LLM mode", {"query": "manage clusters", "top_k": 3, "recommender_mode": "llm"}),
     ("AI: HyDE mode", {"query": "monitor network traffic", "top_k": 3, "recommender_mode": "hyde"}),

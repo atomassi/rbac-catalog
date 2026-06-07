@@ -5,8 +5,8 @@ from datetime import UTC
 import pytest
 from sqlalchemy import select
 
-from azurerbac.core import Role, RoleHistory
-from azurerbac.core.constants import EventType, RoleStatus
+from rbaccatalog.core import Role, RoleHistory
+from rbaccatalog.core.enums import EventType, RoleStatus
 
 
 def _make_role_json(role_name: str, role_type: str = "BuiltInRole") -> dict:
@@ -253,7 +253,7 @@ class TestRoleHistory:
         """
         from datetime import datetime
 
-        from azurerbac.core.models import RoleScanStatus
+        from rbaccatalog.core.models import RoleScanStatus
 
         role = Role(role_id="delete-scan-test", role_name="Test", status=RoleStatus.ACTIVE)
         db_session.add(role)
@@ -311,7 +311,7 @@ class TestRoleHistory:
         """
         from datetime import datetime
 
-        from azurerbac.core.models import RoleScanStatus
+        from rbaccatalog.core.models import RoleScanStatus
 
         role = Role(
             role_id="update-version-test", role_name="Original Name", status=RoleStatus.ACTIVE
@@ -571,62 +571,9 @@ class TestDeletedRoleProperties:
 class TestMatchingModels:
     """Tests for matching module models."""
 
-    @pytest.mark.parametrize(
-        "plane,actions,not_actions,expected_none",
-        [
-            pytest.param(
-                None,
-                ["Microsoft.Storage/*"],
-                [],
-                True,
-                id="none_plane_returns_none",
-            ),
-            pytest.param(
-                "CONTROL",
-                ["Microsoft.Storage/*"],
-                [],
-                False,
-                id="control_plane_returns_key",
-            ),
-            pytest.param(
-                "DATA",
-                ["Microsoft.Storage/*"],
-                ["*/delete"],
-                False,
-                id="data_plane_with_not_actions",
-            ),
-        ],
-    )
-    def test_partial_coverage_cache_key_build(
-        self,
-        plane: str | None,
-        actions: list[str],
-        not_actions: list[str],
-        expected_none: bool,
-    ):
-        """Test PartialCoverageCacheKey.build with various inputs."""
-        from azurerbac.matching.models import PartialCoverageCacheKey, Plane
-
-        plane_enum = Plane[plane] if plane else None
-        result = PartialCoverageCacheKey.build(
-            pattern="Microsoft.Storage/*",
-            plane=plane_enum,
-            actions=actions,
-            not_actions=not_actions,
-        )
-
-        if expected_none:
-            assert result is None
-        else:
-            assert result is not None
-            assert result.pattern == "Microsoft.Storage/*"
-            assert result.plane == plane_enum
-            assert result.actions == tuple(sorted(actions))
-            assert result.not_actions == tuple(sorted(not_actions))
-
     def test_classified_operations_all_requested_property(self):
         """Test ClassifiedOperations.all_requested union property."""
-        from azurerbac.matching.models import ClassifiedOperations
+        from rbaccatalog.matching.models import ClassifiedOperations
 
         ops = ClassifiedOperations(
             control=frozenset({"op1", "op2"}),
@@ -644,7 +591,7 @@ class TestMatchingModels:
 
     def test_classified_operations_len(self):
         """Test ClassifiedOperations.__len__ returns total count."""
-        from azurerbac.matching.models import ClassifiedOperations
+        from rbaccatalog.matching.models import ClassifiedOperations
 
         ops = ClassifiedOperations(
             control=frozenset({"op1", "op2"}),
@@ -657,7 +604,7 @@ class TestMatchingModels:
 
     def test_role_match_is_full_match_property(self):
         """Test RoleMatch.is_full_match property."""
-        from azurerbac.matching.models import RoleMatch
+        from rbaccatalog.matching.models import RoleMatch
 
         full_match = RoleMatch(
             role_id="r1",
@@ -679,7 +626,7 @@ class TestMatchingModels:
 
     def test_role_match_to_dict(self):
         """Test RoleMatch.to_dict includes is_full_match."""
-        from azurerbac.matching.models import RoleMatch
+        from rbaccatalog.matching.models import RoleMatch
 
         match = RoleMatch(
             role_id="r1",

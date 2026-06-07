@@ -5,18 +5,12 @@ Covers: pattern matching, action types, notActions, high privilege roles, sortin
 
 import pytest
 
-from azurerbac.core.patterns import matches_pattern, pattern_to_regex
-from azurerbac.matching.role_matching import (
-    _prefix_pattern_covers,
-    _remove_excluded_operations,
-    _segment_pattern_covers,
-    _suffix_pattern_covers,
+from rbaccatalog.core.patterns import matches_pattern, pattern_to_regex
+from rbaccatalog.matching.role_matching import (
     check_operation_allowed,
     count_net_permissions,
-    count_wildcard_partial_coverage,
     is_high_privilege_role,
     operation_matches_any_pattern,
-    pattern_covers_pattern,
 )
 from tests.helpers import make_operation, make_role_definition, recommend_roles_with_cache
 
@@ -75,223 +69,6 @@ class TestPatternMatching:
         assert operation_matches_any_pattern("Microsoft.Storage/storageAccounts/read", patterns)
         assert operation_matches_any_pattern("Microsoft.Compute/virtualMachines/read", patterns)
         assert not operation_matches_any_pattern("Microsoft.Network/virtualNetworks/read", patterns)
-
-
-# =============================================================================
-# Pattern Covers Pattern Tests
-# =============================================================================
-
-
-class TestPatternCoverage:
-    """Tests for pattern_covers_pattern and helper functions."""
-
-    @pytest.mark.parametrize(
-        "role_pattern,requested_pattern,expected",
-        [
-            # Exact match
-            ("Microsoft.Storage/read", "Microsoft.Storage/read", True),
-            # Universal wildcard
-            ("*", "Microsoft.Storage/storageAccounts/read", True),
-            ("*", "anything/at/all", True),
-            # Different patterns don't match
-            ("Microsoft.Storage/write", "Microsoft.Storage/read", False),
-        ],
-    )
-    def test_pattern_covers_exact_and_wildcard(
-        self, role_pattern: str, requested_pattern: str, expected: bool
-    ):
-        """Test exact match and universal wildcard coverage."""
-        assert pattern_covers_pattern(role_pattern, requested_pattern) == expected
-
-    @pytest.mark.parametrize(
-        "role_pattern,requested_pattern,expected",
-        [
-            # Valid suffix patterns
-            ("*/read", "Microsoft.Storage/storageAccounts/read", True),
-            ("*/delete", "Microsoft.Compute/virtualMachines/delete", True),
-            # Suffix doesn't match
-            ("*/read", "Microsoft.Storage/storageAccounts/write", False),
-            ("*/delete", "Microsoft.Storage/storageAccounts/read", False),
-            # Not a suffix pattern
-            ("Microsoft.Storage/*", "Microsoft.Storage/accounts/read", False),
-            ("Microsoft.Storage/read", "Microsoft.Storage/read", False),
-            # Case sensitivity (Azure operations are case-insensitive but suffix check is literal)
-            ("*/Read", "Microsoft.Storage/storageAccounts/Read", True),
-        ],
-    )
-    def test_suffix_pattern_covers(self, role_pattern: str, requested_pattern: str, expected: bool):
-        """Test suffix pattern coverage logic."""
-        assert _suffix_pattern_covers(role_pattern, requested_pattern) == expected
-
-    @pytest.mark.parametrize(
-        "role_pattern,requested_pattern,expected",
-        [
-            # Valid prefix patterns (must end with /*)
-            ("Microsoft.Storage/*", "Microsoft.Storage/storageAccounts/read", True),
-            ("Microsoft.Compute/*", "Microsoft.Compute/virtualMachines/delete", True),
-            # Prefix doesn't match
-            ("Microsoft.Storage/*", "Microsoft.Compute/virtualMachines/read", False),
-            ("Microsoft.Network/*", "Microsoft.Storage/storageAccounts/read", False),
-            # Not a prefix pattern (doesn't end with /*)
-            ("*/read", "Microsoft.Storage/accounts/read", False),
-            ("Microsoft.Storage/read", "Microsoft.Storage/read", False),
-            ("Microsoft.*", "Microsoft.Storage/read", False),  # Ends with * but not /*
-        ],
-    )
-    def test_prefix_pattern_covers(self, role_pattern: str, requested_pattern: str, expected: bool):
-        """Test prefix pattern coverage logic."""
-        assert _prefix_pattern_covers(role_pattern, requested_pattern) == expected
-
-    @pytest.mark.parametrize(
-        "role_pattern,requested_pattern,expected",
-        [
-            # Middle wildcard patterns
-            ("Microsoft.Storage/*/read", "Microsoft.Storage/storageAccounts/read", True),
-            # Trailing wildcard
-            ("Microsoft.Storage/*", "Microsoft.Storage/storageAccounts/read", True),
-            ("Microsoft.Storage/storageAccounts/*", "Microsoft.Storage/storageAccounts/read", True),
-            # Multiple segments with wildcards
-            (
-                "Microsoft.Storage/*/blobServices/*",
-                "Microsoft.Storage/accounts/blobServices/containers",
-                True,
-            ),
-            # Pattern too long
-            ("Microsoft.Storage/a/b/c/d", "Microsoft.Storage/a/b", False),
-            # Segment mismatch
-            ("Microsoft.Storage/*/write", "Microsoft.Storage/storageAccounts/read", False),
-            ("Microsoft.Compute/*/read", "Microsoft.Storage/storageAccounts/read", False),
-            # Requested has wildcard but role has specific
-            ("Microsoft.Storage/storageAccounts/read", "Microsoft.Storage/*/read", False),
-            # Case insensitivity
-            ("microsoft.storage/*/read", "Microsoft.Storage/storageAccounts/read", True),
-            # First segment wildcard (Microsoft.* style patterns)
-            ("*/virtualMachines/read", "Microsoft.Compute/virtualMachines/read", True),
-        ],
-    )
-    def test_segment_pattern_covers(
-        self, role_pattern: str, requested_pattern: str, expected: bool
-    ):
-        """Test segment-by-segment pattern coverage."""
-        assert _segment_pattern_covers(role_pattern, requested_pattern) == expected
-
-
-# =============================================================================
-# Wildcard Partial Coverage Tests
-# =============================================================================
-
-
-class TestCountWildcardPartialCoverage:
-    """Tests for count_wildcard_partial_coverage function."""
-
-    @pytest.mark.parametrize(
-        "requested_pattern,actions,not_actions,all_ops,expected_covered,expected_total",
-        [
-            pytest.param(
-                "Microsoft.Storage/*",
-                ["microsoft.storage/storageaccounts/read"],  # Explicit must match lowercase
-                [],
-                {
-                    "microsoft.storage/storageaccounts/read",
-                    "microsoft.storage/storageaccounts/write",
-                    "microsoft.storage/storageaccounts/delete",
-                    "microsoft.compute/virtualmachines/read",
-                },
-                1,
-                3,
-                id="single-action-partial-coverage",
-            ),
-            pytest.param(
-                "Microsoft.Storage/*",
-                ["Microsoft.Storage/*"],  # Wildcards use pattern matching (case-insensitive)
-                [],
-                {
-                    "microsoft.storage/storageaccounts/read",
-                    "microsoft.storage/storageaccounts/write",
-                    "microsoft.compute/virtualmachines/read",
-                },
-                2,
-                2,
-                id="wildcard-action-full-coverage",
-            ),
-            pytest.param(
-                "Microsoft.Storage/*",
-                ["*"],
-                [],
-                {
-                    "microsoft.storage/storageaccounts/read",
-                    "microsoft.storage/storageaccounts/write",
-                },
-                2,
-                2,
-                id="star-action-full-coverage",
-            ),
-            pytest.param(
-                "Microsoft.Storage/*",
-                ["*"],
-                [],
-                {"microsoft.compute/virtualmachines/read"},
-                0,
-                0,
-                id="no-matching-operations",
-            ),
-        ],
-    )
-    def test_coverage_parametrized(
-        self,
-        requested_pattern: str,
-        actions: list[str],
-        not_actions: list[str],
-        all_ops: set[str],
-        expected_covered: int,
-        expected_total: int,
-    ):
-        """Test coverage calculation with various scenarios."""
-        result = count_wildcard_partial_coverage(
-            requested_pattern=requested_pattern,
-            actions=actions,
-            not_actions=not_actions,
-            all_operations=all_ops,
-        )
-        assert result.covered == expected_covered
-        assert result.total == expected_total
-
-    def test_coverage_with_not_actions(self):
-        """Test that notActions properly exclude operations via pattern matching."""
-        all_ops = {
-            "microsoft.storage/storageaccounts/read",
-            "microsoft.storage/storageaccounts/write",
-            "microsoft.storage/storageaccounts/delete",
-        }
-        # Use wildcard notAction to properly exclude via pattern matching
-        result = count_wildcard_partial_coverage(
-            requested_pattern="Microsoft.Storage/*",
-            actions=["Microsoft.Storage/*"],
-            not_actions=[
-                "Microsoft.Storage/storageAccounts/delete"
-            ],  # Wildcardless must match exactly
-            all_operations=all_ops,
-        )
-        # Note: explicit notAction "Microsoft.Storage/storageAccounts/delete" won't match
-        # "microsoft.storage/storageaccounts/delete" due to case difference
-        # Use wildcard pattern for case-insensitive exclusion
-        assert result.covered == 3  # All matched because notAction didn't match (case)
-
-    def test_coverage_with_wildcard_not_actions(self):
-        """Test that wildcard notActions properly exclude operations."""
-        all_ops = {
-            "microsoft.storage/storageaccounts/read",
-            "microsoft.storage/storageaccounts/write",
-            "microsoft.storage/storageaccounts/delete",
-        }
-        result = count_wildcard_partial_coverage(
-            requested_pattern="Microsoft.Storage/*",
-            actions=["Microsoft.Storage/*"],
-            not_actions=["*/delete"],  # Wildcard pattern for case-insensitive matching
-            all_operations=all_ops,
-        )
-        assert result.covered == 2
-        assert result.uncovered == 1
 
 
 class TestCountNetPermissions:
@@ -394,43 +171,6 @@ class TestCountNetPermissions:
     ):
         """Test operation allowed logic with various patterns."""
         assert check_operation_allowed(operation, actions, not_actions) == expected
-
-
-# =============================================================================
-# _remove_excluded_operations Tests
-# =============================================================================
-
-
-class TestRemoveExcludedOperations:
-    """Tests for _remove_excluded_operations edge cases."""
-
-    def test_star_not_action_removes_everything(self):
-        """notActions=['*'] should return empty set."""
-        from azurerbac.cache import CacheData
-
-        cache = CacheData()
-        all_ops: frozenset[str] = frozenset({"op1", "op2", "op3"})
-        covered = {"op1", "op2", "op3"}
-        result = _remove_excluded_operations(covered, ["*"], all_ops, None, cache)
-        assert result == set()
-
-    def test_no_not_actions_returns_covered(self):
-        """Empty notActions returns the covered set unchanged."""
-        from azurerbac.cache import CacheData
-
-        cache = CacheData()
-        covered = {"op1", "op2"}
-        result = _remove_excluded_operations(covered, [], frozenset(), None, cache)
-        assert result == covered
-
-    def test_explicit_not_action_discards_single(self):
-        """An explicit notAction discards a single operation."""
-        from azurerbac.cache import CacheData
-
-        cache = CacheData()
-        covered = {"op1", "op2", "op3"}
-        result = _remove_excluded_operations(covered, ["op2"], frozenset(), None, cache)
-        assert result == {"op1", "op3"}
 
 
 # =============================================================================
@@ -801,7 +541,7 @@ class TestHighPrivilegeIntegration:
 
     def test_precompute_all_populates_high_privilege_roles(self, populated_cache):
         """Verify precompute_all correctly identifies high-privilege roles."""
-        from azurerbac.cache.build import precompute_all
+        from rbaccatalog.cache.build import precompute_all
 
         # Role with unconstrained roleAssignments/write -> high privilege
         high_priv_role = make_role_definition(
@@ -1002,7 +742,7 @@ class TestClassifiedOperations:
         """ClassifiedOperations should be immutable (frozen)."""
         from dataclasses import FrozenInstanceError
 
-        from azurerbac.matching.models import ClassifiedOperations
+        from rbaccatalog.matching.models import ClassifiedOperations
 
         classified = ClassifiedOperations(
             control=frozenset(["op1"]),
@@ -1013,7 +753,7 @@ class TestClassifiedOperations:
 
     def test_all_requested_combines_all_sets(self):
         """all_requested should combine all operation sets."""
-        from azurerbac.matching.models import ClassifiedOperations
+        from rbaccatalog.matching.models import ClassifiedOperations
 
         classified = ClassifiedOperations(
             control=frozenset(["ctrl1"]),
@@ -1025,7 +765,7 @@ class TestClassifiedOperations:
 
     def test_len_returns_total_count(self):
         """len() should return total operation count."""
-        from azurerbac.matching.models import ClassifiedOperations
+        from rbaccatalog.matching.models import ClassifiedOperations
 
         classified = ClassifiedOperations(
             control=frozenset(["c1", "c2"]),
@@ -1040,7 +780,7 @@ class TestRecommendationService:
 
     def test_classify_operations_separates_by_plane(self, populated_cache):
         """classify_operations should correctly separate control and data operations."""
-        from azurerbac.matching.recommendation_service import RoleRecommendationService
+        from rbaccatalog.matching.recommendation_service import RoleRecommendationService
 
         svc = RoleRecommendationService()
         classified = svc.classify_operations(
@@ -1056,7 +796,7 @@ class TestRecommendationService:
 
     def test_classify_operations_handles_wildcards(self, populated_cache):
         """classify_operations should detect wildcards matching both planes."""
-        from azurerbac.matching.recommendation_service import RoleRecommendationService
+        from rbaccatalog.matching.recommendation_service import RoleRecommendationService
 
         svc = RoleRecommendationService()
         classified = svc.classify_operations(["Microsoft.Storage/*"])
@@ -1067,7 +807,7 @@ class TestRecommendationService:
 
     def test_compute_wildcard_matches_expands_patterns(self, populated_cache):
         """compute_wildcard_matches should expand wildcards to actual operations."""
-        from azurerbac.matching.recommendation_service import RoleRecommendationService
+        from rbaccatalog.matching.recommendation_service import RoleRecommendationService
 
         svc = RoleRecommendationService()
         classified = svc.classify_operations(["Microsoft.Compute/*"])
@@ -1080,7 +820,7 @@ class TestRecommendationService:
 
     def test_classify_unknown_wildcard_defaults_to_control(self, populated_cache):
         """Wildcard matching no known operations defaults to control plane."""
-        from azurerbac.matching.recommendation_service import RoleRecommendationService
+        from rbaccatalog.matching.recommendation_service import RoleRecommendationService
 
         svc = RoleRecommendationService()
         classified = svc.classify_operations(["Microsoft.FakeProvider/*/read"])
@@ -1091,9 +831,9 @@ class TestRecommendationService:
 
     def test_evaluate_wildcards_fast_skips_when_cached_ops_none(self, populated_cache):
         """_evaluate_wildcards_fast returns immediately when cached_ops is None."""
-        from azurerbac.matching.models import PlaneContext, RoleEvaluationContext
-        from azurerbac.matching.recommendation_service import RoleRecommendationService
-        from azurerbac.matching.role_matching import Plane
+        from rbaccatalog.matching.models import PlaneContext, RoleEvaluationContext
+        from rbaccatalog.matching.recommendation_service import RoleRecommendationService
+        from rbaccatalog.matching.role_matching import Plane
 
         svc = RoleRecommendationService()
         ctx = RoleEvaluationContext(
@@ -1111,9 +851,9 @@ class TestRecommendationService:
 
     def test_evaluate_wildcards_fast_records_partial_coverage(self, populated_cache):
         """_evaluate_wildcards_fast stores partial coverage when not fully covered."""
-        from azurerbac.matching.models import PlaneContext, RoleEvaluationContext
-        from azurerbac.matching.recommendation_service import RoleRecommendationService
-        from azurerbac.matching.role_matching import Plane
+        from rbaccatalog.matching.models import PlaneContext, RoleEvaluationContext
+        from rbaccatalog.matching.recommendation_service import RoleRecommendationService
+        from rbaccatalog.matching.role_matching import Plane
 
         svc = RoleRecommendationService()
         classified = svc.classify_operations(["Microsoft.Storage/*"])
@@ -1165,7 +905,7 @@ class TestMaxResultsParameter:
         expected_count: int,
     ):
         """Test max_results parameter behavior."""
-        from azurerbac.matching.role_recommender import recommend_roles
+        from rbaccatalog.matching.role_recommender import recommend_roles
 
         # Use an operation that exists in sample_operations
         roles = [
@@ -1175,8 +915,8 @@ class TestMaxResultsParameter:
             for i in range(num_roles)
         ]
         # Build cache with these roles first
-        from azurerbac.cache import get_cache_service
-        from azurerbac.cache.build import precompute_all
+        from rbaccatalog.cache import get_cache_service
+        from rbaccatalog.cache.build import precompute_all
 
         cache = get_cache_service()
         ops = list(cache.cache.all_operations)
@@ -1287,8 +1027,8 @@ class TestIntraRequestCacheConsistency:
 
     def test_service_uses_cache_from_construction_time(self, populated_cache):
         """Service should use the cache provided at construction, not global singleton."""
-        from azurerbac.cache.models import CacheData
-        from azurerbac.matching.recommendation_service import RoleRecommendationService
+        from rbaccatalog.cache.models import CacheData
+        from rbaccatalog.matching.recommendation_service import RoleRecommendationService
 
         # Create a custom cache with known data
         custom_cache = CacheData()
@@ -1308,8 +1048,8 @@ class TestIntraRequestCacheConsistency:
         """When no cache provided, service captures global cache at construction."""
         from unittest.mock import patch
 
-        from azurerbac.cache.models import CacheData
-        from azurerbac.matching.recommendation_service import RoleRecommendationService
+        from rbaccatalog.cache.models import CacheData
+        from rbaccatalog.matching.recommendation_service import RoleRecommendationService
 
         # Create two different cache instances
         cache_v1 = CacheData()
@@ -1325,7 +1065,7 @@ class TestIntraRequestCacheConsistency:
             return current_cache[0]
 
         with patch(
-            "azurerbac.matching.recommendation_service._get_default_cache",
+            "rbaccatalog.matching.recommendation_service._get_default_cache",
             side_effect=mock_get_default_cache,
         ):
             # Create service - should capture cache_v1
@@ -1345,8 +1085,8 @@ class TestIntraRequestCacheConsistency:
         """Each new service instance captures the current cache state."""
         from unittest.mock import patch
 
-        from azurerbac.cache.models import CacheData
-        from azurerbac.matching.recommendation_service import RoleRecommendationService
+        from rbaccatalog.cache.models import CacheData
+        from rbaccatalog.matching.recommendation_service import RoleRecommendationService
 
         cache_v1 = CacheData()
         cache_v1.role_coverage["v1-marker"] = None
@@ -1360,7 +1100,7 @@ class TestIntraRequestCacheConsistency:
             return current_cache[0]
 
         with patch(
-            "azurerbac.matching.recommendation_service._get_default_cache",
+            "rbaccatalog.matching.recommendation_service._get_default_cache",
             side_effect=mock_get_default_cache,
         ):
             # First service gets v1
@@ -1397,7 +1137,7 @@ class TestCountConsistency:
         The count-matches API (used to show "matches N operations" in UI) must return
         the same count that role matching will report as requested_operations_count.
         """
-        from azurerbac.cache import get_cache_service
+        from rbaccatalog.cache import get_cache_service
 
         cache = get_cache_service()
 
@@ -1439,7 +1179,7 @@ class TestCountConsistency:
 
     def test_control_and_data_plane_counts_separate(self, populated_cache):
         """Test that control and data plane wildcards are counted separately."""
-        from azurerbac.cache import get_cache_service
+        from rbaccatalog.cache import get_cache_service
 
         cache = get_cache_service()
 

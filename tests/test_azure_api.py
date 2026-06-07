@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from azurerbac.azure.models import OperationData, Permission, RoleDefinition, RoleProperties
+from rbaccatalog.azure.models import OperationData, Permission, RoleDefinition, RoleProperties
 
 
 def _transform_role(item: dict[str, Any]) -> dict[str, Any]:
@@ -17,7 +17,7 @@ def _transform_role(item: dict[str, Any]) -> dict[str, Any]:
 
 class TestFlattenProviderOperationsPayload:
     def test_flattens_provider_and_resource_type_operations(self):
-        from azurerbac.azure.operations import _flatten_provider_operations
+        from rbaccatalog.azure.operations import _flatten_provider_operations
 
         payload = {
             "value": [
@@ -69,12 +69,12 @@ class TestFlattenProviderOperationsPayload:
         assert all(op.resource_type_display_name == "Virtual Machines" for op in rt_ops)
 
     def test_handles_empty_payload(self):
-        from azurerbac.azure.operations import _flatten_provider_operations
+        from rbaccatalog.azure.operations import _flatten_provider_operations
 
         assert _flatten_provider_operations({"value": []}) == []
 
     def test_defaults_missing_sections(self):
-        from azurerbac.azure.operations import _flatten_provider_operations
+        from rbaccatalog.azure.operations import _flatten_provider_operations
 
         payload = {"value": [{"displayName": "X"}]}
         operations = _flatten_provider_operations(payload)
@@ -373,7 +373,7 @@ class TestRolePropertiesCaseInsensitive:
     )
     def test_role_properties_parses_any_case(self, key_case: dict):
         """Test that RoleProperties accepts field names in any case."""
-        from azurerbac.azure.models import RoleProperties
+        from rbaccatalog.azure.models import RoleProperties
 
         props = RoleProperties.model_validate(key_case)
         assert props.role_name == "Test"
@@ -382,7 +382,7 @@ class TestRolePropertiesCaseInsensitive:
 
     def test_role_properties_preserves_unknown_fields(self):
         """Test that unknown fields pass through unchanged."""
-        from azurerbac.azure.models import RoleProperties
+        from rbaccatalog.azure.models import RoleProperties
 
         # Unknown fields should be ignored by default Pydantic config
         props = RoleProperties.model_validate(
@@ -432,7 +432,7 @@ class TestRoleDefinitionCaseInsensitive:
     )
     def test_role_definition_parses_any_case(self, key_case: dict):
         """Test that RoleDefinition accepts field names in any case."""
-        from azurerbac.azure.models import RoleDefinition
+        from rbaccatalog.azure.models import RoleDefinition
 
         role = RoleDefinition.model_validate(key_case)
         assert role.id == "/test"
@@ -441,7 +441,7 @@ class TestRoleDefinitionCaseInsensitive:
 
     def test_role_definition_with_nested_properties_case(self):
         """Test that nested RoleProperties also handles case variations."""
-        from azurerbac.azure.models import RoleDefinition
+        from rbaccatalog.azure.models import RoleDefinition
 
         # PascalCase outer, camelCase inner
         role = RoleDefinition.model_validate(
@@ -814,13 +814,13 @@ class TestManagementUrl:
     """Tests for management_url helper."""
 
     def test_prepends_base_url(self):
-        from azurerbac.azure.http import management_url
+        from rbaccatalog.azure.http import management_url
 
         result = management_url("/providers/Microsoft.Authorization")
         assert result == "https://management.azure.com/providers/Microsoft.Authorization"
 
     def test_handles_path_without_leading_slash(self):
-        from azurerbac.azure.http import management_url
+        from rbaccatalog.azure.http import management_url
 
         result = management_url("providers/Microsoft.Authorization")
         assert result == "https://management.azure.com/providers/Microsoft.Authorization"
@@ -838,10 +838,10 @@ class TestAzureAuthContext:
         mock_credential.close = AsyncMock()
 
         with patch(
-            "azurerbac.azure.auth.DefaultAzureCredential",
+            "rbaccatalog.azure.auth.DefaultAzureCredential",
             return_value=mock_credential,
         ):
-            from azurerbac.azure.auth import default_azure_credential
+            from rbaccatalog.azure.auth import default_azure_credential
 
             async with default_azure_credential() as cred:
                 assert cred is mock_credential
@@ -903,16 +903,16 @@ class TestFetchBuiltinRoles:
     async def test_returns_role_definitions_on_success(self, mock_role_response):
         from unittest.mock import patch
 
-        from azurerbac.azure.models import RoleDefinition
+        from rbaccatalog.azure.models import RoleDefinition
 
         response = _make_mock_response({"value": [mock_role_response]})
         mock_client = _make_mock_async_client(response, method="get")
 
         with patch(
-            "azurerbac.azure.roles.authenticated_management_async_client",
+            "rbaccatalog.azure.roles.authenticated_management_async_client",
             return_value=mock_client,
         ):
-            from azurerbac.azure.roles import fetch_builtin_roles
+            from rbaccatalog.azure.roles import fetch_builtin_roles
 
             roles = await fetch_builtin_roles()
 
@@ -955,10 +955,10 @@ class TestFetchBuiltinRoles:
         mock_client = _make_mock_async_client(responses, method="get")
 
         with patch(
-            "azurerbac.azure.roles.authenticated_management_async_client",
+            "rbaccatalog.azure.roles.authenticated_management_async_client",
             return_value=mock_client,
         ):
-            from azurerbac.azure.roles import fetch_builtin_roles
+            from rbaccatalog.azure.roles import fetch_builtin_roles
 
             roles = await fetch_builtin_roles()
 
@@ -989,10 +989,10 @@ class TestFetchBuiltinRoles:
         mock_client = _make_mock_async_client([first_response, second_response], method="get")
 
         with patch(
-            "azurerbac.azure.roles.authenticated_management_async_client",
+            "rbaccatalog.azure.roles.authenticated_management_async_client",
             return_value=mock_client,
         ):
-            from azurerbac.azure.roles import fetch_builtin_roles
+            from rbaccatalog.azure.roles import fetch_builtin_roles
 
             await fetch_builtin_roles()
 
@@ -1023,12 +1023,12 @@ class TestFetchBuiltinRoles:
 
         with (
             patch(
-                "azurerbac.azure.roles.authenticated_management_async_client",
+                "rbaccatalog.azure.roles.authenticated_management_async_client",
                 return_value=mock_client,
             ),
             pytest.raises((httpx.HTTPStatusError, httpx.ConnectError)),
         ):
-            from azurerbac.azure.roles import fetch_builtin_roles
+            from rbaccatalog.azure.roles import fetch_builtin_roles
 
             await fetch_builtin_roles()
 
@@ -1060,10 +1060,10 @@ class TestFetchProviderOperations:
         mock_client = _make_mock_async_client(response, method="get")
 
         with patch(
-            "azurerbac.azure.operations.authenticated_management_async_client",
+            "rbaccatalog.azure.operations.authenticated_management_async_client",
             return_value=mock_client,
         ):
-            from azurerbac.azure.operations import fetch_provider_operations
+            from rbaccatalog.azure.operations import fetch_provider_operations
 
             operations = await fetch_provider_operations()
 
@@ -1079,16 +1079,16 @@ class TestAzureFetchErrorHandling:
         "module_path,function_name,http_method,patch_target",
         [
             (
-                "azurerbac.azure.roles",
+                "rbaccatalog.azure.roles",
                 "fetch_builtin_roles",
                 "get",
-                "azurerbac.azure.roles.authenticated_management_async_client",
+                "rbaccatalog.azure.roles.authenticated_management_async_client",
             ),
             (
-                "azurerbac.azure.operations",
+                "rbaccatalog.azure.operations",
                 "fetch_provider_operations",
                 "get",
-                "azurerbac.azure.operations.authenticated_management_async_client",
+                "rbaccatalog.azure.operations.authenticated_management_async_client",
             ),
         ],
     )

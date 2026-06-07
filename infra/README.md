@@ -3,8 +3,6 @@
 Bicep templates + helper scripts to provision the Azure infrastructure for
 the Azure RBAC Catalog. Plan for **~15 minutes** end-to-end.
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for design rationale.
-
 ---
 
 > [!TIP]
@@ -58,12 +56,23 @@ so the templates stay small and predictable:
 
 | Skipped | Why |
 |---|---|
-| **Ollama VM / VNet** | An always-on VM-hosted Ollama is expensive (~$30 / month) and rarely useful for a public demo site. The app degrades gracefully when `OLLAMA_BASE_URL` is empty — the catalog still browses, search still works, only the LLM-backed recommendation modes are disabled. Bring your own Ollama-compatible endpoint and set `OLLAMA_BASE_URL` in `.env` if you want AI features. |
+| **Ollama VM / VNet** | An always-on VM-hosted Ollama is expensive (~$50 / month) and rarely useful for a public demo site. The app degrades gracefully when `OLLAMA_BASE_URL` is empty — the catalog still browses, search still works, only the LLM-backed recommendation modes are disabled. Bring your own Ollama-compatible endpoint and set `OLLAMA_BASE_URL` in `.env` if you want AI features. |
 | **Automation Account / runbooks** | Useful only as housekeeping (ACR pruning, PPE-slot shutdown). ACR Basic does not support retention policies anyway; prune images out of band when needed. Removing this avoids shipping empty runbook scaffolds. |
 
 Two profiles ship out of the box:
-- [`parameters/prod.bicepparam`](parameters/prod.bicepparam) — production baseline with slots (~$77 / month)
+- [`parameters/prod.bicepparam`](parameters/prod.bicepparam) — production baseline with slots (~$65 / month)
 - [`parameters/dev.bicepparam`](parameters/dev.bicepparam) — mandatory only, cheap SKUs (~$20 / month)
+
+---
+
+## Design notes
+
+- **App Service over AKS / Container Apps** — single-container app; free TLS, slot swaps, and App Insights integration are built in.
+- **P0v3 plan** — smallest Premium V3 (VNet integration, AlwaysOn, 5 free slots).
+- **System-assigned MI (per slot)** — lifecycle bound to the app; simpler than a user-assigned identity for a single app. Each slot has its own MI, and AcrPull + PostgreSQL grants are wired for all three (production + staging + ppe).
+- **PostgreSQL Flexible (not Single)** — better price/perf and Entra ID auth. B1ms is enough for the workload (< 5 RPS, ~200 MB data).
+- **Entra ID for DB auth** — the app opens password-less, token-based connections; rotation is automatic via MSI tokens. The admin password is only needed at first deploy to provision the AAD-mapped role (see [§ Security notes](#security-notes)).
+- **Slot-sticky config** — `MSI_DB_USER`, `APP_ENVIRONMENT_NAME`, and the scan-enable flags (`ROLE_SCAN_ENABLED`, `OPERATIONS_SCAN_ENABLED`, `RUN_SCAN_ON_STARTUP`, `RUN_OPERATIONS_SCAN_ON_STARTUP`) are registered in `slotConfigNames`, so a slot swap does NOT carry the staging PG role, telemetry label, or scanner with the code. Only the **production slot** runs the role + operations scans; staging and ppe are non-writers so they don't race the worker and double-count events.
 
 ---
 
@@ -83,7 +92,8 @@ az login
 ```
 
 You also need **Owner** (or Contributor + User Access Administrator) on the
-target subscription.
+target subscription so the deployment can create the role assignments that
+wire AcrPull / DB grants automatically.
 
 ---
 
@@ -112,10 +122,6 @@ az login
 az account set --subscription "$SUBSCRIPTION_ID"
 az bicep install                          # one-time, no-op if already installed
 ```
-
-You need **Owner** (or Contributor + User Access Administrator) on the
-subscription so the deployment can create the role assignments that wire
-AcrPull / DB grants automatically.
 
 ### 3. (Optional) Dry-run with `--what-if`
 
@@ -157,7 +163,7 @@ APP=$(jq -r .appServiceName.value  "$OUT")
 RG=$(jq  -r .resourceGroupName.value "$OUT")
 URL=$(jq -r .appServiceUrl.value   "$OUT")
 
-az acr build --registry "$ACR" --image azurerbac:latest \
+az acr build --registry "$ACR" --image rbaccatalog:latest \
     --build-arg VERSION="$(git describe --tags --always 2>/dev/null || echo dev)" .
 
 az webapp restart -n "$APP" -g "$RG"
@@ -261,15 +267,15 @@ az webapp deployment slot swap -n "$APP" -g "$RG" --slot ppe --target-slot produ
 
 ---
 
-## Cost estimate (West Europe, list price)
+## Cost estimate (West Europe)
 
-| Tier | ~ Monthly |
+| Profile | ~ Monthly |
 |---|---|
-| **Mandatory only** (P0v3 + B1ms PG + ACR Basic + Log Analytics) | **≈ $77** |
-| + slots (free with the plan) | + $0 |
-| **Full prod profile** | **≈ $77** |
+| **Prod** (P0v3 + B1ms PG + ACR Basic + Log Analytics, slots included free) | **≈ $65** |
+| **Dev** (mandatory only, cheap SKUs) | **≈ $20** |
 
-Dev profile lands at **≈ $20 / month**.
+Slots add no cost — they share the App Service Plan. The prod figure assumes
+light Log Analytics ingestion.
 
 ---
 
@@ -299,7 +305,6 @@ to enable the LLM-backed modes.
 ```text
 infra/
 ├── README.md                          # this file
-├── ARCHITECTURE.md                    # diagrams + design rationale
 ├── .env.example  /  .gitignore
 ├── bicepconfig.json                   # strict linter rules
 ├── main.bicep                         # single subscription-scoped template
@@ -333,7 +338,7 @@ production-grade deployment you should review and (for the items marked
 | **PostgreSQL firewall** | `postgresAllowAllAzureServices = true` (rule `0.0.0.0` — reachable from every Azure tenant) | For production: set `postgresAllowAllAzureServices = false` and migrate to a Private Endpoint or a VNet-integrated server. The current rule is a documented Azure convenience that exposes the server to all Azure subscriptions. |
 | **PostgreSQL password auth** | `postgresEnablePasswordAuth = true` on first deploy | Required so `grant-postgres-aad-admin.sh` can provision the AAD-mapped role. The app itself never uses password auth (it uses Entra ID via `USE_MANAGED_IDENTITY=true`), but the server still accepts password auth until you redeploy with `postgresEnablePasswordAuth = false`. Doing so removes the password attack surface entirely. |
 | **PG admin firewall during bootstrap** | `grant-postgres-aad-admin.sh` opens the firewall to your public IP | The script uses a stable rule name (`deploy-shell-temp`) and removes the rule on exit via `trap`. |
-| **Container image** | App Service pulls `azurerbac:latest` | Pin to an immutable tag or digest in CI: pass `imageTag` to `appservice.bicep` (e.g. a Git SHA). |
+| **Container image** | App Service pulls `rbaccatalog:latest` | Pin to an immutable tag or digest in CI: pass `imageTag` to `appservice.bicep` (e.g. a Git SHA). |
 | **ACR public network** | `publicNetworkAccess = 'Enabled'`, `adminUserEnabled = false`, `anonymousPullEnabled = false` | For a closed network, switch to a Private Endpoint (Premium SKU required). |
 | **Diagnostic logging** | All resources (App, PG, ACR) forward `allLogs` + `AllMetrics` to Log Analytics | Already on. Add Defender for Cloud / Microsoft Defender for Containers for vulnerability scanning. |
 | **Backups** | PG backup retention 7 days, no geo-redundancy | Increase `backupRetentionDays` and enable `geoRedundantBackup` for production. |

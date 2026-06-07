@@ -1,1 +1,1 @@
-"""Test suite for azurerbac."""
+"""Test suite for rbaccatalog."""

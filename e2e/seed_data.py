@@ -29,7 +29,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 # Set up path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from azurerbac.core.models import Base, Operation, Role, RoleHistory, RoleScanStatus
+from rbaccatalog.core.models import Base, Operation, Role, RoleHistory, RoleScanStatus
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession

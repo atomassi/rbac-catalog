@@ -1,16 +1,18 @@
 # Azure RBAC Catalog
 
 [![Build](https://github.com/atomassi/rbac-catalog/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/atomassi/rbac-catalog/actions/workflows/build.yml)
-[![Deploy](https://github.com/atomassi/rbac-catalog/actions/workflows/deploy.yml/badge.svg)](https://github.com/atomassi/rbac-catalog/actions/workflows/deploy.yml)
-[![Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/atomassi/56d5c381b196c9c18db9fedbecb79220/raw/coverage.json&cacheSeconds=3600)](https://github.com/atomassi/rbac-catalog/actions/workflows/build.yml)
-[![Python](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/)
-[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[![Deploy](https://github.com/atomassi/rbac-catalog/actions/workflows/deploy.yml/badge.svg?branch=main)](https://github.com/atomassi/rbac-catalog/actions/workflows/deploy.yml)
+[![CodeQL](https://github.com/atomassi/rbac-catalog/actions/workflows/github-code-scanning/codeql/badge.svg?branch=main)](https://github.com/atomassi/rbac-catalog/actions/workflows/github-code-scanning/codeql)
+[![Coverage](https://codecov.io/gh/atomassi/rbac-catalog/branch/main/graph/badge.svg)](https://codecov.io/gh/atomassi/rbac-catalog)
+[![Python](https://img.shields.io/badge/python-3.12%20%7C%203.13%20%7C%203.14-blue.svg)](https://www.python.org/downloads/)
+[![Release](https://img.shields.io/github/v/release/atomassi/rbac-catalog)](https://github.com/atomassi/rbac-catalog/releases/latest)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 > [!IMPORTANT]
 > **The public site at [rbac-catalog.dev](https://rbac-catalog.dev/) will be decommissioned on June 12, 2026.**
 >
-> The full source — application code, Bicep templates, and post-deploy
-> scripts — stays in this repository under the MIT license. You have two
+> The full source (application code, Bicep templates, and post-deploy
+> scripts) stays in this repository under the MIT license. You have two
 > ways to keep using it:
 >
 > - **Run it locally** — see [`docs/run-local.md`](docs/run-local.md).
@@ -23,7 +25,21 @@
 
 A comprehensive catalog and monitoring tool for [Azure built-in RBAC roles](https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles). Browse roles, explore their permissions, track changes over time, find least-privilege roles based on operation requirements, and get AI-powered role recommendations.
 
-[![Azure RBAC Catalog screenshot](docs/images/homepage.png)](https://rbac-catalog.dev/)
+[![Azure RBAC Catalog demo](docs/images/demo.webp)](https://rbac-catalog.dev/)
+
+## Contents
+
+- [Features](#features)
+- [Quick Start](#quick-start)
+- [Documentation](#documentation)
+- [Tech Stack](#tech-stack)
+- [Infrastructure & Costs](#infrastructure--costs)
+- [AI Recommendation Modes](#ai-recommendation-modes)
+- [MCP Server Integration](#mcp-server-integration)
+- [Testing](#testing)
+- [Deployment](#deployment)
+- [Project Structure](#project-structure)
+- [References](#references)
 
 ## Features
 
@@ -40,6 +56,47 @@ A comprehensive catalog and monitoring tool for [Azure built-in RBAC roles](http
 - **MCP Server** — Integrate with AI agents (Copilot, Claude) via Model Context Protocol
 - **RSS/Atom Feeds** — Subscribe to role changes in your favorite feed reader
 
+## Quick Start
+
+Run the catalog locally in a few minutes. You need **Python 3.12, 3.13, or 3.14** and **Git**.
+
+```bash
+git clone https://github.com/atomassi/rbac-catalog.git
+cd rbac-catalog
+python3.12 -m venv .venv && source .venv/bin/activate
+pip install --upgrade pip && pip install -r requirements.txt
+
+# Boot fast with only the lightweight recommender engine
+ENABLED_AI_ENGINES=tfidf uvicorn rbaccatalog.web.app:app --port 8000 --reload
+```
+
+Open <http://localhost:8000>. The UI and search work immediately; the catalog
+stays empty until the background worker runs its first scan. To populate it with
+live data, run `az login` once, then start the worker in a second terminal:
+
+```bash
+python -m rbaccatalog.backgroundjobs.worker
+```
+
+Prefer containers? Build and run the image instead:
+
+```bash
+docker build -t rbaccatalog:local --build-arg VERSION=local-dev .
+docker run --rm -p 8000:8000 rbaccatalog:local
+```
+
+For prerequisites, environment variables, and the full walkthrough, see
+[`docs/run-local.md`](docs/run-local.md).
+
+## Documentation
+
+| Guide | What it covers |
+|-------|----------------|
+| [`docs/run-local.md`](docs/run-local.md) | Run the app locally with native Python or Docker — prerequisites, environment variables, and the full walkthrough |
+| [`infra/README.md`](infra/README.md) | Deploy your own copy on Azure with the Bicep templates, step by step |
+| [`docs/ai-recommender.md`](docs/ai-recommender.md) | How the 8 AI modes work, plus the LLM fine-tuning pipeline (Unsloth + Qwen) |
+| [`docs/mcp.md`](docs/mcp.md) | MCP server tools, example queries, direct invocations, and rate limits |
+
 ## Tech Stack
 
 | Layer | Technologies |
@@ -47,7 +104,7 @@ A comprehensive catalog and monitoring tool for [Azure built-in RBAC roles](http
 | **Backend** | Python 3.12+, FastAPI, SQLAlchemy, Pydantic |
 | **Frontend** | Jinja2 templates, Tailwind CSS, Alpine.js |
 | **Database** | PostgreSQL |
-| **AI/ML** | PyTorch, Ollama, sentence-transformers, ColBERT, Qwen (fine-tuned) |
+| **AI/ML** | PyTorch, Ollama, sentence-transformers, Qwen (fine-tuned) |
 | **Hosting** | Azure App Service, Cloudflare CDN |
 | **CI/CD** | GitHub Actions, Azure Container Registry, Docker |
 | **Testing** | pytest, Playwright |
@@ -55,16 +112,15 @@ A comprehensive catalog and monitoring tool for [Azure built-in RBAC roles](http
 
 ## Infrastructure & Costs
 
-The site is designed around a **hard cap of $150/month** on Azure spend.
-That budget shapes every architectural choice: SKUs, what runs as a
-managed service vs. on a VM, no Kubernetes, no autoscaling, no high
-availability. Adequate for a low-traffic public catalog; deliberately
-under-provisioned for anything else.
+The architecture favors simplicity over scale: managed Azure services do the
+heavy lifting, fronted by Cloudflare's free tier and backed by a single
+PostgreSQL instance. There's no Kubernetes, no autoscaling, and no multi-region
+failover — just the moving parts a low-traffic public catalog actually needs.
 
-The Ollama and GPU VMs are **optional** — the site runs fine without
-them. They're included because part of the goal of this project was
-to experiment with self-hosted LLMs, Unsloth fine-tuning, and serving
-via Ollama.
+Self-hosted LLM inference runs on two **optional** VMs that the catalog works
+fine without. They exist because one goal of this project was to experiment with
+self-hosted LLMs end to end: fine-tuning with Unsloth and serving the result
+through Ollama.
 
 ### Architecture
 
@@ -114,7 +170,9 @@ flowchart TD
 ### Current Cost
 
 > [!TIP]
-> A lot of the spending in the table below is optional. A minimal deployment — App Service (B1), PostgreSQL (B1ms), ACR Basic, App Insights, Cloudflare Free, and no Ollama/GPU VMs — runs comfortably under **$50/month**. The AI features that depend on the local LLM are then unavailable, but the rest of the catalog works as-is.
+> The catalog runs comfortably on the **core** services below for **~$65/month**. The **optional** self-hosted inference VMs roughly double the bill; skip them and the AI features that depend on the local LLM are simply unavailable, while the rest of the catalog works as-is.
+
+**Core services** — required to run the catalog:
 
 | Service | $/month | Notes |
 |---------|--------:|-------|
@@ -124,22 +182,29 @@ flowchart TD
 | Container Registry | ~$5 | Basic SKU. |
 | App Insights + Log Analytics | ~$2 | Pay-per-GB ingestion, 30-day retention. |
 | Automation Account | $0 | Basic SKU, within the 500 min/month free tier. |
+| **Subtotal** | **~$65** | |
+
+**Optional services** — self-hosted LLM inference and fine-tuning:
+
+| Service | $/month | Notes |
+|---------|--------:|-------|
 | Ollama VM (inference) | ~$50 | B2ms (2 vCPU, 8 GiB), always-on. Runs the fine-tuned Qwen 0.5B model. |
 | GPU VM (training/finetuning) | on-demand (~$1/hour) | NV12ads A10 v5 (1× NVIDIA A10). Started only for finetuning runs. |
-| **Total** | **~$115** | |
+| **Subtotal** | **~$50** | |
+
+**Total: ~$115/month** baseline (core + always-on Ollama VM). The GPU VM is excluded — it's billed only while a finetuning run is active, at ~$1/hour, so add roughly that per GPU-hour on top.
 
 ## AI Recommendation Modes
 
 > [!NOTE]
-> The AI modes are experimental — built as a playground for trying out different recommendation approaches and for learning LLM fine-tuning ([Unsloth](https://unsloth.ai/docs) + Qwen, served via [Ollama](https://ollama.com/)). Results should be verified. Access them via the "Show AI Tools" toggle on the Recommend page.
+> The AI modes are experimental, built as a playground for trying out different recommendation approaches and for learning LLM fine-tuning ([Unsloth](https://unsloth.ai/docs) + Qwen, served via [Ollama](https://ollama.com/)). Results should be verified. Access them via the "Show AI Tools" toggle on the Recommend page.
 
-The AI Role Recommender supports **8 different modes**, each with different speed/accuracy trade-offs:
+The AI Role Recommender supports **7 different modes**, each with different speed/accuracy trade-offs:
 
 | Mode | Description | Requires |
 |------|-------------|----------|
 | **TF-IDF** | Enhanced TF-IDF + BM25 keyword matching | CPU only |
 | **Semantic** | Pure sentence embedding similarity | Embeddings |
-| **ColBERT** | Token-level late interaction for precise matching | ColBERT index |
 | **Cross-Encoder** | Bi-encoder retrieval + neural reranking | Embeddings |
 | **LLM** | Fine-tuned Qwen model direct inference | Ollama |
 | **RAG** | Retrieval-Augmented Generation with LLM reranking | Embeddings + Ollama |
@@ -170,8 +235,8 @@ See [docs/mcp.md](docs/mcp.md) for the full tool reference, example queries, dir
 ## Testing
 
 ```bash
-# Unit tests (runs on Python 3.12-3.13)
-pytest tests/ -q --cov=azurerbac
+# Unit tests (Python 3.12, 3.13, or 3.14)
+pytest tests/ -q --cov=rbaccatalog
 
 # E2E tests
 npm ci
@@ -212,8 +277,9 @@ This ensures every production deployment is validated before users see it.
 ## Project Structure
 
 ```
-azurerbac/
+rbaccatalog/
 ├── airecommender/   # AI recommendation engines (8 modes)
+├── analytics/       # Permission distribution, change-over-time, and provider stats
 ├── azure/           # Azure SDK integration (roles, operations)
 ├── backgroundjobs/  # Scheduled tasks and background workers
 ├── cache/           # Caching layer for roles and operations
@@ -234,8 +300,8 @@ e2e/                 # Playwright end-to-end tests
 
 - **TF-IDF/BM25**: Robertson & Zaragoza, [The Probabilistic Relevance Framework: BM25 and Beyond](https://www.staff.city.ac.uk/~sbrp622/papers/foundations_bm25_review.pdf) (2009)
 - **Sentence-BERT**: Reimers & Gurevych, [Sentence Embeddings using Siamese BERT-Networks](https://arxiv.org/abs/1908.10084) (2019)
-- **ColBERT**: Khattab & Zaharia, [Efficient and Effective Passage Search via Contextualized Late Interaction](https://arxiv.org/abs/2004.12832) (2020)
 - **Cross-Encoder**: Humeau et al., [Poly-encoders: Architectures and Pre-training Strategies](https://arxiv.org/abs/1905.01969) (2019)
 - **Qwen**: Bai et al., [Qwen Technical Report](https://arxiv.org/abs/2309.16609) (2023)
 - **RAG**: Lewis et al., [Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks](https://arxiv.org/abs/2005.11401) (2020)
 - **HyDE**: Gao et al., [Precise Zero-Shot Dense Retrieval without Relevance Labels](https://arxiv.org/abs/2212.10496) (2022)
+

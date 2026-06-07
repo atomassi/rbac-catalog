@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from azurerbac.analytics.models import (
+from rbaccatalog.analytics.models import (
     AllTimeStats,
     AnalyticsData,
     DailyChanges,
@@ -22,7 +22,7 @@ from azurerbac.analytics.models import (
     RollingStats,
     TopRoleByPermissions,
 )
-from azurerbac.analytics.service import build_analytics_from_db
+from rbaccatalog.analytics.service import build_analytics_from_db
 
 # =============================================================================
 # Fixtures
@@ -285,68 +285,68 @@ class TestBuildAnalyticsFromDb:
     async def test_build_from_db(self) -> None:
         with (
             patch(
-                "azurerbac.analytics.service.fetch_all_time_stats",
+                "rbaccatalog.analytics.service.fetch_all_time_stats",
                 new_callable=AsyncMock,
                 return_value=AllTimeStats(total_additions=100),
             ),
             patch(
-                "azurerbac.analytics.service.fetch_rolling_stats",
+                "rbaccatalog.analytics.service.fetch_rolling_stats",
                 new_callable=AsyncMock,
                 return_value=RollingStats(window_days=30, additions=10),
             ),
             patch(
-                "azurerbac.analytics.service.fetch_daily_changes",
+                "rbaccatalog.analytics.service.fetch_daily_changes",
                 new_callable=AsyncMock,
                 return_value=[],
             ),
             patch(
-                "azurerbac.analytics.service.fetch_frequently_updated_roles",
+                "rbaccatalog.analytics.service.fetch_frequently_updated_roles",
                 new_callable=AsyncMock,
                 return_value=[],
             ),
             patch(
-                "azurerbac.analytics.service.fetch_recently_created_roles",
+                "rbaccatalog.analytics.service.fetch_recently_created_roles",
                 new_callable=AsyncMock,
                 return_value=[],
             ),
             patch(
-                "azurerbac.analytics.service.fetch_recently_updated_roles",
+                "rbaccatalog.analytics.service.fetch_recently_updated_roles",
                 new_callable=AsyncMock,
                 return_value=[],
             ),
             patch(
-                "azurerbac.analytics.service.fetch_recently_deleted_roles",
+                "rbaccatalog.analytics.service.fetch_recently_deleted_roles",
                 new_callable=AsyncMock,
                 return_value=[],
             ),
             patch(
-                "azurerbac.analytics.service.fetch_volatile_roles",
+                "rbaccatalog.analytics.service.fetch_volatile_roles",
                 new_callable=AsyncMock,
                 return_value=[],
             ),
             patch(
-                "azurerbac.analytics.service.fetch_permission_change_stats",
+                "rbaccatalog.analytics.service.fetch_permission_change_stats",
                 new_callable=AsyncMock,
                 return_value=PermissionChangeStats(),
             ),
-            patch("azurerbac.analytics.service.compute_top_providers", return_value=[]),
+            patch("rbaccatalog.analytics.service.compute_top_providers", return_value=[]),
             patch(
-                "azurerbac.analytics.service.fetch_new_operations_count",
+                "rbaccatalog.analytics.service.fetch_new_operations_count",
                 new_callable=AsyncMock,
                 return_value=0,
             ),
             patch(
-                "azurerbac.analytics.service.fetch_recent_operations",
+                "rbaccatalog.analytics.service.fetch_recent_operations",
                 new_callable=AsyncMock,
                 return_value=[],
             ),
             patch(
-                "azurerbac.analytics.service.fetch_operations_summary",
+                "rbaccatalog.analytics.service.fetch_operations_summary",
                 new_callable=AsyncMock,
                 return_value=(5000, 50),
             ),
             patch(
-                "azurerbac.analytics.service.fetch_monitoring_health",
+                "rbaccatalog.analytics.service.fetch_monitoring_health",
                 new_callable=AsyncMock,
                 return_value=MonitoringHealth(
                     last_scan=None,
@@ -374,8 +374,8 @@ class TestComputeTopRolesByPermissions:
     def test_computes_top_roles_correctly(self) -> None:
         from unittest.mock import MagicMock
 
-        from azurerbac.analytics.queries import compute_top_roles_by_permissions
-        from azurerbac.matching.models import RoleNetPermissions
+        from rbaccatalog.analytics.queries import compute_top_roles_by_permissions
+        from rbaccatalog.matching.models import RoleNetPermissions
 
         # Create mock CachedRole objects
         def make_cached_role(role_id: str, role_name: str) -> MagicMock:
@@ -415,8 +415,8 @@ class TestComputeTopRolesByPermissions:
     def test_respects_limit(self) -> None:
         from unittest.mock import MagicMock
 
-        from azurerbac.analytics.queries import compute_top_roles_by_permissions
-        from azurerbac.matching.models import RoleNetPermissions
+        from rbaccatalog.analytics.queries import compute_top_roles_by_permissions
+        from rbaccatalog.matching.models import RoleNetPermissions
 
         def make_cached_role(role_id: str, role_name: str) -> MagicMock:
             mock = MagicMock()
@@ -438,7 +438,7 @@ class TestComputeTopRolesByPermissions:
         assert len(top_by_data_actions) == 3
 
     def test_handles_empty_input(self) -> None:
-        from azurerbac.analytics.queries import compute_top_roles_by_permissions
+        from rbaccatalog.analytics.queries import compute_top_roles_by_permissions
 
         top_by_actions, top_by_data_actions = compute_top_roles_by_permissions({}, {})
 
@@ -488,7 +488,7 @@ class TestComputeTopProviders:
         expected_len: int,
         expected_first: tuple[str, int] | None,
     ) -> None:
-        from azurerbac.analytics.queries import compute_top_providers
+        from rbaccatalog.analytics.queries import compute_top_providers
 
         result = compute_top_providers(all_ops, limit=limit)
         assert len(result) == expected_len
@@ -497,7 +497,7 @@ class TestComputeTopProviders:
             assert result[0].operation_count == expected_first[1]
 
     def test_handles_ops_without_slash(self) -> None:
-        from azurerbac.analytics.queries import compute_top_providers
+        from rbaccatalog.analytics.queries import compute_top_providers
 
         # Edge case: operations without "/" are treated as provider name itself
         all_ops = {"someop", "microsoft.storage/read"}
@@ -546,7 +546,7 @@ class TestGetAnalyticsFromCache:
         """Verify analytics are returned when cache is populated."""
         from unittest.mock import MagicMock, patch
 
-        from azurerbac.web.services.analytics import get_analytics_from_cache
+        from rbaccatalog.web.services.analytics import get_analytics_from_cache
 
         mock_analytics = AnalyticsData(computed_at=dt.datetime.now(dt.UTC))
         mock_cache = MagicMock()
@@ -554,7 +554,9 @@ class TestGetAnalyticsFromCache:
         mock_service = MagicMock()
         mock_service.cache = mock_cache
 
-        with patch("azurerbac.web.services.analytics.get_cache_service", return_value=mock_service):
+        with patch(
+            "rbaccatalog.web.services.analytics.get_cache_service", return_value=mock_service
+        ):
             result = get_analytics_from_cache()
 
         assert result is mock_analytics
@@ -564,7 +566,7 @@ class TestGetAnalyticsFromCache:
         when cache.analytics is None (route translates this to HTTP 503)."""
         from unittest.mock import MagicMock, patch
 
-        from azurerbac.web.services.analytics import (
+        from rbaccatalog.web.services.analytics import (
             AnalyticsNotAvailableError,
             get_analytics_from_cache,
         )
@@ -575,7 +577,9 @@ class TestGetAnalyticsFromCache:
         mock_service.cache = mock_cache
 
         with (
-            patch("azurerbac.web.services.analytics.get_cache_service", return_value=mock_service),
+            patch(
+                "rbaccatalog.web.services.analytics.get_cache_service", return_value=mock_service
+            ),
             pytest.raises(AnalyticsNotAvailableError, match="not available"),
         ):
             get_analytics_from_cache()
@@ -593,11 +597,11 @@ class TestAnalyticsRouteErrorDisclosure:
 
         from httpx import ASGITransport, AsyncClient
 
-        from azurerbac.web import app as app_module
-        from azurerbac.web.services.analytics import AnalyticsNotAvailableError
+        from rbaccatalog.web import app as app_module
+        from rbaccatalog.web.services.analytics import AnalyticsNotAvailableError
 
         with patch(
-            "azurerbac.web.routes.analytics.get_analytics_from_cache",
+            "rbaccatalog.web.routes.analytics.get_analytics_from_cache",
             side_effect=AnalyticsNotAvailableError(self._INTERNAL_DETAIL),
         ):
             transport = ASGITransport(app=app_module.app)

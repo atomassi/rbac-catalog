@@ -2,8 +2,8 @@ import copy
 
 import pytest
 
-from azurerbac.azure.models import RoleDefinition
-from azurerbac.core.diffing import diff_roles, diff_summary
+from rbaccatalog.azure.models import RoleDefinition
+from rbaccatalog.core.diffing import diff_roles, diff_summary
 
 READER_ROLE_DICT = {
     "properties": {

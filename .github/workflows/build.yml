@@ -10,6 +10,11 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
+# Least-privilege default for GITHUB_TOKEN. The e2e job's artifact upload uses
+# the separate ACTIONS_RUNTIME_TOKEN, so contents: read is sufficient here.
+permissions:
+  contents: read
+
 jobs:
   lint:
     name: Lint
@@ -20,9 +25,9 @@ jobs:
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
         with:
           python-version: '3.12'
-      - run: pip install ruff
-      - run: ruff check azurerbac/
-      - run: ruff format --check azurerbac/
+      - run: pip install ruff==0.14.10
+      - run: ruff check rbaccatalog/
+      - run: ruff format --check rbaccatalog/
 
   typecheck:
     name: Static Type Check
@@ -38,8 +43,8 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-      - run: pip install -r requirements.txt pyright
-      - run: pyright azurerbac/
+      - run: pip install -r requirements.txt pyright==1.1.407
+      - run: pyright rbaccatalog/
       - run: npm ci
       - run: npm run check:js
 
@@ -62,41 +67,33 @@ jobs:
     runs-on: ubuntu-latest
     needs: [lint, typecheck]
     if: ${{ github.event_name == 'push' || !contains(github.event.pull_request.labels.*.name, 'skip-ci') }}
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.12', '3.13', '3.14']
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
-      - name: Set up Python 3.12
+      - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
         with:
-          python-version: '3.12'
+          python-version: ${{ matrix.python-version }}
           cache: 'pip'
 
       - name: Install dependencies
         run: pip install -r requirements.txt
 
       - name: Run tests
-        id: tests
-        run: |
-          pytest tests/ -q --tb=short --cov=azurerbac --cov-report=term --cov-fail-under=50 2>&1 | tee coverage.txt
-          PYTEST_EXIT=${PIPESTATUS[0]}
-          COVERAGE=$(grep -E '^TOTAL' coverage.txt | awk '{print $(NF)}' | tr -d '%')
-          echo "coverage=$COVERAGE" >> $GITHUB_OUTPUT
-          exit $PYTEST_EXIT
+        run: pytest tests/ -q --tb=short --cov=rbaccatalog --cov-report=term --cov-report=xml --cov-fail-under=80
         env:
           DB_CONNECTION_STRING: "sqlite+aiosqlite:///:memory:"
 
-      - name: Update coverage badge
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        uses: schneegans/dynamic-badges-action@0e50b8bad39e7e1afd3e4e9c2b7dd145fad07501  # v1.8.0
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe  # v5.5.4
         with:
-          auth: ${{ secrets.GIST_TOKEN }}
-          gistID: 56d5c381b196c9c18db9fedbecb79220
-          filename: coverage.json
-          label: coverage
-          message: ${{ steps.tests.outputs.coverage }}%
-          valColorRange: ${{ steps.tests.outputs.coverage }}
-          minColorRange: 50
-          maxColorRange: 90
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.xml
+          fail_ci_if_error: false
 
   e2e:
     name: E2E Tests
@@ -127,7 +124,7 @@ jobs:
 
       - name: Run E2E tests
         run: |
-          uvicorn azurerbac.web.app:app --host 0.0.0.0 --port 8000 &
+          uvicorn rbaccatalog.web.app:app --host 0.0.0.0 --port 8000 &
           echo "Waiting for app to start..."
           for i in {1..600}; do
             if curl -sf http://localhost:8000/healthz > /dev/null 2>&1; then

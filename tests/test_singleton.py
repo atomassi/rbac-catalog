@@ -7,7 +7,7 @@ import time
 
 import pytest
 
-from azurerbac.core.singleton import ThreadSafeSingleton
+from rbaccatalog.core.singleton import ThreadSafeSingleton
 
 
 class TestThreadSafeSingleton:

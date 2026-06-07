@@ -10,9 +10,9 @@ from xml.etree import ElementTree as ET
 
 import pytest
 
-from azurerbac.cache.models import CachedChangeEvent
-from azurerbac.core.constants import EventType
-from azurerbac.web.services.feeds import (
+from rbaccatalog.cache.models import CachedChangeEvent
+from rbaccatalog.core.enums import EventType
+from rbaccatalog.web.services.feeds import (
     _build_rich_content,
     build_atom_feed,
     build_rss_feed,
@@ -312,10 +312,10 @@ class TestFeedEndpointsIntegration:
 
         from httpx import ASGITransport, AsyncClient
 
-        from azurerbac.cache import get_cache_service
-        from azurerbac.cache.models import CachedChangeEvent
-        from azurerbac.web import app as app_module
-        from azurerbac.web.dependencies import BaseDeps, get_api_deps
+        from rbaccatalog.cache import get_cache_service
+        from rbaccatalog.cache.models import CachedChangeEvent
+        from rbaccatalog.web import app as app_module
+        from rbaccatalog.web.dependencies import BaseDeps, get_api_deps
 
         # Get cache and inject test events via proper swap pattern
         cache = get_cache_service()
@@ -390,9 +390,9 @@ class TestFeedSmokeTests:
         """Minimal client without seeded data."""
         from httpx import ASGITransport, AsyncClient
 
-        from azurerbac.cache import get_cache_service
-        from azurerbac.web import app as app_module
-        from azurerbac.web.dependencies import BaseDeps, get_api_deps
+        from rbaccatalog.cache import get_cache_service
+        from rbaccatalog.web import app as app_module
+        from rbaccatalog.web.dependencies import BaseDeps, get_api_deps
 
         cache = get_cache_service()
 
@@ -638,10 +638,10 @@ class TestFeedEndpointsParametrized:
 
         from httpx import ASGITransport, AsyncClient
 
-        from azurerbac.cache import get_cache_service
-        from azurerbac.cache.models import CachedChangeEvent
-        from azurerbac.web import app as app_module
-        from azurerbac.web.dependencies import BaseDeps, get_api_deps
+        from rbaccatalog.cache import get_cache_service
+        from rbaccatalog.cache.models import CachedChangeEvent
+        from rbaccatalog.web import app as app_module
+        from rbaccatalog.web.dependencies import BaseDeps, get_api_deps
 
         cache = get_cache_service()
         now = dt.datetime.now(dt.UTC)

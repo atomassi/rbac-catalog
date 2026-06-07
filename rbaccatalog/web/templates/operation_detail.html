@@ -184,7 +184,7 @@
         }
     </style>
 </head>
-<body class="h-full bg-slate-50 dark:bg-slate-900 transition-colors duration-200">
+<body class="h-full bg-slate-50 dark:bg-slate-900">
     {% include 'partials/_decommission_banner.html' %}
     <!-- Navigation state handler - must load before content -->
     <script src="/static/js/nav-state.js"></script>
@@ -355,7 +355,7 @@
                         </div>
                         <input type="text" id="roleSearchInput" placeholder="Search roles by name or ID..." 
                                class="block w-full pl-9 pr-4 py-2.5 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-azure-500 focus:ring-2 focus:ring-azure-500/20"
-                               oninput="filterRoles(this.value)">
+                               oninput="filterRolesDebounced(this.value)">
                     </div>
                 </div>
                 {% endif %}
@@ -496,6 +496,12 @@
                                 }
                             });
                         }
+                    }
+
+                    let _filterRolesTimer;
+                    function filterRolesDebounced(query) {
+                        clearTimeout(_filterRolesTimer);
+                        _filterRolesTimer = setTimeout(function() { filterRoles(query); }, 200);
                     }
                     
                     function sortTable(column) {

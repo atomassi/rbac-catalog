@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from azurerbac.airecommender.engines import (
+from rbaccatalog.airecommender.engines import (
     BM25Index,
     EngineRegistry,
     EnhancedTFIDFRecommender,
@@ -15,8 +15,8 @@ from azurerbac.airecommender.engines import (
     cosine_similarity,
     top_k_similar,
 )
-from azurerbac.airecommender.modes import RecommenderMode
-from azurerbac.azure.models import RoleDefinition
+from rbaccatalog.airecommender.modes import RecommenderMode
+from rbaccatalog.azure.models import RoleDefinition
 
 
 class TestRankedRole:
@@ -181,7 +181,7 @@ class TestComputeDocumentsHash:
     )
     def test_hash_comparison(self, docs1, docs2, should_equal):
         """Test hash behavior for various document comparisons."""
-        from azurerbac.airecommender.embeddings import compute_documents_hash
+        from rbaccatalog.airecommender.embeddings import compute_documents_hash
 
         hash1 = compute_documents_hash(docs1)
         hash2 = compute_documents_hash(docs2)
@@ -199,12 +199,15 @@ class TestEngineEmbeddingNotLoadedFallback:
     @pytest.mark.parametrize(
         "engine_class_path",
         [
-            pytest.param("azurerbac.airecommender.engines.rag.RAGEngine", id="RAG"),
-            pytest.param("azurerbac.airecommender.engines.semantic.SemanticEngine", id="Semantic"),
+            pytest.param("rbaccatalog.airecommender.engines.rag.RAGEngine", id="RAG"),
             pytest.param(
-                "azurerbac.airecommender.engines.crossencoder.CrossEncoderEngine", id="CrossEncoder"
+                "rbaccatalog.airecommender.engines.semantic.SemanticEngine", id="Semantic"
             ),
-            pytest.param("azurerbac.airecommender.engines.hyde.HyDEEngine", id="HyDE"),
+            pytest.param(
+                "rbaccatalog.airecommender.engines.crossencoder.CrossEncoderEngine",
+                id="CrossEncoder",
+            ),
+            pytest.param("rbaccatalog.airecommender.engines.hyde.HyDEEngine", id="HyDE"),
         ],
     )
     def test_returns_empty_when_embedding_not_loaded(
@@ -238,9 +241,10 @@ class TestEngineNoEmbeddingsFallback:
         "engine_class_path",
         [
             pytest.param(
-                "azurerbac.airecommender.engines.crossencoder.CrossEncoderEngine", id="CrossEncoder"
+                "rbaccatalog.airecommender.engines.crossencoder.CrossEncoderEngine",
+                id="CrossEncoder",
             ),
-            pytest.param("azurerbac.airecommender.engines.hyde.HyDEEngine", id="HyDE"),
+            pytest.param("rbaccatalog.airecommender.engines.hyde.HyDEEngine", id="HyDE"),
         ],
     )
     def test_returns_empty_when_no_embeddings(
@@ -947,7 +951,7 @@ class TestTFIDFEngine:
 
     def test_tfidf_engine_properties(self, mock_tfidf_recommender, mock_knowledge_base):
         """Test TFIDFEngine has correct properties."""
-        from azurerbac.airecommender.engines.tfidf import TFIDFEngine
+        from rbaccatalog.airecommender.engines.tfidf import TFIDFEngine
 
         engine = TFIDFEngine(
             tfidf_recommender=mock_tfidf_recommender,
@@ -961,7 +965,7 @@ class TestTFIDFEngine:
         self, mock_tfidf_recommender, mock_knowledge_base
     ):
         """Test TFIDFEngine recommend returns RankedRole objects."""
-        from azurerbac.airecommender.engines.tfidf import TFIDFEngine
+        from rbaccatalog.airecommender.engines.tfidf import TFIDFEngine
 
         engine = TFIDFEngine(
             tfidf_recommender=mock_tfidf_recommender,
@@ -975,7 +979,7 @@ class TestTFIDFEngine:
 
     def test_tfidf_returns_empty_when_not_initialized(self, mock_knowledge_base):
         """Test TFIDFEngine returns empty list when recommender is None."""
-        from azurerbac.airecommender.engines.tfidf import TFIDFEngine
+        from rbaccatalog.airecommender.engines.tfidf import TFIDFEngine
 
         engine = TFIDFEngine(
             tfidf_recommender=None,
@@ -987,7 +991,7 @@ class TestTFIDFEngine:
 
     def test_tfidf_excludes_owner_by_default(self, mock_tfidf_recommender, mock_knowledge_base):
         """Test TFIDFEngine excludes Owner role by default."""
-        from azurerbac.airecommender.engines.tfidf import TFIDFEngine
+        from rbaccatalog.airecommender.engines.tfidf import TFIDFEngine
 
         mock_tfidf_recommender.recommend.return_value = [
             ("owner-id", "Owner", 0.95, ["owner"]),
@@ -1231,7 +1235,7 @@ class TestEmbeddingModelOptimizations:
         """Create a mock embedding model for testing without sentence-transformers."""
         import numpy as np
 
-        from azurerbac.airecommender.embeddings import EmbeddingModel
+        from rbaccatalog.airecommender.embeddings import EmbeddingModel
 
         model = EmbeddingModel()
         # Mock the model to avoid needing sentence-transformers
@@ -1383,7 +1387,7 @@ class TestEmbeddingModelOptimizations:
         vectorized_results = mock_embedding_model._search_matrix(query_embedding, top_k=3)
 
         # Manual loop-based calculation
-        from azurerbac.airecommender.engines.common import cosine_similarity
+        from rbaccatalog.airecommender.engines.common import cosine_similarity
 
         loop_results = []
         for doc_id, doc_emb in mock_embedding_model._embeddings.items():
@@ -1406,7 +1410,7 @@ class TestEmbeddingModelEdgeCases:
 
     def test_empty_documents(self):
         """Test building embeddings with empty documents dict."""
-        from azurerbac.airecommender.embeddings import EmbeddingModel
+        from rbaccatalog.airecommender.embeddings import EmbeddingModel
 
         model = EmbeddingModel()
         model._model = MagicMock()
@@ -1421,7 +1425,7 @@ class TestEmbeddingModelEdgeCases:
         """Test that search falls back to loop when matrix not built."""
         import numpy as np
 
-        from azurerbac.airecommender.embeddings import EmbeddingModel
+        from rbaccatalog.airecommender.embeddings import EmbeddingModel
 
         model = EmbeddingModel()
         model._model = MagicMock()
@@ -1458,7 +1462,7 @@ class TestCrossEncoderEngine:
 
     def test_crossencoder_initialization(self, mock_embedding_model, mock_knowledge_base):
         """Test CrossEncoderEngine initializes correctly with required properties."""
-        from azurerbac.airecommender.engines.crossencoder import CrossEncoderEngine
+        from rbaccatalog.airecommender.engines.crossencoder import CrossEncoderEngine
 
         engine = CrossEncoderEngine(
             embedding_model=mock_embedding_model,
@@ -1474,7 +1478,7 @@ class TestCrossEncoderEngine:
         self, mock_embedding_model, mock_knowledge_base, monkeypatch
     ):
         """Test CrossEncoder recommend returns RankedRole objects."""
-        from azurerbac.airecommender.engines.crossencoder import (
+        from rbaccatalog.airecommender.engines.crossencoder import (
             CrossEncoderEngine,
         )
 
@@ -1482,7 +1486,7 @@ class TestCrossEncoderEngine:
         mock_ce = MagicMock()
         mock_ce.predict = MagicMock(return_value=[2.5, 1.2])
         monkeypatch.setattr(
-            "azurerbac.airecommender.engines.crossencoder.get_cross_encoder",
+            "rbaccatalog.airecommender.engines.crossencoder.get_cross_encoder",
             lambda: mock_ce,
         )
 
@@ -1502,12 +1506,12 @@ class TestCrossEncoderEngine:
         self, mock_embedding_model, mock_knowledge_base, monkeypatch
     ):
         """Test CrossEncoder excludes Owner role by default."""
-        from azurerbac.airecommender.engines.crossencoder import CrossEncoderEngine
+        from rbaccatalog.airecommender.engines.crossencoder import CrossEncoderEngine
 
         mock_ce = MagicMock()
         mock_ce.predict = MagicMock(return_value=[2.5, 1.2, 3.0])
         monkeypatch.setattr(
-            "azurerbac.airecommender.engines.crossencoder.get_cross_encoder",
+            "rbaccatalog.airecommender.engines.crossencoder.get_cross_encoder",
             lambda: mock_ce,
         )
 
@@ -1524,12 +1528,12 @@ class TestCrossEncoderEngine:
         self, mock_embedding_model, mock_knowledge_base, monkeypatch
     ):
         """Test CrossEncoder doesn't filter Owner when exclude_owner=False."""
-        from azurerbac.airecommender.engines.crossencoder import CrossEncoderEngine
+        from rbaccatalog.airecommender.engines.crossencoder import CrossEncoderEngine
 
         mock_ce = MagicMock()
         mock_ce.predict = MagicMock(return_value=[2.5, 1.2, 3.0])
         monkeypatch.setattr(
-            "azurerbac.airecommender.engines.crossencoder.get_cross_encoder",
+            "rbaccatalog.airecommender.engines.crossencoder.get_cross_encoder",
             lambda: mock_ce,
         )
 
@@ -1548,14 +1552,14 @@ class TestCrossEncoderEngine:
         self, mock_embedding_model, mock_knowledge_base, monkeypatch
     ):
         """Test CrossEncoder raises when cross-encoder unavailable."""
-        from azurerbac.airecommender.engines.crossencoder import CrossEncoderEngine
+        from rbaccatalog.airecommender.engines.crossencoder import CrossEncoderEngine
 
         # Mock cross-encoder to raise
         def mock_get_cross_encoder():
             raise ImportError("Cross-encoder not available")
 
         monkeypatch.setattr(
-            "azurerbac.airecommender.engines.crossencoder.get_cross_encoder",
+            "rbaccatalog.airecommender.engines.crossencoder.get_cross_encoder",
             mock_get_cross_encoder,
         )
 
@@ -1571,14 +1575,14 @@ class TestCrossEncoderEngine:
         self, mock_embedding_model, mock_knowledge_base, monkeypatch
     ):
         """Test that cross-encoder reranking can change candidate order."""
-        from azurerbac.airecommender.engines.crossencoder import CrossEncoderEngine
+        from rbaccatalog.airecommender.engines.crossencoder import CrossEncoderEngine
 
         # Cross-encoder scores in different order than bi-encoder
         # role-2 gets higher CE score than role-1
         mock_ce = MagicMock()
         mock_ce.predict = MagicMock(return_value=[1.0, 3.0])  # role-2 > role-1
         monkeypatch.setattr(
-            "azurerbac.airecommender.engines.crossencoder.get_cross_encoder",
+            "rbaccatalog.airecommender.engines.crossencoder.get_cross_encoder",
             lambda: mock_ce,
         )
 
@@ -1595,12 +1599,12 @@ class TestCrossEncoderEngine:
         self, mock_embedding_model, mock_knowledge_base, monkeypatch
     ):
         """Test that final score combines bi-encoder and cross-encoder scores."""
-        from azurerbac.airecommender.engines.crossencoder import CrossEncoderEngine
+        from rbaccatalog.airecommender.engines.crossencoder import CrossEncoderEngine
 
         mock_ce = MagicMock()
         mock_ce.predict = MagicMock(return_value=[2.0, 1.0])
         monkeypatch.setattr(
-            "azurerbac.airecommender.engines.crossencoder.get_cross_encoder",
+            "rbaccatalog.airecommender.engines.crossencoder.get_cross_encoder",
             lambda: mock_ce,
         )
 
@@ -1620,12 +1624,12 @@ class TestCrossEncoderEngine:
         self, mock_embedding_model, mock_knowledge_base, monkeypatch
     ):
         """Test CrossEncoder handles cross-encoder prediction exceptions."""
-        from azurerbac.airecommender.engines.crossencoder import CrossEncoderEngine
+        from rbaccatalog.airecommender.engines.crossencoder import CrossEncoderEngine
 
         mock_ce = MagicMock()
         mock_ce.predict = MagicMock(side_effect=Exception("CE failed"))
         monkeypatch.setattr(
-            "azurerbac.airecommender.engines.crossencoder.get_cross_encoder",
+            "rbaccatalog.airecommender.engines.crossencoder.get_cross_encoder",
             lambda: mock_ce,
         )
 
@@ -1642,13 +1646,13 @@ class TestCrossEncoderEngine:
         self, mock_embedding_model, mock_knowledge_base, monkeypatch
     ):
         """Test that cross-encoder scores are normalized to 0-1 range."""
-        from azurerbac.airecommender.engines.crossencoder import CrossEncoderEngine
+        from rbaccatalog.airecommender.engines.crossencoder import CrossEncoderEngine
 
         # Raw CE scores can be negative or > 1
         mock_ce = MagicMock()
         mock_ce.predict = MagicMock(return_value=[-5.0, 0.0, 5.0])
         monkeypatch.setattr(
-            "azurerbac.airecommender.engines.crossencoder.get_cross_encoder",
+            "rbaccatalog.airecommender.engines.crossencoder.get_cross_encoder",
             lambda: mock_ce,
         )
 
@@ -1664,7 +1668,7 @@ class TestCrossEncoderEngine:
 
     def test_crossencoder_retrieval_k_constant(self):
         """Test that _RETRIEVAL_K constant is set appropriately."""
-        from azurerbac.airecommender.engines.crossencoder import _RETRIEVAL_K
+        from rbaccatalog.airecommender.engines.crossencoder import _RETRIEVAL_K
 
         assert _RETRIEVAL_K == 50  # Should retrieve 50 candidates for reranking
 
@@ -1674,8 +1678,8 @@ class TestCrossEncoderSingleton:
 
     def test_get_cross_encoder_raises_when_load_fails(self, monkeypatch):
         """Test get_cross_encoder raises when loading fails."""
-        from azurerbac.airecommender.engines import crossencoder
-        from azurerbac.core.singleton import ThreadSafeSingleton
+        from rbaccatalog.airecommender.engines import crossencoder
+        from rbaccatalog.core.singleton import ThreadSafeSingleton
 
         # Save original singleton
         original_singleton = crossencoder._cross_encoder
@@ -1741,7 +1745,7 @@ class TestHyDEEngine:
         self, mock_embedding_model, mock_ollama_client, mock_knowledge_base
     ):
         """Test HyDEEngine initializes correctly with required properties."""
-        from azurerbac.airecommender.engines.hyde import HyDEEngine
+        from rbaccatalog.airecommender.engines.hyde import HyDEEngine
 
         engine = HyDEEngine(
             embedding_model=mock_embedding_model,
@@ -1759,7 +1763,7 @@ class TestHyDEEngine:
         self, mock_embedding_model, mock_ollama_client, mock_knowledge_base
     ):
         """Test HyDE recommend returns RankedRole objects."""
-        from azurerbac.airecommender.engines.hyde import HyDEEngine
+        from rbaccatalog.airecommender.engines.hyde import HyDEEngine
 
         engine = HyDEEngine(
             embedding_model=mock_embedding_model,
@@ -1778,7 +1782,7 @@ class TestHyDEEngine:
         self, mock_embedding_model, mock_ollama_client, mock_knowledge_base
     ):
         """Test HyDE excludes Owner role by default."""
-        from azurerbac.airecommender.engines.hyde import HyDEEngine
+        from rbaccatalog.airecommender.engines.hyde import HyDEEngine
 
         engine = HyDEEngine(
             embedding_model=mock_embedding_model,
@@ -1794,7 +1798,7 @@ class TestHyDEEngine:
         self, mock_embedding_model, mock_ollama_client, mock_knowledge_base
     ):
         """Test HyDE doesn't filter Owner when exclude_owner=False."""
-        from azurerbac.airecommender.engines.hyde import HyDEEngine
+        from rbaccatalog.airecommender.engines.hyde import HyDEEngine
 
         engine = HyDEEngine(
             embedding_model=mock_embedding_model,
@@ -1812,7 +1816,7 @@ class TestHyDEEngine:
         self, mock_embedding_model, mock_knowledge_base
     ):
         """Test HyDE returns empty when Ollama not connected."""
-        from azurerbac.airecommender.engines.hyde import HyDEEngine
+        from rbaccatalog.airecommender.engines.hyde import HyDEEngine
 
         disconnected_client = MagicMock()
         disconnected_client.is_connected = False
@@ -1830,7 +1834,7 @@ class TestHyDEEngine:
         self, mock_embedding_model, mock_ollama_client, mock_knowledge_base
     ):
         """Test HyDE calls LLM with proper prompt template."""
-        from azurerbac.airecommender.engines.hyde import HYDE_MODEL, HyDEEngine
+        from rbaccatalog.airecommender.engines.hyde import HYDE_MODEL, HyDEEngine
 
         engine = HyDEEngine(
             embedding_model=mock_embedding_model,
@@ -1854,7 +1858,7 @@ class TestHyDEEngine:
         self, mock_embedding_model, mock_ollama_client, mock_knowledge_base
     ):
         """Test HyDE embeds the hypothetical document, not the original query."""
-        from azurerbac.airecommender.engines.hyde import HyDEEngine
+        from rbaccatalog.airecommender.engines.hyde import HyDEEngine
 
         engine = HyDEEngine(
             embedding_model=mock_embedding_model,
@@ -1872,7 +1876,7 @@ class TestHyDEEngine:
 
     def test_hyde_fallback_to_query_when_llm_fails(self, mock_embedding_model, mock_knowledge_base):
         """Test HyDE falls back to original query when LLM generation fails."""
-        from azurerbac.airecommender.engines.hyde import HyDEEngine
+        from rbaccatalog.airecommender.engines.hyde import HyDEEngine
 
         failing_client = MagicMock()
         failing_client.is_connected = True
@@ -1892,7 +1896,7 @@ class TestHyDEEngine:
         self, mock_embedding_model, mock_knowledge_base
     ):
         """Test HyDE falls back gracefully when LLM raises exception."""
-        from azurerbac.airecommender.engines.hyde import HyDEEngine
+        from rbaccatalog.airecommender.engines.hyde import HyDEEngine
 
         failing_client = MagicMock()
         failing_client.is_connected = True
@@ -1912,7 +1916,7 @@ class TestHyDEEngine:
         self, mock_embedding_model, mock_knowledge_base
     ):
         """Test HyDE cleans up LLM response that includes role name prefix."""
-        from azurerbac.airecommender.engines.hyde import HyDEEngine
+        from rbaccatalog.airecommender.engines.hyde import HyDEEngine
 
         client = MagicMock()
         client.is_connected = True
@@ -1937,7 +1941,7 @@ class TestHyDEEngine:
         self, mock_embedding_model, mock_ollama_client, mock_knowledge_base
     ):
         """Test HyDE uses encode_single_cached for efficiency."""
-        from azurerbac.airecommender.engines.hyde import HyDEEngine
+        from rbaccatalog.airecommender.engines.hyde import HyDEEngine
 
         engine = HyDEEngine(
             embedding_model=mock_embedding_model,
@@ -1952,7 +1956,7 @@ class TestHyDEEngine:
 
     def test_hyde_filters_low_confidence_results(self, mock_ollama_client, mock_knowledge_base):
         """Test HyDE filters out low confidence results."""
-        from azurerbac.airecommender.engines.hyde import HyDEEngine
+        from rbaccatalog.airecommender.engines.hyde import HyDEEngine
 
         # Create embedding model with very low similarity scores
         low_similarity_model = MagicMock()
@@ -1972,14 +1976,14 @@ class TestHyDEEngine:
         results = engine.recommend("something", top_k=5)
 
         # Low similarity results should be filtered
-        from azurerbac.airecommender.engines.config import HYDE_THRESHOLDS
+        from rbaccatalog.airecommender.engines.config import HYDE_THRESHOLDS
 
         for r in results:
             assert r.final_score >= HYDE_THRESHOLDS.min_confidence
 
     def test_hyde_prompt_template_includes_azure_context(self):
         """Test that HyDE prompt template includes Azure-specific context."""
-        from azurerbac.airecommender.engines.hyde import HYDE_PROMPT_TEMPLATE
+        from rbaccatalog.airecommender.engines.hyde import HYDE_PROMPT_TEMPLATE
 
         assert "Azure" in HYDE_PROMPT_TEMPLATE
         # Prompt should ask for role description
@@ -1991,8 +1995,8 @@ class TestHyDEEngine:
         self, mock_embedding_model, mock_knowledge_base
     ):
         """Test HyDE raises OllamaClientNotAvailableError when ollama_client is None."""
-        from azurerbac.airecommender.engines.hyde import HyDEEngine
-        from azurerbac.airecommender.exceptions import OllamaClientNotAvailableError
+        from rbaccatalog.airecommender.engines.hyde import HyDEEngine
+        from rbaccatalog.airecommender.exceptions import OllamaClientNotAvailableError
 
         engine = HyDEEngine(
             embedding_model=mock_embedding_model,
@@ -2009,7 +2013,7 @@ class TestHyDEPromptGeneration:
 
     def test_hyde_generates_detailed_description(self):
         """Test that HyDE generates detailed role descriptions."""
-        from azurerbac.airecommender.engines.hyde import HYDE_PROMPT_TEMPLATE
+        from rbaccatalog.airecommender.engines.hyde import HYDE_PROMPT_TEMPLATE
 
         # The prompt should ask for specific Azure details
         assert "azure" in HYDE_PROMPT_TEMPLATE.lower()
@@ -2020,7 +2024,7 @@ class TestHyDEPromptGeneration:
 
     def test_hyde_prompt_formats_correctly(self):
         """Test that HyDE prompt template formats correctly."""
-        from azurerbac.airecommender.engines.hyde import HYDE_PROMPT_TEMPLATE
+        from rbaccatalog.airecommender.engines.hyde import HYDE_PROMPT_TEMPLATE
 
         formatted = HYDE_PROMPT_TEMPLATE.format(query="manage virtual machines")
         assert "manage virtual machines" in formatted
@@ -2060,8 +2064,8 @@ class TestLLMEngine:
         self, mock_knowledge_base
     ):
         """Test LLMEngine raises error when ollama_client is None in role init."""
-        from azurerbac.airecommender.engines.llm import LLMEngine
-        from azurerbac.airecommender.exceptions import OllamaClientNotAvailableError
+        from rbaccatalog.airecommender.engines.llm import LLMEngine
+        from rbaccatalog.airecommender.exceptions import OllamaClientNotAvailableError
 
         engine = LLMEngine(
             ollama_client=None,
@@ -2072,8 +2076,8 @@ class TestLLMEngine:
 
     def test_llm_raises_error_when_ollama_client_none_in_query_llm(self, mock_knowledge_base):
         """Test LLMEngine raises error when ollama_client is None in _query_llm."""
-        from azurerbac.airecommender.engines.llm import LLMEngine
-        from azurerbac.airecommender.exceptions import OllamaClientNotAvailableError
+        from rbaccatalog.airecommender.engines.llm import LLMEngine
+        from rbaccatalog.airecommender.exceptions import OllamaClientNotAvailableError
 
         engine = LLMEngine(
             ollama_client=None,
@@ -2084,7 +2088,7 @@ class TestLLMEngine:
 
     def test_llm_engine_properties(self, mock_ollama_client, mock_knowledge_base):
         """Test LLMEngine has correct properties."""
-        from azurerbac.airecommender.engines.llm import LLMEngine
+        from rbaccatalog.airecommender.engines.llm import LLMEngine
 
         engine = LLMEngine(
             ollama_client=mock_ollama_client,
@@ -2096,7 +2100,7 @@ class TestLLMEngine:
 
     def test_llm_recommend_returns_ranked_roles(self, mock_ollama_client, mock_knowledge_base):
         """Test LLMEngine recommend returns RankedRole objects."""
-        from azurerbac.airecommender.engines.llm import LLMEngine
+        from rbaccatalog.airecommender.engines.llm import LLMEngine
 
         engine = LLMEngine(
             ollama_client=mock_ollama_client,
@@ -2111,7 +2115,7 @@ class TestLLMEngine:
 
     def test_llm_returns_empty_when_ollama_not_connected(self, mock_knowledge_base):
         """Test LLMEngine returns empty list when Ollama is not connected."""
-        from azurerbac.airecommender.engines.llm import LLMEngine
+        from rbaccatalog.airecommender.engines.llm import LLMEngine
 
         disconnected_client = MagicMock()
         disconnected_client.is_connected = False
@@ -2126,7 +2130,7 @@ class TestLLMEngine:
 
     def test_llm_filters_hallucinated_roles(self, mock_ollama_client, mock_knowledge_base):
         """Test LLMEngine filters out hallucinated role names."""
-        from azurerbac.airecommender.engines.llm import LLMEngine
+        from rbaccatalog.airecommender.engines.llm import LLMEngine
 
         mock_ollama_client.recommend_roles.return_value = [
             ("Fake Role That Doesnt Exist", 0.9, "hallucinated", ["fake"]),
@@ -2143,7 +2147,7 @@ class TestLLMEngine:
 
     def test_llm_excludes_owner_by_default(self, mock_ollama_client, mock_knowledge_base):
         """Test LLMEngine excludes Owner role by default."""
-        from azurerbac.airecommender.engines.llm import LLMEngine
+        from rbaccatalog.airecommender.engines.llm import LLMEngine
 
         mock_ollama_client.recommend_roles.return_value = [
             ("Owner", 0.95, "Full access", ["owner"]),
@@ -2173,11 +2177,11 @@ class TestEngineAvailability:
         self, mock_embedding_model, mock_knowledge_base, monkeypatch
     ):
         """Test CrossEncoder is available when all dependencies present."""
-        from azurerbac.airecommender.engines.crossencoder import CrossEncoderEngine
+        from rbaccatalog.airecommender.engines.crossencoder import CrossEncoderEngine
 
         mock_ce = MagicMock()
         monkeypatch.setattr(
-            "azurerbac.airecommender.engines.crossencoder.get_cross_encoder",
+            "rbaccatalog.airecommender.engines.crossencoder.get_cross_encoder",
             lambda: mock_ce,
         )
 
@@ -2191,11 +2195,11 @@ class TestEngineAvailability:
         self, mock_embedding_model, mock_knowledge_base, monkeypatch
     ):
         """Test CrossEncoder is unavailable when cross-encoder can't load."""
-        from azurerbac.airecommender.engines.crossencoder import CrossEncoderEngine
+        from rbaccatalog.airecommender.engines.crossencoder import CrossEncoderEngine
 
         # Mock is_cross_encoder_available to return False
         monkeypatch.setattr(
-            "azurerbac.airecommender.engines.crossencoder.is_cross_encoder_available",
+            "rbaccatalog.airecommender.engines.crossencoder.is_cross_encoder_available",
             lambda: False,
         )
 
@@ -2209,7 +2213,7 @@ class TestEngineAvailability:
         self, mock_knowledge_base, monkeypatch
     ):
         """Test CrossEncoder is unavailable when embedding model not loaded."""
-        from azurerbac.airecommender.engines.crossencoder import CrossEncoderEngine
+        from rbaccatalog.airecommender.engines.crossencoder import CrossEncoderEngine
 
         unloaded_model = MagicMock()
         unloaded_model.is_loaded = False
@@ -2231,15 +2235,15 @@ class TestNormalizeScores:
 
     def test_empty_candidates_returns_empty(self):
         """Test that empty input returns empty output."""
-        from azurerbac.airecommender.engines.common import normalize_candidates
+        from rbaccatalog.airecommender.engines.common import normalize_candidates
 
         result = normalize_candidates([])
         assert result == []
 
     def test_single_candidate_gets_max_normalized(self):
         """Test single candidate gets normalized within expected range."""
-        from azurerbac.airecommender.engines.common import normalize_candidates
-        from azurerbac.airecommender.engines.config import SCORE_CEILING, SCORE_FLOOR
+        from rbaccatalog.airecommender.engines.common import normalize_candidates
+        from rbaccatalog.airecommender.engines.config import SCORE_CEILING, SCORE_FLOOR
 
         candidates = [
             RankedRole(
@@ -2267,7 +2271,7 @@ class TestNormalizeScores:
         self, scores: list[float], expected_high: float, expected_low: float
     ):
         """Test min-max normalization produces expected range."""
-        from azurerbac.airecommender.engines.common import normalize_candidates
+        from rbaccatalog.airecommender.engines.common import normalize_candidates
 
         candidates = [
             RankedRole(
@@ -2286,7 +2290,7 @@ class TestNormalizeScores:
 
     def test_preserves_relative_order(self):
         """Test that relative ordering is preserved after normalization."""
-        from azurerbac.airecommender.engines.common import normalize_candidates
+        from rbaccatalog.airecommender.engines.common import normalize_candidates
 
         candidates = [
             RankedRole(role_id="high", role_name="High", description="", final_score=0.9),
@@ -2304,8 +2308,8 @@ class TestNormalizeWithSigmoid:
 
     def test_empty_candidates_returns_empty(self):
         """Test that empty input returns empty output."""
-        from azurerbac.airecommender.engines.common import sigmoid_normalize
-        from azurerbac.airecommender.engines.config import SigmoidParams
+        from rbaccatalog.airecommender.engines.common import sigmoid_normalize
+        from rbaccatalog.airecommender.engines.config import SigmoidParams
 
         params = SigmoidParams(midpoint=0.5, steepness=10, output_min=0.6, output_max=0.95)
         result = sigmoid_normalize([], params)
@@ -2323,8 +2327,8 @@ class TestNormalizeWithSigmoid:
         self, raw_score: float, midpoint: float, steepness: float, expected_approx: float
     ):
         """Test sigmoid transformation for various inputs."""
-        from azurerbac.airecommender.engines.common import sigmoid_normalize
-        from azurerbac.airecommender.engines.config import SigmoidParams
+        from rbaccatalog.airecommender.engines.common import sigmoid_normalize
+        from rbaccatalog.airecommender.engines.config import SigmoidParams
 
         candidates = [
             RankedRole(
@@ -2346,8 +2350,8 @@ class TestNormalizeWithSigmoid:
 
     def test_preserves_relative_order(self):
         """Test sigmoid preserves relative ordering."""
-        from azurerbac.airecommender.engines.common import sigmoid_normalize
-        from azurerbac.airecommender.engines.config import SigmoidParams
+        from rbaccatalog.airecommender.engines.common import sigmoid_normalize
+        from rbaccatalog.airecommender.engines.config import SigmoidParams
 
         candidates = [
             RankedRole(role_id="high", role_name="High", description="", final_score=0.9),
@@ -2378,7 +2382,7 @@ class TestAIRecommenderExceptions:
     )
     def test_ollama_client_not_available_error(self, engine_name: str):
         """Test OllamaClientNotAvailableError stores engine name."""
-        from azurerbac.airecommender.exceptions import OllamaClientNotAvailableError
+        from rbaccatalog.airecommender.exceptions import OllamaClientNotAvailableError
 
         exc = OllamaClientNotAvailableError(engine_name)
         assert exc.engine_name == engine_name
@@ -2387,14 +2391,14 @@ class TestAIRecommenderExceptions:
 
     def test_knowledge_base_not_initialized_error(self):
         """Test KnowledgeBaseNotInitializedError message."""
-        from azurerbac.airecommender.exceptions import KnowledgeBaseNotInitializedError
+        from rbaccatalog.airecommender.exceptions import KnowledgeBaseNotInitializedError
 
         exc = KnowledgeBaseNotInitializedError()
         assert "Knowledge base" in str(exc) or "not initialized" in str(exc)
 
     def test_exceptions_inherit_from_base(self):
         """Test all exceptions inherit from AIRecommenderError."""
-        from azurerbac.airecommender.exceptions import (
+        from rbaccatalog.airecommender.exceptions import (
             AIRecommenderError,
             KnowledgeBaseNotInitializedError,
             OllamaClientNotAvailableError,
@@ -2425,7 +2429,7 @@ class TestTFIDFWeights:
         self, bm25: float, pattern: float, name_match: float, fuzzy: float
     ):
         """Test that weights summing to 1.0 are accepted."""
-        from azurerbac.airecommender.engines.config import TFIDFWeights
+        from rbaccatalog.airecommender.engines.config import TFIDFWeights
 
         weights = TFIDFWeights(bm25=bm25, pattern=pattern, name_match=name_match, fuzzy=fuzzy)
         assert weights.bm25 == bm25
@@ -2433,7 +2437,7 @@ class TestTFIDFWeights:
 
     def test_default_weights_sum_to_one(self):
         """Test that default weights sum to 1.0."""
-        from azurerbac.airecommender.engines.config import TFIDFWeights
+        from rbaccatalog.airecommender.engines.config import TFIDFWeights
 
         weights = TFIDFWeights()
         total = weights.bm25 + weights.pattern + weights.name_match + weights.fuzzy
@@ -2452,7 +2456,7 @@ class TestTFIDFWeights:
         self, bm25: float, pattern: float, name_match: float, fuzzy: float, expected_sum: float
     ):
         """Test that weights not summing to 1.0 raise ValueError."""
-        from azurerbac.airecommender.engines.config import TFIDFWeights
+        from rbaccatalog.airecommender.engines.config import TFIDFWeights
 
         with pytest.raises(ValueError, match=r"must sum to 1\.0"):
             TFIDFWeights(bm25=bm25, pattern=pattern, name_match=name_match, fuzzy=fuzzy)
@@ -2473,7 +2477,7 @@ class TestWeightPair:
     )
     def test_valid_weight_pair_accepted(self, primary: float, secondary: float):
         """Test that weight pairs summing to 1.0 are accepted."""
-        from azurerbac.airecommender.engines.config import WeightPair
+        from rbaccatalog.airecommender.engines.config import WeightPair
 
         pair = WeightPair(primary=primary, secondary=secondary)
         assert pair.primary == primary
@@ -2490,7 +2494,7 @@ class TestWeightPair:
     )
     def test_invalid_weight_pair_raise_value_error(self, primary: float, secondary: float):
         """Test that weight pairs not summing to 1.0 raise ValueError."""
-        from azurerbac.airecommender.engines.config import WeightPair
+        from rbaccatalog.airecommender.engines.config import WeightPair
 
         with pytest.raises(ValueError, match=r"must sum to 1\.0"):
             WeightPair(primary=primary, secondary=secondary)
@@ -2506,15 +2510,15 @@ class TestScoreNormalizerFunctions:
 
     def test_normalize_candidates_empty_list(self):
         """Test normalize_candidates handles empty list correctly."""
-        from azurerbac.airecommender.engines.common import normalize_candidates
+        from rbaccatalog.airecommender.engines.common import normalize_candidates
 
         result = normalize_candidates([])
         assert result == []
 
     def test_normalize_candidates_mutates_in_place(self):
         """Test normalize_candidates mutates candidates in-place."""
-        from azurerbac.airecommender.engines.base import RankedRole
-        from azurerbac.airecommender.engines.common import normalize_candidates
+        from rbaccatalog.airecommender.engines.base import RankedRole
+        from rbaccatalog.airecommender.engines.common import normalize_candidates
 
         candidates = [
             RankedRole(role_id="a", role_name="A", description="Test A", final_score=10.0),
@@ -2535,8 +2539,8 @@ class TestScoreNormalizerFunctions:
 
     def test_sigmoid_normalize_empty_list(self):
         """Test sigmoid_normalize handles empty list correctly."""
-        from azurerbac.airecommender.engines.common import sigmoid_normalize
-        from azurerbac.airecommender.engines.config import SigmoidParams
+        from rbaccatalog.airecommender.engines.common import sigmoid_normalize
+        from rbaccatalog.airecommender.engines.config import SigmoidParams
 
         params = SigmoidParams(midpoint=0.5, steepness=10.0)
         result = sigmoid_normalize([], params)
@@ -2544,9 +2548,9 @@ class TestScoreNormalizerFunctions:
 
     def test_sigmoid_normalize_applies_transform(self):
         """Test sigmoid_normalize applies sigmoid transform correctly."""
-        from azurerbac.airecommender.engines.base import RankedRole
-        from azurerbac.airecommender.engines.common import sigmoid_normalize
-        from azurerbac.airecommender.engines.config import SigmoidParams
+        from rbaccatalog.airecommender.engines.base import RankedRole
+        from rbaccatalog.airecommender.engines.common import sigmoid_normalize
+        from rbaccatalog.airecommender.engines.config import SigmoidParams
 
         params = SigmoidParams(midpoint=0.5, steepness=10.0, output_min=0.0, output_max=1.0)
         candidates = [

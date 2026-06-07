@@ -23,7 +23,7 @@ When generating or modifying code, GitHub Copilot should:
 - Match existing naming conventions and file structure exactly
 - Generate production-ready code (no TODOs, no placeholders)
 - Assume this is a long-lived, audited codebase (clarity > cleverness)
-- When creating new API endpoints, reference `azurerbac/web/dependencies.py` for the cache and database injection patterns
+- When creating new API endpoints, reference `rbaccatalog/web/dependencies.py` for the cache and database injection patterns
 
 ## Repository Summary
 
@@ -98,7 +98,7 @@ Dependencies must point inward:
 ❌ **No `print()`** — Use the `telemetry.logging` module for all output  
 ❌ **No `session.query()`** — Use SQLAlchemy 2.0 `select()` syntax  
 ❌ **No `.dict()`** — Use Pydantic v2 `.model_dump()` method  
-❌ **No relative imports** — Use absolute imports from `azurerbac.*`  
+❌ **No relative imports** — Use absolute imports from `rbaccatalog.*`  
 ❌ **No global state** — Avoid module-level mutable state except where explicitly designed (e.g., cache layer)
 
 ## Key Patterns & Conventions
@@ -121,7 +121,7 @@ async def get_roles(db: AsyncSession) -> list[Role]:
 
 Routes receive a frozen dataclass of dependencies (cache + session factory) via
 `Depends` — there is no per-request `get_db()`. The deps classes and providers
-live in `azurerbac/web/dependencies.py` (`BaseDeps`, `DashboardDeps`, `PagesDeps`
+live in `rbaccatalog/web/dependencies.py` (`BaseDeps`, `DashboardDeps`, `PagesDeps`
 with `get_api_deps` / `get_dashboard_deps` / `get_pages_deps`):
 
 ```python
@@ -189,9 +189,9 @@ if not role:
 Use absolute imports from the package root:
 
 ```python
-from azurerbac.core.models import Role, RoleHistory
-from azurerbac.cache import CacheService
-from azurerbac.web.dependencies import BaseDeps, get_api_deps
+from rbaccatalog.core.models import Role, RoleHistory
+from rbaccatalog.cache import CacheService
+from rbaccatalog.web.dependencies import BaseDeps, get_api_deps
 ```
 
 ### Naming Conventions
@@ -213,7 +213,7 @@ from azurerbac.web.dependencies import BaseDeps, get_api_deps
 
 ## Database Models
 
-Key SQLAlchemy models in `azurerbac/core/models.py`:
+Key SQLAlchemy models in `rbaccatalog/core/models.py`:
 
 - `Role` — Tracks role identity and current state (role_id, role_name, status)
 - `RoleHistory` — Historical versions with role_json, diff_json, event_type

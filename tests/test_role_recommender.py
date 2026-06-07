@@ -5,8 +5,8 @@ Covers: pattern matching, action types, notActions, high privilege roles, sortin
 
 import pytest
 
-from azurerbac.core.patterns import matches_pattern, pattern_to_regex
-from azurerbac.matching.role_matching import (
+from rbaccatalog.core.patterns import matches_pattern, pattern_to_regex
+from rbaccatalog.matching.role_matching import (
     check_operation_allowed,
     count_net_permissions,
     is_high_privilege_role,
@@ -541,7 +541,7 @@ class TestHighPrivilegeIntegration:
 
     def test_precompute_all_populates_high_privilege_roles(self, populated_cache):
         """Verify precompute_all correctly identifies high-privilege roles."""
-        from azurerbac.cache.build import precompute_all
+        from rbaccatalog.cache.build import precompute_all
 
         # Role with unconstrained roleAssignments/write -> high privilege
         high_priv_role = make_role_definition(
@@ -742,7 +742,7 @@ class TestClassifiedOperations:
         """ClassifiedOperations should be immutable (frozen)."""
         from dataclasses import FrozenInstanceError
 
-        from azurerbac.matching.models import ClassifiedOperations
+        from rbaccatalog.matching.models import ClassifiedOperations
 
         classified = ClassifiedOperations(
             control=frozenset(["op1"]),
@@ -753,7 +753,7 @@ class TestClassifiedOperations:
 
     def test_all_requested_combines_all_sets(self):
         """all_requested should combine all operation sets."""
-        from azurerbac.matching.models import ClassifiedOperations
+        from rbaccatalog.matching.models import ClassifiedOperations
 
         classified = ClassifiedOperations(
             control=frozenset(["ctrl1"]),
@@ -765,7 +765,7 @@ class TestClassifiedOperations:
 
     def test_len_returns_total_count(self):
         """len() should return total operation count."""
-        from azurerbac.matching.models import ClassifiedOperations
+        from rbaccatalog.matching.models import ClassifiedOperations
 
         classified = ClassifiedOperations(
             control=frozenset(["c1", "c2"]),
@@ -780,7 +780,7 @@ class TestRecommendationService:
 
     def test_classify_operations_separates_by_plane(self, populated_cache):
         """classify_operations should correctly separate control and data operations."""
-        from azurerbac.matching.recommendation_service import RoleRecommendationService
+        from rbaccatalog.matching.recommendation_service import RoleRecommendationService
 
         svc = RoleRecommendationService()
         classified = svc.classify_operations(
@@ -796,7 +796,7 @@ class TestRecommendationService:
 
     def test_classify_operations_handles_wildcards(self, populated_cache):
         """classify_operations should detect wildcards matching both planes."""
-        from azurerbac.matching.recommendation_service import RoleRecommendationService
+        from rbaccatalog.matching.recommendation_service import RoleRecommendationService
 
         svc = RoleRecommendationService()
         classified = svc.classify_operations(["Microsoft.Storage/*"])
@@ -807,7 +807,7 @@ class TestRecommendationService:
 
     def test_compute_wildcard_matches_expands_patterns(self, populated_cache):
         """compute_wildcard_matches should expand wildcards to actual operations."""
-        from azurerbac.matching.recommendation_service import RoleRecommendationService
+        from rbaccatalog.matching.recommendation_service import RoleRecommendationService
 
         svc = RoleRecommendationService()
         classified = svc.classify_operations(["Microsoft.Compute/*"])
@@ -820,7 +820,7 @@ class TestRecommendationService:
 
     def test_classify_unknown_wildcard_defaults_to_control(self, populated_cache):
         """Wildcard matching no known operations defaults to control plane."""
-        from azurerbac.matching.recommendation_service import RoleRecommendationService
+        from rbaccatalog.matching.recommendation_service import RoleRecommendationService
 
         svc = RoleRecommendationService()
         classified = svc.classify_operations(["Microsoft.FakeProvider/*/read"])
@@ -831,9 +831,9 @@ class TestRecommendationService:
 
     def test_evaluate_wildcards_fast_skips_when_cached_ops_none(self, populated_cache):
         """_evaluate_wildcards_fast returns immediately when cached_ops is None."""
-        from azurerbac.matching.models import PlaneContext, RoleEvaluationContext
-        from azurerbac.matching.recommendation_service import RoleRecommendationService
-        from azurerbac.matching.role_matching import Plane
+        from rbaccatalog.matching.models import PlaneContext, RoleEvaluationContext
+        from rbaccatalog.matching.recommendation_service import RoleRecommendationService
+        from rbaccatalog.matching.role_matching import Plane
 
         svc = RoleRecommendationService()
         ctx = RoleEvaluationContext(
@@ -851,9 +851,9 @@ class TestRecommendationService:
 
     def test_evaluate_wildcards_fast_records_partial_coverage(self, populated_cache):
         """_evaluate_wildcards_fast stores partial coverage when not fully covered."""
-        from azurerbac.matching.models import PlaneContext, RoleEvaluationContext
-        from azurerbac.matching.recommendation_service import RoleRecommendationService
-        from azurerbac.matching.role_matching import Plane
+        from rbaccatalog.matching.models import PlaneContext, RoleEvaluationContext
+        from rbaccatalog.matching.recommendation_service import RoleRecommendationService
+        from rbaccatalog.matching.role_matching import Plane
 
         svc = RoleRecommendationService()
         classified = svc.classify_operations(["Microsoft.Storage/*"])
@@ -905,7 +905,7 @@ class TestMaxResultsParameter:
         expected_count: int,
     ):
         """Test max_results parameter behavior."""
-        from azurerbac.matching.role_recommender import recommend_roles
+        from rbaccatalog.matching.role_recommender import recommend_roles
 
         # Use an operation that exists in sample_operations
         roles = [
@@ -915,8 +915,8 @@ class TestMaxResultsParameter:
             for i in range(num_roles)
         ]
         # Build cache with these roles first
-        from azurerbac.cache import get_cache_service
-        from azurerbac.cache.build import precompute_all
+        from rbaccatalog.cache import get_cache_service
+        from rbaccatalog.cache.build import precompute_all
 
         cache = get_cache_service()
         ops = list(cache.cache.all_operations)
@@ -1027,8 +1027,8 @@ class TestIntraRequestCacheConsistency:
 
     def test_service_uses_cache_from_construction_time(self, populated_cache):
         """Service should use the cache provided at construction, not global singleton."""
-        from azurerbac.cache.models import CacheData
-        from azurerbac.matching.recommendation_service import RoleRecommendationService
+        from rbaccatalog.cache.models import CacheData
+        from rbaccatalog.matching.recommendation_service import RoleRecommendationService
 
         # Create a custom cache with known data
         custom_cache = CacheData()
@@ -1048,8 +1048,8 @@ class TestIntraRequestCacheConsistency:
         """When no cache provided, service captures global cache at construction."""
         from unittest.mock import patch
 
-        from azurerbac.cache.models import CacheData
-        from azurerbac.matching.recommendation_service import RoleRecommendationService
+        from rbaccatalog.cache.models import CacheData
+        from rbaccatalog.matching.recommendation_service import RoleRecommendationService
 
         # Create two different cache instances
         cache_v1 = CacheData()
@@ -1065,7 +1065,7 @@ class TestIntraRequestCacheConsistency:
             return current_cache[0]
 
         with patch(
-            "azurerbac.matching.recommendation_service._get_default_cache",
+            "rbaccatalog.matching.recommendation_service._get_default_cache",
             side_effect=mock_get_default_cache,
         ):
             # Create service - should capture cache_v1
@@ -1085,8 +1085,8 @@ class TestIntraRequestCacheConsistency:
         """Each new service instance captures the current cache state."""
         from unittest.mock import patch
 
-        from azurerbac.cache.models import CacheData
-        from azurerbac.matching.recommendation_service import RoleRecommendationService
+        from rbaccatalog.cache.models import CacheData
+        from rbaccatalog.matching.recommendation_service import RoleRecommendationService
 
         cache_v1 = CacheData()
         cache_v1.role_coverage["v1-marker"] = None
@@ -1100,7 +1100,7 @@ class TestIntraRequestCacheConsistency:
             return current_cache[0]
 
         with patch(
-            "azurerbac.matching.recommendation_service._get_default_cache",
+            "rbaccatalog.matching.recommendation_service._get_default_cache",
             side_effect=mock_get_default_cache,
         ):
             # First service gets v1
@@ -1137,7 +1137,7 @@ class TestCountConsistency:
         The count-matches API (used to show "matches N operations" in UI) must return
         the same count that role matching will report as requested_operations_count.
         """
-        from azurerbac.cache import get_cache_service
+        from rbaccatalog.cache import get_cache_service
 
         cache = get_cache_service()
 
@@ -1179,7 +1179,7 @@ class TestCountConsistency:
 
     def test_control_and_data_plane_counts_separate(self, populated_cache):
         """Test that control and data plane wildcards are counted separately."""
-        from azurerbac.cache import get_cache_service
+        from rbaccatalog.cache import get_cache_service
 
         cache = get_cache_service()
 

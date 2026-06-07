@@ -2,15 +2,15 @@
 
 import pytest
 
-from azurerbac.core.diffing import DiffChange
-from azurerbac.core.utils import slugify
-from azurerbac.web.filters import (
+from rbaccatalog.core.diffing import DiffChange
+from rbaccatalog.core.utils import slugify
+from rbaccatalog.web.filters import (
     diff_lines,
     format_date,
     format_datetime,
     full_json_diff,
 )
-from azurerbac.web.utils import role_json_pretty, urlencode_path
+from rbaccatalog.web.utils import role_json_pretty, urlencode_path
 
 
 class TestDiffLines:
@@ -84,7 +84,7 @@ class TestDiffLines:
         This covers the _process_ndiff branch where a '?' hint line appears between
         a removed line and an added line that differ only by a trailing comma.
         """
-        from azurerbac.web.filters import _process_ndiff
+        from rbaccatalog.web.filters import _process_ndiff
 
         # Simulate ndiff output: removed with comma, hint, added without comma
         lines = [
@@ -218,7 +218,7 @@ class TestIsWildcardPattern:
     )
     def test_is_wildcard_pattern(self, pattern: str, expected: bool):
         """Test wildcard pattern detection."""
-        from azurerbac.core.patterns import is_wildcard_pattern
+        from rbaccatalog.core.patterns import is_wildcard_pattern
 
         assert is_wildcard_pattern(pattern) is expected
 

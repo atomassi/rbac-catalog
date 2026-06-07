@@ -22,12 +22,12 @@ RUN pip install --no-cache-dir --upgrade pip --root-user-action=ignore && \
     pip install --no-cache-dir -r requirements.txt --root-user-action=ignore
 
 # Copy application code
-COPY azurerbac/ ./azurerbac/
+COPY rbaccatalog/ ./rbaccatalog/
 
 # Write version from build arg
 ARG VERSION
-RUN echo '"""Auto-generated version file. DO NOT EDIT."""' > ./azurerbac/_version.py && \
-    echo "__version__ = \"${VERSION}\"" >> ./azurerbac/_version.py && \
+RUN echo '"""Auto-generated version file. DO NOT EDIT."""' > ./rbaccatalog/_version.py && \
+    echo "__version__ = \"${VERSION}\"" >> ./rbaccatalog/_version.py && \
     echo "Version: ${VERSION}"
 
 # Environment variables
@@ -49,4 +49,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
 # its own lifecycle, log stream, resource limits, scaling rules, and isolates
 # a worker crash from the web tier. They are deliberately co-located here to
 # save the cost of a second Azure App Service plan in the current deployment.
-CMD ["sh", "-c", "python -m azurerbac.backgroundjobs.worker & exec python -m uvicorn azurerbac.web.app:app --host 0.0.0.0 --port ${PORT} --limit-concurrency 256 --h11-max-incomplete-event-size 16384"]
+CMD ["sh", "-c", "python -m rbaccatalog.backgroundjobs.worker & exec python -m uvicorn rbaccatalog.web.app:app --host 0.0.0.0 --port ${PORT} --limit-concurrency 256 --h11-max-incomplete-event-size 16384"]

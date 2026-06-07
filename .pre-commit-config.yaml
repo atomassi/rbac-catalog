@@ -17,7 +17,7 @@ repos:
         language: system
         types: [python]
         pass_filenames: false
-        args: [azurerbac/]
+        args: [rbaccatalog/]
 
       - id: unit-tests
         name: unit tests

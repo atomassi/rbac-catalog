@@ -44,7 +44,7 @@
 
 .EXAMPLE
     .\acr-cleanup.ps1
-    Runs with defaults: azurerbacregistry/azurerbac, keeps 4 versions.
+    Runs with defaults: azurerbacregistry/rbaccatalog, keeps 4 versions.
 
 .EXAMPLE
     .\acr-cleanup.ps1 -KeepCount 10
@@ -65,7 +65,7 @@ param(
 
     [Parameter()]
     [ValidateNotNullOrEmpty()]
-    [string]$RepositoryName = 'azurerbac',
+    [string]$RepositoryName = 'rbaccatalog',
 
     [Parameter()]
     [ValidateRange(1, 100)]

@@ -4,8 +4,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from azurerbac.settings import Settings
-from azurerbac.web.limiter import get_real_client_ip
+from rbaccatalog.settings import Settings
+from rbaccatalog.web.limiter import get_real_client_ip
 
 
 @pytest.fixture

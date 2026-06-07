@@ -5,8 +5,8 @@ from datetime import UTC
 import pytest
 from sqlalchemy import select
 
-from azurerbac.core import Role, RoleHistory
-from azurerbac.core.enums import EventType, RoleStatus
+from rbaccatalog.core import Role, RoleHistory
+from rbaccatalog.core.enums import EventType, RoleStatus
 
 
 def _make_role_json(role_name: str, role_type: str = "BuiltInRole") -> dict:
@@ -253,7 +253,7 @@ class TestRoleHistory:
         """
         from datetime import datetime
 
-        from azurerbac.core.models import RoleScanStatus
+        from rbaccatalog.core.models import RoleScanStatus
 
         role = Role(role_id="delete-scan-test", role_name="Test", status=RoleStatus.ACTIVE)
         db_session.add(role)
@@ -311,7 +311,7 @@ class TestRoleHistory:
         """
         from datetime import datetime
 
-        from azurerbac.core.models import RoleScanStatus
+        from rbaccatalog.core.models import RoleScanStatus
 
         role = Role(
             role_id="update-version-test", role_name="Original Name", status=RoleStatus.ACTIVE
@@ -573,7 +573,7 @@ class TestMatchingModels:
 
     def test_classified_operations_all_requested_property(self):
         """Test ClassifiedOperations.all_requested union property."""
-        from azurerbac.matching.models import ClassifiedOperations
+        from rbaccatalog.matching.models import ClassifiedOperations
 
         ops = ClassifiedOperations(
             control=frozenset({"op1", "op2"}),
@@ -591,7 +591,7 @@ class TestMatchingModels:
 
     def test_classified_operations_len(self):
         """Test ClassifiedOperations.__len__ returns total count."""
-        from azurerbac.matching.models import ClassifiedOperations
+        from rbaccatalog.matching.models import ClassifiedOperations
 
         ops = ClassifiedOperations(
             control=frozenset({"op1", "op2"}),
@@ -604,7 +604,7 @@ class TestMatchingModels:
 
     def test_role_match_is_full_match_property(self):
         """Test RoleMatch.is_full_match property."""
-        from azurerbac.matching.models import RoleMatch
+        from rbaccatalog.matching.models import RoleMatch
 
         full_match = RoleMatch(
             role_id="r1",
@@ -626,7 +626,7 @@ class TestMatchingModels:
 
     def test_role_match_to_dict(self):
         """Test RoleMatch.to_dict includes is_full_match."""
-        from azurerbac.matching.models import RoleMatch
+        from rbaccatalog.matching.models import RoleMatch
 
         match = RoleMatch(
             role_id="r1",

@@ -7,7 +7,7 @@ export default defineConfig({
         globals: true,
         coverage: {
             provider: 'v8',
-            include: ['azurerbac/web/static/js/**/*.js'],
+            include: ['rbaccatalog/web/static/js/**/*.js'],
             exclude: ['**/*.test.js'],
         },
     },

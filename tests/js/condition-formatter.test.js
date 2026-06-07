@@ -3,7 +3,7 @@
  * Tests ABAC condition parsing, tokenization, and syntax highlighting
  */
 import { describe, it, expect, beforeEach } from 'vitest';
-const { conditionFormatter, ESCAPE_MAP } = require('../../azurerbac/web/static/js/condition-formatter.js');
+const { conditionFormatter, ESCAPE_MAP } = require('../../rbaccatalog/web/static/js/condition-formatter.js');
 
 describe('conditionFormatter', () => {
     /** @type {ReturnType<typeof conditionFormatter>} */
@@ -397,7 +397,7 @@ describe('conditionFormatter', () => {
 });
 
 // Import explainCondition for testing
-const { explainCondition, normalizeGuid, friendlyAttributeName } = require('../../azurerbac/web/static/js/condition-formatter.js');
+const { explainCondition, normalizeGuid, friendlyAttributeName } = require('../../rbaccatalog/web/static/js/condition-formatter.js');
 
 describe('explainCondition', () => {
     describe('role assignment conditions', () => {

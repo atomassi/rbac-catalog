@@ -7199,7 +7199,7 @@
               "azureLogAnalytics": {
                 "dashboardTime": false,
                 "mode": "raw",
-                "query": "exceptions\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == 'azurerbac-worker'\n| count",
+                "query": "exceptions\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == 'rbaccatalog-worker'\n| count",
                 "resources": [
                   "/subscriptions/__SUBSCRIPTION_ID__/resourceGroups/__RESOURCE_GROUP__/providers/microsoft.insights/components/__APP_INSIGHTS_NAME__"
                 ],
@@ -7330,7 +7330,7 @@
           "targets": [
             {
               "azureLogAnalytics": {
-                "query": "traces\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == 'azurerbac-worker'\n| project timestamp, severityLevel, message\n| order by timestamp desc\n| take 30",
+                "query": "traces\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == 'rbaccatalog-worker'\n| project timestamp, severityLevel, message\n| order by timestamp desc\n| take 30",
                 "resource": "/subscriptions/__SUBSCRIPTION_ID__/resourceGroups/__RESOURCE_GROUP__/providers/microsoft.insights/components/__APP_INSIGHTS_NAME__",
                 "resultFormat": "table"
               },
@@ -7527,7 +7527,7 @@
               "azureLogAnalytics": {
                 "dashboardTime": false,
                 "mode": "raw",
-                "query": "exceptions\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == 'azurerbac-worker'\n| project timestamp, problemId, outerMessage, innermostMessage\n| order by timestamp desc\n| take 20",
+                "query": "exceptions\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == 'rbaccatalog-worker'\n| project timestamp, problemId, outerMessage, innermostMessage\n| order by timestamp desc\n| take 20",
                 "resources": [
                   "/subscriptions/__SUBSCRIPTION_ID__/resourceGroups/__RESOURCE_GROUP__/providers/microsoft.insights/components/__APP_INSIGHTS_NAME__"
                 ],

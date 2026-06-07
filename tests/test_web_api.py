@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from azurerbac.azure.models import OperationData, RoleDefinition
-from azurerbac.cache.models import CachedRole
-from azurerbac.core.enums import RoleStatus
+from rbaccatalog.azure.models import OperationData, RoleDefinition
+from rbaccatalog.cache.models import CachedRole
+from rbaccatalog.core.enums import RoleStatus
 from tests.helpers import populate_cache_with_operations
 
 
@@ -15,7 +15,7 @@ class TestCacheService:
 
     def test_cache_get_set_supported_keys(self):
         """Test get/set for supported keys."""
-        from azurerbac.cache import CacheService
+        from rbaccatalog.cache import CacheService
 
         cache = CacheService()
 
@@ -28,7 +28,7 @@ class TestCacheService:
 
     def test_cache_returns_none_for_missing_key(self):
         """Test that missing keys return None."""
-        from azurerbac.cache import CacheService
+        from rbaccatalog.cache import CacheService
 
         cache = CacheService()
         result = cache.get_allowing_roles("nonexistent")
@@ -36,7 +36,7 @@ class TestCacheService:
 
     def test_cache_role_pages(self):
         """Test role page caching."""
-        from azurerbac.cache import CacheService
+        from rbaccatalog.cache import CacheService
 
         cache = CacheService()
         cache.set_role_page("roles:page:1", [{"role_id": "test1"}])
@@ -47,7 +47,7 @@ class TestCacheService:
 
     def test_cache_invalidate_all_clears_all_data(self):
         """Test invalidating all caches."""
-        from azurerbac.cache import CacheService
+        from rbaccatalog.cache import CacheService
 
         cache = CacheService()
         cache.set_allowing_roles("custom_key", ["value1"])
@@ -68,7 +68,7 @@ class TestOperationsIndex:
 
     def test_build_from_operations(self, sample_operations):
         """Test building operations index."""
-        from azurerbac.cache import CacheService
+        from rbaccatalog.cache import CacheService
 
         cache = CacheService()
         populate_cache_with_operations(cache, sample_operations)
@@ -80,7 +80,7 @@ class TestOperationsIndex:
 
     def test_search_operations_substring(self, sample_operations):
         """Test substring search."""
-        from azurerbac.cache import CacheService
+        from rbaccatalog.cache import CacheService
 
         cache = CacheService()
         populate_cache_with_operations(cache, sample_operations)
@@ -92,7 +92,7 @@ class TestOperationsIndex:
 
     def test_search_operations_wildcard(self, sample_operations):
         """Test wildcard search."""
-        from azurerbac.cache import CacheService
+        from rbaccatalog.cache import CacheService
 
         cache = CacheService()
         populate_cache_with_operations(cache, sample_operations)
@@ -104,7 +104,7 @@ class TestOperationsIndex:
 
     def test_search_operations_case_insensitive(self, sample_operations):
         """Test that search is case insensitive."""
-        from azurerbac.cache import CacheService
+        from rbaccatalog.cache import CacheService
 
         cache = CacheService()
         populate_cache_with_operations(cache, sample_operations)
@@ -115,7 +115,7 @@ class TestOperationsIndex:
 
     def test_search_operations_by_display_name(self, sample_operations):
         """Test search by display name."""
-        from azurerbac.cache import CacheService
+        from rbaccatalog.cache import CacheService
 
         cache = CacheService()
         populate_cache_with_operations(cache, sample_operations)
@@ -126,7 +126,7 @@ class TestOperationsIndex:
 
     def test_search_operations_limit(self, sample_operations):
         """Test search respects limit."""
-        from azurerbac.cache import CacheService
+        from rbaccatalog.cache import CacheService
 
         cache = CacheService()
         populate_cache_with_operations(cache, sample_operations)
@@ -137,7 +137,7 @@ class TestOperationsIndex:
 
     def test_search_empty_query(self, sample_operations):
         """Test search with empty query returns nothing."""
-        from azurerbac.cache import CacheService
+        from rbaccatalog.cache import CacheService
 
         cache = CacheService()
         populate_cache_with_operations(cache, sample_operations)
@@ -187,7 +187,7 @@ class TestCountWildcardMatches:
         description: str,
     ):
         """Test counting wildcard pattern matches."""
-        from azurerbac.cache import CacheService
+        from rbaccatalog.cache import CacheService
 
         cache = CacheService()
         populate_cache_with_operations(cache, sample_operations)
@@ -207,7 +207,7 @@ class TestCountWildcardMatches:
         Regression test for: UI shows "matches X operations" but role results
         show "Matches Y of Y operations" where X != Y.
         """
-        from azurerbac.cache import CacheService
+        from rbaccatalog.cache import CacheService
         from tests.helpers import make_operation
 
         # Create operations where different casings lowercase to same string
@@ -267,7 +267,7 @@ class TestMatchesPattern:
     )
     def testmatches_pattern(self, operation: str, pattern: str, expected: bool):
         """Test pattern matching with various patterns."""
-        from azurerbac.core.patterns import matches_pattern
+        from rbaccatalog.core.patterns import matches_pattern
 
         assert matches_pattern(operation, pattern) is expected
 
@@ -281,7 +281,7 @@ class TestCacheSimplicity:
         Cache is refreshed atomically by worker invalidation or periodic recompute,
         so TTL is not needed.
         """
-        from azurerbac.cache import CacheService
+        from rbaccatalog.cache import CacheService
 
         cache = CacheService()
         # Should work without TTL parameter for supported keys
@@ -296,7 +296,7 @@ class TestCacheServiceThreadSafety:
         """Test concurrent cache access doesn't corrupt data."""
         import concurrent.futures
 
-        from azurerbac.cache import CacheService
+        from rbaccatalog.cache import CacheService
 
         cache = CacheService()
         populate_cache_with_operations(cache, sample_operations)
@@ -334,7 +334,7 @@ class TestCacheServiceInvalidateAll:
 
     def test_invalidate_all_clears_memory_cache(self, sample_operations):
         """Test that invalidate_all clears memory cache."""
-        from azurerbac.cache import CacheService
+        from rbaccatalog.cache import CacheService
 
         cache = CacheService()
         cache.set_allowing_roles("key1", "value1")
@@ -347,7 +347,7 @@ class TestCacheServiceInvalidateAll:
 
     def test_invalidate_all_clears_computed_caches(self, sample_operations):
         """Test that invalidate_all clears computed caches."""
-        from azurerbac.cache import CacheService
+        from rbaccatalog.cache import CacheService
 
         cache = CacheService()
 
@@ -366,7 +366,7 @@ class TestUniqueProvidersCaching:
 
     def test_unique_providers_is_cached(self, sample_operations):
         """Test that unique_providers is stored in cache."""
-        from azurerbac.cache import CacheService
+        from rbaccatalog.cache import CacheService
 
         cache = CacheService()
         # Set up the cache with operations data
@@ -390,7 +390,7 @@ class TestUniqueProvidersCaching:
 
     def test_unique_providers_cleared_on_invalidate_all(self, sample_operations):
         """Test that unique_providers is cleared when invalidate_all is called."""
-        from azurerbac.cache import CacheService
+        from rbaccatalog.cache import CacheService
 
         cache = CacheService()
         cache.set_metadata(unique_providers=["Provider1", "Provider2"])
@@ -406,7 +406,7 @@ class TestUniqueProvidersCaching:
 
     def test_unique_providers_cleared_on_cache_invalidate_all(self, sample_operations):
         """Test that unique_providers is cleared with invalidate_all."""
-        from azurerbac.cache import CacheService
+        from rbaccatalog.cache import CacheService
 
         cache = CacheService()
         cache.set_metadata(unique_providers=["Provider1", "Provider2"])
@@ -424,7 +424,7 @@ class TestRolesAllowingOperationCaching:
 
     def test_roles_allowing_operation_cache_key_format(self):
         """Test that cache key format is correct for roles_allowing_op."""
-        from azurerbac.cache import CacheService
+        from rbaccatalog.cache import CacheService
 
         CacheService()
 
@@ -439,8 +439,8 @@ class TestRolesAllowingOperationCaching:
 
     def test_roles_allowing_operation_is_cached(self):
         """Test that roles_allowing_operation results are stored in cache."""
-        from azurerbac.cache import CacheService
-        from azurerbac.web.services.models import RoleAllowingOperation
+        from rbaccatalog.cache import CacheService
+        from rbaccatalog.web.services.models import RoleAllowingOperation
 
         cache = CacheService()
 
@@ -478,8 +478,8 @@ class TestRolesAllowingOperationCaching:
 
     def test_roles_allowing_operation_cleared_on_invalidate_all(self):
         """Test that roles_allowing_op entries are cleared on invalidate_all."""
-        from azurerbac.cache import CacheService
-        from azurerbac.web.services.models import RoleAllowingOperation
+        from rbaccatalog.cache import CacheService
+        from rbaccatalog.web.services.models import RoleAllowingOperation
 
         cache = CacheService()
 
@@ -516,8 +516,8 @@ class TestRolesAllowingOperationCaching:
 
     def test_different_operations_have_different_cache_keys(self):
         """Test that different operations use different cache keys."""
-        from azurerbac.cache import CacheService
-        from azurerbac.web.services.models import RoleAllowingOperation
+        from rbaccatalog.cache import CacheService
+        from rbaccatalog.web.services.models import RoleAllowingOperation
 
         cache = CacheService()
 
@@ -572,7 +572,7 @@ class TestCacheConsistencyOnRebuild:
 
     def test_cache_entries_cleared_on_invalidate_all(self):
         """Test that cache entries are cleared when invalidate_all is called."""
-        from azurerbac.cache import CacheService
+        from rbaccatalog.cache import CacheService
 
         cache = CacheService()
 
@@ -606,8 +606,8 @@ class TestRoleCoverageRaceCondition:
         3. But _role_coverage_cache is not yet populated (precompute_func not called yet)
         4. get_roles_allowing_operation is called -> returns empty list (BUG)
         """
-        from azurerbac.cache import CacheService
-        from azurerbac.web.routes.pages import get_roles_allowing_operation
+        from rbaccatalog.cache import CacheService
+        from rbaccatalog.web.routes.pages import get_roles_allowing_operation
         from tests.helpers import clear_computed_caches
 
         cache = CacheService()
@@ -660,11 +660,11 @@ class TestRoleCoverageRaceCondition:
 
     def test_roles_allowing_works_when_coverage_cache_populated(self):
         """Verify roles_allowing works correctly when coverage cache IS populated."""
-        from azurerbac.cache import (
+        from rbaccatalog.cache import (
             get_cache_service,
             precompute_all,
         )
-        from azurerbac.web.routes.pages import get_roles_allowing_operation
+        from rbaccatalog.web.routes.pages import get_roles_allowing_operation
         from tests.helpers import clear_computed_caches
 
         # Set up mock role data
@@ -734,11 +734,11 @@ class TestRoleCoverageRaceCondition:
         This tests that get_roles_allowing_operation uses get_all_roles()
         which derives from data.roles_by_id, ensuring consistent data access.
         """
-        from azurerbac.cache import (
+        from rbaccatalog.cache import (
             get_cache_service,
             precompute_all,
         )
-        from azurerbac.web.routes.pages import get_roles_allowing_operation
+        from rbaccatalog.web.routes.pages import get_roles_allowing_operation
         from tests.helpers import clear_computed_caches
 
         # Set up mock role data
@@ -822,7 +822,7 @@ class TestResponseFactories:
     )
     def test_empty_search_response(self, message: str):
         """Test empty_search_response creates correct response."""
-        from azurerbac.web.routes.responses import empty_search_response
+        from rbaccatalog.web.routes.responses import empty_search_response
 
         result = empty_search_response(message)
         assert result.operations == []
@@ -840,7 +840,7 @@ class TestResponseFactories:
     )
     def test_ai_error_response(self, error: str, mode: str | None):
         """Test ai_error_response creates correct response."""
-        from azurerbac.web.routes.responses import ai_error_response
+        from rbaccatalog.web.routes.responses import ai_error_response
 
         result = ai_error_response(error, mode)
         assert result.error == error
@@ -865,7 +865,7 @@ class TestErrorMessages:
     )
     def test_engine_unavailable_message(self, engine_name: str):
         """Test engine_unavailable generates correct message."""
-        from azurerbac.web.routes.responses import ErrorMessages
+        from rbaccatalog.web.routes.responses import ErrorMessages
 
         message = ErrorMessages.engine_unavailable(engine_name)
         assert engine_name in message

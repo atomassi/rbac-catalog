@@ -31,7 +31,7 @@ test-results/
 # Logs
 *.log
 logs/
-azurerbac/web/logs/
+rbaccatalog/web/logs/
 
 # Node.js (only needed for dev/testing)
 node_modules/
@@ -52,7 +52,7 @@ pyproject.toml
 
 # Cache directories
 .cache/
-azurerbac/.cache/
+rbaccatalog/.cache/
 
 # Local secrets
 .env
@@ -69,7 +69,7 @@ build/
 dist/
 
 # Large ML models (downloaded at runtime)
-azurerbac/airecommender/models/all-MiniLM-L6-v2/
+rbaccatalog/airecommender/models/all-MiniLM-L6-v2/
 
 # Generated version file
-azurerbac/_version_generated.py
+rbaccatalog/_version_generated.py

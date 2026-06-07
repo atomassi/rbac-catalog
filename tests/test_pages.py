@@ -8,10 +8,11 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from azurerbac.azure.models import OperationData, RoleDefinition
-from azurerbac.cache.models import CachedChangeEvent, CachedRole
-from azurerbac.core.constants import ROLE_DEFINITION_TYPE, EventType, RoleStatus
-from azurerbac.matching.models import RoleCoverage
+from rbaccatalog.azure.models import OperationData, RoleDefinition
+from rbaccatalog.cache.models import CachedChangeEvent, CachedRole
+from rbaccatalog.core.constants import ROLE_DEFINITION_TYPE
+from rbaccatalog.core.enums import EventType, RoleStatus
+from rbaccatalog.matching.models import RoleCoverage
 from tests.helpers import make_cached_role, make_role_definition
 
 # =============================================================================
@@ -26,7 +27,7 @@ class TestComputeRoleEffectivePermissionsServices:
 
     def test_compute_from_cache(self):
         """Test computing effective permissions from cache."""
-        from azurerbac.web.services.pages import compute_role_effective_permissions
+        from rbaccatalog.web.services.pages import compute_role_effective_permissions
 
         role = make_role_definition(
             "Test Role", "test-role-id", actions=["Microsoft.Storage/*/read"]
@@ -62,7 +63,7 @@ class TestComputeRoleEffectivePermissionsServices:
 
     def test_compute_with_not_actions(self):
         """Test that notActions are properly excluded."""
-        from azurerbac.web.services.pages import compute_role_effective_permissions
+        from rbaccatalog.web.services.pages import compute_role_effective_permissions
 
         role = make_role_definition(
             "Test Role",
@@ -103,7 +104,7 @@ class TestComputeRoleEffectivePermissionsServices:
 
     def test_compute_data_actions(self):
         """Test computing data plane actions."""
-        from azurerbac.web.services.pages import compute_role_effective_permissions
+        from rbaccatalog.web.services.pages import compute_role_effective_permissions
 
         role = make_role_definition(
             "Test Role",
@@ -183,7 +184,7 @@ class TestComputeRoleEffectivePermissionsServices:
         expected: bool,
     ):
         """Test detection of various permission attributes (conditions, wildcards, unresolved)."""
-        from azurerbac.web.services.pages import compute_role_effective_permissions
+        from rbaccatalog.web.services.pages import compute_role_effective_permissions
 
         role = make_role_definition(
             "Test Role", "test-role-id", actions=actions, condition=condition
@@ -205,7 +206,7 @@ class TestComputeRoleEffectivePermissionsServices:
 
     def test_fallback_to_manual_computation(self):
         """Test fallback to manual computation when cache misses."""
-        from azurerbac.web.services.pages import compute_role_effective_permissions
+        from rbaccatalog.web.services.pages import compute_role_effective_permissions
 
         role = make_role_definition(
             "Test Role",
@@ -242,7 +243,7 @@ class TestComputeRoleEffectivePermissionsServices:
         This is a regression test for a bug where compute_coverage passed operations
         with original casing, but restore_operation_casing expected lowercased names.
         """
-        from azurerbac.web.services.pages import compute_role_effective_permissions
+        from rbaccatalog.web.services.pages import compute_role_effective_permissions
 
         role = make_role_definition(
             "Test Role",
@@ -293,8 +294,8 @@ class TestGetRolesAllowingOperationServices:
 
     def test_returns_roles_from_cache(self):
         """Test returning cached results."""
-        from azurerbac.web.services.models import RoleAllowingOperation
-        from azurerbac.web.services.pages import get_roles_allowing_operation
+        from rbaccatalog.web.services.models import RoleAllowingOperation
+        from rbaccatalog.web.services.pages import get_roles_allowing_operation
 
         mock_app_cache = MagicMock()
         cached_roles = [
@@ -318,10 +319,10 @@ class TestGetRolesAllowingOperationServices:
 
     def test_finds_roles_by_operation(self):
         """Test finding roles that allow an operation via inverted index."""
-        from azurerbac.cache.models import CachedRole
-        from azurerbac.core.constants import RoleStatus
-        from azurerbac.matching.models import RoleNetPermissions
-        from azurerbac.web.services.pages import get_roles_allowing_operation
+        from rbaccatalog.cache.models import CachedRole
+        from rbaccatalog.core.enums import RoleStatus
+        from rbaccatalog.matching.models import RoleNetPermissions
+        from rbaccatalog.web.services.pages import get_roles_allowing_operation
 
         mock_app_cache = MagicMock()
         mock_app_cache.get_allowing_roles.return_value = None  # Cache miss
@@ -360,7 +361,7 @@ class TestGetRolesAllowingOperationServices:
 
     def test_excludes_roles_without_operation(self):
         """Test that roles without the operation are excluded (empty index result)."""
-        from azurerbac.web.services.pages import get_roles_allowing_operation
+        from rbaccatalog.web.services.pages import get_roles_allowing_operation
 
         mock_app_cache = MagicMock()
         mock_app_cache.get_allowing_roles.return_value = None
@@ -376,10 +377,10 @@ class TestGetRolesAllowingOperationServices:
 
     def test_caches_result(self):
         """Test that results are cached."""
-        from azurerbac.cache.models import CachedRole
-        from azurerbac.core.constants import RoleStatus
-        from azurerbac.matching.models import RoleNetPermissions
-        from azurerbac.web.services.pages import get_roles_allowing_operation
+        from rbaccatalog.cache.models import CachedRole
+        from rbaccatalog.core.enums import RoleStatus
+        from rbaccatalog.matching.models import RoleNetPermissions
+        from rbaccatalog.web.services.pages import get_roles_allowing_operation
 
         mock_app_cache = MagicMock()
         mock_app_cache.get_allowing_roles.return_value = None
@@ -415,7 +416,7 @@ class TestGetRolesAllowingOperationServices:
 
     def test_raises_on_missing_role_in_cache(self):
         """Test that RuntimeError is raised when role in index but not in cache."""
-        from azurerbac.web.services.pages import get_roles_allowing_operation
+        from rbaccatalog.web.services.pages import get_roles_allowing_operation
 
         mock_app_cache = MagicMock()
         mock_app_cache.get_allowing_roles.return_value = None
@@ -427,9 +428,9 @@ class TestGetRolesAllowingOperationServices:
 
     def test_raises_on_missing_net_permissions(self):
         """Test that RuntimeError is raised when role missing net_perms."""
-        from azurerbac.cache.models import CachedRole
-        from azurerbac.core.constants import RoleStatus
-        from azurerbac.web.services.pages import get_roles_allowing_operation
+        from rbaccatalog.cache.models import CachedRole
+        from rbaccatalog.core.enums import RoleStatus
+        from rbaccatalog.web.services.pages import get_roles_allowing_operation
 
         mock_app_cache = MagicMock()
         mock_app_cache.get_allowing_roles.return_value = None
@@ -460,7 +461,7 @@ class TestEnrichEventWithDiff:
 
     def test_enriches_event_with_role_json_pretty(self):
         """Test that role_json is formatted as role_json_pretty."""
-        from azurerbac.web.services.pages import enrich_event_with_diff
+        from rbaccatalog.web.services.pages import enrich_event_with_diff
 
         event = CachedChangeEvent(
             id=1,
@@ -487,7 +488,7 @@ class TestEnrichEventWithDiff:
 
     def test_role_json_pretty_empty_when_no_role_json(self):
         """Test that role_json_pretty is empty for deleted events."""
-        from azurerbac.web.services.pages import enrich_event_with_diff
+        from rbaccatalog.web.services.pages import enrich_event_with_diff
 
         event = CachedChangeEvent(
             id=2,
@@ -507,7 +508,7 @@ class TestEnrichEventWithDiff:
 
     def test_applies_sanitization_to_role_json(self):
         """Test that role_json is sanitized (isServiceRole excluded via RoleDefinition model)."""
-        from azurerbac.web.services.pages import enrich_event_with_diff
+        from rbaccatalog.web.services.pages import enrich_event_with_diff
 
         event = CachedChangeEvent(
             id=3,
@@ -534,7 +535,7 @@ class TestEnrichEventWithDiff:
 
     def test_diff_json_is_processed(self):
         """Test that diff_json is included in result."""
-        from azurerbac.web.services.pages import enrich_event_with_diff
+        from rbaccatalog.web.services.pages import enrich_event_with_diff
 
         event = CachedChangeEvent(
             id=4,
@@ -563,7 +564,7 @@ class TestEnrichEventWithDiff:
         Azure API sometimes returns different createdOn values for the same role.
         The before_json should have its createdOn set to match after_json.
         """
-        from azurerbac.web.services.pages import enrich_event_with_diff
+        from rbaccatalog.web.services.pages import enrich_event_with_diff
 
         event = CachedChangeEvent(
             id=5,
@@ -613,7 +614,7 @@ class TestEnrichEventWithDiff:
         Delete events created by diff_roles(old, None) only have 'changes' - not the full JSON.
         The function should NOT introduce before_json/after_json keys in this case.
         """
-        from azurerbac.web.services.pages import enrich_event_with_diff
+        from rbaccatalog.web.services.pages import enrich_event_with_diff
 
         event = CachedChangeEvent(
             id=6,
@@ -647,7 +648,7 @@ class TestEnrichEventWithDiff:
         Bug regression test: If after_json is missing but before_json has createdOn,
         the value should still be preserved (not cause issues).
         """
-        from azurerbac.web.services.pages import enrich_event_with_diff
+        from rbaccatalog.web.services.pages import enrich_event_with_diff
 
         event = CachedChangeEvent(
             id=7,
@@ -687,7 +688,7 @@ class TestEnrichEventWithDiff:
         Bug regression test: If before_json exists but has no 'properties' key,
         and after_json has createdOn, the function should add properties to before.
         """
-        from azurerbac.web.services.pages import enrich_event_with_diff
+        from rbaccatalog.web.services.pages import enrich_event_with_diff
 
         event = CachedChangeEvent(
             id=8,
@@ -794,7 +795,7 @@ class TestJaccard:
     )
     def test_jaccard_similarity(self, set_a: frozenset, set_b: frozenset, expected: float):
         """Test Jaccard similarity for various set combinations."""
-        from azurerbac.web.services.pages import _jaccard
+        from rbaccatalog.web.services.pages import _jaccard
 
         assert _jaccard(set_a, set_b) == pytest.approx(expected)
 
@@ -824,7 +825,7 @@ class TestConditionSimilarity:
     )
     def test_condition_similarity(self, conds_a: frozenset, conds_b: frozenset, expected: float):
         """Test condition similarity for various condition combinations."""
-        from azurerbac.web.services.pages import _condition_similarity
+        from rbaccatalog.web.services.pages import _condition_similarity
 
         assert _condition_similarity(conds_a, conds_b) == pytest.approx(expected)
 
@@ -833,7 +834,7 @@ class TestExtractRoleMetadata:
     """Tests for _extract_role_metadata function."""
 
     def test_default_scope(self):
-        from azurerbac.web.services.pages import _extract_role_metadata
+        from rbaccatalog.web.services.pages import _extract_role_metadata
 
         role = make_cached_role("r1", "Reader")
         scopes, conditions = _extract_role_metadata(role)
@@ -841,7 +842,7 @@ class TestExtractRoleMetadata:
         assert conditions == frozenset()
 
     def test_custom_scopes(self):
-        from azurerbac.web.services.pages import _extract_role_metadata
+        from rbaccatalog.web.services.pages import _extract_role_metadata
 
         role = _make_cached_role_full(
             "r1",
@@ -852,7 +853,7 @@ class TestExtractRoleMetadata:
         assert scopes == frozenset({"/subscriptions/abc", "/subscriptions/def"})
 
     def test_conditions_extracted(self):
-        from azurerbac.web.services.pages import _extract_role_metadata
+        from rbaccatalog.web.services.pages import _extract_role_metadata
 
         role = _make_cached_role_full(
             "r1",
@@ -865,7 +866,7 @@ class TestExtractRoleMetadata:
         assert "BlobStorage" in next(iter(conditions))
 
     def test_no_conditions_when_absent(self):
-        from azurerbac.web.services.pages import _extract_role_metadata
+        from rbaccatalog.web.services.pages import _extract_role_metadata
 
         role = _make_cached_role_full("r1", "Plain", actions=["*/read"])
         _, conditions = _extract_role_metadata(role)
@@ -926,7 +927,7 @@ class TestScopesContain:
     )
     def test_scopes_contain(self, broader: frozenset, narrower: frozenset, expected: bool):
         """Test scope containment for various scope combinations."""
-        from azurerbac.web.services.pages import _scopes_contain
+        from rbaccatalog.web.services.pages import _scopes_contain
 
         assert _scopes_contain(broader, narrower) is expected
 
@@ -957,20 +958,20 @@ class TestComputeRelatedRoles:
     """Tests for compute_related_roles function."""
 
     def test_role_not_found_returns_empty(self):
-        from azurerbac.web.services.pages import compute_related_roles
+        from rbaccatalog.web.services.pages import compute_related_roles
 
         cache = _build_cache_service({}, {}, {})
         assert compute_related_roles("missing-id", cache=cache) == []
 
     def test_no_coverage_returns_empty(self):
-        from azurerbac.web.services.pages import compute_related_roles
+        from rbaccatalog.web.services.pages import compute_related_roles
 
         role = make_cached_role("r1", "Reader")
         cache = _build_cache_service({"r1": role}, {}, {})
         assert compute_related_roles("r1", cache=cache) == []
 
     def test_empty_operations_returns_empty(self):
-        from azurerbac.web.services.pages import compute_related_roles
+        from rbaccatalog.web.services.pages import compute_related_roles
 
         role = make_cached_role("r1", "Reader")
         coverage = RoleCoverage(control=set(), data=set())
@@ -978,7 +979,7 @@ class TestComputeRelatedRoles:
         assert compute_related_roles("r1", cache=cache) == []
 
     def test_no_co_occurring_roles_returns_empty(self):
-        from azurerbac.web.services.pages import compute_related_roles
+        from rbaccatalog.web.services.pages import compute_related_roles
 
         role = make_cached_role("r1", "Reader")
         coverage = RoleCoverage(control={"op1"}, data=set())
@@ -988,7 +989,7 @@ class TestComputeRelatedRoles:
 
     def test_basic_related_role(self):
         """Two roles sharing all operations should have high similarity."""
-        from azurerbac.web.services.pages import compute_related_roles
+        from rbaccatalog.web.services.pages import compute_related_roles
 
         ops = {"op1", "op2", "op3"}
         r1 = make_cached_role("r1", "Alpha")
@@ -1008,7 +1009,7 @@ class TestComputeRelatedRoles:
 
     def test_partial_overlap_similarity(self):
         """Partial operation overlap should produce fractional similarity."""
-        from azurerbac.web.services.pages import compute_related_roles
+        from rbaccatalog.web.services.pages import compute_related_roles
 
         r1 = make_cached_role("r1", "Alpha")
         r2 = make_cached_role("r2", "Beta")
@@ -1034,7 +1035,7 @@ class TestComputeRelatedRoles:
 
     def test_below_threshold_filtered(self):
         """Roles below 20% composite similarity should be excluded."""
-        from azurerbac.web.services.pages import compute_related_roles
+        from rbaccatalog.web.services.pages import compute_related_roles
 
         r1 = make_cached_role("r1", "Alpha")
         r2 = _make_cached_role_full(
@@ -1063,7 +1064,7 @@ class TestComputeRelatedRoles:
 
     def test_deleted_roles_excluded(self):
         """Deleted roles should not appear in results."""
-        from azurerbac.web.services.pages import compute_related_roles
+        from rbaccatalog.web.services.pages import compute_related_roles
 
         ops = {"op1", "op2"}
         r1 = make_cached_role("r1", "Alpha")
@@ -1078,7 +1079,7 @@ class TestComputeRelatedRoles:
 
     def test_results_sorted_descending(self):
         """Results should be sorted by similarity from highest to lowest."""
-        from azurerbac.web.services.pages import compute_related_roles
+        from rbaccatalog.web.services.pages import compute_related_roles
 
         r1 = make_cached_role("r1", "Alpha")
         r_high = make_cached_role("r2", "High")
@@ -1112,7 +1113,7 @@ class TestComputeRelatedRoles:
 
     def test_limit_respected(self):
         """Results should be capped at the limit parameter."""
-        from azurerbac.web.services.pages import compute_related_roles
+        from rbaccatalog.web.services.pages import compute_related_roles
 
         r1 = make_cached_role("r1", "Alpha")
         roles = {"r1": r1}
@@ -1133,7 +1134,7 @@ class TestComputeRelatedRoles:
 
     def test_scope_mismatch_reduces_similarity(self):
         """Different assignable scopes should reduce similarity."""
-        from azurerbac.web.services.pages import compute_related_roles
+        from rbaccatalog.web.services.pages import compute_related_roles
 
         r1 = _make_cached_role_full("r1", "Alpha", actions=["op1"])
         r_same_scope = _make_cached_role_full("r2", "SameScope", actions=["op1"])
@@ -1163,7 +1164,7 @@ class TestComputeRelatedRoles:
 
     def test_condition_mismatch_reduces_similarity(self):
         """One role with conditions vs one without should reduce similarity."""
-        from azurerbac.web.services.pages import compute_related_roles
+        from rbaccatalog.web.services.pages import compute_related_roles
 
         r1 = _make_cached_role_full("r1", "Alpha", actions=["op1"])
         r_no_cond = _make_cached_role_full("r2", "NoCond", actions=["op1"])
@@ -1194,7 +1195,7 @@ class TestComputeRelatedRoles:
 
     def test_data_actions_included_in_similarity(self):
         """Data actions should contribute to operation overlap."""
-        from azurerbac.web.services.pages import compute_related_roles
+        from rbaccatalog.web.services.pages import compute_related_roles
 
         r1 = make_cached_role("r1", "Alpha")
         r2 = make_cached_role("r2", "Beta")
@@ -1213,7 +1214,7 @@ class TestComputeRelatedRoles:
 
     def test_related_role_dataclass_fields(self):
         """Verify all fields of the RelatedRole dataclass are populated."""
-        from azurerbac.web.services.pages import compute_related_roles
+        from rbaccatalog.web.services.pages import compute_related_roles
 
         r1 = make_cached_role("r1", "Alpha")
         r2 = make_cached_role("r2", "Beta")
@@ -1237,7 +1238,7 @@ class TestComputeRelatedRoles:
 
     def test_result_cached_on_second_call(self):
         """Second call should return cached result without recomputing."""
-        from azurerbac.web.services.pages import compute_related_roles
+        from rbaccatalog.web.services.pages import compute_related_roles
 
         ops = {"op1", "op2"}
         r1 = make_cached_role("r1", "Alpha")
@@ -1266,7 +1267,7 @@ class TestComputeRelatedRoles:
 
     def test_cache_miss_then_stores(self):
         """First call should store computed result in cache."""
-        from azurerbac.web.services.pages import compute_related_roles
+        from rbaccatalog.web.services.pages import compute_related_roles
 
         ops = {"op1"}
         r1 = make_cached_role("r1", "Alpha")
@@ -1281,7 +1282,7 @@ class TestComputeRelatedRoles:
 
     def test_subset_same_ops_same_scope_same_conditions(self):
         """Other has fewer ops, all in current, same scope/conditions → subset."""
-        from azurerbac.web.services.pages import compute_related_roles
+        from rbaccatalog.web.services.pages import compute_related_roles
 
         r1 = _make_cached_role_full("r1", "Alpha", actions=["op1", "op2", "op3"])
         r2 = _make_cached_role_full("r2", "Beta", actions=["op1", "op2"])
@@ -1297,7 +1298,7 @@ class TestComputeRelatedRoles:
 
     def test_superset_same_ops_same_scope_same_conditions(self):
         """Other has more ops, all current ops in other, same scope/conditions → superset."""
-        from azurerbac.web.services.pages import compute_related_roles
+        from rbaccatalog.web.services.pages import compute_related_roles
 
         r1 = _make_cached_role_full("r1", "Alpha", actions=["op1", "op2"])
         r2 = _make_cached_role_full("r2", "Beta", actions=["op1", "op2", "op3"])
@@ -1313,7 +1314,7 @@ class TestComputeRelatedRoles:
 
     def test_subset_narrower_scope(self):
         """Other has same ops but narrower scope → subset."""
-        from azurerbac.web.services.pages import compute_related_roles
+        from rbaccatalog.web.services.pages import compute_related_roles
 
         r1 = _make_cached_role_full("r1", "Alpha", actions=["op1"], assignable_scopes=["/"])
         r2 = _make_cached_role_full(
@@ -1333,7 +1334,7 @@ class TestComputeRelatedRoles:
 
     def test_superset_broader_scope(self):
         """Other has same ops but broader scope → superset."""
-        from azurerbac.web.services.pages import compute_related_roles
+        from rbaccatalog.web.services.pages import compute_related_roles
 
         r1 = _make_cached_role_full(
             "r1", "Alpha", actions=["op1"], assignable_scopes=["/subscriptions/abc"]
@@ -1352,7 +1353,7 @@ class TestComputeRelatedRoles:
 
     def test_different_conditions_neither_subset_nor_superset(self):
         """Same ops but different conditions → neither subset nor superset."""
-        from azurerbac.web.services.pages import compute_related_roles
+        from rbaccatalog.web.services.pages import compute_related_roles
 
         r1 = _make_cached_role_full(
             "r1", "Alpha", actions=["op1"], condition="@Resource[Microsoft.Storage:kind] == 'Blob'"
@@ -1372,7 +1373,7 @@ class TestComputeRelatedRoles:
 
     def test_one_conditioned_one_not_neither(self):
         """One role has conditions, other doesn't → neither."""
-        from azurerbac.web.services.pages import compute_related_roles
+        from rbaccatalog.web.services.pages import compute_related_roles
 
         r1 = _make_cached_role_full("r1", "Alpha", actions=["op1"])
         r2 = _make_cached_role_full(
@@ -1390,7 +1391,7 @@ class TestComputeRelatedRoles:
 
     def test_equal_roles_both_subset_and_superset(self):
         """Same ops, same scope, same conditions → both subset and superset."""
-        from azurerbac.web.services.pages import compute_related_roles
+        from rbaccatalog.web.services.pages import compute_related_roles
 
         r1 = _make_cached_role_full("r1", "Alpha", actions=["op1"])
         r2 = _make_cached_role_full("r2", "Beta", actions=["op1"])
@@ -1414,13 +1415,13 @@ class TestComputeRoleComparison:
     """Tests for compute_role_comparison function."""
 
     def test_role_a_not_found_returns_none(self):
-        from azurerbac.comparer import compute_role_comparison
+        from rbaccatalog.comparer import compute_role_comparison
 
         cache = _build_cache_service({}, {}, {})
         assert compute_role_comparison("missing", "also-missing", cache=cache) is None
 
     def test_role_b_not_found_returns_none(self):
-        from azurerbac.comparer import compute_role_comparison
+        from rbaccatalog.comparer import compute_role_comparison
 
         r1 = make_cached_role("r1", "Alpha")
         cache = _build_cache_service({"r1": r1}, {}, {})
@@ -1428,7 +1429,7 @@ class TestComputeRoleComparison:
 
     def test_identical_roles_all_shared(self):
         """Two roles with identical operations should have no unique ops."""
-        from azurerbac.comparer import compute_role_comparison
+        from rbaccatalog.comparer import compute_role_comparison
 
         ops = {"op1", "op2", "op3"}
         r1 = make_cached_role("r1", "Alpha")
@@ -1448,7 +1449,7 @@ class TestComputeRoleComparison:
 
     def test_disjoint_roles_no_shared(self):
         """Two roles with no overlap should have no shared ops."""
-        from azurerbac.comparer import compute_role_comparison
+        from rbaccatalog.comparer import compute_role_comparison
 
         r1 = make_cached_role("r1", "Alpha")
         r2 = make_cached_role("r2", "Beta")
@@ -1464,7 +1465,7 @@ class TestComputeRoleComparison:
 
     def test_partial_overlap(self):
         """Partial overlap should correctly split into three sets."""
-        from azurerbac.comparer import compute_role_comparison
+        from rbaccatalog.comparer import compute_role_comparison
 
         r1 = make_cached_role("r1", "Alpha")
         r2 = make_cached_role("r2", "Beta")
@@ -1483,7 +1484,7 @@ class TestComputeRoleComparison:
 
     def test_no_coverage_treated_as_empty(self):
         """Roles without coverage should be treated as having no operations."""
-        from azurerbac.comparer import compute_role_comparison
+        from rbaccatalog.comparer import compute_role_comparison
 
         r1 = make_cached_role("r1", "Alpha")
         r2 = make_cached_role("r2", "Beta")
@@ -1499,7 +1500,7 @@ class TestComputeRoleComparison:
 
     def test_side_metadata_populated(self):
         """RoleComparisonSide fields should be populated correctly."""
-        from azurerbac.comparer import compute_role_comparison
+        from rbaccatalog.comparer import compute_role_comparison
 
         r1 = _make_cached_role_full("r1", "Alpha", actions=["op1"], data_actions=["d1"])
         r2 = _make_cached_role_full("r2", "Beta", actions=["op2"])
@@ -1520,7 +1521,7 @@ class TestComputeRoleComparison:
 
     def test_results_are_sorted(self):
         """Operation lists should be alphabetically sorted."""
-        from azurerbac.comparer import compute_role_comparison
+        from rbaccatalog.comparer import compute_role_comparison
 
         r1 = make_cached_role("r1", "Alpha")
         r2 = make_cached_role("r2", "Beta")
@@ -1534,7 +1535,7 @@ class TestComputeRoleComparison:
 
     def test_same_role_returns_none(self):
         """Comparing a role with itself should return None."""
-        from azurerbac.comparer import compute_role_comparison
+        from rbaccatalog.comparer import compute_role_comparison
 
         r1 = make_cached_role("r1", "Alpha")
         cache = _build_cache_service({"r1": r1}, {}, {})
@@ -1542,7 +1543,7 @@ class TestComputeRoleComparison:
 
     def test_cache_hit_avoids_recompute(self):
         """Second call with same IDs should return cached result."""
-        from azurerbac.comparer import compute_role_comparison
+        from rbaccatalog.comparer import compute_role_comparison
 
         ops = {"op1", "op2"}
         r1 = make_cached_role("r1", "Alpha")
@@ -1563,7 +1564,7 @@ class TestComputeRoleComparison:
 
     def test_reverse_order_separate_cache(self):
         """Calling with (B, A) produces a separate cache entry with swapped sides."""
-        from azurerbac.comparer import compute_role_comparison
+        from rbaccatalog.comparer import compute_role_comparison
 
         r1 = make_cached_role("r1", "Alpha")
         r2 = make_cached_role("r2", "Beta")
@@ -1594,7 +1595,7 @@ class TestComputeRoleComparison:
 
     def test_conditions_populated_in_sides(self):
         """ABAC conditions should appear in role comparison sides."""
-        from azurerbac.comparer import compute_role_comparison
+        from rbaccatalog.comparer import compute_role_comparison
 
         cond = "@Resource[Microsoft.Storage/storageAccounts:kind] == 'BlobStorage'"
         r1 = _make_cached_role_full("r1", "Alpha", actions=["op1"], condition=cond)
@@ -1610,7 +1611,7 @@ class TestComputeRoleComparison:
 
     def test_assignable_scopes_populated_in_sides(self):
         """Assignable scopes should appear in role comparison sides."""
-        from azurerbac.comparer import compute_role_comparison
+        from rbaccatalog.comparer import compute_role_comparison
 
         r1 = _make_cached_role_full(
             "r1", "Alpha", actions=["op1"], assignable_scopes=["/subscriptions/abc"]
@@ -1640,7 +1641,7 @@ class TestBuildPopularComparisons:
 
     def test_resolves_known_pairs(self):
         """Pairs whose IDs exist in roles_by_id should be resolved."""
-        from azurerbac.cache.build import _build_popular_comparisons
+        from rbaccatalog.cache.build import _build_popular_comparisons
 
         roles_by_id = {
             self.READER_ID: make_cached_role(self.READER_ID, "Reader"),
@@ -1663,7 +1664,7 @@ class TestBuildPopularComparisons:
 
     def test_skips_pair_when_role_missing(self):
         """Pairs where one role is missing should be skipped."""
-        from azurerbac.cache.build import _build_popular_comparisons
+        from rbaccatalog.cache.build import _build_popular_comparisons
 
         roles_by_id = {
             self.READER_ID: make_cached_role(self.READER_ID, "Reader"),
@@ -1674,15 +1675,15 @@ class TestBuildPopularComparisons:
 
     def test_empty_roles_returns_empty(self):
         """Empty roles_by_id should produce an empty list."""
-        from azurerbac.cache.build import _build_popular_comparisons
+        from rbaccatalog.cache.build import _build_popular_comparisons
 
         result = _build_popular_comparisons({})
         assert result == []
 
     def test_all_pairs_resolved_with_full_index(self):
         """When all role IDs exist, all pairs should resolve."""
-        from azurerbac.cache.build import _build_popular_comparisons
-        from azurerbac.core.constants import POPULAR_COMPARE_PAIRS
+        from rbaccatalog.cache.build import _build_popular_comparisons
+        from rbaccatalog.core.constants import POPULAR_COMPARE_PAIRS
 
         roles_by_id: dict[str, CachedRole] = {}
         for id_a, id_b, _cat in POPULAR_COMPARE_PAIRS:
@@ -1695,7 +1696,7 @@ class TestBuildPopularComparisons:
 
     def test_returned_objects_are_frozen(self):
         """PopularComparison instances should be immutable."""
-        from azurerbac.cache.build import _build_popular_comparisons
+        from rbaccatalog.cache.build import _build_popular_comparisons
 
         roles_by_id = {
             self.READER_ID: make_cached_role(self.READER_ID, "Reader"),

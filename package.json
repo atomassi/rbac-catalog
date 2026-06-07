@@ -1,11 +1,11 @@
 {
-  "name": "azurerbac-frontend",
+  "name": "rbaccatalog-frontend",
   "version": "1.0.0",
   "description": "Frontend build for Azure RBAC Monitor",
   "scripts": {
-    "build:css": "tailwindcss -i ./azurerbac/web/static/css/input.css -o ./azurerbac/web/static/css/tailwind.min.css --minify",
-    "watch:css": "tailwindcss -i ./azurerbac/web/static/css/input.css -o ./azurerbac/web/static/css/tailwind.min.css --watch",
-    "check:js": "tsc --noEmit --allowJs --checkJs --strict --target ES2020 --lib ES2020,DOM --moduleResolution node azurerbac/web/static/js/*.js",
+    "build:css": "tailwindcss -i ./rbaccatalog/web/static/css/input.css -o ./rbaccatalog/web/static/css/tailwind.min.css --minify",
+    "watch:css": "tailwindcss -i ./rbaccatalog/web/static/css/input.css -o ./rbaccatalog/web/static/css/tailwind.min.css --watch",
+    "check:js": "tsc --noEmit --allowJs --checkJs --strict --target ES2020 --lib ES2020,DOM --moduleResolution node rbaccatalog/web/static/js/*.js",
     "test:js": "vitest run",
     "test:js:watch": "vitest",
     "test:js:coverage": "vitest run --coverage",
@@ -17,7 +17,7 @@
     "jsdom": "^26.0.0",
     "tailwindcss": "^3.4.0",
     "typescript": "^5.7.0",
-    "vitest": "^3.0.0"
+    "vitest": "^4.1.0"
   },
   "dependencies": {
     "playwright": "^1.60.0"

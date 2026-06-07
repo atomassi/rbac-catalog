@@ -1,8 +1,8 @@
 [project]
-name = "azurerbac"
+name = "rbac-catalog"
 description = "Azure RBAC Built-in Role Definitions Monitor"
 readme = "README.md"
-requires-python = ">=3.12,<3.13"
+requires-python = ">=3.12,<3.15"
 license = { text = "MIT" }
 authors = [{ name = "Andrea Tomassilli" }]
 keywords = ["azure", "rbac", "iam", "roles", "permissions", "least-privilege"]
@@ -14,6 +14,8 @@ classifiers = [
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Security",
     "Topic :: System :: Systems Administration",
 ]
@@ -25,7 +27,7 @@ Repository = "https://github.com/atomassi/rbac-catalog"
 Issues = "https://github.com/atomassi/rbac-catalog/issues"
 
 [tool.setuptools.dynamic]
-version = {attr = "azurerbac._version.__version__"}
+version = {attr = "rbaccatalog._version.__version__"}
 
 [build-system]
 requires = ["setuptools>=82.0.1"]
@@ -33,7 +35,7 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["azurerbac*"]
+include = ["rbaccatalog*"]
 
 [tool.ruff]
 line-length = 100
@@ -100,12 +102,12 @@ convention = "google"
 "scripts/*" = ["T20", "D", "ANN"]  # CLI scripts use print
 "finetune/*" = ["T20", "D", "ANN", "PLR"]
 "benchmark/*" = ["T20", "D", "ANN", "PLR"]
-"azurerbac/web/routes/static.py" = ["N806"]  # SessionLocal variable naming
-"azurerbac/core/models.py" = ["D101"]  # SQLAlchemy models are self-documenting
-"azurerbac/backgroundjobs/*" = ["D103", "D101", "ANN"]  # Internal workers
+"rbaccatalog/web/routes/static.py" = ["N806"]  # SessionLocal variable naming
+"rbaccatalog/core/models.py" = ["D101"]  # SQLAlchemy models are self-documenting
+"rbaccatalog/backgroundjobs/*" = ["D103", "D101", "ANN"]  # Internal workers
 
 [tool.ruff.lint.isort]
-known-first-party = ["azurerbac"]
+known-first-party = ["rbaccatalog"]
 
 [tool.black]
 line-length = 100
@@ -136,7 +138,7 @@ filterwarnings = [
 [tool.pyright]
 pythonVersion = "3.12"
 typeCheckingMode = "standard"
-include = ["azurerbac"]
+include = ["rbaccatalog"]
 exclude = [
     "tests",
     "**/__pycache__",

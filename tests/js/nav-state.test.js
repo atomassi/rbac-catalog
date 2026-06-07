@@ -3,7 +3,7 @@
  * Tests navigation state management and back button logic
  */
 import { describe, it, expect, beforeEach } from 'vitest';
-const { NavState } = require('../../azurerbac/web/static/js/nav-state.js');
+const { NavState } = require('../../rbaccatalog/web/static/js/nav-state.js');
 
 describe('NavState', () => {
     beforeEach(() => {

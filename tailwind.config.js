@@ -1,11 +1,11 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   content: [
-    './azurerbac/web/templates/**/*.html',
-    './azurerbac/web/static/js/**/*.js',
+    './rbaccatalog/web/templates/**/*.html',
+    './rbaccatalog/web/static/js/**/*.js',
   ],
   // Some utility classes only appear inside Python string literals
-  // (e.g. the decommission banner HTML in ``azurerbac/web/constants.py``)
+  // (e.g. the decommission banner HTML in ``rbaccatalog/web/constants.py``)
   // and the JIT can't see them through the ``content`` globs. Scanning
   // the whole Python file would also emit utilities for unrelated tokens
   // (URLs, CSP domains, etc.) and bloat the bundle, so we list the

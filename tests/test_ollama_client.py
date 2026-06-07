@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 
-from azurerbac.airecommender.llm.client import OllamaClient
+from rbaccatalog.airecommender.llm.client import OllamaClient
 
 
 @pytest.fixture
@@ -202,7 +202,7 @@ class TestParseJsonWithRepair:
     )
     def test_json_extraction_and_repair(self, raw: str, expected_role: str):
         """Test JSON parsing with extraction and repair for various formats."""
-        from azurerbac.airecommender.llm.json_repair import parse_json_with_repair
+        from rbaccatalog.airecommender.llm.json_repair import parse_json_with_repair
 
         result = parse_json_with_repair(raw)
         assert result is not None
@@ -210,7 +210,7 @@ class TestParseJsonWithRepair:
 
     def test_valid_json_with_arrays(self):
         """Test parsing valid JSON with arrays."""
-        from azurerbac.airecommender.llm.json_repair import parse_json_with_repair
+        from rbaccatalog.airecommender.llm.json_repair import parse_json_with_repair
 
         raw = '{"role": "Reader", "signals_matched": ["read", "view"]}'
         result = parse_json_with_repair(raw)
@@ -219,7 +219,7 @@ class TestParseJsonWithRepair:
 
     def test_regex_fallback_with_confidence(self):
         """Test regex fallback extracts confidence class too."""
-        from azurerbac.airecommender.llm.json_repair import parse_json_with_repair
+        from rbaccatalog.airecommender.llm.json_repair import parse_json_with_repair
 
         raw = '{"role": "Reader", "confidence_class": "medium", invalid'
         result = parse_json_with_repair(raw)
@@ -229,7 +229,7 @@ class TestParseJsonWithRepair:
 
     def test_completely_invalid_returns_none(self):
         """Test completely invalid input returns None."""
-        from azurerbac.airecommender.llm.json_repair import parse_json_with_repair
+        from rbaccatalog.airecommender.llm.json_repair import parse_json_with_repair
 
         raw = "This is not JSON at all, just plain text"
         result = parse_json_with_repair(raw)
@@ -237,7 +237,7 @@ class TestParseJsonWithRepair:
 
     def test_nested_array_repair(self):
         """Test repairing nested array syntax issues."""
-        from azurerbac.airecommender.llm.json_repair import parse_json_with_repair
+        from rbaccatalog.airecommender.llm.json_repair import parse_json_with_repair
 
         # ["a"], ["b"] should become ["a", "b"]
         raw = '{"role": "Reader", "signals_matched": ["read"], ["view"]}'
@@ -248,7 +248,7 @@ class TestParseJsonWithRepair:
 
     def test_missing_quote_in_array(self):
         """Test repairing missing quotes in array."""
-        from azurerbac.airecommender.llm.json_repair import parse_json_with_repair
+        from rbaccatalog.airecommender.llm.json_repair import parse_json_with_repair
 
         raw = '{"role": "Reader", "signals_matched": ["read]}'
         result = parse_json_with_repair(raw)
@@ -257,7 +257,7 @@ class TestParseJsonWithRepair:
 
     def test_unquoted_array_items(self):
         """Test repair of unquoted array items."""
-        from azurerbac.airecommender.llm.json_repair import parse_json_with_repair
+        from rbaccatalog.airecommender.llm.json_repair import parse_json_with_repair
 
         raw = '{"role": "Reader", "signals_matched": [read, view]}'
         result = parse_json_with_repair(raw)
@@ -267,7 +267,7 @@ class TestParseJsonWithRepair:
 
     def test_markdown_json_block(self):
         """Test JSON extraction from markdown code block."""
-        from azurerbac.airecommender.llm.json_repair import parse_json_with_repair
+        from rbaccatalog.airecommender.llm.json_repair import parse_json_with_repair
 
         # Note: markdown extraction is handled in recommend_roles before
         # calling parse_json_with_repair, but we test the inner function here
@@ -278,21 +278,21 @@ class TestParseJsonWithRepair:
 
     def test_empty_string(self):
         """Test empty string returns None."""
-        from azurerbac.airecommender.llm.json_repair import parse_json_with_repair
+        from rbaccatalog.airecommender.llm.json_repair import parse_json_with_repair
 
         result = parse_json_with_repair("")
         assert result is None
 
     def test_empty_json_object(self):
         """Test empty JSON object."""
-        from azurerbac.airecommender.llm.json_repair import parse_json_with_repair
+        from rbaccatalog.airecommender.llm.json_repair import parse_json_with_repair
 
         result = parse_json_with_repair("{}")
         assert result == {}
 
     def test_regex_fallback_default_confidence(self):
         """Test regex fallback uses 'low' as default confidence."""
-        from azurerbac.airecommender.llm.json_repair import parse_json_with_repair
+        from rbaccatalog.airecommender.llm.json_repair import parse_json_with_repair
 
         raw = '{"role": "Reader" broken'
         result = parse_json_with_repair(raw)
@@ -304,7 +304,7 @@ class TestParseJsonWithRepair:
 
     def test_complex_valid_json(self):
         """Test parsing complex but valid JSON structure."""
-        from azurerbac.airecommender.llm.json_repair import parse_json_with_repair
+        from rbaccatalog.airecommender.llm.json_repair import parse_json_with_repair
 
         raw = """{
             "role": "Storage Blob Data Contributor",
@@ -318,6 +318,82 @@ class TestParseJsonWithRepair:
         assert result["role"] == "Storage Blob Data Contributor"
         assert result["confidence_class"] == "very_high"
         assert len(result["signals_matched"]) == 4
+
+
+# =============================================================================
+# Connection Tests
+# =============================================================================
+
+
+class TestTryConnect:
+    """Tests for OllamaClient.try_connect model selection."""
+
+    @staticmethod
+    def _mock_response(models: list[str]) -> MagicMock:
+        response = MagicMock()
+        response.raise_for_status = MagicMock()
+        response.json.return_value = {"models": [{"name": name} for name in models]}
+        return response
+
+    def test_connects_when_configured_model_present(self, client):
+        client.model = "qwen-rbac-v5"
+        with patch("httpx.get", return_value=self._mock_response(["qwen-rbac-v5"])):
+            assert client.try_connect() is True
+        assert client.is_connected is True
+        assert client.model == "qwen-rbac-v5"
+
+    def test_connects_on_base_tag_match(self, client):
+        client.model = "qwen-rbac-v5"
+        with patch("httpx.get", return_value=self._mock_response(["qwen-rbac-v5:latest"])):
+            assert client.try_connect() is True
+
+    def test_fails_closed_when_model_absent(self, client):
+        """An arbitrary available model must NOT be substituted for the
+        configured fine-tuned model: connecting would serve unreliable
+        recommendations. The client stays disconnected instead.
+        """
+        client.model = "qwen-rbac-v5"
+        with patch("httpx.get", return_value=self._mock_response(["llama3", "codellama"])):
+            assert client.try_connect() is False
+        assert client.is_connected is False
+        # Configured model is left untouched (no silent substitution)
+        assert client.model == "qwen-rbac-v5"
+
+    def test_fails_when_no_models_available(self, client):
+        client.model = "qwen-rbac-v5"
+        with patch("httpx.get", return_value=self._mock_response([])):
+            assert client.try_connect() is False
+        assert client.is_connected is False
+
+    def test_fails_closed_when_only_superstring_model_present(self, client):
+        """A model whose base name merely *contains* the configured base
+        (e.g. ``not-qwen-rbac-v5``) must not be treated as a match.
+        """
+        client.model = "qwen-rbac-v5"
+        with patch("httpx.get", return_value=self._mock_response(["not-qwen-rbac-v5"])):
+            assert client.try_connect() is False
+        assert client.is_connected is False
+
+    def test_returns_false_on_http_error(self, client):
+        with patch("httpx.get", side_effect=httpx.ConnectError("refused")):
+            assert client.try_connect() is False
+        assert client.is_connected is False
+
+    def test_clears_connected_on_failure_after_prior_connect(self, client):
+        """A previously connected client must drop ``_connected`` when a
+        later ``try_connect()`` can no longer find the model or reach the
+        server, so ``generate()`` does not run against a bad state.
+        """
+        client.model = "qwen-rbac-v5"
+        client._connected = True
+        with patch("httpx.get", return_value=self._mock_response(["llama3"])):
+            assert client.try_connect() is False
+        assert client.is_connected is False
+
+        client._connected = True
+        with patch("httpx.get", side_effect=httpx.ConnectError("refused")):
+            assert client.try_connect() is False
+        assert client.is_connected is False
 
 
 # =============================================================================
@@ -376,7 +452,7 @@ class TestGenerateWithRetry:
 
     def test_generate_uses_default_timeout(self, connected_client):
         """Test that generate uses the default timeout constant."""
-        from azurerbac.airecommender.llm.client import DEFAULT_TIMEOUT_SECONDS
+        from rbaccatalog.airecommender.llm.client import DEFAULT_TIMEOUT_SECONDS
 
         mock_response = MagicMock()
         mock_response.json.return_value = {"response": "test"}
@@ -458,14 +534,14 @@ class TestExtractJsonFromMarkdown:
     )
     def test_markdown_extraction(self, raw_input: str, expected_output: str):
         """Test extraction of JSON from various markdown formats."""
-        from azurerbac.airecommender.llm.json_repair import extract_json_from_markdown
+        from rbaccatalog.airecommender.llm.json_repair import extract_json_from_markdown
 
         result = extract_json_from_markdown(raw_input)
         assert result.strip() == expected_output.strip()
 
     def test_multiple_code_blocks_extracts_first(self):
         """Test that only the first code block is extracted."""
-        from azurerbac.airecommender.llm.json_repair import extract_json_from_markdown
+        from rbaccatalog.airecommender.llm.json_repair import extract_json_from_markdown
 
         raw = '```json\n{"first": true}\n```\n\n```json\n{"second": true}\n```'
         result = extract_json_from_markdown(raw)

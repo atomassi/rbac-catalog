@@ -5,13 +5,14 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
-from azurerbac.azure.models import OperationData, RoleDefinition
-from azurerbac.cache.models import CachedRole
-from azurerbac.core.constants import ROLE_DEFINITION_TYPE, RoleStatus
+from rbaccatalog.azure.models import OperationData, RoleDefinition
+from rbaccatalog.cache.models import CachedRole
+from rbaccatalog.core.constants import ROLE_DEFINITION_TYPE
+from rbaccatalog.core.enums import RoleStatus
 
 if TYPE_CHECKING:
-    from azurerbac.cache import CacheService
-    from azurerbac.cache.models import CachedChangeEvent
+    from rbaccatalog.cache import CacheService
+    from rbaccatalog.cache.models import CachedChangeEvent
 
 
 # =============================================================================
@@ -214,7 +215,7 @@ def populate_cache_with_operations(cache: CacheService, operations: list[Operati
     """Populate cache with operations using swap() pattern."""
     from dataclasses import replace
 
-    from azurerbac.cache.models import Indexes, build_indexes
+    from rbaccatalog.cache.models import Indexes, build_indexes
 
     ops_by_name_lower, ops_by_prefix = build_indexes(operations)
     current = cache.cache
@@ -222,7 +223,6 @@ def populate_cache_with_operations(cache: CacheService, operations: list[Operati
     new_indexes = Indexes(
         ops_by_name_lower=ops_by_name_lower,
         ops_by_prefix=ops_by_prefix,
-        ops_by_prefix_by_plane={},
     )
     cache.swap(replace(current, source=new_source, indexes=new_indexes))
 
@@ -248,8 +248,8 @@ def populate_cache_with_events(cache: CacheService, events: list[CachedChangeEve
 
 def clear_computed_caches(service: CacheService | None = None) -> None:
     """Clear computed caches by swapping to cache with empty computed fields."""
-    from azurerbac.cache import get_cache_service
-    from azurerbac.cache.models import CacheData
+    from rbaccatalog.cache import get_cache_service
+    from rbaccatalog.cache.models import CacheData
 
     if service is None:
         service = get_cache_service()
@@ -288,9 +288,9 @@ def recommend_roles_with_cache(
     Returns:
         List of matching roles sorted by least privilege.
     """
-    from azurerbac.cache import get_cache_service
-    from azurerbac.cache.build import precompute_all
-    from azurerbac.matching.role_recommender import recommend_roles
+    from rbaccatalog.cache import get_cache_service
+    from rbaccatalog.cache.build import precompute_all
+    from rbaccatalog.matching.role_recommender import recommend_roles
 
     cache = get_cache_service()
     ops = operations if operations is not None else list(cache.cache.all_operations)

@@ -2,13 +2,13 @@
 
 import pytest
 
-from azurerbac.airecommender.ai_recommender import (
+from rbaccatalog.airecommender.ai_recommender import (
     AIRecommendation,
     AIRoleRecommender,
     EngineNotAvailableError,
 )
-from azurerbac.airecommender.modes import RecommenderMode
-from azurerbac.azure.models import RoleDefinition
+from rbaccatalog.airecommender.modes import RecommenderMode
+from rbaccatalog.azure.models import RoleDefinition
 
 # =============================================================================
 # AIRecommendation Tests
@@ -410,7 +410,7 @@ class TestAIRecommenderQueryEdgeCases:
     @pytest.fixture
     def query_test_recommender(self):
         """Create an initialized recommender for query testing."""
-        from azurerbac.airecommender.ai_recommender import AIRoleRecommender
+        from rbaccatalog.airecommender.ai_recommender import AIRoleRecommender
 
         recommender = AIRoleRecommender()
         # Minimal initialization with test roles
@@ -489,7 +489,7 @@ class TestOwnerRoleExclusion:
 
     def test_exclude_owner_default(self):
         """Owner excluded by default when not mentioned in query."""
-        from azurerbac.airecommender.ai_recommender import AIRoleRecommender
+        from rbaccatalog.airecommender.ai_recommender import AIRoleRecommender
 
         recommender = AIRoleRecommender()
         assert recommender._should_exclude_owner("read storage blobs")
@@ -497,7 +497,7 @@ class TestOwnerRoleExclusion:
 
     def test_include_owner_when_mentioned(self):
         """Owner included when explicitly mentioned in query."""
-        from azurerbac.airecommender.ai_recommender import AIRoleRecommender
+        from rbaccatalog.airecommender.ai_recommender import AIRoleRecommender
 
         recommender = AIRoleRecommender()
         assert not recommender._should_exclude_owner("I need owner access")
@@ -505,7 +505,7 @@ class TestOwnerRoleExclusion:
 
     def test_include_owner_for_full_access(self):
         """Owner included when 'full access' mentioned."""
-        from azurerbac.airecommender.ai_recommender import AIRoleRecommender
+        from rbaccatalog.airecommender.ai_recommender import AIRoleRecommender
 
         recommender = AIRoleRecommender()
         assert not recommender._should_exclude_owner("I need full access to everything")

@@ -5,7 +5,7 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 
 // Must import after jsdom is set up
-const { clipboardUtils, _internals } = require('../../azurerbac/web/static/js/clipboard.js');
+const { clipboardUtils, _internals } = require('../../rbaccatalog/web/static/js/clipboard.js');
 
 describe('clipboard', () => {
     beforeEach(() => {

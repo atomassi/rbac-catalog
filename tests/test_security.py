@@ -28,11 +28,11 @@ async def client(async_session_maker) -> AsyncGenerator[AsyncClient, None]:
     Uses the real app with properly initialized in-memory database and cache.
     """
     # Lazy import to avoid loading .env during test collection
-    from azurerbac.cache import get_cache_service
-    from azurerbac.cache.build import precompute_all
-    from azurerbac.cache.models import CachedRole
-    from azurerbac.core.constants import RoleStatus
-    from azurerbac.web import app as app_module
+    from rbaccatalog.cache import get_cache_service
+    from rbaccatalog.cache.build import precompute_all
+    from rbaccatalog.cache.models import CachedRole
+    from rbaccatalog.core.enums import RoleStatus
+    from rbaccatalog.web import app as app_module
     from tests.helpers import make_operation, make_role_definition
 
     test_session_maker = async_session_maker

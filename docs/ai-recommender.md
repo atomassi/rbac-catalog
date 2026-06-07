@@ -1,6 +1,8 @@
-# AI Recommender — Implementation Notes
+# AI Recommender: Implementation Notes
 
 Internal implementation reference for the AI Role Recommender. The high-level mode table is in the [main README](../README.md#ai-recommendation-modes).
+
+Every mode answers the same question, "which built-in role best fits this request?", but trades speed for accuracy differently. The keyword and embedding modes run on CPU in milliseconds; the LLM-backed modes call the local Qwen model and are slower but handle vaguer phrasing.
 
 ## LLM Fine-Tuning
 
@@ -42,5 +44,8 @@ flowchart LR
 |--------|---------------------------|
 | **TF-IDF** | BM25 keyword matching |
 | **Semantic** | Embeds into vectors, cosine similarity |
-| **ColBERT** | Token-level MaxSim matching |
 | **LLM** | Doesn't use it — fine-tuned model predicts directly |
+
+## Hybrid Pipeline
+
+The **Hybrid** mode chains the cheaper engines into the LLM: TF-IDF narrows the catalog to a candidate set, semantic embeddings rerank those candidates by meaning, and the fine-tuned LLM makes the final selection. This keeps the expensive model focused on a short list instead of all 800+ roles, so it stays fast while still benefiting from the LLM's judgement on the close calls.

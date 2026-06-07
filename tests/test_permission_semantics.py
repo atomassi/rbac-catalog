@@ -12,8 +12,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from azurerbac.cache.build import _compute_role_coverage
-from azurerbac.web.services.models import RawPermissions, RolePermissionAnalyzer
+from rbaccatalog.cache.build import _compute_role_coverage
+from rbaccatalog.web.services.models import RawPermissions, RolePermissionAnalyzer
 from tests.helpers import make_role_definition, make_role_with_multiple_permissions
 
 # =============================================================================

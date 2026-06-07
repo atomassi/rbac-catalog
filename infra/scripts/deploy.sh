@@ -152,7 +152,7 @@ Next steps (run from the repo root):
   # 1. Build & push the container image:
   az acr build \\
     --registry \$(jq -r .acrName.value \$OUT) \\
-    --image azurerbac:latest \\
+    --image rbaccatalog:latest \\
     --build-arg VERSION=\$(git describe --tags --always 2>/dev/null || echo dev) .
 
   # 2. Restart the App Service so it picks up the new image:

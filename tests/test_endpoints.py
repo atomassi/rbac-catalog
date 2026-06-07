@@ -3,8 +3,8 @@
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from azurerbac.core import Operation, Role, RoleHistory, RoleScanStatus
-from azurerbac.core.constants import EventType, RoleStatus
+from rbaccatalog.core import Operation, Role, RoleHistory, RoleScanStatus
+from rbaccatalog.core.enums import EventType, RoleStatus
 
 
 def _make_test_snapshot(
@@ -47,12 +47,12 @@ def _make_test_snapshot(
 async def test_client(async_session_maker):
     """Create a test client with in-memory database."""
     # Lazy import to avoid loading .env during test collection
-    from azurerbac.cache import get_cache_service
-    from azurerbac.cache.build import precompute_all
-    from azurerbac.cache.models import CachedRole
-    from azurerbac.core.constants import RoleStatus
-    from azurerbac.web import app as app_module
-    from azurerbac.web.dependencies import (
+    from rbaccatalog.cache import get_cache_service
+    from rbaccatalog.cache.build import precompute_all
+    from rbaccatalog.cache.models import CachedRole
+    from rbaccatalog.core.enums import RoleStatus
+    from rbaccatalog.web import app as app_module
+    from rbaccatalog.web.dependencies import (
         BaseDeps,
         DashboardDeps,
         PagesDeps,

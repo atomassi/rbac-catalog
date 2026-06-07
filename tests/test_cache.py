@@ -5,26 +5,23 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from azurerbac.azure.models import OperationData, RoleDefinition
-from azurerbac.cache import (
+from rbaccatalog.azure.models import OperationData, RoleDefinition
+from rbaccatalog.cache import (
     CacheData,
     CachedChangeEvent,
     CachedRole,
     CacheMetadata,
     CacheService,
     PatternCacheKey,
-    compute_operations_hash,
-    compute_roles_hash,
     get_cache_service,
 )
-from azurerbac.cache.build import (
+from rbaccatalog.cache.build import (
     _build_operation_to_roles,
-    build_operations_prefix_index,
     get_matching_operations,
 )
-from azurerbac.cache.models import PopularComparison
-from azurerbac.core.constants import EventType, RoleStatus
-from azurerbac.matching.models import Plane, RoleCoverage
+from rbaccatalog.cache.models import PopularComparison
+from rbaccatalog.core.enums import EventType, RoleStatus
+from rbaccatalog.matching.models import Plane, RoleCoverage
 
 
 def make_cached_roles_by_id(roles: list[RoleDefinition]) -> dict[str, CachedRole]:
@@ -147,7 +144,7 @@ class TestLowerOptimization:
 
     def test_role_coverage_stores_lowered(self, operation_names: set[str]):
         """Test that role coverage stores operations lowered."""
-        from azurerbac.cache.build import precompute_all
+        from rbaccatalog.cache.build import precompute_all
 
         operations = [
             OperationData(name="Microsoft.Storage/storageAccounts/read", is_data_action=False),
@@ -226,7 +223,7 @@ class TestLowerOptimization:
 
     def test_explicit_operation_lookup_case_insensitive(self):
         """Test that explicit operation names are matched case-insensitively."""
-        from azurerbac.cache.build import precompute_all
+        from rbaccatalog.cache.build import precompute_all
 
         operations = [
             OperationData(name="Microsoft.Storage/storageAccounts/read", is_data_action=False),
@@ -253,8 +250,8 @@ class TestLowerOptimization:
 
     def test_cache_consistency_with_recommend_roles(self, operation_names: set[str]):
         """Test that recommend_roles works correctly with cached role coverage."""
-        from azurerbac.cache.build import precompute_all
-        from azurerbac.matching.role_recommender import recommend_roles
+        from rbaccatalog.cache.build import precompute_all
+        from rbaccatalog.matching.role_recommender import recommend_roles
         from tests.helpers import clear_computed_caches
 
         operations = [
@@ -305,8 +302,8 @@ class TestLowerOptimization:
 
     def test_ops_lowered_to_orig_restores_casing(self):
         """Test that ops_lowered_to_orig correctly restores original operation casing."""
-        from azurerbac.cache import CacheService
-        from azurerbac.cache.build import precompute_all
+        from rbaccatalog.cache import CacheService
+        from rbaccatalog.cache.build import precompute_all
 
         operations = [
             OperationData(name="Microsoft.Storage/storageAccounts/read", is_data_action=False),
@@ -364,70 +361,6 @@ class TestLowerOptimization:
         unknown_ops = ["unknown.operation/read"]
         restored_unknown = service.restore_operation_casing(unknown_ops)
         assert restored_unknown == ["unknown.operation/read"]
-
-
-# =============================================================================
-# build_operations_prefix_index Tests
-# =============================================================================
-
-
-class TestBuildOperationsPrefixIndex:
-    """Tests for build_operations_prefix_index function."""
-
-    def test_builds_correct_index(self, operation_names: set[str]):
-        """Test that index groups operations by provider prefix."""
-        cache: dict[Plane, dict[str, set[str]]] = {}
-        result = build_operations_prefix_index(operation_names, Plane.CONTROL, cache)
-
-        assert "microsoft.storage/" in result
-        assert "microsoft.compute/" in result
-        assert "microsoft.keyvault/" in result
-
-        # Check Storage operations
-        storage_ops = result["microsoft.storage/"]
-        assert "Microsoft.Storage/storageAccounts/read" in storage_ops
-        assert "Microsoft.Storage/storageAccounts/write" in storage_ops
-        assert len(storage_ops) == 4  # read, write, delete, listKeys
-
-    def test_caches_results(self, operation_names: set[str]):
-        """Test that results are cached with separate keys per plane."""
-        cache: dict[Plane, dict[str, set[str]]] = {}
-
-        result1 = build_operations_prefix_index(operation_names, Plane.CONTROL, cache)
-        assert Plane.CONTROL in cache
-
-        result2 = build_operations_prefix_index(operation_names, Plane.CONTROL, cache)
-        assert result1 is result2
-
-        # Different plane creates separate cache entry
-        build_operations_prefix_index(operation_names, Plane.DATA, cache)
-        assert Plane.DATA in cache
-
-    @pytest.mark.parametrize(
-        ("ops", "expected_result"),
-        [
-            pytest.param(set(), {}, id="empty_set"),
-            pytest.param(
-                {"SimpleOperation", "Microsoft.Storage/read"},
-                {"microsoft.storage/": {"Microsoft.Storage/read"}},
-                id="ignores_no_slash_ops",
-            ),
-        ],
-    )
-    def test_edge_cases(self, ops: set[str], expected_result: dict[str, set[str]]):
-        """Test edge cases: empty set and operations without slash."""
-        cache: dict[Plane, dict[str, set[str]]] = {}
-        result = build_operations_prefix_index(ops, Plane.CONTROL, cache)
-        assert result == expected_result
-
-    def test_lowered_prefix_keys(self, operation_names: set[str]):
-        """Test that prefix keys are lowered."""
-        cache: dict[Plane, dict[str, set[str]]] = {}
-        result = build_operations_prefix_index(operation_names, Plane.CONTROL, cache)
-
-        for key in result:
-            assert key == key.lower()
-            assert key.endswith("/")
 
 
 # =============================================================================
@@ -829,138 +762,14 @@ class TestPreloadCacheIntegration:
         mock_session_local.return_value.__aexit__ = AsyncMock(return_value=None)
 
         with (
-            patch("azurerbac.web.services.startup.get_cache_service", return_value=mock_service),
-            patch("azurerbac.telemetry.track_startup"),
-            patch("azurerbac.telemetry.track_cache_refresh"),
+            patch("rbaccatalog.web.services.startup.get_cache_service", return_value=mock_service),
+            patch("rbaccatalog.telemetry.track_startup"),
         ):
-            from azurerbac.web.services.startup import preload_cache
+            from rbaccatalog.web.services.startup import preload_cache
 
             await preload_cache(mock_session_local)
 
         mock_service.rebuild_in_memory.assert_awaited_once_with(mock_session)
-
-
-# =============================================================================
-# Test Fixtures for Hash Computation Tests
-# =============================================================================
-
-
-@pytest.fixture
-def roles_for_hashing():
-    """Sample role data for hash computation tests.
-
-    Uses minimal structure with updatedOn for modification detection tests.
-    Returns RoleDefinition objects as required by compute_roles_hash.
-    """
-    from azurerbac.azure.models import RoleDefinition
-
-    role_dicts = [
-        {
-            "name": "role-1",
-            "properties": {
-                "roleName": "Reader",
-                "type": "BuiltInRole",
-                "updatedOn": "2024-01-01T00:00:00Z",
-            },
-        },
-        {
-            "name": "role-2",
-            "properties": {
-                "roleName": "Contributor",
-                "type": "BuiltInRole",
-                "updatedOn": "2024-01-02T00:00:00Z",
-            },
-        },
-    ]
-    return [RoleDefinition.model_validate(r) for r in role_dicts]
-
-
-@pytest.fixture
-def operations_for_hashing():
-    """Sample operation data for hash computation tests."""
-    return [
-        OperationData(name="Microsoft.Storage/read", isDataAction=False),
-        OperationData(name="Microsoft.Compute/write", isDataAction=False),
-        OperationData(name="Microsoft.KeyVault/secrets/read", isDataAction=True),
-    ]
-
-
-# =============================================================================
-# Tests for Hash Computation
-# =============================================================================
-
-
-class TestHashComputation:
-    """Tests for hash computation functions."""
-
-    @pytest.mark.parametrize(
-        "hash_func",
-        [
-            pytest.param(compute_roles_hash, id="roles"),
-            pytest.param(compute_operations_hash, id="operations"),
-        ],
-    )
-    def test_hash_empty_list(self, hash_func):
-        """Empty list produces a valid hash."""
-        result = hash_func([])
-        assert isinstance(result, str)
-        assert len(result) == 32  # Full MD5 hex digest
-
-    def test_compute_roles_hash_deterministic(self, roles_for_hashing):
-        """Same roles produce same hash."""
-        hash1 = compute_roles_hash(roles_for_hashing)
-        hash2 = compute_roles_hash(roles_for_hashing)
-        assert hash1 == hash2
-
-    def test_compute_roles_hash_order_independent(self, roles_for_hashing):
-        """Hash is the same regardless of role order."""
-        hash1 = compute_roles_hash(roles_for_hashing)
-        hash2 = compute_roles_hash(list(reversed(roles_for_hashing)))
-        assert hash1 == hash2
-
-    def test_compute_roles_hash_changes_on_update(self, roles_for_hashing):
-        """Hash changes when role data changes."""
-        from azurerbac.azure.models import RoleDefinition
-
-        hash1 = compute_roles_hash(roles_for_hashing)
-
-        # Create a new role with different updatedOn
-        modified_role_dict = {
-            "name": "role-1",
-            "properties": {
-                "roleName": "Reader",
-                "type": "BuiltInRole",
-                "updatedOn": "2024-12-01T00:00:00Z",
-            },
-        }
-        modified_roles = [RoleDefinition.model_validate(modified_role_dict), roles_for_hashing[1]]
-        hash2 = compute_roles_hash(modified_roles)
-
-        assert hash1 != hash2
-
-    def test_compute_operations_hash_deterministic(self, operations_for_hashing):
-        """Same operations produce same hash."""
-        hash1 = compute_operations_hash(operations_for_hashing)
-        hash2 = compute_operations_hash(operations_for_hashing)
-        assert hash1 == hash2
-
-    def test_compute_operations_hash_order_independent(self, operations_for_hashing):
-        """Hash is the same regardless of operation order."""
-        hash1 = compute_operations_hash(operations_for_hashing)
-        hash2 = compute_operations_hash(list(reversed(operations_for_hashing)))
-        assert hash1 == hash2
-
-    def test_compute_operations_hash_changes_on_new_op(self, operations_for_hashing):
-        """Hash changes when operation is added."""
-        hash1 = compute_operations_hash(operations_for_hashing)
-
-        modified_ops = [
-            *operations_for_hashing,
-            OperationData(name="New/operation", isDataAction=False),
-        ]
-        hash2 = compute_operations_hash(modified_ops)
-
-        assert hash1 != hash2
 
 
 # =============================================================================
@@ -1008,7 +817,7 @@ class TestThreadSafety:
         """Readers always see consistent data even during cache swap."""
         import threading
 
-        from azurerbac.cache import precompute_all
+        from rbaccatalog.cache import precompute_all
         from tests.helpers import populate_cache_with_operations
 
         populate_cache_with_operations(get_cache_service(), sample_operations)
@@ -1061,7 +870,7 @@ class TestDataConsistency:
 
     def test_role_coverage_matches_role_data(self, sample_roles, sample_operations):
         """Role coverage is computed for all roles in cache."""
-        from azurerbac.cache import precompute_all
+        from rbaccatalog.cache import precompute_all
 
         roles_by_id = make_cached_roles_by_id(sample_roles)
         cache_data = precompute_all(sample_roles, sample_operations, roles_by_id=roles_by_id)
@@ -1070,7 +879,7 @@ class TestDataConsistency:
 
     def test_role_net_permissions_matches_role_data(self, sample_roles, sample_operations):
         """Role net permissions is computed for all roles in cache."""
-        from azurerbac.cache import precompute_all
+        from rbaccatalog.cache import precompute_all
 
         roles_by_id = make_cached_roles_by_id(sample_roles)
         cache_data = precompute_all(sample_roles, sample_operations, roles_by_id=roles_by_id)
@@ -1079,7 +888,7 @@ class TestDataConsistency:
 
     def test_unique_providers_extracted_correctly(self, sample_roles, sample_operations):
         """unique_providers contains all providers from operations."""
-        from azurerbac.cache import precompute_all
+        from rbaccatalog.cache import precompute_all
 
         roles_by_id = make_cached_roles_by_id(sample_roles)
         cache_data = precompute_all(sample_roles, sample_operations, roles_by_id=roles_by_id)
@@ -1094,7 +903,7 @@ class TestCacheLifecycle:
 
     def test_periodic_refresh_recomputes_caches(self, sample_roles, sample_operations):
         """Verify periodic refresh recomputes all caches."""
-        from azurerbac.cache import precompute_all
+        from rbaccatalog.cache import precompute_all
         from tests.helpers import populate_cache_with_operations
 
         populate_cache_with_operations(get_cache_service(), sample_operations)
@@ -1119,7 +928,7 @@ class TestCacheLifecycle:
 
     def test_data_consistency_across_multiple_refreshes(self, sample_roles, sample_operations):
         """Verify data remains consistent across multiple refreshes."""
-        from azurerbac.cache import precompute_all
+        from rbaccatalog.cache import precompute_all
         from tests.helpers import populate_cache_with_operations
 
         populate_cache_with_operations(get_cache_service(), sample_operations)
@@ -1142,7 +951,7 @@ class TestCacheLifecycle:
 
     def test_reset_clears_memory_cache(self, sample_roles, sample_operations):
         """reset() clears all in-memory caches."""
-        from azurerbac.cache import precompute_all
+        from rbaccatalog.cache import precompute_all
 
         roles_by_id = make_cached_roles_by_id(sample_roles)
         cache_data = precompute_all(sample_roles, sample_operations, roles_by_id=roles_by_id)
@@ -1168,7 +977,7 @@ class TestRebuildInMemory:
 
     async def test_returns_false_when_rebuild_in_progress(self):
         """rebuild_in_memory returns False when a rebuild is already in progress."""
-        from azurerbac.cache.service import _REBUILD_LOCK
+        from rbaccatalog.cache.service import _REBUILD_LOCK
 
         service = get_cache_service()
         await _REBUILD_LOCK.acquire()
@@ -1183,7 +992,7 @@ class TestRebuildInMemory:
         from unittest.mock import AsyncMock, patch
 
         with patch(
-            "azurerbac.cache.build.build_from_db",
+            "rbaccatalog.cache.build.build_from_db",
             new=AsyncMock(side_effect=RuntimeError("DB down")),
         ):
             service = get_cache_service()
@@ -1192,7 +1001,7 @@ class TestRebuildInMemory:
 
     def test_seeds_comparisons_for_popular_pairs(self, sample_roles, sample_operations):
         """Popular pairs should be pre-computed and ready in the LRU cache."""
-        from azurerbac.cache import precompute_all
+        from rbaccatalog.cache import precompute_all
 
         roles_by_id = make_cached_roles_by_id(sample_roles)
         cache_data = precompute_all(sample_roles, sample_operations, roles_by_id=roles_by_id)
@@ -1272,7 +1081,7 @@ class TestSitemapUrl:
     """Tests for the sitemap_url utility function."""
 
     def test_generates_valid_xml(self):
-        from azurerbac.cache.models import sitemap_url
+        from rbaccatalog.cache.models import sitemap_url
 
         result = sitemap_url("https://example.com/roles", "2026-01-15", "weekly", 0.8)
         assert "<loc>https://example.com/roles</loc>" in result
@@ -1281,7 +1090,7 @@ class TestSitemapUrl:
         assert "<priority>0.8</priority>" in result
 
     def test_uses_defaults(self):
-        from azurerbac.cache.models import sitemap_url
+        from rbaccatalog.cache.models import sitemap_url
 
         result = sitemap_url("https://example.com", "2026-01-01")
         assert "<changefreq>weekly</changefreq>" in result
@@ -1297,7 +1106,7 @@ class TestSitemapBuild:
     """Tests for Sitemap.build classmethod."""
 
     def test_build_contains_static_pages(self):
-        from azurerbac.cache.models import Sitemap
+        from rbaccatalog.cache.models import Sitemap
 
         sitemap = Sitemap.build(
             roles_by_id={},
@@ -1314,7 +1123,7 @@ class TestSitemapBuild:
         assert "https://test.dev/about" in sitemap.content
 
     def test_build_includes_role_urls(self):
-        from azurerbac.cache.models import Sitemap
+        from rbaccatalog.cache.models import Sitemap
 
         role = CachedRole(
             definition=RoleDefinition(
@@ -1337,7 +1146,7 @@ class TestSitemapBuild:
         assert "2026-01-10" in sitemap.content
 
     def test_build_includes_operation_urls(self):
-        from azurerbac.cache.models import Sitemap
+        from rbaccatalog.cache.models import Sitemap
 
         op = OperationData(
             name="Microsoft.Compute/virtualMachines/read",
@@ -1353,8 +1162,8 @@ class TestSitemapBuild:
     def test_build_includes_popular_compare_pairs(self):
         """Popular comparison URLs appear when both role IDs exist in cache."""
 
-        from azurerbac.cache.models import Sitemap
-        from azurerbac.core.constants import POPULAR_COMPARE_PAIRS
+        from rbaccatalog.cache.models import Sitemap
+        from rbaccatalog.core.constants import POPULAR_COMPARE_PAIRS
 
         # Use the first popular pair from constants
         id_a, id_b, _cat = POPULAR_COMPARE_PAIRS[0]
@@ -1383,7 +1192,7 @@ class TestSitemapBuild:
     def test_build_records_built_at(self):
         import datetime as dt
 
-        from azurerbac.cache.models import Sitemap
+        from rbaccatalog.cache.models import Sitemap
 
         sitemap = Sitemap.build(
             roles_by_id={},

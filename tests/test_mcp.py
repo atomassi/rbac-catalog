@@ -1,12 +1,14 @@
 """Tests for MCP server implementation."""
 
+import asyncio
+import inspect
 from unittest.mock import MagicMock, patch
 
 import pytest
 from starlette.testclient import TestClient
 
-from azurerbac.mcp.server import MCPServer, create_disabled_mcp_app
-from azurerbac.mcp.utils import ToolTimer
+from rbaccatalog.mcp.server import MCPServer, create_disabled_mcp_app
+from rbaccatalog.mcp.utils import ToolTimer
 
 # =============================================================================
 # Fixtures
@@ -263,7 +265,7 @@ class TestCreateMCPServer:
     def test_returns_starlette_app(self) -> None:
         from starlette.applications import Starlette
 
-        from azurerbac.mcp.server import create_mcp_server
+        from rbaccatalog.mcp.server import create_mcp_server
 
         mock_cache = MagicMock()
         mock_cache.get_all_roles.return_value = []
@@ -277,7 +279,7 @@ class TestTransportSecurity:
 
     def test_adds_production_domain_to_allowed_hosts(self, mock_cache: MagicMock) -> None:
         """Verify production domain is added to allowed_hosts when transport_security exists."""
-        from azurerbac.core.constants import NEW_DOMAIN
+        from rbaccatalog.core.constants import NEW_DOMAIN
 
         server = MCPServer(mock_cache)
         transport_security = server._mcp.settings.transport_security
@@ -287,7 +289,7 @@ class TestTransportSecurity:
 
     def test_adds_production_origin_to_allowed_origins(self, mock_cache: MagicMock) -> None:
         """Verify production origin is added to allowed_origins when transport_security exists."""
-        from azurerbac.core.constants import SITE_URL
+        from rbaccatalog.core.constants import SITE_URL
 
         server = MCPServer(mock_cache)
         transport_security = server._mcp.settings.transport_security
@@ -297,7 +299,7 @@ class TestTransportSecurity:
 
     def test_no_duplicate_entries_on_multiple_instantiation(self, mock_cache: MagicMock) -> None:
         """Verify multiple MCPServer instances don't create duplicate entries."""
-        from azurerbac.core.constants import NEW_DOMAIN, SITE_URL
+        from rbaccatalog.core.constants import NEW_DOMAIN, SITE_URL
 
         # Create first server
         MCPServer(mock_cache)
@@ -358,9 +360,16 @@ class TestDisabledMCPApp:
 
 
 def _call_tool(server: MCPServer, tool_name: str, **kwargs: object) -> str:
-    """Call a registered MCP tool by name via its internal function."""
+    """Call a registered MCP tool by name via its internal function.
+
+    Handles both sync and async tool handlers transparently so callers can
+    invoke any tool without worrying about its coroutine status.
+    """
     tool = server._mcp._tool_manager._tools[tool_name]
-    return tool.fn(**kwargs)
+    result = tool.fn(**kwargs)
+    if inspect.isawaitable(result):
+        return asyncio.run(result)  # type: ignore[arg-type]
+    return result  # type: ignore[return-value]
 
 
 # =============================================================================
@@ -582,7 +591,7 @@ class TestRecommendRolesTool:
         result = _call_tool(mcp_server, "recommend_roles_tool", operations=ops, ctx=None)
         assert "Maximum" in result
 
-    @patch("azurerbac.mcp.server.recommend_roles")
+    @patch("rbaccatalog.mcp.server.recommend_roles")
     def test_returns_recommendations(
         self, mock_recommend: MagicMock, mcp_server: MCPServer
     ) -> None:
@@ -604,7 +613,7 @@ class TestRecommendRolesTool:
         assert "acdd72a7" in result
         assert "Coverage" in result
 
-    @patch("azurerbac.mcp.server.recommend_roles")
+    @patch("rbaccatalog.mcp.server.recommend_roles")
     def test_no_matches(self, mock_recommend: MagicMock, mcp_server: MCPServer) -> None:
         mock_recommend.return_value = []
         result = _call_tool(
@@ -615,7 +624,7 @@ class TestRecommendRolesTool:
         )
         assert "No roles found" in result
 
-    @patch("azurerbac.mcp.server.recommend_roles")
+    @patch("rbaccatalog.mcp.server.recommend_roles")
     def test_shows_missing_operations(
         self, mock_recommend: MagicMock, mcp_server: MCPServer
     ) -> None:
@@ -640,12 +649,12 @@ class TestRecommendRolesTool:
         result = _call_tool(
             mcp_server,
             "recommend_roles_tool",
-            operations=["<script>alert(1)</script>"],
+            operations=["bad\x00null"],
             ctx=None,
         )
         assert "Invalid" in result
 
-    @patch("azurerbac.mcp.server.recommend_roles")
+    @patch("rbaccatalog.mcp.server.recommend_roles")
     def test_wildcards_control(self, mock_recommend: MagicMock, mcp_server: MCPServer) -> None:
         mock_recommend.return_value = []
         _call_tool(
@@ -658,7 +667,7 @@ class TestRecommendRolesTool:
         call_kwargs = mock_recommend.call_args[1]
         assert call_kwargs["requested_ops_data_flags"]["Microsoft.Storage/*/read"] is False
 
-    @patch("azurerbac.mcp.server.recommend_roles")
+    @patch("rbaccatalog.mcp.server.recommend_roles")
     def test_wildcards_data(self, mock_recommend: MagicMock, mcp_server: MCPServer) -> None:
         mock_recommend.return_value = []
         _call_tool(
@@ -679,7 +688,7 @@ class TestRecommendRolesTool:
 class TestAiRecommendTool:
     """Tests for the ai_recommend MCP tool handler."""
 
-    @patch("azurerbac.mcp.server.ai_recommend_roles")
+    @patch("rbaccatalog.mcp.server.ai_recommend_roles")
     def test_returns_recommendations(self, mock_ai: MagicMock, mcp_server: MCPServer) -> None:
         mock_ai.return_value = (
             [
@@ -690,7 +699,7 @@ class TestAiRecommendTool:
                     "matched_keywords": ["storage", "blob"],
                 }
             ],
-            "colbert",
+            "crossencoder",
         )
         result = _call_tool(
             mcp_server,
@@ -699,12 +708,12 @@ class TestAiRecommendTool:
             ctx=None,
         )
         assert "Storage Blob Reader" in result
-        assert "colbert" in result
+        assert "crossencoder" in result
         assert "0.95" in result
 
-    @patch("azurerbac.mcp.server.ai_recommend_roles")
+    @patch("rbaccatalog.mcp.server.ai_recommend_roles")
     def test_no_recommendations(self, mock_ai: MagicMock, mcp_server: MCPServer) -> None:
-        mock_ai.return_value = ([], "colbert")
+        mock_ai.return_value = ([], "crossencoder")
         result = _call_tool(
             mcp_server, "ai_recommend", query="something very obscure query", ctx=None
         )
@@ -714,7 +723,7 @@ class TestAiRecommendTool:
         result = _call_tool(mcp_server, "ai_recommend", query="hi", ctx=None)
         assert "at least" in result.lower()
 
-    @patch("azurerbac.mcp.server.ai_recommend_roles")
+    @patch("rbaccatalog.mcp.server.ai_recommend_roles")
     def test_ai_exception_handled(self, mock_ai: MagicMock, mcp_server: MCPServer) -> None:
         """Internal exception messages must not be echoed back to the MCP client.
 
@@ -742,7 +751,7 @@ class TestToolRateLimiting:
         """When max sessions are reached, new sessions are rejected."""
         import time
 
-        from azurerbac.mcp.constants import RATE_LIMIT_MAX_SESSIONS
+        from rbaccatalog.mcp.constants import RATE_LIMIT_MAX_SESSIONS
 
         # Fill up all session slots
         now = time.monotonic()

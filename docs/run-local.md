@@ -6,9 +6,8 @@ The commands below use a Bash / Zsh shell (macOS, Linux, WSL). For native Window
 
 ## Prerequisites
 
-- Python 3.12
+- **Python 3.12, 3.13, or 3.14** — all supported and tested. Verify with `python3 --version` before continuing. The examples below use `python3.12`; substitute `python3.13`/`python3.14` if you prefer a newer interpreter.
 - Git
-- A C++ toolchain — required by ColBERT, which JIT-compiles PyTorch extensions on first use. Install Xcode Command Line Tools on macOS (`xcode-select --install`) or `build-essential` on Debian/Ubuntu. Skip this if you run with `ENABLED_AI_ENGINES=tfidf` (see [Run](#run)).
 - Optional: Azure CLI (`az login`) — only needed to populate the catalog with live data from Azure
 
 ## Setup
@@ -27,20 +26,20 @@ The app is made of **two processes** that run independently. You'll typically ru
 
 | Process | Command | What it does |
 |---|---|---|
-| **Web server** | `uvicorn azurerbac.web.app:app --host 0.0.0.0 --port 8000 --reload` | Serves the UI + API at <http://localhost:8000>. Doesn't need Azure auth. |
-| **Background worker** | `python -m azurerbac.backgroundjobs.worker` | Pulls Azure roles + operations on a schedule and writes them to the database. Needs Azure auth. |
+| **Web server** | `uvicorn rbaccatalog.web.app:app --host 0.0.0.0 --port 8000 --reload` | Serves the UI + API at <http://localhost:8000>. Doesn't need Azure auth. |
+| **Background worker** | `python -m rbaccatalog.backgroundjobs.worker` | Pulls Azure roles + operations on a schedule and writes them to the database. Needs Azure auth. |
 
 The web server works on its own — the UI loads, search works — but the catalog will be empty until the worker has scanned at least once.
 
 If you want to run both in one terminal:
 
 ```bash
-python -m azurerbac.backgroundjobs.worker &
-uvicorn azurerbac.web.app:app --host 0.0.0.0 --port 8000 --reload
+python -m rbaccatalog.backgroundjobs.worker &
+uvicorn rbaccatalog.web.app:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 > [!TIP]
-> First startup loads ColBERT + sentence-transformers + PyTorch — several hundred MB. To skip the heavy engines and boot in a few seconds, set `ENABLED_AI_ENGINES=tfidf`. Comma-separate to enable more (e.g. `tfidf,semantic`).
+> First startup loads sentence-transformers + PyTorch — several hundred MB. To skip the heavy engines and boot in a few seconds, set `ENABLED_AI_ENGINES=tfidf`. Comma-separate to enable more (e.g. `tfidf,semantic`).
 
 ## Populating the catalog
 
@@ -52,7 +51,7 @@ By default the worker runs a scan immediately on startup (`RUN_SCAN_ON_STARTUP=t
 
 ```bash
 export RUN_SCAN_ON_STARTUP=false
-python -m azurerbac.backgroundjobs.worker
+python -m rbaccatalog.backgroundjobs.worker
 ```
 
 ## Environment variables
@@ -61,9 +60,9 @@ The app reads all configuration from environment variables. For local runs, an o
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `DB_CONNECTION_STRING` | `sqlite+aiosqlite:///./azurerbac.db` | Switch to `postgresql+asyncpg://...` to use Postgres instead. |
+| `DB_CONNECTION_STRING` | `sqlite+aiosqlite:///./rbaccatalog.db` | Switch to `postgresql+asyncpg://...` to use Postgres instead. |
 | `LOG_LEVEL` | `INFO` | Set to `DEBUG` for verbose logs. |
-| `ENABLED_AI_ENGINES` | `crossencoder,colbert,semantic,llm,rag,hyde,tfidf` | Comma-separated subset of `tfidf,semantic,colbert,crossencoder,llm,rag,hyde,hybrid`. Set to `tfidf` for fast boot. |
+| `ENABLED_AI_ENGINES` | `crossencoder,semantic,llm,rag,hyde,tfidf` | Comma-separated subset of `tfidf,semantic,crossencoder,llm,rag,hyde,hybrid`. Set to `tfidf` for fast boot. |
 | `RUN_SCAN_ON_STARTUP` | `true` | Worker runs a roles scan immediately on startup. Set to `false` to only run on the regular poll interval. |
 | `RUN_OPERATIONS_SCAN_ON_STARTUP` | `true` | Same, for operations. |
 | `ROLE_SCAN_ENABLED` | `true` | Set to `false` to disable the worker's role scanner. |
@@ -76,8 +75,8 @@ The app reads all configuration from environment variables. For local runs, an o
 If you don't want to install Python locally:
 
 ```bash
-docker build -t azurerbac:local --build-arg VERSION=local-dev .
-docker run --rm -p 8000:8000 azurerbac:local
+docker build -t rbaccatalog:local --build-arg VERSION=local-dev .
+docker run --rm -p 8000:8000 rbaccatalog:local
 ```
 
 The container runs both the web server and the worker side-by-side. The worker won't have Azure credentials by default, so the catalog will stay empty — pass a service principal to fix that:
@@ -85,7 +84,7 @@ The container runs both the web server and the worker side-by-side. The worker w
 ```bash
 docker run --rm -p 8000:8000 \
   -e AZURE_TENANT_ID=... -e AZURE_CLIENT_ID=... -e AZURE_CLIENT_SECRET=... \
-  azurerbac:local
+  rbaccatalog:local
 ```
 
 Or skip the worker entirely and mount a SQLite file you populated natively:
@@ -93,8 +92,8 @@ Or skip the worker entirely and mount a SQLite file you populated natively:
 ```bash
 docker run --rm -p 8000:8000 \
   -e ROLE_SCAN_ENABLED=false -e OPERATIONS_SCAN_ENABLED=false \
-  -v "$PWD/azurerbac.db:/app/azurerbac.db" \
-  azurerbac:local
+  -v "$PWD/rbaccatalog.db:/app/rbaccatalog.db" \
+  rbaccatalog:local
 ```
 
 ## Troubleshooting
@@ -103,7 +102,7 @@ docker run --rm -p 8000:8000 \
 
 **Empty catalog after a scan that looked successful** — set `LOG_LEVEL=DEBUG` and watch the worker logs. The fetcher raises `EmptyFetchResultError` when Azure returns zero rows, which usually means a permissions/auth issue rather than a real empty result.
 
-**Wipe and start over** — delete `./azurerbac.db` (SQLite) or drop the database (`DROP DATABASE azurerbac; CREATE DATABASE azurerbac;` for Postgres). The schema is recreated on next boot.
+**Wipe and start over** — delete `./rbaccatalog.db` (SQLite) or drop the database (`DROP DATABASE azurerbac; CREATE DATABASE azurerbac;` for Postgres). The schema is recreated on next boot.
 
 ## Windows (PowerShell) notes
 
@@ -114,6 +113,6 @@ The app runs on native Windows — no Linux-only dependencies. The shell syntax 
 | `python3.12 -m venv .venv` | `py -3.12 -m venv .venv` |
 | `source .venv/bin/activate` | `.\.venv\Scripts\Activate.ps1` |
 | `export VAR=value` | `$env:VAR = "value"` |
-| `python -m azurerbac.backgroundjobs.worker &` | Open a second PowerShell window, or `Start-Process python -ArgumentList '-m','azurerbac.backgroundjobs.worker'` |
-| `-v "$PWD/azurerbac.db:/app/azurerbac.db"` | `-v "${PWD}\azurerbac.db:/app/azurerbac.db"` |
+| `python -m rbaccatalog.backgroundjobs.worker &` | Open a second PowerShell window, or `Start-Process python -ArgumentList '-m','rbaccatalog.backgroundjobs.worker'` |
+| `-v "$PWD/rbaccatalog.db:/app/rbaccatalog.db"` | `-v "${PWD}\rbaccatalog.db:/app/rbaccatalog.db"` |
 

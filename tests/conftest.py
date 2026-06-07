@@ -23,10 +23,10 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
-from azurerbac.azure.models import OperationData, RoleDefinition
-from azurerbac.cache.models import CachedRole
-from azurerbac.core import Base
-from azurerbac.core.constants import RoleStatus
+from rbaccatalog.azure.models import OperationData, RoleDefinition
+from rbaccatalog.cache.models import CachedRole
+from rbaccatalog.core import Base
+from rbaccatalog.core.enums import RoleStatus
 
 # Import factory functions from helpers for use in fixtures
 from tests.helpers import (
@@ -44,7 +44,7 @@ from tests.helpers import (
 @pytest.fixture(autouse=True)
 def reset_settings_singleton() -> Generator[None, None, None]:
     """Reset settings singleton before/after each test."""
-    from azurerbac.settings import Settings
+    from rbaccatalog.settings import Settings
 
     Settings.reset()
     yield
@@ -281,9 +281,9 @@ def sample_operations() -> list[OperationData]:
 @pytest.fixture
 def populated_cache(sample_operations: list[OperationData]) -> Generator[None, None, None]:
     """Populate global cache with sample_operations for role recommender tests."""
-    from azurerbac.cache import get_cache_service
-    from azurerbac.cache.build import precompute_all
-    from azurerbac.cache.models import CacheData
+    from rbaccatalog.cache import get_cache_service
+    from rbaccatalog.cache.build import precompute_all
+    from rbaccatalog.cache.models import CacheData
 
     # Create minimal cache with just the operations (no roles needed for op_sets)
     cache = precompute_all(roles=[], all_operations=sample_operations)

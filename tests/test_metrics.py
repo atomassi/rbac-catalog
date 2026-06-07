@@ -6,8 +6,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from azurerbac.cache.models import CachedChangeEvent
-from azurerbac.core.constants import EventType
+from rbaccatalog.cache.models import CachedChangeEvent
+from rbaccatalog.core.enums import EventType
 
 # =============================================================================
 # Fixtures
@@ -21,7 +21,7 @@ def local_env():
         os.environ.pop("WEBSITE_SITE_NAME", None)
         os.environ.pop("APPLICATIONINSIGHTS_CONNECTION_STRING", None)
 
-        import azurerbac.telemetry.metrics as metrics_module
+        import rbaccatalog.telemetry.metrics as metrics_module
 
         importlib.reload(metrics_module)
 
@@ -34,7 +34,7 @@ def azure_env():
     with patch.dict(os.environ, {"WEBSITE_SITE_NAME": "test-app"}, clear=False):
         os.environ.pop("APPLICATIONINSIGHTS_CONNECTION_STRING", None)
 
-        import azurerbac.telemetry.metrics as metrics_module
+        import rbaccatalog.telemetry.metrics as metrics_module
 
         importlib.reload(metrics_module)
 
@@ -60,7 +60,7 @@ def mock_app_cache():
 @pytest.fixture
 def reset_metrics_sender():
     """Reset MetricsSender state between tests."""
-    from azurerbac.telemetry.sender import MetricsSender
+    from rbaccatalog.telemetry.sender import MetricsSender
 
     original_initialized = MetricsSender._initialized
     original_meter = MetricsSender._meter
@@ -87,7 +87,7 @@ class TestMetricsSenderUnit:
 
     def test_send_gauge_noop_when_not_initialized(self, local_env, reset_metrics_sender):
         """send_gauge should be a no-op when not in Azure."""
-        from azurerbac.telemetry.sender import MetricsSender
+        from rbaccatalog.telemetry.sender import MetricsSender
 
         MetricsSender._initialized = False
         MetricsSender._meter = None
@@ -97,7 +97,7 @@ class TestMetricsSenderUnit:
 
     def test_send_histogram_noop_when_not_initialized(self, local_env, reset_metrics_sender):
         """send_histogram should be a no-op when not in Azure."""
-        from azurerbac.telemetry.sender import MetricsSender
+        from rbaccatalog.telemetry.sender import MetricsSender
 
         MetricsSender._initialized = False
         MetricsSender._meter = None
@@ -107,7 +107,7 @@ class TestMetricsSenderUnit:
 
     def test_send_count_noop_when_not_initialized(self, local_env, reset_metrics_sender):
         """send_count should be a no-op when not in Azure."""
-        from azurerbac.telemetry.sender import MetricsSender
+        from rbaccatalog.telemetry.sender import MetricsSender
 
         MetricsSender._initialized = False
         MetricsSender._meter = None
@@ -117,7 +117,7 @@ class TestMetricsSenderUnit:
 
     def test_flush_returns_false_when_not_initialized(self, local_env, reset_metrics_sender):
         """flush should return False when not initialized."""
-        from azurerbac.telemetry.sender import MetricsSender
+        from rbaccatalog.telemetry.sender import MetricsSender
 
         MetricsSender._initialized = False
         MetricsSender._meter = None
@@ -127,7 +127,7 @@ class TestMetricsSenderUnit:
 
     def test_get_histogram_creates_histogram(self, reset_metrics_sender):
         """_get_histogram should create and cache histograms."""
-        from azurerbac.telemetry.sender import MetricsSender
+        from rbaccatalog.telemetry.sender import MetricsSender
 
         mock_histogram = MagicMock()
         mock_meter = MagicMock()
@@ -152,7 +152,7 @@ class TestBaseAttributes:
     @pytest.fixture(autouse=True)
     def _setup_sender(self, reset_metrics_sender):
         """Set up MetricsSender with a mock meter and known environment."""
-        from azurerbac.telemetry.sender import MetricsSender
+        from rbaccatalog.telemetry.sender import MetricsSender
 
         self.mock_meter = MagicMock()
         MetricsSender._initialized = True
@@ -173,7 +173,7 @@ class TestBaseAttributes:
 
     def test_send_gauge_includes_environment(self):
         """send_gauge should include environment in attributes."""
-        from azurerbac.telemetry.sender import MetricsSender
+        from rbaccatalog.telemetry.sender import MetricsSender
 
         mock_gauge = MagicMock()
         self.mock_meter.create_gauge.return_value = mock_gauge
@@ -187,7 +187,7 @@ class TestBaseAttributes:
 
     def test_send_histogram_includes_environment(self):
         """send_histogram should include environment in attributes."""
-        from azurerbac.telemetry.sender import MetricsSender
+        from rbaccatalog.telemetry.sender import MetricsSender
 
         mock_histogram = MagicMock()
         self.mock_meter.create_histogram.return_value = mock_histogram
@@ -201,7 +201,7 @@ class TestBaseAttributes:
 
     def test_send_count_includes_environment(self):
         """send_count should include environment in attributes."""
-        from azurerbac.telemetry.sender import MetricsSender
+        from rbaccatalog.telemetry.sender import MetricsSender
 
         mock_counter = MagicMock()
         self.mock_meter.create_counter.return_value = mock_counter
@@ -215,7 +215,7 @@ class TestBaseAttributes:
 
     def test_properties_cannot_override_environment(self):
         """Caller-provided environment key must not override the base attribute."""
-        from azurerbac.telemetry.sender import MetricsSender
+        from rbaccatalog.telemetry.sender import MetricsSender
 
         mock_gauge = MagicMock()
         self.mock_meter.create_gauge.return_value = mock_gauge
@@ -227,7 +227,7 @@ class TestBaseAttributes:
 
     def test_environment_present_with_no_properties(self):
         """Environment should be present even when no properties are passed."""
-        from azurerbac.telemetry.sender import MetricsSender
+        from rbaccatalog.telemetry.sender import MetricsSender
 
         mock_gauge = MagicMock()
         self.mock_meter.create_gauge.return_value = mock_gauge
@@ -251,7 +251,7 @@ class TestMetricsLocalMode:
         [
             ("track_gauge", ("test_metric", 42.0, {"dim": "value"})),
             ("track_startup", (5.0, 100, 5000)),
-            ("track_cache_refresh", (3.0, "startup", 100, 5000)),
+            ("track_cache_refresh", (3.0,)),
             ("track_role_scan", (100, 5, 3, 2)),
             ("track_operations_scan", (5000,)),
         ],
@@ -301,8 +301,15 @@ class TestTrackFunctions:
         metrics_module = local_env
         # Should not raise (no-op when local)
         metrics_module.track_ai_recommendation("tfidf", 5)
-        metrics_module.track_ai_recommendation("semantic", 0, is_error=True)
-        metrics_module.track_ai_recommendation("colbert", 10)
+        metrics_module.track_ai_recommendation("semantic", 0)
+        metrics_module.track_ai_recommendation("crossencoder", 10)
+
+    def test_track_ai_recommendation_error_logs_correctly(self, local_env):
+        """track_ai_recommendation_error should log and handle parameters."""
+        metrics_module = local_env
+        # Should not raise (no-op when local)
+        metrics_module.track_ai_recommendation_error("semantic", "EngineNotAvailableError")
+        metrics_module.track_ai_recommendation_error("crossencoder", "EngineNotAvailableError")
 
     def test_track_role_recommendation_logs_correctly(self, local_env):
         """track_role_recommendation should log and handle parameters."""
@@ -356,11 +363,10 @@ class TestMetricsDimensions:
         metrics_module = local_env
         metrics_module.track_gauge("test", 1.0, properties)
 
-    @pytest.mark.parametrize("source", ["startup", "worker", "periodic", "manual"])
-    def test_track_cache_refresh_with_source_dimension(self, local_env, source):
-        """track_cache_refresh should use source as dimension."""
+    def test_track_cache_refresh_emits_without_error(self, local_env):
+        """track_cache_refresh should emit duration and event metrics."""
         metrics_module = local_env
-        metrics_module.track_cache_refresh(1.0, source, 100, 5000)
+        metrics_module.track_cache_refresh(1.0)
 
 
 # =============================================================================
@@ -458,7 +464,7 @@ class TestOpenTelemetryIntegration:
     )
     def test_track_functions_exist_and_callable(self, func_name, args):
         """Test various track functions exist and are callable."""
-        from azurerbac.telemetry import metrics
+        from rbaccatalog.telemetry import metrics
 
         func = getattr(metrics, func_name)
         assert callable(func)
@@ -467,7 +473,7 @@ class TestOpenTelemetryIntegration:
 
     def test_flush_metrics_exists_and_callable(self):
         """Test flush_metrics function exists and is callable."""
-        from azurerbac.telemetry.metrics import flush_metrics
+        from rbaccatalog.telemetry.metrics import flush_metrics
 
         assert callable(flush_metrics)
 
@@ -483,7 +489,7 @@ class TestOpenTelemetryIntegration:
 
     def test_flush_metrics_exported_from_init(self):
         """Test flush_metrics is exported from telemetry module."""
-        from azurerbac.telemetry import flush_metrics
+        from rbaccatalog.telemetry import flush_metrics
 
         assert callable(flush_metrics)
 
@@ -500,9 +506,9 @@ class TestTimedDbQuery:
         """Test that sync context manager tracks query metrics."""
         from unittest.mock import patch
 
-        from azurerbac.telemetry.timers import TimedDbQuery
+        from rbaccatalog.telemetry.timers import TimedDbQuery
 
-        with patch("azurerbac.telemetry.timers.track_db_query") as mock_track:
+        with patch("rbaccatalog.telemetry.timers.track_db_query") as mock_track:
             with TimedDbQuery("test_query") as timer:
                 timer.rows = 10
 
@@ -516,9 +522,9 @@ class TestTimedDbQuery:
         """Test that query is tracked even when row count not set."""
         from unittest.mock import patch
 
-        from azurerbac.telemetry.timers import TimedDbQuery
+        from rbaccatalog.telemetry.timers import TimedDbQuery
 
-        with patch("azurerbac.telemetry.timers.track_db_query") as mock_track:
+        with patch("rbaccatalog.telemetry.timers.track_db_query") as mock_track:
             with TimedDbQuery("no_rows_query"):
                 pass
 
@@ -532,9 +538,9 @@ class TestTimedDbQuery:
         """Test that async context manager tracks query metrics."""
         from unittest.mock import patch
 
-        from azurerbac.telemetry.timers import TimedDbQuery
+        from rbaccatalog.telemetry.timers import TimedDbQuery
 
-        with patch("azurerbac.telemetry.timers.track_db_query") as mock_track:
+        with patch("rbaccatalog.telemetry.timers.track_db_query") as mock_track:
             async with TimedDbQuery("async_test_query") as timer:
                 timer.rows = 25
 
@@ -557,9 +563,9 @@ class TestTimedDbQuery:
         """Test timer works with various query names and row counts."""
         from unittest.mock import patch
 
-        from azurerbac.telemetry.timers import TimedDbQuery
+        from rbaccatalog.telemetry.timers import TimedDbQuery
 
-        with patch("azurerbac.telemetry.timers.track_db_query") as mock_track:
+        with patch("rbaccatalog.telemetry.timers.track_db_query") as mock_track:
             with TimedDbQuery(query_name) as timer:
                 timer.rows = row_count
 
@@ -571,12 +577,12 @@ class TestTimedDbQuery:
         """Test that sync context manager tracks error when exception occurs."""
         from unittest.mock import patch
 
-        from azurerbac.telemetry.timers import TimedDbQuery
+        from rbaccatalog.telemetry.timers import TimedDbQuery
 
         with (
-            patch("azurerbac.telemetry.timers.track_db_query") as mock_success,
-            patch("azurerbac.telemetry.timers.track_db_query_error") as mock_error,
-            patch("azurerbac.telemetry.timers.track_db_fallback") as mock_fallback,
+            patch("rbaccatalog.telemetry.timers.track_db_query") as mock_success,
+            patch("rbaccatalog.telemetry.timers.track_db_query_error") as mock_error,
+            patch("rbaccatalog.telemetry.timers.track_db_fallback") as mock_fallback,
             pytest.raises(ValueError),
             TimedDbQuery("failing_query", fallback_type="test_fallback"),
         ):
@@ -598,12 +604,12 @@ class TestTimedDbQuery:
         """Test that async context manager tracks error when exception occurs."""
         from unittest.mock import patch
 
-        from azurerbac.telemetry.timers import TimedDbQuery
+        from rbaccatalog.telemetry.timers import TimedDbQuery
 
         with (
-            patch("azurerbac.telemetry.timers.track_db_query") as mock_success,
-            patch("azurerbac.telemetry.timers.track_db_query_error") as mock_error,
-            patch("azurerbac.telemetry.timers.track_db_fallback") as mock_fallback,
+            patch("rbaccatalog.telemetry.timers.track_db_query") as mock_success,
+            patch("rbaccatalog.telemetry.timers.track_db_query_error") as mock_error,
+            patch("rbaccatalog.telemetry.timers.track_db_fallback") as mock_fallback,
             pytest.raises(RuntimeError),
         ):
             async with TimedDbQuery("async_failing_query", fallback_type="test_fallback"):
@@ -624,11 +630,11 @@ class TestTimedDbQuery:
         """Test that fallback_type triggers track_db_fallback on successful query."""
         from unittest.mock import patch
 
-        from azurerbac.telemetry.timers import TimedDbQuery
+        from rbaccatalog.telemetry.timers import TimedDbQuery
 
         with (
-            patch("azurerbac.telemetry.timers.track_db_query") as mock_query,
-            patch("azurerbac.telemetry.timers.track_db_fallback") as mock_fallback,
+            patch("rbaccatalog.telemetry.timers.track_db_query") as mock_query,
+            patch("rbaccatalog.telemetry.timers.track_db_fallback") as mock_fallback,
         ):
             with TimedDbQuery("test_query", fallback_type="dashboard_roles") as timer:
                 timer.rows = 5
@@ -641,11 +647,11 @@ class TestTimedDbQuery:
         """Test that fallback_type=None does not trigger track_db_fallback."""
         from unittest.mock import patch
 
-        from azurerbac.telemetry.timers import TimedDbQuery
+        from rbaccatalog.telemetry.timers import TimedDbQuery
 
         with (
-            patch("azurerbac.telemetry.timers.track_db_query") as mock_query,
-            patch("azurerbac.telemetry.timers.track_db_fallback") as mock_fallback,
+            patch("rbaccatalog.telemetry.timers.track_db_query") as mock_query,
+            patch("rbaccatalog.telemetry.timers.track_db_fallback") as mock_fallback,
         ):
             with TimedDbQuery("test_query"):
                 pass
@@ -658,11 +664,11 @@ class TestTimedDbQuery:
         """Test async fallback_type triggers track_db_fallback on successful query."""
         from unittest.mock import patch
 
-        from azurerbac.telemetry.timers import TimedDbQuery
+        from rbaccatalog.telemetry.timers import TimedDbQuery
 
         with (
-            patch("azurerbac.telemetry.timers.track_db_query") as mock_query,
-            patch("azurerbac.telemetry.timers.track_db_fallback") as mock_fallback,
+            patch("rbaccatalog.telemetry.timers.track_db_query") as mock_query,
+            patch("rbaccatalog.telemetry.timers.track_db_fallback") as mock_fallback,
         ):
             async with TimedDbQuery("async_test", fallback_type="search_roles") as timer:
                 timer.rows = 10
@@ -678,9 +684,9 @@ class TestTrackDbQueryError:
         """Test that error is logged at WARNING level with expected format."""
         import logging
 
-        from azurerbac.telemetry.metrics import track_db_query_error
+        from rbaccatalog.telemetry.metrics import track_db_query_error
 
-        with caplog.at_level(logging.WARNING, logger="azurerbac.telemetry.metrics"):
+        with caplog.at_level(logging.WARNING, logger="rbaccatalog.telemetry.metrics"):
             track_db_query_error("test_query", 1.234, "ValueError")
 
         assert "DB query failed: test_query (1.234s) error=ValueError" in caplog.text
@@ -717,7 +723,7 @@ class TestTrackDbQueryError:
             patch.object(metrics_module, "track_duration") as mock_duration,
             patch.object(metrics_module, "track_event") as mock_event,
         ):
-            with caplog.at_level(logging.WARNING, logger="azurerbac.telemetry.metrics"):
+            with caplog.at_level(logging.WARNING, logger="rbaccatalog.telemetry.metrics"):
                 metrics_module.track_db_query_error("query", 1.0, "Error")
 
             # Logging still happens
@@ -758,14 +764,14 @@ class TestWorkerOperationContext:
     )
     def test_context_manager_enters_and_exits(self, operation_name: str):
         """Test context manager enters and exits without error."""
-        from azurerbac.telemetry.tracing import WorkerOperationContext
+        from rbaccatalog.telemetry.tracing import WorkerOperationContext
 
         with WorkerOperationContext(operation_name) as ctx:
             assert ctx.operation_name == operation_name
 
     def test_does_not_suppress_exceptions(self):
         """Test exceptions are not suppressed by context manager."""
-        from azurerbac.telemetry.tracing import WorkerOperationContext
+        from rbaccatalog.telemetry.tracing import WorkerOperationContext
 
         with (
             pytest.raises(ValueError, match="test error"),
@@ -777,12 +783,12 @@ class TestWorkerOperationContext:
         """Test graceful handling when opentelemetry is not available."""
         from unittest.mock import patch
 
-        from azurerbac.telemetry.tracing import WorkerOperationContext
+        from rbaccatalog.telemetry.tracing import WorkerOperationContext
 
         with (
             patch.dict("sys.modules", {"opentelemetry": None}),
             patch(
-                "azurerbac.telemetry.tracing.WorkerOperationContext.__enter__",
+                "rbaccatalog.telemetry.tracing.WorkerOperationContext.__enter__",
                 side_effect=lambda self: self,
             ),
         ):

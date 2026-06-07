@@ -849,20 +849,21 @@
     </div>
     
     <script>
-        // Navigate only to same-origin relative URLs. The <select> option
-        // values are server-generated relative paths (build_recent_url); this
-        // guard rejects absolute, scheme-relative, and javascript: URLs so a
-        // tampered option value cannot redirect off-site or execute script.
+        // Navigate only to server-generated root-relative paths (e.g.
+        // "/recent?..."). The <select> option values come from build_recent_url,
+        // which always emits a leading-slash path. Anything that is not a
+        // root-relative path is rejected: scheme-relative ("//host"), backslash
+        // tricks ("/\\host"), absolute URLs ("https://host/..."), and
+        // "javascript:" URLs — so a tampered option value cannot redirect
+        // off-site or execute script.
         function navigateToRelative(value) {
-            if (typeof value !== 'string' || value === '') return;
-            let target;
-            try {
-                target = new URL(value, window.location.origin);
-            } catch {
-                return;
-            }
-            if (target.origin !== window.location.origin) return;
-            window.location.assign(target.pathname + target.search + target.hash);
+            if (typeof value !== 'string') return;
+            const path = value.trim();
+            // Require a single leading "/" followed by a non-slash, non-backslash
+            // character. Rejects "//evil.com", "/\\evil.com", "https://...",
+            // "javascript:...", and empty/whitespace values.
+            if (!/^\/[^/\\]/.test(path)) return;
+            window.location.assign(path);
         }
 
         // Clear search query on page refresh, but preserve when coming back from role detail

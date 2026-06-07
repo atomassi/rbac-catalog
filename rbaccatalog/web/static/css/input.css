@@ -24,9 +24,24 @@
 .cond-red { color: var(--cond-red); }
 .cond-gray { color: var(--cond-gray); }
 
+/* Metrics-matched fallback for Inter to prevent font-swap layout shift (CLS).
+   ``ascent-override``/``descent-override``/``line-gap-override`` force the
+   line-box height to match Inter regardless of which local font actually
+   backs it (Arial on desktop, Roboto on Android), so swapping to Inter once
+   it loads over the network causes no vertical reflow. ``size-adjust`` scales
+   the glyph advances so horizontal wrapping stays close too. */
+@font-face {
+  font-family: 'Inter Fallback';
+  src: local('Arial'), local('Roboto'), local('Helvetica Neue');
+  ascent-override: 90%;
+  descent-override: 22.43%;
+  line-gap-override: 0%;
+  size-adjust: 107.4%;
+}
+
 /* Custom styles */
 body {
-  font-family: 'Inter', sans-serif;
+  font-family: 'Inter', 'Inter Fallback', sans-serif;
 }
 
 .gradient-bg {

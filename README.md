@@ -1,4 +1,4 @@
-# Azure RBAC Catalog
+# Azure RBAC Built-in Role Definitions Catalog
 
 [![Build](https://github.com/atomassi/rbac-catalog/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/atomassi/rbac-catalog/actions/workflows/build.yml)
 [![Deploy](https://github.com/atomassi/rbac-catalog/actions/workflows/deploy.yml/badge.svg?branch=main)](https://github.com/atomassi/rbac-catalog/actions/workflows/deploy.yml)
@@ -63,7 +63,7 @@ Run the catalog locally in a few minutes. You need **Python 3.12, 3.13, or 3.14*
 ```bash
 git clone https://github.com/atomassi/rbac-catalog.git
 cd rbac-catalog
-python3.12 -m venv .venv && source .venv/bin/activate
+python3 -m venv .venv && source .venv/bin/activate
 pip install --upgrade pip && pip install -r requirements.txt
 
 # Boot fast with only the lightweight recommender engine
@@ -94,7 +94,7 @@ For prerequisites, environment variables, and the full walkthrough, see
 |-------|----------------|
 | [`docs/run-local.md`](docs/run-local.md) | Run the app locally with native Python or Docker — prerequisites, environment variables, and the full walkthrough |
 | [`infra/README.md`](infra/README.md) | Deploy your own copy on Azure with the Bicep templates, step by step |
-| [`docs/ai-recommender.md`](docs/ai-recommender.md) | How the 8 AI modes work, plus the LLM fine-tuning pipeline (Unsloth + Qwen) |
+| [`docs/ai-recommender.md`](docs/ai-recommender.md) | How the 7 AI modes work, plus the LLM fine-tuning pipeline (Unsloth + Qwen) |
 | [`docs/mcp.md`](docs/mcp.md) | MCP server tools, example queries, direct invocations, and rate limits |
 
 ## Tech Stack
@@ -278,7 +278,7 @@ This ensures every production deployment is validated before users see it.
 
 ```
 rbaccatalog/
-├── airecommender/   # AI recommendation engines (8 modes)
+├── airecommender/   # AI recommendation engines (7 modes)
 ├── analytics/       # Permission distribution, change-over-time, and provider stats
 ├── azure/           # Azure SDK integration (roles, operations)
 ├── backgroundjobs/  # Scheduled tasks and background workers

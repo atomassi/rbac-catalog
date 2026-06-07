@@ -686,19 +686,19 @@
                     <div class="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-100 dark:border-slate-700">
                         <!-- Mobile: compact select dropdowns (shown < sm) -->
                         <div class="flex sm:hidden items-center gap-2">
-                            <select onchange="window.location.href=this.value" class="flex-1 min-w-0 text-sm font-medium rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 px-2.5 py-2.5 appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22%2394a3b8%22%3E%3Cpath%20fill-rule%3D%22evenodd%22%20d%3D%22M5.23%207.21a.75.75%200%20011.06.02L10%2011.168l3.71-3.938a.75.75%200%20111.08%201.04l-4.25%204.5a.75.75%200%2001-1.08%200l-4.25-4.5a.75.75%200%2001.02-1.06z%22%20clip-rule%3D%22evenodd%22%2F%3E%3C%2Fsvg%3E')] bg-[length:1.25rem_1.25rem] bg-[right_0.25rem_center] bg-no-repeat pr-7" aria-label="Filter by event type">
+                            <select onchange="navigateToRelative(this.value)" class="flex-1 min-w-0 text-sm font-medium rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 px-2.5 py-2.5 appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22%2394a3b8%22%3E%3Cpath%20fill-rule%3D%22evenodd%22%20d%3D%22M5.23%207.21a.75.75%200%20011.06.02L10%2011.168l3.71-3.938a.75.75%200%20111.08%201.04l-4.25%204.5a.75.75%200%2001-1.08%200l-4.25-4.5a.75.75%200%2001.02-1.06z%22%20clip-rule%3D%22evenodd%22%2F%3E%3C%2Fsvg%3E')] bg-[length:1.25rem_1.25rem] bg-[right_0.25rem_center] bg-no-repeat pr-7" aria-label="Filter by event type">
                                 <option value="{{ build_recent_url(new_page=1, new_event_type='all') }}" {{ 'selected' if event_type == 'all' }}>All changes</option>
                                 <option value="{{ build_recent_url(new_page=1, new_event_type='created') }}" {{ 'selected' if event_type == 'created' }}>Created</option>
                                 <option value="{{ build_recent_url(new_page=1, new_event_type='updated') }}" {{ 'selected' if event_type == 'updated' }}>Updated</option>
                                 <option value="{{ build_recent_url(new_page=1, new_event_type='deleted') }}" {{ 'selected' if event_type == 'deleted' }}>Deleted</option>
                             </select>
-                            <select onchange="window.location.href=this.value" class="flex-1 min-w-0 text-sm font-medium rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 px-2.5 py-2.5 appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22%2394a3b8%22%3E%3Cpath%20fill-rule%3D%22evenodd%22%20d%3D%22M5.23%207.21a.75.75%200%20011.06.02L10%2011.168l3.71-3.938a.75.75%200%20111.08%201.04l-4.25%204.5a.75.75%200%2001-1.08%200l-4.25-4.5a.75.75%200%2001.02-1.06z%22%20clip-rule%3D%22evenodd%22%2F%3E%3C%2Fsvg%3E')] bg-[length:1.25rem_1.25rem] bg-[right_0.25rem_center] bg-no-repeat pr-7" aria-label="Time range">
+                            <select onchange="navigateToRelative(this.value)" class="flex-1 min-w-0 text-sm font-medium rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 px-2.5 py-2.5 appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22%2394a3b8%22%3E%3Cpath%20fill-rule%3D%22evenodd%22%20d%3D%22M5.23%207.21a.75.75%200%20011.06.02L10%2011.168l3.71-3.938a.75.75%200%20111.08%201.04l-4.25%204.5a.75.75%200%2001-1.08%200l-4.25-4.5a.75.75%200%2001.02-1.06z%22%20clip-rule%3D%22evenodd%22%2F%3E%3C%2Fsvg%3E')] bg-[length:1.25rem_1.25rem] bg-[right_0.25rem_center] bg-no-repeat pr-7" aria-label="Time range">
                                 <option value="{{ build_recent_url(new_page=1, new_days=7) }}" {{ 'selected' if days == 7 }}>7 days</option>
                                 <option value="{{ build_recent_url(new_page=1, new_days=30) }}" {{ 'selected' if days == 30 }}>30 days</option>
                                 <option value="{{ build_recent_url(new_page=1, new_days=90) }}" {{ 'selected' if days == 90 }}>90 days</option>
                                 <option value="{{ build_recent_url(new_page=1, new_days=365) }}" {{ 'selected' if days == 365 }}>1 year</option>
                             </select>
-                            <select onchange="window.location.href=this.value" class="w-[4.5rem] text-sm font-medium rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 px-2.5 py-2.5 appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22%2394a3b8%22%3E%3Cpath%20fill-rule%3D%22evenodd%22%20d%3D%22M5.23%207.21a.75.75%200%20011.06.02L10%2011.168l3.71-3.938a.75.75%200%20111.08%201.04l-4.25%204.5a.75.75%200%2001-1.08%200l-4.25-4.5a.75.75%200%2001.02-1.06z%22%20clip-rule%3D%22evenodd%22%2F%3E%3C%2Fsvg%3E')] bg-[length:1.25rem_1.25rem] bg-[right_0.25rem_center] bg-no-repeat pr-7" aria-label="Results per page">
+                            <select onchange="navigateToRelative(this.value)" class="w-[4.5rem] text-sm font-medium rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 px-2.5 py-2.5 appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22%2394a3b8%22%3E%3Cpath%20fill-rule%3D%22evenodd%22%20d%3D%22M5.23%207.21a.75.75%200%20011.06.02L10%2011.168l3.71-3.938a.75.75%200%20111.08%201.04l-4.25%204.5a.75.75%200%2001-1.08%200l-4.25-4.5a.75.75%200%2001.02-1.06z%22%20clip-rule%3D%22evenodd%22%2F%3E%3C%2Fsvg%3E')] bg-[length:1.25rem_1.25rem] bg-[right_0.25rem_center] bg-no-repeat pr-7" aria-label="Results per page">
                                 <option value="{{ build_recent_url(new_page=1, new_limit=25) }}" {{ 'selected' if limit == 25 }}>25</option>
                                 <option value="{{ build_recent_url(new_page=1, new_limit=100) }}" {{ 'selected' if limit == 100 }}>100</option>
                                 <option value="{{ build_recent_url(new_page=1, new_limit=500) }}" {{ 'selected' if limit == 500 }}>500</option>
@@ -849,6 +849,22 @@
     </div>
     
     <script>
+        // Navigate only to same-origin relative URLs. The <select> option
+        // values are server-generated relative paths (build_recent_url); this
+        // guard rejects absolute, scheme-relative, and javascript: URLs so a
+        // tampered option value cannot redirect off-site or execute script.
+        function navigateToRelative(value) {
+            if (typeof value !== 'string' || value === '') return;
+            let target;
+            try {
+                target = new URL(value, window.location.origin);
+            } catch {
+                return;
+            }
+            if (target.origin !== window.location.origin) return;
+            window.location.assign(target.pathname + target.search + target.hash);
+        }
+
         // Clear search query on page refresh, but preserve when coming back from role detail
         (function() {
             const navEntry = performance.getEntriesByType('navigation')[0];

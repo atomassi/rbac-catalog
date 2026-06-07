@@ -10,6 +10,10 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
+# Least-privilege default: no job writes via GITHUB_TOKEN.
+permissions:
+  contents: read
+
 jobs:
   lint:
     name: Lint

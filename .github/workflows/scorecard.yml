@@ -8,6 +8,10 @@ on:
     - cron: '23 5 * * 1'
   push:
     branches: [main]
+  # TEMPORARY (revert after validating PR #344): run on PRs to confirm the
+  # workflow executes. Publishing is disabled on PRs (see publish_results below).
+  pull_request:
+    branches: [main]
 
 # Least-privilege default; the analysis job opts in to the scopes it needs.
 permissions: read-all
@@ -34,7 +38,9 @@ jobs:
           results_file: results.sarif
           results_format: sarif
           # Publish results to OpenSSF so the README badge populates.
-          publish_results: true
+          # TEMPORARY (revert to `true` after validating PR #344): the publish
+          # API rejects non-default-branch runs, so skip it on pull_request.
+          publish_results: ${{ github.event_name != 'pull_request' }}
 
       # Upload the results as artifacts (kept short; debugging aid only).
       - name: Upload artifact

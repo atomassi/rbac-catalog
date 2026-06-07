@@ -849,13 +849,11 @@
     </div>
     
     <script>
-        // Navigate only to server-generated paths under the "/recent" route.
-        // The <select> option values come from build_recent_url, which always
-        // emits a leading-slash "/recent..." path. The raw value is parsed
-        // against the current origin and must resolve to the same origin and the
-        // "/recent" prefix; only the parsed pathname/search/hash are used, so
-        // scheme-relative ("//host"), absolute ("https://host/..."), and
-        // "javascript:" URLs cannot redirect off-site or execute script.
+        // Navigate only to the "/recent" route. The <select> option values come
+        // from build_recent_url, but rather than trust them, the destination is
+        // rebuilt from scratch using a strict allowlist of expected params and
+        // values. No attacker-influenced text reaches window.location, so a
+        // tampered option value cannot redirect off-site or execute script.
         function navigateToRelative(value) {
             if (typeof value !== 'string') return;
             const raw = value.trim();
@@ -867,10 +865,30 @@
             } catch {
                 return;
             }
-            // Enforce same-origin and the expected route prefix only.
+            // Enforce same-origin and the exact expected route.
             if (url.origin !== window.location.origin) return;
-            if (!url.pathname.startsWith('/recent')) return;
-            window.location.assign(url.pathname + url.search + url.hash);
+            if (url.pathname !== '/recent') return;
+            // Rebuild destination from an allowlist of expected params.
+            const safeParams = new URLSearchParams();
+            const eventType = url.searchParams.get('event_type');
+            if (eventType && ['all', 'created', 'updated', 'deleted'].includes(eventType)) {
+                safeParams.set('event_type', eventType);
+            }
+            const days = url.searchParams.get('days');
+            if (days && ['7', '30', '90', '365'].includes(days)) {
+                safeParams.set('days', days);
+            }
+            const limit = url.searchParams.get('limit');
+            if (limit && ['25', '100', '500'].includes(limit)) {
+                safeParams.set('limit', limit);
+            }
+            const page = url.searchParams.get('page');
+            if (page && /^[1-9]\d*$/.test(page)) {
+                safeParams.set('page', page);
+            }
+            const query = safeParams.toString();
+            const safeRelative = '/recent' + (query ? ('?' + query) : '');
+            window.location.assign(safeRelative);
         }
 
         // Clear search query on page refresh, but preserve when coming back from role detail

@@ -17,38 +17,7 @@ from rbaccatalog.cache import CacheService
 from rbaccatalog.cache.models import CachedRole
 from rbaccatalog.core.constants import NEW_DOMAIN, SITE_URL
 from rbaccatalog.matching import recommend_roles
-from rbaccatalog.mcp.constants import (
-    AI_RECOMMEND_DESC,
-    DEFAULT_AI_RECOMMEND_LIMIT,
-    DEFAULT_OPERATIONS_LIMIT,
-    DEFAULT_RECOMMEND_LIMIT,
-    DEFAULT_ROLES_LIMIT,
-    GET_ROLE_DESC,
-    GET_ROLE_PERMISSIONS_DESC,
-    MAX_AI_QUERY_LENGTH,
-    MAX_AI_RECOMMEND_LIMIT,
-    MAX_OPERATION_LENGTH,
-    MAX_OPERATIONS_LIMIT,
-    MAX_OPERATIONS_PER_REQUEST,
-    MAX_QUERY_LENGTH,
-    MAX_RECOMMEND_LIMIT,
-    MAX_ROLE_ID_LENGTH,
-    MAX_ROLES_LIMIT,
-    MCP_SERVER_INSTRUCTIONS,
-    MCP_SERVER_NAME,
-    MCP_SESSION_ID_HEADER,
-    MIN_AI_QUERY_LENGTH,
-    MIN_QUERY_LENGTH,
-    RATE_LIMIT_GLOBAL_CAPACITY,
-    RATE_LIMIT_GLOBAL_REFILL_RATE,
-    RATE_LIMIT_MAX_SESSIONS,
-    RATE_LIMIT_SESSION_CAPACITY,
-    RATE_LIMIT_SESSION_REFILL_RATE,
-    RATE_LIMIT_SESSION_TIMEOUT_SECONDS,
-    RECOMMEND_ROLES_DESC,
-    SEARCH_OPERATIONS_DESC,
-    SEARCH_ROLES_DESC,
-)
+from rbaccatalog.mcp import constants as mcpconst
 from rbaccatalog.mcp.utils import TokenBucketRateLimiter, ToolTimer, ValidationError, validate_input
 from rbaccatalog.settings import Settings
 from rbaccatalog.telemetry import MCPRateLimitType, MetricName, track_event
@@ -64,13 +33,19 @@ class MCPServer:
     def __init__(self, cache: CacheService) -> None:
         self._cache = cache
         self._global_limiter = TokenBucketRateLimiter(
-            RATE_LIMIT_GLOBAL_CAPACITY, RATE_LIMIT_GLOBAL_REFILL_RATE, max_buckets=1
+            mcpconst.RATE_LIMIT_GLOBAL_CAPACITY,
+            mcpconst.RATE_LIMIT_GLOBAL_REFILL_RATE,
+            max_buckets=1,
         )
         self._session_limiter = TokenBucketRateLimiter(
-            RATE_LIMIT_SESSION_CAPACITY, RATE_LIMIT_SESSION_REFILL_RATE, RATE_LIMIT_MAX_SESSIONS
+            mcpconst.RATE_LIMIT_SESSION_CAPACITY,
+            mcpconst.RATE_LIMIT_SESSION_REFILL_RATE,
+            mcpconst.RATE_LIMIT_MAX_SESSIONS,
         )
         self._session_last_activity: OrderedDict[str, float] = OrderedDict()
-        self._mcp = FastMCP(name=MCP_SERVER_NAME, instructions=MCP_SERVER_INSTRUCTIONS)
+        self._mcp = FastMCP(
+            name=mcpconst.MCP_SERVER_NAME, instructions=mcpconst.MCP_SERVER_INSTRUCTIONS
+        )
         # Configure internal path to "/" so when mounted at /mcp, endpoint is /mcp (not /mcp/mcp)
         self._mcp.settings.streamable_http_path = "/"
         # Allow production host for DNS rebinding protection
@@ -82,7 +57,7 @@ class MCPServer:
                 self._mcp.settings.transport_security.allowed_origins.append(SITE_URL)
         self._register_tools()
         track_event(MetricName.MCP_SERVER_INITIALIZED, {})
-        logger.info("MCP server '%s' initialized", MCP_SERVER_NAME)
+        logger.info("MCP server '%s' initialized", mcpconst.MCP_SERVER_NAME)
 
     def streamable_http_app(self) -> Starlette:
         """Get Starlette Streamable HTTP app (modern MCP transport)."""
@@ -129,7 +104,7 @@ class MCPServer:
         session_id = "default"
         if ctx.request_context and ctx.request_context.request:
             headers = getattr(ctx.request_context.request, "headers", {})
-            session_id = headers.get(MCP_SESSION_ID_HEADER, "default")
+            session_id = headers.get(mcpconst.MCP_SESSION_ID_HEADER, "default")
 
         logger.debug(
             "MCP client=%s/%s, session=%s, request_id=%s",
@@ -150,7 +125,7 @@ class MCPServer:
         expired = [
             sid
             for sid, last in self._session_last_activity.items()
-            if now - last > RATE_LIMIT_SESSION_TIMEOUT_SECONDS
+            if now - last > mcpconst.RATE_LIMIT_SESSION_TIMEOUT_SECONDS
         ]
         for sid in expired:
             del self._session_last_activity[sid]
@@ -176,11 +151,11 @@ class MCPServer:
         # Max sessions check
         if (
             session_id not in self._session_last_activity
-            and len(self._session_last_activity) >= RATE_LIMIT_MAX_SESSIONS
+            and len(self._session_last_activity) >= mcpconst.RATE_LIMIT_MAX_SESSIONS
         ):
             logger.warning("Max sessions reached, rejecting: %s", session_id)
             self._track_rate_limit(tool_name, MCPRateLimitType.MAX_SESSIONS)
-            return f"Server at capacity ({RATE_LIMIT_MAX_SESSIONS} sessions). Try later."
+            return f"Server at capacity ({mcpconst.RATE_LIMIT_MAX_SESSIONS} sessions). Try later."
 
         self._session_last_activity[session_id] = now
         self._session_last_activity.move_to_end(session_id)
@@ -225,9 +200,9 @@ class MCPServer:
     # -------------------------------------------------------------------------
 
     def _register_tools(self) -> None:
-        @self._mcp.tool(description=SEARCH_OPERATIONS_DESC)
+        @self._mcp.tool(description=mcpconst.SEARCH_OPERATIONS_DESC)
         def search_operations(
-            query: str, limit: int = DEFAULT_OPERATIONS_LIMIT, ctx: Context | None = None
+            query: str, limit: int = mcpconst.DEFAULT_OPERATIONS_LIMIT, ctx: Context | None = None
         ) -> str:
             session_id = self._get_client_key(ctx)
             logger.debug(
@@ -241,14 +216,16 @@ class MCPServer:
 
             with self._timer("search_operations") as timer:
                 try:
-                    query = validate_input(query, MAX_QUERY_LENGTH, MIN_QUERY_LENGTH, "Query")
+                    query = validate_input(
+                        query, mcpconst.MAX_QUERY_LENGTH, mcpconst.MIN_QUERY_LENGTH, "Query"
+                    )
                 except ValidationError as e:
                     timer.fail()
                     return str(e)
 
                 results = self._cache.search_operations(
                     query,
-                    limit=min(limit, MAX_OPERATIONS_LIMIT),
+                    limit=min(limit, mcpconst.MAX_OPERATIONS_LIMIT),
                 )
                 timer.result_count = len(results)
 
@@ -264,9 +241,9 @@ class MCPServer:
                 lines.append(f"• {op.name}{flag}{desc}")
             return "\n".join(lines)
 
-        @self._mcp.tool(description=SEARCH_ROLES_DESC)
+        @self._mcp.tool(description=mcpconst.SEARCH_ROLES_DESC)
         def search_roles(
-            query: str, limit: int = DEFAULT_ROLES_LIMIT, ctx: Context | None = None
+            query: str, limit: int = mcpconst.DEFAULT_ROLES_LIMIT, ctx: Context | None = None
         ) -> str:
             session_id = self._get_client_key(ctx)
             logger.debug(
@@ -280,13 +257,15 @@ class MCPServer:
 
             with self._timer("search_roles") as timer:
                 try:
-                    query = validate_input(query, MAX_QUERY_LENGTH, MIN_QUERY_LENGTH, "Query")
+                    query = validate_input(
+                        query, mcpconst.MAX_QUERY_LENGTH, mcpconst.MIN_QUERY_LENGTH, "Query"
+                    )
                 except ValidationError as e:
                     timer.fail()
                     return str(e)
 
                 query_lower = query.lower()
-                effective_limit = min(limit, MAX_ROLES_LIMIT)
+                effective_limit = min(limit, mcpconst.MAX_ROLES_LIMIT)
                 matching = list(
                     islice(
                         (
@@ -313,7 +292,7 @@ class MCPServer:
                     lines.append(f"  {desc}")
             return "\n".join(lines)
 
-        @self._mcp.tool(description=GET_ROLE_DESC)
+        @self._mcp.tool(description=mcpconst.GET_ROLE_DESC)
         def get_role(role_id_or_name: str, ctx: Context | None = None) -> str:
             session_id = self._get_client_key(ctx)
             logger.debug(
@@ -327,7 +306,7 @@ class MCPServer:
             with self._timer("get_role") as timer:
                 try:
                     role_id_or_name = validate_input(
-                        role_id_or_name, MAX_ROLE_ID_LENGTH, 1, "Role identifier"
+                        role_id_or_name, mcpconst.MAX_ROLE_ID_LENGTH, 1, "Role identifier"
                     )
                 except ValidationError as e:
                     timer.fail()
@@ -365,7 +344,7 @@ class MCPServer:
 
             return "\n".join(lines)
 
-        @self._mcp.tool(description=GET_ROLE_PERMISSIONS_DESC)
+        @self._mcp.tool(description=mcpconst.GET_ROLE_PERMISSIONS_DESC)
         def get_role_permissions(
             role_id_or_name: str, include_data_actions: bool = True, ctx: Context | None = None
         ) -> str:
@@ -382,7 +361,7 @@ class MCPServer:
             with self._timer("get_role_permissions") as timer:
                 try:
                     role_id_or_name = validate_input(
-                        role_id_or_name, MAX_ROLE_ID_LENGTH, 1, "Role identifier"
+                        role_id_or_name, mcpconst.MAX_ROLE_ID_LENGTH, 1, "Role identifier"
                     )
                 except ValidationError as e:
                     timer.fail()
@@ -416,12 +395,12 @@ class MCPServer:
 
             return "\n".join(lines)
 
-        @self._mcp.tool(description=RECOMMEND_ROLES_DESC)
+        @self._mcp.tool(description=mcpconst.RECOMMEND_ROLES_DESC)
         async def recommend_roles_tool(
             operations: list[str] | None = None,
             wildcards_control: list[str] | None = None,
             wildcards_data: list[str] | None = None,
-            max_results: int = DEFAULT_RECOMMEND_LIMIT,
+            max_results: int = mcpconst.DEFAULT_RECOMMEND_LIMIT,
             ctx: Context | None = None,
         ) -> str:
             session_id = self._get_client_key(ctx)
@@ -440,9 +419,9 @@ class MCPServer:
                 if not all_ops:
                     timer.fail()
                     return "Provide operations, wildcards_control, or wildcards_data"
-                if len(all_ops) > MAX_OPERATIONS_PER_REQUEST:
+                if len(all_ops) > mcpconst.MAX_OPERATIONS_PER_REQUEST:
                     timer.fail()
-                    return f"Maximum {MAX_OPERATIONS_PER_REQUEST} operations allowed"
+                    return f"Maximum {mcpconst.MAX_OPERATIONS_PER_REQUEST} operations allowed"
 
                 sanitized_ops: list[str] = []
                 data_flags: dict[str, bool] = {}
@@ -451,18 +430,18 @@ class MCPServer:
                     # Explicit operations - auto-detect plane
                     for op in operations or []:
                         sanitized_ops.append(
-                            validate_input(op, MAX_OPERATION_LENGTH, 1, "Operation")
+                            validate_input(op, mcpconst.MAX_OPERATION_LENGTH, 1, "Operation")
                         )
 
                     # Control-plane wildcards
                     for op in wildcards_control or []:
-                        clean = validate_input(op, MAX_OPERATION_LENGTH, 1, "Operation")
+                        clean = validate_input(op, mcpconst.MAX_OPERATION_LENGTH, 1, "Operation")
                         sanitized_ops.append(clean)
                         data_flags[clean] = False
 
                     # Data-plane wildcards
                     for op in wildcards_data or []:
-                        clean = validate_input(op, MAX_OPERATION_LENGTH, 1, "Operation")
+                        clean = validate_input(op, mcpconst.MAX_OPERATION_LENGTH, 1, "Operation")
                         sanitized_ops.append(clean)
                         data_flags[clean] = True
                 except ValidationError as e:
@@ -477,7 +456,7 @@ class MCPServer:
                         partial(
                             recommend_roles,
                             requested_operations=sanitized_ops,
-                            max_results=min(max_results, MAX_RECOMMEND_LIMIT),
+                            max_results=min(max_results, mcpconst.MAX_RECOMMEND_LIMIT),
                             requested_ops_data_flags=data_flags or None,
                         )
                     )
@@ -505,9 +484,9 @@ class MCPServer:
             lines.append("💡 Lower excess = better least-privilege fit")
             return "\n".join(lines)
 
-        @self._mcp.tool(description=AI_RECOMMEND_DESC)
+        @self._mcp.tool(description=mcpconst.AI_RECOMMEND_DESC)
         async def ai_recommend(
-            query: str, top_k: int = DEFAULT_AI_RECOMMEND_LIMIT, ctx: Context | None = None
+            query: str, top_k: int = mcpconst.DEFAULT_AI_RECOMMEND_LIMIT, ctx: Context | None = None
         ) -> str:
             session_id = self._get_client_key(ctx)
             logger.debug(
@@ -521,12 +500,14 @@ class MCPServer:
 
             with self._timer("ai_recommend") as timer:
                 try:
-                    query = validate_input(query, MAX_AI_QUERY_LENGTH, MIN_AI_QUERY_LENGTH, "Query")
+                    query = validate_input(
+                        query, mcpconst.MAX_AI_QUERY_LENGTH, mcpconst.MIN_AI_QUERY_LENGTH, "Query"
+                    )
                 except ValidationError as e:
                     timer.fail()
                     return str(e)
 
-                top_k = min(top_k, MAX_AI_RECOMMEND_LIMIT)
+                top_k = min(top_k, mcpconst.MAX_AI_RECOMMEND_LIMIT)
 
                 try:
                     enabled = Settings.get().enabled_ai_engines

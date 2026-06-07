@@ -40,7 +40,7 @@ STAGING_OID=$(jq -r        '.stagingSlotPrincipalId.value // empty' "$OUTPUTS_FI
 PPE_OID=$(jq -r            '.ppeSlotPrincipalId.value     // empty' "$OUTPUTS_FILE")
 PG_FQDN=$(jq -r            '.postgresFqdn.value'          "$OUTPUTS_FILE")
 PG_SERVER="${PG_FQDN%%.*}"
-PG_DB="rbaccatalog"
+PG_DB="azurerbac"
 
 CURRENT_UPN=$(az ad signed-in-user show --query userPrincipalName -o tsv)
 CURRENT_OID=$(az ad signed-in-user show --query id -o tsv)

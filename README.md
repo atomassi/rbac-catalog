@@ -2,9 +2,12 @@
 
 [![Build](https://github.com/atomassi/rbac-catalog/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/atomassi/rbac-catalog/actions/workflows/build.yml)
 [![Deploy](https://github.com/atomassi/rbac-catalog/actions/workflows/deploy.yml/badge.svg)](https://github.com/atomassi/rbac-catalog/actions/workflows/deploy.yml)
+[![CodeQL](https://github.com/atomassi/rbac-catalog/actions/workflows/codeql.yml/badge.svg)](https://github.com/atomassi/rbac-catalog/actions/workflows/codeql.yml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/atomassi/rbac-catalog/badge)](https://scorecard.dev/viewer/?uri=github.com/atomassi/rbac-catalog)
 [![Coverage](https://codecov.io/gh/atomassi/rbac-catalog/branch/main/graph/badge.svg)](https://codecov.io/gh/atomassi/rbac-catalog)
 [![Python](https://img.shields.io/badge/python-3.12%20%7C%203.13%20%7C%203.14-blue.svg)](https://www.python.org/downloads/)
-[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[![Release](https://img.shields.io/github/v/release/atomassi/rbac-catalog)](https://github.com/atomassi/rbac-catalog/releases/latest)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 > [!IMPORTANT]
 > **The public site at [rbac-catalog.dev](https://rbac-catalog.dev/) will be decommissioned on June 12, 2026.**

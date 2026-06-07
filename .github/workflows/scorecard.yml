@@ -1,0 +1,51 @@
+name: Scorecard supply-chain security
+
+on:
+  # Re-run when branch protection settings change so the score stays current.
+  branch_protection_rule:
+  # Weekly scheduled run (Mondays 05:23 UTC).
+  schedule:
+    - cron: '23 5 * * 1'
+  push:
+    branches: [main]
+
+# Least-privilege default; the analysis job opts in to the scopes it needs.
+permissions: read-all
+
+jobs:
+  analysis:
+    name: Scorecard analysis
+    runs-on: ubuntu-latest
+    permissions:
+      # Needed to upload the results to the code-scanning dashboard.
+      security-events: write
+      # Needed to publish results and get a badge (OIDC token for scorecard.dev).
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Run analysis
+        uses: ossf/scorecard-action@4eaacf0543bb3f2c246792bd56e8cdeffafb205a  # v2.4.3
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          # Publish results to OpenSSF so the README badge populates.
+          publish_results: true
+
+      # Upload the results as artifacts (kept short; debugging aid only).
+      - name: Upload artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: SARIF file
+          path: results.sarif
+          retention-days: 5
+
+      # Upload the results to GitHub's code-scanning dashboard.
+      - name: Upload to code-scanning
+        uses: github/codeql-action/upload-sarif@dd903d2e4f5405488e5ef1422510ee31c8b32357  # v3.36.2
+        with:
+          sarif_file: results.sarif

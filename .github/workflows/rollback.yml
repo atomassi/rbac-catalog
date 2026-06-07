@@ -8,8 +8,9 @@ on:
         required: false
         type: string
 
+# Least-privilege default: read-only workflow token. The rollback job opts in to
+# id-token: write below for Azure OIDC login.
 permissions:
-  id-token: write
   contents: read
 
 env:
@@ -23,6 +24,8 @@ jobs:
   rollback:
     name: Rollback to Previous Version
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write   # Request the OIDC JWT for Azure login
     environment:
       name: production
       url: https://rbac-catalog.dev

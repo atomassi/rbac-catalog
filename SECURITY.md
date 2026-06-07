@@ -22,6 +22,7 @@ service-level commitment to triage reports.
 
 If you find a vulnerability, the most effective options are:
 
+- **Report privately:** https://github.com/atomassi/rbac-catalog/security/advisories/new
 - **Fork and fix it yourself.** Pull requests are welcome and may be reviewed on
   a best-effort basis, but there is no guaranteed timeline.
 - **Open a GitHub issue** for awareness — but **do not include working exploit

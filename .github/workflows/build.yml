@@ -79,28 +79,15 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run tests
-        id: tests
-        run: |
-          pytest tests/ -q --tb=short --cov=azurerbac --cov-report=term --cov-fail-under=50 2>&1 | tee coverage.txt
-          PYTEST_EXIT=${PIPESTATUS[0]}
-          COVERAGE=$(grep -E '^TOTAL' coverage.txt | awk '{print $(NF)}' | tr -d '%')
-          echo "coverage=$COVERAGE" >> $GITHUB_OUTPUT
-          exit $PYTEST_EXIT
+        run: pytest tests/ -q --tb=short --cov=azurerbac --cov-report=term --cov-report=xml --cov-fail-under=80
         env:
           DB_CONNECTION_STRING: "sqlite+aiosqlite:///:memory:"
 
-      - name: Update coverage badge
-        if: matrix.python-version == '3.12' && github.ref == 'refs/heads/main' && github.event_name == 'push'
-        uses: schneegans/dynamic-badges-action@0e50b8bad39e7e1afd3e4e9c2b7dd145fad07501  # v1.8.0
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe  # v5.5.4
         with:
-          auth: ${{ secrets.GIST_TOKEN }}
-          gistID: 56d5c381b196c9c18db9fedbecb79220
-          filename: coverage.json
-          label: coverage
-          message: ${{ steps.tests.outputs.coverage }}%
-          valColorRange: ${{ steps.tests.outputs.coverage }}
-          minColorRange: 50
-          maxColorRange: 90
+          files: ./coverage.xml
+          fail_ci_if_error: false
 
   e2e:
     name: E2E Tests

@@ -3,7 +3,6 @@
 [![Build](https://github.com/atomassi/rbac-catalog/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/atomassi/rbac-catalog/actions/workflows/build.yml)
 [![Deploy](https://github.com/atomassi/rbac-catalog/actions/workflows/deploy.yml/badge.svg)](https://github.com/atomassi/rbac-catalog/actions/workflows/deploy.yml)
 [![CodeQL](https://github.com/atomassi/rbac-catalog/actions/workflows/codeql.yml/badge.svg)](https://github.com/atomassi/rbac-catalog/actions/workflows/codeql.yml)
-[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/atomassi/rbac-catalog/badge)](https://scorecard.dev/viewer/?uri=github.com/atomassi/rbac-catalog)
 [![Coverage](https://codecov.io/gh/atomassi/rbac-catalog/branch/main/graph/badge.svg)](https://codecov.io/gh/atomassi/rbac-catalog)
 [![Python](https://img.shields.io/badge/python-3.12%20%7C%203.13%20%7C%203.14-blue.svg)](https://www.python.org/downloads/)
 [![Release](https://img.shields.io/github/v/release/atomassi/rbac-catalog)](https://github.com/atomassi/rbac-catalog/releases/latest)

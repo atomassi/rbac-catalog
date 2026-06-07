@@ -216,7 +216,7 @@
     </script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
-<body class="h-full bg-slate-50 dark:bg-slate-900 transition-colors duration-200">
+<body class="h-full bg-slate-50 dark:bg-slate-900">
     {% include 'partials/_decommission_banner.html' %}
     <!-- Navigation state handler - must load before content -->
     <script src="/static/js/nav-state.js"></script>
@@ -944,7 +944,7 @@
                             <div class="mb-2">
                                 <div class="relative">
                                     <input type="text" 
-                                           x-model="controlSearch"
+                                           x-model.debounce.250ms="controlSearch"
                                            placeholder="Filter operations..." 
                                            class="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-azure-500 focus:border-azure-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500">
                                     <svg class="absolute left-2.5 top-2 h-3.5 w-3.5 text-slate-400 dark:text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1000,7 +1000,7 @@
                             <div class="mb-2">
                                 <div class="relative">
                                     <input type="text" 
-                                           x-model="dataSearch"
+                                           x-model.debounce.250ms="dataSearch"
                                            placeholder="Filter operations..." 
                                            class="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-azure-500 focus:border-azure-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500">
                                     <svg class="absolute left-2.5 top-2 h-3.5 w-3.5 text-slate-400 dark:text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">

@@ -375,7 +375,7 @@
 
         <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-6 sm:-mt-8">
             <!-- Stats Cards -->
-            <div class="grid {% if tab == 'recent' %}grid-cols-1 sm:grid-cols-3{% else %}grid-cols-2{% endif %} gap-3 sm:gap-5 mb-6 sm:mb-8">
+            <div class="grid {% if tab == 'recent' %}grid-cols-1 lg:grid-cols-3{% else %}grid-cols-2{% endif %} gap-3 sm:gap-5 mb-6 sm:mb-8">
                 {% if tab == 'recent' %}
                 <a href="/roles" class="bg-white dark:bg-slate-800 rounded-xl sm:rounded-2xl shadow-lg overflow-hidden card-hover cursor-pointer transition-transform hover:scale-[1.02]">
                 {% else %}
@@ -684,8 +684,8 @@
                 {% else %}
                     <!-- Recent Changes Filter -->
                     <div class="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-100 dark:border-slate-700">
-                        <!-- Mobile: compact select dropdowns (shown < sm) -->
-                        <div class="flex sm:hidden items-center gap-2">
+                        <!-- Mobile: compact select dropdowns (shown < lg) -->
+                        <div class="flex lg:hidden items-center gap-2">
                             <select onchange="navigateToRelative(this.value)" class="flex-1 min-w-0 text-sm font-medium rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 px-2.5 py-2.5 appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22%2394a3b8%22%3E%3Cpath%20fill-rule%3D%22evenodd%22%20d%3D%22M5.23%207.21a.75.75%200%20011.06.02L10%2011.168l3.71-3.938a.75.75%200%20111.08%201.04l-4.25%204.5a.75.75%200%2001-1.08%200l-4.25-4.5a.75.75%200%2001.02-1.06z%22%20clip-rule%3D%22evenodd%22%2F%3E%3C%2Fsvg%3E')] bg-[length:1.25rem_1.25rem] bg-[right_0.25rem_center] bg-no-repeat pr-7" aria-label="Filter by event type">
                                 <option value="{{ build_recent_url(new_page=1, new_event_type='all') }}" {{ 'selected' if event_type == 'all' }}>All changes</option>
                                 <option value="{{ build_recent_url(new_page=1, new_event_type='created') }}" {{ 'selected' if event_type == 'created' }}>Created</option>
@@ -707,8 +707,8 @@
                                 {{ total_events }}
                             </span>
                         </div>
-                        <!-- Desktop: segmented pill controls (shown >= sm) -->
-                        <div class="hidden sm:flex flex-wrap items-center gap-3">
+                        <!-- Desktop: segmented pill controls (shown >= lg) -->
+                        <div class="hidden lg:flex flex-wrap items-center gap-3">
                                 <!-- Event Type Filter -->
                                 <div class="flex items-center border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700">
                                     <div class="pl-3 pr-2 py-2 border-r border-slate-200 dark:border-slate-600">

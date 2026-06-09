@@ -1,6 +1,6 @@
 """Canonical values for custom-metric dimensions emitted to Azure Monitor.
 
-The string values are an external contract: Grafana/Application Insights
+The string values are an external contract: Application Insights
 dashboards group and filter ``customDimensions`` by them, so don't change a
 value without updating the dashboards.
 """

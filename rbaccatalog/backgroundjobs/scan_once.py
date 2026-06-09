@@ -1,10 +1,7 @@
-"""One-shot scan runner for local catalog population and scheduled jobs.
+"""Run one or more scans once and exit (no in-process scheduler).
 
-Runs one or more scans and exits; there is no in-process scheduler. Locally this
-is a one-off way to populate the catalog without leaving the background worker
-running. In production each scan runs as its own scheduled job that invokes this
-entry point for that single scan. A failed scan propagates as a non-zero exit
-code so the caller (or job runner) can mark the run failed.
+Used locally to populate the catalog without leaving the background worker
+running. A failed scan exits non-zero.
 
 Usage:
     python -m rbaccatalog.backgroundjobs.scan_once              # run all scans
@@ -50,7 +47,7 @@ async def run_once(jobs: list[Job]) -> None:
 
 
 def select_jobs(name: str | None) -> list[Job]:
-    """Return all jobs, or just the one matching ``name`` (raises KeyError if unknown)."""
+    """Return all jobs, or just the one named (raises KeyError if unknown)."""
     return create_all_jobs() if name is None else [create_job(name)]
 
 
@@ -58,7 +55,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Parse command-line arguments, validating the job name against the registry."""
     parser = argparse.ArgumentParser(
         prog="python -m rbaccatalog.backgroundjobs.scan_once",
-        description="Run a single Azure RBAC catalog scan and exit.",
+        description="Run one or all Azure RBAC catalog scans and exit.",
     )
     parser.add_argument(
         "job",

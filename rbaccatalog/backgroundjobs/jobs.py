@@ -140,7 +140,7 @@ JOB_FACTORIES: dict[str, type[Job]] = {
 
 
 def create_job(name: str) -> Job:
-    """Create a single job by name (e.g. ``role-scan``); raises KeyError if unknown."""
+    """Create a single job by name (raises KeyError if unknown)."""
     return JOB_FACTORIES[name]()
 
 

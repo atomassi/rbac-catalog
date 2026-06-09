@@ -52,10 +52,15 @@ class Job(ABC):
         """Execute the job. Handles fetch, apply, logging, and telemetry."""
 
 
+# Canonical job names, shared by the job classes and the JOB_FACTORIES registry.
+ROLE_SCAN_JOB_NAME = "role-scan"
+OPERATIONS_SCAN_JOB_NAME = "operations-scan"
+
+
 class RoleScanJob(Job):
     """Scans and synchronizes Azure built-in role definitions."""
 
-    _JOB_NAME = "role-scan"
+    _JOB_NAME = ROLE_SCAN_JOB_NAME
 
     @property
     def name(self) -> str:
@@ -94,7 +99,7 @@ class RoleScanJob(Job):
 class OperationsScanJob(Job):
     """Scans and synchronizes Azure provider operations."""
 
-    _JOB_NAME = "operations-scan"
+    _JOB_NAME = OPERATIONS_SCAN_JOB_NAME
 
     @property
     def name(self) -> str:
@@ -125,9 +130,20 @@ class OperationsScanJob(Job):
         track_operations_scan(len(operations))
 
 
-def create_jobs() -> list[Job]:
+# Registry of job constructors keyed by job name. Single source of truth for
+# both the scheduler (create_all_jobs) and one-shot runners (scan_once), so
+# adding a job here wires it into both paths.
+JOB_FACTORIES: dict[str, type[Job]] = {
+    ROLE_SCAN_JOB_NAME: RoleScanJob,
+    OPERATIONS_SCAN_JOB_NAME: OperationsScanJob,
+}
+
+
+def create_job(name: str) -> Job:
+    """Create a single job by name (raises KeyError if unknown)."""
+    return JOB_FACTORIES[name]()
+
+
+def create_all_jobs() -> list[Job]:
     """Create all job instances."""
-    return [
-        RoleScanJob(),
-        OperationsScanJob(),
-    ]
+    return [factory() for factory in JOB_FACTORIES.values()]

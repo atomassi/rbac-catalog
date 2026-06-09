@@ -3,14 +3,14 @@
   "version": "1.0.0",
   "description": "Frontend build for Azure RBAC Monitor",
   "scripts": {
-    "build:css": "tailwindcss -i ./rbaccatalog/web/static/css/input.css -o ./rbaccatalog/web/static/css/tailwind.min.css --minify",
-    "watch:css": "tailwindcss -i ./rbaccatalog/web/static/css/input.css -o ./rbaccatalog/web/static/css/tailwind.min.css --watch",
+    "build:css": "tailwindcss -c ./config/tailwind.config.js -i ./rbaccatalog/web/static/css/input.css -o ./rbaccatalog/web/static/css/tailwind.min.css --minify",
+    "watch:css": "tailwindcss -c ./config/tailwind.config.js -i ./rbaccatalog/web/static/css/input.css -o ./rbaccatalog/web/static/css/tailwind.min.css --watch",
     "check:js": "tsc --noEmit --allowJs --checkJs --strict --target ES2020 --lib ES2020,DOM --moduleResolution node rbaccatalog/web/static/js/*.js",
-    "test:js": "vitest run",
-    "test:js:watch": "vitest",
-    "test:js:coverage": "vitest run --coverage",
-    "test:e2e": "playwright test",
-    "test:e2e:headed": "playwright test --headed"
+    "test:js": "vitest run --config ./config/vitest.config.js",
+    "test:js:watch": "vitest --config ./config/vitest.config.js",
+    "test:js:coverage": "vitest run --coverage --config ./config/vitest.config.js",
+    "test:e2e": "playwright test --config ./config/playwright.config.ts",
+    "test:e2e:headed": "playwright test --headed --config ./config/playwright.config.ts"
   },
   "devDependencies": {
     "@playwright/test": "^1.60.0",

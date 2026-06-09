@@ -2,7 +2,7 @@
  * MCP Server E2E/Smoke Tests
  *
  * Tests the MCP Streamable HTTP endpoint availability and basic tool invocations.
- * Run with: npx playwright test e2e/mcp.spec.ts
+ * Run with: npx playwright test --config config/playwright.config.ts e2e/mcp.spec.ts
  */
 import { test, expect } from '@playwright/test';
 

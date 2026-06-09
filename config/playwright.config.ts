@@ -1,7 +1,8 @@
 import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
-  testDir: './e2e',
+  testDir: '../e2e',
+  outputDir: '../test-results',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
 
@@ -12,7 +13,7 @@ export default defineConfig({
   expect: { timeout: 5000 },
 
   reporter: process.env.CI
-    ? [['list'], ['html', { open: 'never' }]]
+    ? [['list'], ['html', { open: 'never', outputFolder: '../playwright-report' }]]
     : 'list',
 
   use: {

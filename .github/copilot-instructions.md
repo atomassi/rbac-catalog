@@ -206,9 +206,9 @@ from rbaccatalog.web.dependencies import BaseDeps, get_api_deps
 
 - `pyproject.toml` — Ruff, Pyright, pytest configuration
 - `requirements.txt` — Python dependencies (pinned versions)
-- `tailwind.config.js` — Tailwind CSS configuration
-- `playwright.config.ts` — Playwright E2E test configuration
-- `vitest.config.js` — Vitest configuration for frontend unit tests
+- `config/tailwind.config.js` — Tailwind CSS configuration
+- `config/playwright.config.ts` — Playwright E2E test configuration
+- `config/vitest.config.js` — Vitest configuration for frontend unit tests
 - `.github/dependabot.yml` — Automated dependency updates
 
 ## Database Models

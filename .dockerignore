@@ -37,8 +37,7 @@ rbaccatalog/web/logs/
 node_modules/
 package.json
 package-lock.json
-playwright.config.js
-tailwind.config.js
+config/
 
 # Config files not needed in container
 pyproject.toml

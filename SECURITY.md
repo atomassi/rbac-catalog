@@ -4,7 +4,7 @@
 
 This repository is provided **as-is** and is **not actively maintained**. The
 public site at `rbac-catalog.dev` is being decommissioned (June 12, 2026), and
-only the source code remains here under the [MIT License](../LICENSE).
+only the source code remains here under the [MIT License](LICENSE).
 
 There is **no support, no guaranteed response, and no commitment to release
 security fixes.** Use this code at your own risk.
@@ -36,10 +36,10 @@ dependencies up to date.
 
 If you self-host this project:
 
-- Review the hardening guidance in [`infra/README.md`](../infra/README.md)
+- Review the hardening guidance in [`infra/README.md`](infra/README.md)
   (TLS, network access restrictions, PostgreSQL firewall, secret handling).
 - Keep dependencies patched — Dependabot configuration ships in
-  [`.github/dependabot.yml`](dependabot.yml), but you must apply updates
+  [`.github/dependabot.yml`](.github/dependabot.yml), but you must apply updates
   in your own fork.
 - Never expose admin credentials or secrets; the app supports Entra ID /
   managed-identity auth for database access.

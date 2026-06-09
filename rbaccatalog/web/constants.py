@@ -95,12 +95,12 @@ MAX_REQUEST_BODY_BYTES: Final = 256 * 1024
 # Both the message HTML and the optional feedback URL are constants here
 # (not env vars) because they should travel with the deployment and be
 # code-reviewed.
-DECOMMISSION_BANNER_VERSION: Final[str] = "2026-05-decommission-v3"
+DECOMMISSION_BANNER_VERSION: Final[str] = "2026-05-decommission-v4"
 DECOMMISSION_BANNER_FEEDBACK_URL: Final[str] = "https://forms.gle/N323bjAWGKJzUWb49"
 DECOMMISSION_BANNER_MESSAGE: Final[str] = (
     "This site is being decommissioned on <strong>June 12, 2026</strong>. "
-    "Bookmark the "
-    '<a href="https://learn.microsoft.com/azure/role-based-access-control/built-in-roles" '
-    'class="underline font-medium hover:no-underline">Azure built-in roles reference</a> '
-    "on Microsoft Learn."
+    "It's "
+    '<a href="https://github.com/atomassi/rbac-catalog" '
+    'class="underline font-medium hover:no-underline">open source</a>, '
+    "so you can host your own copy."
 )

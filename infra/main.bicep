@@ -122,6 +122,17 @@ module monitoring 'modules/monitoring.bicep' = {
   params: { logAnalyticsName: n.logs, appInsightsName: n.insights, location: location, tags: tags }
 }
 
+module identity 'modules/identity.bicep' = {
+  scope: rg
+  name: 'identity'
+  params: {
+    baseName: baseName
+    location: location
+    tags: tags
+    deploySlots: deploySlots
+  }
+}
+
 module postgres 'modules/postgres.bicep' = {
   scope: rg
   name: 'postgres'
@@ -154,9 +165,16 @@ module appService 'modules/appservice.bicep' = {
     appInsightsConnectionString: monitoring.outputs.appInsightsConnectionString
     logAnalyticsId: monitoring.outputs.logAnalyticsId
     postgresHost: postgres.outputs.fqdn
-    // PG role created by scripts/grant-postgres-aad-admin.sh matches the App
-    // Service name (its MI display name).
-    postgresUser: n.app
+    // Writer identity (production slot) and reader identity (staging/ppe).
+    // Each slot authenticates to PostgreSQL as its own pgaadauth role,
+    // created by scripts/grant-postgres-aad-admin.sh to match the identity
+    // name below.
+    writerResourceId: identity.outputs.writerResourceId
+    writerClientId: identity.outputs.writerClientId
+    writerDbRole: identity.outputs.writerName
+    readerResourceId: identity.outputs.readerResourceId
+    readerClientId: identity.outputs.readerClientId
+    readerDbRole: identity.outputs.readerName
     environmentName: environmentName
     deploySlots: deploySlots
     ollamaBaseUrl: ollamaBaseUrl
@@ -171,9 +189,8 @@ module acr 'modules/acr.bicep' = {
     name: n.acr
     location: acrLocation
     tags: tags
-    appServicePrincipalId: appService.outputs.appServicePrincipalId
-    stagingSlotPrincipalId: appService.outputs.stagingSlotPrincipalId
-    ppeSlotPrincipalId: appService.outputs.ppeSlotPrincipalId
+    writerPrincipalId: identity.outputs.writerPrincipalId
+    readerPrincipalId: identity.outputs.readerPrincipalId
     logAnalyticsId: monitoring.outputs.logAnalyticsId
   }
 }
@@ -187,12 +204,14 @@ output subscriptionId        string = subscription().subscriptionId
 output appServiceName        string = n.app
 output appInsightsName       string = n.insights
 output appServiceUrl         string = 'https://${appService.outputs.defaultHostname}'
-output appServicePrincipalId string = appService.outputs.appServicePrincipalId
-// Slot principal IDs are emitted so post-deploy bootstrap (in particular
-// scripts/grant-postgres-aad-admin.sh) can grant PostgreSQL access to each
-// slot's managed identity. Empty when ``deploySlots = false``.
-output stagingSlotPrincipalId string = appService.outputs.stagingSlotPrincipalId
-output ppeSlotPrincipalId     string = appService.outputs.ppeSlotPrincipalId
+// Writer/reader managed-identity principal IDs and their PostgreSQL role
+// names. Post-deploy bootstrap (scripts/grant-postgres-aad-admin.sh) grants
+// CRUD to the writer role and SELECT-only to the reader role. The reader
+// values are empty when ``deploySlots = false``.
+output writerPrincipalId     string = identity.outputs.writerPrincipalId
+output writerDbRole          string = identity.outputs.writerName
+output readerPrincipalId     string = identity.outputs.readerPrincipalId
+output readerDbRole          string = identity.outputs.readerName
 output acrName               string = n.acr
 output acrLoginServer        string = acr.outputs.loginServer
 output postgresFqdn          string = postgres.outputs.fqdn

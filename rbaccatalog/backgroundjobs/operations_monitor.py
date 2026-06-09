@@ -32,11 +32,14 @@ class OperationChangeProcessor:
         self,
         session: AsyncSession,
         operations: list[OperationData],
+        *,
+        dry_run: bool = False,
     ) -> None:
         self._session = session
         self._ops_by_name, self._duplicates = self._deduplicate(operations)
         self._existing_by_name: dict[str, Operation] = {}
         self._timestamp = utcnow()
+        self._dry_run = dry_run
 
     @property
     def timestamp(self) -> dt.datetime:
@@ -79,8 +82,16 @@ class OperationChangeProcessor:
         if self._duplicates > 0:
             logger.debug("Deduplicated %d operations (kept last occurrence)", self._duplicates)
 
-        created, updated = self._process_operations()
-        await self._record_scan_status(created, updated)
+        # In dry-run the staged ORM changes are never flushed (see
+        # ``_record_scan_status``); ``no_autoflush`` guards against an
+        # incidental autoflush, and apply_operations_scan rolls everything back.
+        if self._dry_run:
+            with self._session.no_autoflush:
+                created, updated = self._process_operations()
+                await self._record_scan_status(created, updated)
+        else:
+            created, updated = self._process_operations()
+            await self._record_scan_status(created, updated)
 
         return OperationsScanResult(
             created=created,
@@ -152,6 +163,10 @@ class OperationChangeProcessor:
             additions=created,
             updates=updated,
         )
+        # Dry-run never persists: skip the INSERT/flush. The unsaved object is
+        # returned only for signature parity.
+        if self._dry_run:
+            return scan_status
         self._session.add(scan_status)
         await self._session.flush()
         return scan_status
@@ -163,18 +178,40 @@ class OperationChangeProcessor:
 
 
 async def apply_operations_scan(
-    session: AsyncSession, operations: list[OperationData]
+    session: AsyncSession,
+    operations: list[OperationData],
+    *,
+    dry_run: bool = False,
 ) -> OperationsScanResult:
-    """Store/update operations in the database using upsert logic."""
-    processor = OperationChangeProcessor(session, operations)
+    """Store/update operations in the database using upsert logic.
+
+    When ``dry_run`` is true the scan computes and logs the changes it would
+    make but writes nothing to the database (the transaction is rolled back).
+    """
+    processor = OperationChangeProcessor(session, operations, dry_run=dry_run)
 
     logger.info(
-        "Processing %d operations from Azure at %s",
+        "Processing %d operations from Azure at %s%s",
         len(operations),
         processor.timestamp,
+        " (WHAT-IF / dry-run)" if dry_run else "",
     )
 
     result = await processor.process()
+
+    if dry_run:
+        # Discard the staged (never-flushed) changes; nothing is written.
+        await session.rollback()
+        logger.info(
+            "Operations scan WHAT-IF complete (no changes written): "
+            "would create=%d, update=%d, total=%d, providers=%d",
+            result.created,
+            result.updated,
+            result.total,
+            result.providers,
+        )
+        return result
+
     await session.commit()
 
     logger.info(

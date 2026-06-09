@@ -382,6 +382,42 @@ class TestApplyRoleScan:
         assert history.summary is not None
         assert len(history.summary) > 0
 
+    @pytest.mark.asyncio
+    async def test_dry_run_reports_but_writes_nothing(self, db_session):
+        """What-if mode returns the would-be counts but persists no rows."""
+        roles = [_make_role("role-1", "Reader"), _make_role("role-2", "Contributor")]
+
+        stats = await apply_role_scan(db_session, roles, dry_run=True)
+
+        # Reports what WOULD happen...
+        assert stats.created == 2
+        assert stats.total == 2
+
+        # ...but nothing is written to the database.
+        assert (await db_session.execute(select(Role))).scalars().all() == []
+        assert (await db_session.execute(select(RoleHistory))).scalars().all() == []
+
+    @pytest.mark.asyncio
+    async def test_dry_run_does_not_apply_updates(self, db_session):
+        """A real scan persists; a later dry-run reports an update without writing."""
+        await apply_role_scan(
+            db_session,
+            [_make_role("role-1", "Reader", updated_on="2021-01-01T00:00:00Z")],
+        )
+
+        stats = await apply_role_scan(
+            db_session,
+            [_make_role("role-1", "Reader Renamed", updated_on="2022-01-01T00:00:00Z")],
+            dry_run=True,
+        )
+        assert stats.updated == 1
+
+        # The stored role keeps its original name and version history.
+        role = (await db_session.execute(select(Role))).scalar_one()
+        assert role.role_name == "Reader"
+        history = (await db_session.execute(select(RoleHistory))).scalars().all()
+        assert len(history) == 1  # only the initial create survived
+
 
 # =============================================================================
 # Operations Monitor Tests
@@ -512,6 +548,24 @@ class TestApplyOperationsScan:
 
         assert stats.created == 1
         assert stats.total == 1
+
+    @pytest.mark.asyncio
+    async def test_dry_run_reports_but_writes_nothing(self, db_session):
+        """What-if mode returns the would-be counts but persists no operations."""
+        from rbaccatalog.backgroundjobs.operations_monitor import apply_operations_scan
+        from rbaccatalog.core import Operation
+
+        operations = [
+            _make_operation("Microsoft.Test/resources/read", "Read"),
+            _make_operation("Microsoft.Test/resources/write", "Write"),
+        ]
+
+        stats = await apply_operations_scan(db_session, operations, dry_run=True)
+
+        assert stats.created == 2
+        assert stats.total == 2
+
+        assert (await db_session.execute(select(Operation))).scalars().all() == []
 
 
 # =============================================================================
@@ -818,25 +872,22 @@ class TestWorker:
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
-        "run_roles,run_operations,expected_jobs_run",
+        "run_scan_on_startup,expected_jobs_run",
         [
-            pytest.param(False, False, [], id="neither_enabled"),
-            pytest.param(True, False, ["role-scan"], id="only_roles"),
-            pytest.param(False, True, ["operations-scan"], id="only_operations"),
-            pytest.param(True, True, ["role-scan", "operations-scan"], id="both_enabled"),
+            pytest.param(False, [], id="disabled"),
+            pytest.param(True, ["role-scan", "operations-scan"], id="enabled"),
         ],
     )
     async def test_run_startup_jobs_based_on_settings(
-        self, run_roles: bool, run_operations: bool, expected_jobs_run: list[str]
+        self, run_scan_on_startup: bool, expected_jobs_run: list[str]
     ):
-        """_run_startup_jobs should respect settings flags."""
+        """_run_startup_jobs should respect the startup-scan flag."""
         from unittest.mock import AsyncMock, MagicMock
 
         from rbaccatalog.backgroundjobs.worker import Worker
 
         mock_settings = MagicMock()
-        mock_settings.run_roles_scan_on_startup = run_roles
-        mock_settings.run_operations_scan_on_startup = run_operations
+        mock_settings.run_scan_on_startup = run_scan_on_startup
 
         worker = Worker(settings=mock_settings)
         worker.run_job = AsyncMock()

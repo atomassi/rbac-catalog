@@ -58,7 +58,17 @@ class ManagedIdentityAuthenticator:
         if self._credential is None:
             from azure.identity.aio import ManagedIdentityCredential
 
-            self._credential = ManagedIdentityCredential()
+            from rbaccatalog.settings import Settings
+
+            client_id = Settings.get().msi_client_id
+            # A non-empty client_id pins the credential to a specific
+            # user-assigned identity; empty falls back to the system-assigned
+            # identity.
+            self._credential = (
+                ManagedIdentityCredential(client_id=client_id)
+                if client_id
+                else ManagedIdentityCredential()
+            )
         return self._credential
 
     async def get_token(self) -> str:

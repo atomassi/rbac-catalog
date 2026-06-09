@@ -31,14 +31,16 @@ command -v psql  >/dev/null || { echo "psql is required (brew install libpq && b
 # Resolve deployment outputs
 # ---------------------------------------------------------------------------
 
-RG_NAME=$(jq -r            '.resourceGroupName.value'     "$OUTPUTS_FILE")
-APP_NAME=$(jq -r           '.appServiceName.value'        "$OUTPUTS_FILE")
-APP_OID=$(jq -r            '.appServicePrincipalId.value' "$OUTPUTS_FILE")
-# Slot principal IDs are emitted only when ``deploySlots = true``. Treat
-# missing/empty values as "no slot" so a slotless deployment Just Works.
-STAGING_OID=$(jq -r        '.stagingSlotPrincipalId.value // empty' "$OUTPUTS_FILE")
-PPE_OID=$(jq -r            '.ppeSlotPrincipalId.value     // empty' "$OUTPUTS_FILE")
-PG_FQDN=$(jq -r            '.postgresFqdn.value'          "$OUTPUTS_FILE")
+RG_NAME=$(jq -r            '.resourceGroupName.value'  "$OUTPUTS_FILE")
+APP_NAME=$(jq -r           '.appServiceName.value'     "$OUTPUTS_FILE")
+# Writer = production slot (full CRUD). Reader = staging/ppe slots (SELECT
+# only). The reader values are emitted only when ``deploySlots = true``;
+# treat missing/empty as "no slots" so a slotless deployment Just Works.
+WRITER_OID=$(jq -r         '.writerPrincipalId.value'  "$OUTPUTS_FILE")
+WRITER_ROLE=$(jq -r        '.writerDbRole.value'       "$OUTPUTS_FILE")
+READER_OID=$(jq -r         '.readerPrincipalId.value // empty' "$OUTPUTS_FILE")
+READER_ROLE=$(jq -r        '.readerDbRole.value     // empty' "$OUTPUTS_FILE")
+PG_FQDN=$(jq -r            '.postgresFqdn.value'       "$OUTPUTS_FILE")
 PG_SERVER="${PG_FQDN%%.*}"
 PG_DB="azurerbac"
 
@@ -48,9 +50,8 @@ CURRENT_OID=$(az ad signed-in-user show --query id -o tsv)
 echo "Resource group  : $RG_NAME"
 echo "PG server       : $PG_SERVER"
 echo "Database        : $PG_DB"
-echo "App Service MI  : $APP_NAME (oid=$APP_OID)"
-[[ -n "$STAGING_OID" ]] && echo "Staging slot MI : ${APP_NAME}/slots/staging (oid=$STAGING_OID)"
-[[ -n "$PPE_OID"     ]] && echo "PPE slot MI     : ${APP_NAME}/slots/ppe     (oid=$PPE_OID)"
+echo "Writer MI       : $WRITER_ROLE (oid=$WRITER_OID)"
+[[ -n "$READER_OID" ]] && echo "Reader MI       : $READER_ROLE (oid=$READER_OID)"
 echo
 
 # ---------------------------------------------------------------------------
@@ -127,12 +128,14 @@ az postgres flexible-server firewall-rule create \
 # ---------------------------------------------------------------------------
 # 3. Run the DDL via psql, using an AAD token as the password
 # ---------------------------------------------------------------------------
-# Each identity (production slot + each deployment slot) gets its own
-# pgaadauth principal and the same set of CRUD grants. Slots have their
-# own managed identities, so they need their own grants — production's
-# grant does NOT cover them.
+# Two identities, split by privilege:
+#   * writer (production slot) — full CRUD; the single catalog writer.
+#   * reader (staging/ppe slots) — SELECT only, so a non-production slot
+#     physically cannot write to (or race) the catalog.
+# Each gets its own pgaadauth principal; the reader is granted a strictly
+# read-only set of privileges.
 
-echo "→ Granting CONNECT/USAGE/CRUD on $PG_DB to each MI..."
+echo "→ Granting CONNECT/USAGE + privileges on $PG_DB to each MI..."
 
 PG_TOKEN=$(az account get-access-token --resource-type oss-rdbms --query accessToken -o tsv)
 
@@ -244,21 +247,52 @@ grant_identity() {
   grant_in_db      "$mi_name"
 }
 
-# Production slot — its PG role matches the App Service name (which is the
-# production identity's MI display name). The bicep ``MSI_DB_USER`` setting
-# on the production slot uses exactly this value.
-grant_identity "$APP_NAME" "$APP_OID"
+# Read-only counterpart of ``grant_in_db``: CONNECT + USAGE + SELECT only.
+# No CREATE/INSERT/UPDATE/DELETE — the reader (staging/ppe) must never be
+# able to mutate the catalog. ALTER DEFAULT PRIVILEGES keeps the read grant
+# in force for any tables the writer creates later.
+grant_in_db_readonly() {
+  local mi_name="$1"
+  echo "  • grant (read-only) on $PG_DB: $mi_name"
+  PGPASSWORD="$PG_TOKEN" psql \
+    "host=$PG_FQDN port=5432 dbname=$PG_DB user=$CURRENT_UPN sslmode=require" \
+    -v ON_ERROR_STOP=1 \
+    -v APP_MI_NAME="$mi_name" \
+    <<'SQL'
+\set role_name :APP_MI_NAME
 
-# Each deployment slot has its OWN system-assigned identity, and the bicep
-# ``MSI_DB_USER`` slot-sticky setting points each one at a distinct PG role:
-#   * staging slot → MSI_DB_USER = ``<app>-slot-staging``
-#   * ppe slot     → MSI_DB_USER = ``<app>-slot-ppe``
-# Create those PG roles and grant them the same CRUD on $PG_DB.
-if [[ -n "$STAGING_OID" ]]; then
-  grant_identity "${APP_NAME}-slot-staging" "$STAGING_OID"
-fi
-if [[ -n "$PPE_OID" ]]; then
-  grant_identity "${APP_NAME}-slot-ppe"     "$PPE_OID"
+GRANT CONNECT ON DATABASE azurerbac TO :"role_name";
+
+-- USAGE lets the role resolve names in ``public``; NO CREATE — the reader
+-- never owns or alters the schema.
+GRANT USAGE ON SCHEMA public TO :"role_name";
+
+GRANT SELECT ON ALL TABLES    IN SCHEMA public TO :"role_name";
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO :"role_name";
+
+-- Future tables the writer creates on first start.
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+  GRANT SELECT ON TABLES    TO :"role_name";
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+  GRANT USAGE, SELECT ON SEQUENCES TO :"role_name";
+SQL
+}
+
+grant_identity_readonly() {
+  local mi_name="$1" mi_oid="$2"
+  create_principal      "$mi_name" "$mi_oid"
+  grant_in_db_readonly  "$mi_name"
+}
+
+# Writer (production slot) — full CRUD. The production slot's bicep
+# ``MSI_DB_USER`` setting uses exactly this role name.
+grant_identity "$WRITER_ROLE" "$WRITER_OID"
+
+# Reader (staging + ppe slots) — SELECT only. Both non-production slots
+# share this single identity/role, so one read-only grant covers both. The
+# slots' bicep ``MSI_DB_USER`` setting points at this role name.
+if [[ -n "$READER_OID" ]]; then
+  grant_identity_readonly "$READER_ROLE" "$READER_OID"
 fi
 
 echo

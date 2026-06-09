@@ -63,8 +63,7 @@ The app reads all configuration from environment variables. For local runs, an o
 | `DB_CONNECTION_STRING` | `sqlite+aiosqlite:///./rbaccatalog.db` | Switch to `postgresql+asyncpg://...` to use Postgres instead. |
 | `LOG_LEVEL` | `INFO` | Set to `DEBUG` for verbose logs. |
 | `ENABLED_AI_ENGINES` | `crossencoder,semantic,llm,rag,hyde,tfidf` | Comma-separated subset of `tfidf,semantic,crossencoder,llm,rag,hyde,hybrid`. Set to `tfidf` for fast boot. |
-| `RUN_SCAN_ON_STARTUP` | `true` | Worker runs a roles scan immediately on startup. Set to `false` to only run on the regular poll interval. |
-| `RUN_OPERATIONS_SCAN_ON_STARTUP` | `true` | Same, for operations. |
+| `RUN_SCAN_ON_STARTUP` | `true` | Worker runs a roles + operations scan immediately on startup. Set to `false` to only run on the regular poll interval. |
 | `ROLE_SCAN_ENABLED` | `true` | Set to `false` to disable the worker's role scanner. |
 | `OPERATIONS_SCAN_ENABLED` | `true` | Set to `false` to disable the worker's operations scanner. |
 | `ROLES_POLL_INTERVAL_SECONDS` | `7200` | How often the worker re-scans roles. |

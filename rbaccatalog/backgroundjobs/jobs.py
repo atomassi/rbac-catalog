@@ -33,6 +33,11 @@ class Job(ABC):
         return Settings.get()
 
     @property
+    def _dry_run(self) -> bool:
+        """Run in "what-if" mode (compute + log changes, write nothing)."""
+        return self._settings.scan_dry_run
+
+    @property
     @abstractmethod
     def name(self) -> str:
         """Job identifier used for scheduling and logging."""
@@ -84,16 +89,19 @@ class RoleScanJob(Job):
 
         session_factory = create_sessionmaker(DBEngine.get())
         async with session_factory() as session:
-            result = await apply_role_scan(session, roles)
+            result = await apply_role_scan(session, roles, dry_run=self._dry_run)
 
         logger.info("Role scan complete: %s", result)
 
-        track_role_scan(
-            roles_fetched=len(roles),
-            roles_added=result.created,
-            roles_updated=result.updated,
-            roles_deleted=result.deleted,
-        )
+        # Skip telemetry in what-if mode: the counts describe changes that
+        # were never persisted, so emitting them would misreport real scans.
+        if not self._dry_run:
+            track_role_scan(
+                roles_fetched=len(roles),
+                roles_added=result.created,
+                roles_updated=result.updated,
+                roles_deleted=result.deleted,
+            )
 
 
 class OperationsScanJob(Job):
@@ -123,11 +131,13 @@ class OperationsScanJob(Job):
 
         session_factory = create_sessionmaker(DBEngine.get())
         async with session_factory() as session:
-            result = await apply_operations_scan(session, operations)
+            result = await apply_operations_scan(session, operations, dry_run=self._dry_run)
 
         logger.info("Operations scan complete: %s", result)
 
-        track_operations_scan(len(operations))
+        # Skip telemetry in what-if mode (see RoleScanJob.run).
+        if not self._dry_run:
+            track_operations_scan(len(operations))
 
 
 # Registry of job constructors keyed by job name. Single source of truth for

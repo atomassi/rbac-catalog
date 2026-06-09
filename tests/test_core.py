@@ -123,7 +123,7 @@ class TestGetSettings:
             settings = Settings.get()
             assert settings.role_scan_enabled is False
             assert settings.operations_scan_enabled is False
-            assert settings.run_roles_scan_on_startup is True
+            assert settings.run_scan_on_startup is True
             assert settings.mcp_server_enabled is True
 
     @pytest.mark.parametrize(
@@ -236,11 +236,11 @@ class TestSettingsValidators:
             settings = Settings()
             assert settings.log_level == expected
 
-    def test_run_scan_on_startup_alias(self):
-        """Legacy RUN_SCAN_ON_STARTUP env var still maps to run_roles_scan_on_startup."""
+    def test_run_scan_on_startup_env(self):
+        """RUN_SCAN_ON_STARTUP env var maps to run_scan_on_startup."""
         with patch.dict(os.environ, {"RUN_SCAN_ON_STARTUP": "false"}, clear=True):
             settings = Settings()
-            assert settings.run_roles_scan_on_startup is False
+            assert settings.run_scan_on_startup is False
 
     def test_extra_env_vars_ignored(self):
         """Unknown env vars do not raise (extra='ignore')."""

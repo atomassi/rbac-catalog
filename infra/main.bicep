@@ -43,12 +43,15 @@ param postgresLocation string = location
 @description('Region for the Azure Container Registry. Defaults to `location`.')
 param acrLocation string = location
 
+@description('Region for the Container Apps environment + scan Jobs. Defaults to `location`. Override if the primary region is out of Container Apps (AKS) capacity.')
+param containerAppsLocation string = location
+
 @description('Base name (3-15 alphanumeric chars). Used as the prefix for every resource name.')
 @minLength(3)
 @maxLength(15)
 param baseName string = 'myapp'
 
-@description('App Service Plan SKU. P0v3 (default) / B3 are ideal; B2 is the practical minimum because the web server and the background scan worker share the plan, so B1\'s single core starves the uvicorn event loop during scans.')
+@description('App Service Plan SKU. P0v3 (default) / B3 are ideal; B2 is the practical minimum because the web tier builds a large in-memory role/operation cache at startup and renders heavy analytics pages, so B1\'s single shared core makes cold starts and concurrent requests time out.')
 param appServicePlanSku string = 'P0v3'
 
 @description('PostgreSQL SKU name (e.g. Standard_B1ms).')
@@ -86,6 +89,9 @@ param postgresAllowAllAzureServices bool = true
 @description('Enable password auth on PostgreSQL in addition to Entra ID. Required during first deployment so the AAD-mapped role can be provisioned. Set to false on subsequent deployments to remove the password attack surface.')
 param postgresEnablePasswordAuth bool = true
 
+@description('Deploy the background scan Jobs (Container Apps Jobs). Container Apps Jobs validate the image pull when they are created, so the image must already exist in the ACR. scripts/deploy.sh sets this to false for the first pass (build ACR), pushes the image, then re-runs with it true. Leave true for normal incremental deploys once the image is present.')
+param deployScanJobs bool = true
+
 // ---------------------------------------------------------------------------
 // Derived names + tags
 // ---------------------------------------------------------------------------
@@ -93,10 +99,17 @@ param postgresEnablePasswordAuth bool = true
 var n = {
   app:        '${baseName}-app'
   plan:       '${baseName}-plan'
-  acr:        '${baseName}registry'
-  pg:         '${baseName}-pg'
+  // ACR: lowercase alphanumeric only (no hyphens).
+  acr:        '${replace(toLower(baseName), '-', '')}registry'
+  // PostgreSQL Flexible Server: lowercase letters, numbers, hyphens only.
+  pg:         toLower('${baseName}-pg')
   logs:       '${baseName}-logs'
   insights:   '${baseName}-insights'
+  caenv:      '${baseName}-cae'
+  webIdentity:       '${baseName}-web-id'
+  scanIdentity:      '${baseName}-scan-id'
+  roleScanJob:       '${baseName}-role-scan'
+  operationsScanJob: '${baseName}-operations-scan'
 }
 
 var tags = {
@@ -125,15 +138,22 @@ module monitoring 'modules/monitoring.bicep' = {
   params: { logAnalyticsName: n.logs, appInsightsName: n.insights, location: location, tags: tags }
 }
 
-module identity 'modules/identity.bicep' = {
+// Two user-assigned identities with least-privilege DB roles:
+//   * webIdentity  → SELECT-only (the web tier never writes).
+//   * scanIdentity → owner / read-write (the scan Jobs create + populate the
+//                    schema; they are the single writer).
+// Splitting them removes the ownership race (only the scan role creates
+// tables) and lets the grant script give the web a one-way SELECT.
+module webIdentity 'modules/identity.bicep' = {
   scope: rg
-  name: 'identity'
-  params: {
-    baseName: baseName
-    location: location
-    tags: tags
-    deploySlots: deploySlots
-  }
+  name: 'webIdentity'
+  params: { name: n.webIdentity, location: location, tags: tags }
+}
+
+module scanIdentity 'modules/identity.bicep' = {
+  scope: rg
+  name: 'scanIdentity'
+  params: { name: n.scanIdentity, location: location, tags: tags }
 }
 
 module postgres 'modules/postgres.bicep' = {
@@ -168,16 +188,11 @@ module appService 'modules/appservice.bicep' = {
     appInsightsConnectionString: monitoring.outputs.appInsightsConnectionString
     logAnalyticsId: monitoring.outputs.logAnalyticsId
     postgresHost: postgres.outputs.fqdn
-    // Writer identity (production slot) and reader identity (staging/ppe).
-    // Each slot authenticates to PostgreSQL as its own pgaadauth role,
-    // created by scripts/grant-postgres-aad-admin.sh to match the identity
-    // name below.
-    writerResourceId: identity.outputs.writerResourceId
-    writerClientId: identity.outputs.writerClientId
-    writerDbRole: identity.outputs.writerName
-    readerResourceId: identity.outputs.readerResourceId
-    readerClientId: identity.outputs.readerClientId
-    readerDbRole: identity.outputs.readerName
+    // The web identity's name is its PostgreSQL role (SELECT-only; created by
+    // scripts/grant-postgres-aad-admin.sh).
+    postgresUser: webIdentity.outputs.name
+    userAssignedIdentityId: webIdentity.outputs.id
+    userAssignedIdentityClientId: webIdentity.outputs.clientId
     deploySlots: deploySlots
     ollamaBaseUrl: ollamaBaseUrl
     httpsOnly: appServiceHttpsOnly
@@ -191,9 +206,31 @@ module acr 'modules/acr.bicep' = {
     name: n.acr
     location: acrLocation
     tags: tags
-    writerPrincipalId: identity.outputs.writerPrincipalId
-    readerPrincipalId: identity.outputs.readerPrincipalId
+    webIdentityPrincipalId: webIdentity.outputs.principalId
+    scanIdentityPrincipalId: scanIdentity.outputs.principalId
     logAnalyticsId: monitoring.outputs.logAnalyticsId
+  }
+}
+
+// Background scans run as Container Apps Jobs (cron, scale-to-zero), decoupled
+// from the App Service web tier. They use the read-write scan identity (the
+// single writer / schema owner).
+module containerAppJobs 'modules/containerappjobs.bicep' = if (deployScanJobs) {
+  scope: rg
+  name: 'containerAppJobs'
+  params: {
+    environmentResourceName: n.caenv
+    scanIdentityName: scanIdentity.outputs.name
+    scanIdentityId: scanIdentity.outputs.id
+    scanIdentityClientId: scanIdentity.outputs.clientId
+    roleScanJobName: n.roleScanJob
+    operationsScanJobName: n.operationsScanJob
+    location: containerAppsLocation
+    tags: tags
+    acrLoginServer: acr.outputs.loginServer
+    logAnalyticsName: n.logs
+    appInsightsConnectionString: monitoring.outputs.appInsightsConnectionString
+    postgresHost: postgres.outputs.fqdn
   }
 }
 
@@ -206,14 +243,19 @@ output subscriptionId        string = subscription().subscriptionId
 output appServiceName        string = n.app
 output appInsightsName       string = n.insights
 output appServiceUrl         string = 'https://${appService.outputs.defaultHostname}'
-// Writer/reader managed-identity principal IDs and their PostgreSQL role
-// names. Post-deploy bootstrap (scripts/grant-postgres-aad-admin.sh) grants
-// CRUD to the writer role and SELECT-only to the reader role. The reader
-// values are empty when ``deploySlots = false``.
-output writerPrincipalId     string = identity.outputs.writerPrincipalId
-output writerDbRole          string = identity.outputs.writerName
-output readerPrincipalId     string = identity.outputs.readerPrincipalId
-output readerDbRole          string = identity.outputs.readerName
 output acrName               string = n.acr
 output acrLoginServer        string = acr.outputs.loginServer
 output postgresFqdn          string = postgres.outputs.fqdn
+
+// Two identities, each mapped to a PostgreSQL role by
+// scripts/grant-postgres-aad-admin.sh:
+//   * web  → SELECT-only   * scan → owner / read-write
+output webIdentityName        string = webIdentity.outputs.name
+output webIdentityPrincipalId string = webIdentity.outputs.principalId
+output scanIdentityName       string = scanIdentity.outputs.name
+output scanIdentityPrincipalId string = scanIdentity.outputs.principalId
+
+// Job names let scripts/deploy.sh trigger an initial scan (schema + data) before
+// the read-only web first boots. Empty when ``deployScanJobs = false``.
+output roleScanJobName        string = deployScanJobs ? n.roleScanJob : ''
+output operationsScanJobName  string = deployScanJobs ? n.operationsScanJob : ''

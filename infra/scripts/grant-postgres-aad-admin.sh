@@ -31,16 +31,16 @@ command -v psql  >/dev/null || { echo "psql is required (brew install libpq && b
 # Resolve deployment outputs
 # ---------------------------------------------------------------------------
 
-RG_NAME=$(jq -r            '.resourceGroupName.value'  "$OUTPUTS_FILE")
-APP_NAME=$(jq -r           '.appServiceName.value'     "$OUTPUTS_FILE")
-# Writer = production slot (full CRUD). Reader = staging/ppe slots (SELECT
-# only). The reader values are emitted only when ``deploySlots = true``;
-# treat missing/empty as "no slots" so a slotless deployment Just Works.
-WRITER_OID=$(jq -r         '.writerPrincipalId.value'  "$OUTPUTS_FILE")
-WRITER_ROLE=$(jq -r        '.writerDbRole.value'       "$OUTPUTS_FILE")
-READER_OID=$(jq -r         '.readerPrincipalId.value // empty' "$OUTPUTS_FILE")
-READER_ROLE=$(jq -r        '.readerDbRole.value     // empty' "$OUTPUTS_FILE")
-PG_FQDN=$(jq -r            '.postgresFqdn.value'       "$OUTPUTS_FILE")
+RG_NAME=$(jq -r            '.resourceGroupName.value'      "$OUTPUTS_FILE")
+APP_NAME=$(jq -r           '.appServiceName.value'         "$OUTPUTS_FILE")
+# Two least-privilege identities, each mapped to a PostgreSQL role:
+#   * web  → SELECT-only (the web tier never writes).
+#   * scan → owner / read-write (the scan Jobs create + populate the schema).
+WEB_ID_NAME=$(jq -r        '.webIdentityName.value'        "$OUTPUTS_FILE")
+WEB_ID_OID=$(jq -r         '.webIdentityPrincipalId.value' "$OUTPUTS_FILE")
+SCAN_ID_NAME=$(jq -r       '.scanIdentityName.value'       "$OUTPUTS_FILE")
+SCAN_ID_OID=$(jq -r        '.scanIdentityPrincipalId.value' "$OUTPUTS_FILE")
+PG_FQDN=$(jq -r            '.postgresFqdn.value'           "$OUTPUTS_FILE")
 PG_SERVER="${PG_FQDN%%.*}"
 PG_DB="azurerbac"
 
@@ -50,8 +50,8 @@ CURRENT_OID=$(az ad signed-in-user show --query id -o tsv)
 echo "Resource group  : $RG_NAME"
 echo "PG server       : $PG_SERVER"
 echo "Database        : $PG_DB"
-echo "Writer MI       : $WRITER_ROLE (oid=$WRITER_OID)"
-[[ -n "$READER_OID" ]] && echo "Reader MI       : $READER_ROLE (oid=$READER_OID)"
+echo "Web MI (SELECT) : $WEB_ID_NAME (oid=$WEB_ID_OID)"
+echo "Scan MI (owner) : $SCAN_ID_NAME (oid=$SCAN_ID_OID)"
 echo
 
 # ---------------------------------------------------------------------------
@@ -128,14 +128,11 @@ az postgres flexible-server firewall-rule create \
 # ---------------------------------------------------------------------------
 # 3. Run the DDL via psql, using an AAD token as the password
 # ---------------------------------------------------------------------------
-# Two identities, split by privilege:
-#   * writer (production slot) — full CRUD; the single catalog writer.
-#   * reader (staging/ppe slots) — SELECT only, so a non-production slot
-#     physically cannot write to (or race) the catalog.
-# Each gets its own pgaadauth principal; the reader is granted a strictly
-# read-only set of privileges.
+# Two least-privilege roles, no ownership race: the scan role owns the schema
+# (it is the only writer / the only one that runs create_all), and the web role
+# gets SELECT plus a one-directional default-SELECT on future scan-owned tables.
 
-echo "→ Granting CONNECT/USAGE + privileges on $PG_DB to each MI..."
+echo "→ Granting PostgreSQL roles (scan=owner, web=SELECT-only) on $PG_DB..."
 
 PG_TOKEN=$(az account get-access-token --resource-type oss-rdbms --query accessToken -o tsv)
 
@@ -210,9 +207,9 @@ $$;
 SQL
 }
 
-grant_in_db() {
+grant_scan_in_db() {
   local mi_name="$1"
-  echo "  • grant on $PG_DB: $mi_name"
+  echo "  • grant on $PG_DB (owner/read-write): $mi_name"
   PGPASSWORD="$PG_TOKEN" psql \
     "host=$PG_FQDN port=5432 dbname=$PG_DB user=$CURRENT_UPN sslmode=require" \
     -v ON_ERROR_STOP=1 \
@@ -222,75 +219,57 @@ grant_in_db() {
 
 GRANT CONNECT ON DATABASE azurerbac TO :"role_name";
 
--- USAGE lets the role resolve names in ``public``; CREATE lets it own the
--- schema (the app's SQLAlchemy ``Base.metadata.create_all`` runs at first
--- start and is the source of truth for the schema).
+-- USAGE resolves names in ``public``; CREATE lets this role own the schema
+-- (the scan Jobs' SQLAlchemy ``create_all`` runs first and is the source of
+-- truth for the schema).
 GRANT USAGE, CREATE ON SCHEMA public TO :"role_name";
 
-GRANT SELECT, INSERT, UPDATE, DELETE
-  ON ALL TABLES    IN SCHEMA public TO :"role_name";
-
-GRANT USAGE, SELECT
-  ON ALL SEQUENCES IN SCHEMA public TO :"role_name";
-
--- Future tables the app creates on first start.
-ALTER DEFAULT PRIVILEGES IN SCHEMA public
-  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES    TO :"role_name";
-ALTER DEFAULT PRIVILEGES IN SCHEMA public
-  GRANT USAGE, SELECT                  ON SEQUENCES TO :"role_name";
+-- Pre-existing objects (idempotent re-runs): full CRUD. Future objects need no
+-- handling — this role owns everything it creates via ensure_db.
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES    IN SCHEMA public TO :"role_name";
+GRANT USAGE, SELECT                  ON ALL SEQUENCES IN SCHEMA public TO :"role_name";
 SQL
 }
 
-grant_identity() {
-  local mi_name="$1" mi_oid="$2"
-  create_principal "$mi_name" "$mi_oid"
-  grant_in_db      "$mi_name"
-}
-
-# Read-only counterpart of ``grant_in_db``: CONNECT + ``pg_read_all_data``.
-# No CREATE/INSERT/UPDATE/DELETE — the reader (staging/ppe) must never be
-# able to mutate the catalog. ``pg_read_all_data`` is used instead of explicit
-# SELECT + ALTER DEFAULT PRIVILEGES because the writer (a different role) owns
-# the tables: default privileges only apply to objects created by the role
-# that sets them, so they would NOT cover writer-created tables. The built-in
-# ``pg_read_all_data`` role grants SELECT on every current and future object.
-grant_in_db_readonly() {
-  local mi_name="$1"
-  echo "  • grant (read-only) on $PG_DB: $mi_name"
+grant_web_in_db() {
+  local web_name="$1" scan_name="$2"
+  echo "  • grant on $PG_DB (SELECT-only): $web_name"
   PGPASSWORD="$PG_TOKEN" psql \
     "host=$PG_FQDN port=5432 dbname=$PG_DB user=$CURRENT_UPN sslmode=require" \
     -v ON_ERROR_STOP=1 \
-    -v APP_MI_NAME="$mi_name" \
+    -v WEB_NAME="$web_name" \
+    -v SCAN_NAME="$scan_name" \
     <<'SQL'
-\set role_name :APP_MI_NAME
+\set web_name  :WEB_NAME
+\set scan_name :SCAN_NAME
 
-GRANT CONNECT ON DATABASE azurerbac TO :"role_name";
+GRANT CONNECT ON DATABASE azurerbac TO :"web_name";
 
--- ``pg_read_all_data`` (PG 14+) confers SELECT on every table/view/sequence
--- and USAGE on every schema, INCLUDING objects the writer creates later, with
--- no write or DDL rights. This sidesteps ALTER DEFAULT PRIVILEGES, which would
--- only cover tables created by the admin running this script — not the writer.
-GRANT pg_read_all_data TO :"role_name";
+-- Read-only: USAGE to resolve names, SELECT on data. No CREATE, no write.
+GRANT USAGE ON SCHEMA public TO :"web_name";
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO :"web_name";
+
+-- Future tables the scan role creates must be auto-readable by the web role.
+-- ALTER DEFAULT PRIVILEGES FOR ROLE <scan> requires membership in <scan>, so
+-- the AAD admin (running this) joins it first. One-directional (scan → web
+-- SELECT); the scan role never needs anything from web.
+GRANT :"scan_name" TO current_user;
+ALTER DEFAULT PRIVILEGES FOR ROLE :"scan_name" IN SCHEMA public
+  GRANT SELECT ON TABLES TO :"web_name";
 SQL
 }
 
-grant_identity_readonly() {
-  local mi_name="$1" mi_oid="$2"
-  create_principal      "$mi_name" "$mi_oid"
-  grant_in_db_readonly  "$mi_name"
-}
+# Scan role first: it owns the schema, so create it (and set its default
+# privileges) BEFORE the Jobs run create_all.
+create_principal "$SCAN_ID_NAME" "$SCAN_ID_OID"
+grant_scan_in_db "$SCAN_ID_NAME"
 
-# Writer (production slot) — full CRUD. The production slot's bicep
-# ``MSI_DB_USER`` setting uses exactly this role name.
-grant_identity "$WRITER_ROLE" "$WRITER_OID"
-
-# Reader (staging + ppe slots) — SELECT only. Both non-production slots
-# share this single identity/role, so one read-only grant covers both. The
-# slots' bicep ``MSI_DB_USER`` setting points at this role name.
-if [[ -n "$READER_OID" ]]; then
-  grant_identity_readonly "$READER_ROLE" "$READER_OID"
-fi
+# Web role: SELECT-only, plus a one-way default SELECT on future scan-owned
+# tables.
+create_principal "$WEB_ID_NAME" "$WEB_ID_OID"
+grant_web_in_db  "$WEB_ID_NAME" "$SCAN_ID_NAME"
 
 echo
-echo "✓ Done. Restart the App Service to refresh its DB connection pool:"
+echo "✓ Done. Schema/data are created by the scan Jobs; scripts/deploy.sh runs"
+echo "  them once before restarting the web. To refresh manually:"
 echo "    az webapp restart -n $APP_NAME -g $RG_NAME"

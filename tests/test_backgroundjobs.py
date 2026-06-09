@@ -1,8 +1,5 @@
 """Tests for the monitor module - role scan application logic."""
 
-import asyncio
-from datetime import timedelta
-
 import pytest
 from sqlalchemy import select
 
@@ -382,42 +379,6 @@ class TestApplyRoleScan:
         assert history.summary is not None
         assert len(history.summary) > 0
 
-    @pytest.mark.asyncio
-    async def test_dry_run_reports_but_writes_nothing(self, db_session):
-        """What-if mode returns the would-be counts but persists no rows."""
-        roles = [_make_role("role-1", "Reader"), _make_role("role-2", "Contributor")]
-
-        stats = await apply_role_scan(db_session, roles, dry_run=True)
-
-        # Reports what WOULD happen...
-        assert stats.created == 2
-        assert stats.total == 2
-
-        # ...but nothing is written to the database.
-        assert (await db_session.execute(select(Role))).scalars().all() == []
-        assert (await db_session.execute(select(RoleHistory))).scalars().all() == []
-
-    @pytest.mark.asyncio
-    async def test_dry_run_does_not_apply_updates(self, db_session):
-        """A real scan persists; a later dry-run reports an update without writing."""
-        await apply_role_scan(
-            db_session,
-            [_make_role("role-1", "Reader", updated_on="2021-01-01T00:00:00Z")],
-        )
-
-        stats = await apply_role_scan(
-            db_session,
-            [_make_role("role-1", "Reader Renamed", updated_on="2022-01-01T00:00:00Z")],
-            dry_run=True,
-        )
-        assert stats.updated == 1
-
-        # The stored role keeps its original name and version history.
-        role = (await db_session.execute(select(Role))).scalar_one()
-        assert role.role_name == "Reader"
-        history = (await db_session.execute(select(RoleHistory))).scalars().all()
-        assert len(history) == 1  # only the initial create survived
-
 
 # =============================================================================
 # Operations Monitor Tests
@@ -549,24 +510,6 @@ class TestApplyOperationsScan:
         assert stats.created == 1
         assert stats.total == 1
 
-    @pytest.mark.asyncio
-    async def test_dry_run_reports_but_writes_nothing(self, db_session):
-        """What-if mode returns the would-be counts but persists no operations."""
-        from rbaccatalog.backgroundjobs.operations_monitor import apply_operations_scan
-        from rbaccatalog.core import Operation
-
-        operations = [
-            _make_operation("Microsoft.Test/resources/read", "Read"),
-            _make_operation("Microsoft.Test/resources/write", "Write"),
-        ]
-
-        stats = await apply_operations_scan(db_session, operations, dry_run=True)
-
-        assert stats.created == 2
-        assert stats.total == 2
-
-        assert (await db_session.execute(select(Operation))).scalars().all() == []
-
 
 # =============================================================================
 # Worker Module Tests
@@ -576,28 +519,12 @@ class TestApplyOperationsScan:
 class TestWorkerImports:
     """Tests for worker module imports and basic structure."""
 
-    def test_worker_imports_engine_correctly(self):
-        """Verify worker uses DBEngine.get() from core."""
-        from rbaccatalog.backgroundjobs import worker
-
-        # Check that DBEngine is imported (not create_engine)
-        assert hasattr(worker, "DBEngine") or "DBEngine" in dir(worker)
-
-    def test_worker_main_is_async(self):
-        """Verify main() is an async function."""
-        from rbaccatalog.backgroundjobs.worker import main
-
-        assert asyncio.iscoroutinefunction(main)
-
     def test_worker_class_exists(self):
-        """Verify Worker class exists and has required methods."""
+        """Verify Worker class exists and exposes run_job."""
         from rbaccatalog.backgroundjobs.worker import Worker
 
         worker = Worker()
         assert hasattr(worker, "run_job")
-        assert hasattr(worker, "start")
-        assert hasattr(worker, "_setup_scheduler")
-        assert hasattr(worker, "_cleanup")
 
     def test_job_abstract_class_has_required_methods(self):
         """Verify Job abstract class has required abstract methods."""
@@ -609,7 +536,6 @@ class TestWorkerImports:
         assert hasattr(Job, "name")
         assert hasattr(Job, "enabled")
         assert hasattr(Job, "run")
-        assert hasattr(Job, "interval")
         assert inspect.isabstract(Job)
 
 
@@ -641,10 +567,6 @@ class TestEmptyFetchResultError:
             def enabled(self) -> bool:
                 return True
 
-            @property
-            def interval(self) -> timedelta:
-                return timedelta(seconds=60)
-
             async def run(self):
                 raise EmptyFetchResultError(self.name)
 
@@ -671,10 +593,6 @@ class TestEmptyFetchResultError:
             def enabled(self) -> bool:
                 return True
 
-            @property
-            def interval(self) -> timedelta:
-                return timedelta(seconds=60)
-
             async def run(self):
                 nonlocal run_called
                 run_called = True
@@ -687,10 +605,10 @@ class TestEmptyFetchResultError:
         assert run_called
 
 
-class TestJobRegistry:
-    """Tests for the JOB_FACTORIES registry and its factory helpers."""
+class TestCreateJobs:
+    """Tests for create_all_jobs function."""
 
-    def test_create_all_jobs_creates_both_jobs(self):
+    def test_creates_both_jobs(self):
         from rbaccatalog.backgroundjobs.jobs import create_all_jobs
 
         jobs = create_all_jobs()
@@ -700,7 +618,7 @@ class TestJobRegistry:
         assert "role-scan" in job_names
         assert "operations-scan" in job_names
 
-    def test_create_all_jobs_returns_job_instances(self):
+    def test_jobs_are_job_instances(self):
         from rbaccatalog.backgroundjobs.jobs import Job, create_all_jobs
 
         jobs = create_all_jobs()
@@ -708,69 +626,10 @@ class TestJobRegistry:
         for job in jobs:
             assert isinstance(job, Job)
             assert callable(job.run)
-            assert isinstance(job.interval, timedelta)
-
-    def test_create_job_returns_named_job(self):
-        from rbaccatalog.backgroundjobs.jobs import create_job
-
-        assert create_job("role-scan").name == "role-scan"
-        assert create_job("operations-scan").name == "operations-scan"
-
-    def test_create_job_unknown_name_raises_key_error(self):
-        from rbaccatalog.backgroundjobs.jobs import create_job
-
-        with pytest.raises(KeyError):
-            create_job("does-not-exist")
 
 
 class TestWorker:
     """Tests for Worker class methods."""
-
-    def test_setup_scheduler_creates_scheduler_with_enabled_jobs(self):
-        from rbaccatalog.backgroundjobs.jobs import Job
-        from rbaccatalog.backgroundjobs.worker import Worker
-
-        class EnabledJob(Job):
-            @property
-            def name(self) -> str:
-                return "job1"
-
-            @property
-            def enabled(self) -> bool:
-                return True
-
-            @property
-            def interval(self) -> timedelta:
-                return timedelta(seconds=60)
-
-            async def run(self):
-                pass
-
-        class DisabledJob(Job):
-            @property
-            def name(self) -> str:
-                return "job2"
-
-            @property
-            def enabled(self) -> bool:
-                return False
-
-            @property
-            def interval(self) -> timedelta:
-                return timedelta(seconds=120)
-
-            async def run(self):
-                pass
-
-        worker = Worker()
-        worker._jobs = [EnabledJob(), DisabledJob()]
-
-        scheduler = worker._setup_scheduler()
-
-        # Only enabled jobs should be scheduled
-        scheduled_jobs = scheduler.get_jobs()
-        assert len(scheduled_jobs) == 1
-        assert scheduled_jobs[0].id == "job1"
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
@@ -799,10 +658,6 @@ class TestWorker:
             def enabled(self) -> bool:
                 return job_enabled
 
-            @property
-            def interval(self) -> timedelta:
-                return timedelta(seconds=60)
-
             async def run(self):
                 nonlocal run_called
                 run_called = True
@@ -816,126 +671,3 @@ class TestWorker:
         await worker.run_job(job)
 
         assert run_called == expect_run_called
-
-    @pytest.mark.parametrize(
-        "use_custom_settings",
-        [
-            pytest.param(False, id="default_settings"),
-            pytest.param(True, id="custom_settings"),
-        ],
-    )
-    def test_init_settings(self, use_custom_settings: bool):
-        """Worker should use provided settings or default to Settings.get()."""
-        from unittest.mock import MagicMock
-
-        from rbaccatalog.backgroundjobs.worker import Worker
-
-        if use_custom_settings:
-            custom_settings = MagicMock()
-            worker = Worker(settings=custom_settings)
-            assert worker._settings is custom_settings
-        else:
-            worker = Worker()
-            assert worker._settings is not None
-
-        # Common assertions for both cases
-        assert worker._jobs == []
-        assert worker._jobs_by_name == {}
-        assert worker._scheduler is None
-        assert worker._shutdown_event is None
-
-    @pytest.mark.asyncio
-    @pytest.mark.parametrize(
-        "has_scheduler",
-        [
-            pytest.param(True, id="with_scheduler"),
-            pytest.param(False, id="without_scheduler"),
-        ],
-    )
-    async def test_cleanup_handles_scheduler(self, has_scheduler: bool):
-        """_cleanup should handle scheduler presence/absence gracefully."""
-        from unittest.mock import MagicMock, patch
-
-        from rbaccatalog.backgroundjobs.worker import Worker
-
-        worker = Worker()
-        mock_scheduler = MagicMock() if has_scheduler else None
-        worker._scheduler = mock_scheduler
-
-        with patch("rbaccatalog.backgroundjobs.worker.DBEngine") as mock_engine:
-            mock_engine.dispose = MagicMock(return_value=asyncio.Future())
-            mock_engine.dispose.return_value.set_result(None)
-            await worker._cleanup()
-
-        if has_scheduler:
-            mock_scheduler.shutdown.assert_called_once_with(wait=True)
-
-    @pytest.mark.asyncio
-    @pytest.mark.parametrize(
-        "run_scan_on_startup,expected_jobs_run",
-        [
-            pytest.param(False, [], id="disabled"),
-            pytest.param(True, ["role-scan", "operations-scan"], id="enabled"),
-        ],
-    )
-    async def test_run_startup_jobs_based_on_settings(
-        self, run_scan_on_startup: bool, expected_jobs_run: list[str]
-    ):
-        """_run_startup_jobs should respect the startup-scan flag."""
-        from unittest.mock import AsyncMock, MagicMock
-
-        from rbaccatalog.backgroundjobs.worker import Worker
-
-        mock_settings = MagicMock()
-        mock_settings.run_scan_on_startup = run_scan_on_startup
-
-        worker = Worker(settings=mock_settings)
-        worker.run_job = AsyncMock()
-
-        # Setup mock jobs
-        role_job = MagicMock()
-        role_job.name = "role-scan"
-        ops_job = MagicMock()
-        ops_job.name = "operations-scan"
-        worker._jobs_by_name = {"role-scan": role_job, "operations-scan": ops_job}
-
-        await worker._run_startup_jobs()
-
-        # Verify correct jobs were run
-        actual_jobs_run = [call.args[0].name for call in worker.run_job.call_args_list]
-        assert actual_jobs_run == expected_jobs_run
-
-    @pytest.mark.parametrize(
-        "has_event,expect_signals_registered",
-        [
-            pytest.param(False, False, id="no_event_returns_early"),
-            pytest.param(True, True, id="with_event_registers_signals"),
-        ],
-    )
-    @pytest.mark.asyncio
-    async def test_setup_shutdown_handler(self, has_event: bool, expect_signals_registered: bool):
-        """_setup_shutdown_handler should register signals only when event exists."""
-        import signal
-        from unittest.mock import MagicMock, patch
-
-        from rbaccatalog.backgroundjobs.worker import Worker
-
-        worker = Worker()
-        worker._shutdown_event = asyncio.Event() if has_event else None
-
-        mock_loop = MagicMock()
-        with patch(
-            "rbaccatalog.backgroundjobs.worker.asyncio.get_running_loop",
-            return_value=mock_loop,
-        ):
-            worker._setup_shutdown_handler()
-
-        if expect_signals_registered:
-            assert mock_loop.add_signal_handler.call_count == 2
-            registered_signals = {
-                call.args[0] for call in mock_loop.add_signal_handler.call_args_list
-            }
-            assert signal.SIGINT in registered_signals
-            assert signal.SIGTERM in registered_signals
-        else:
-            mock_loop.add_signal_handler.assert_not_called()

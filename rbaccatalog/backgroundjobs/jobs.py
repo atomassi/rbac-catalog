@@ -93,8 +93,6 @@ class RoleScanJob(Job):
 
         logger.info("Role scan complete: %s", result)
 
-        # Skip telemetry in what-if mode: the counts describe changes that
-        # were never persisted, so emitting them would misreport real scans.
         if not self._dry_run:
             track_role_scan(
                 roles_fetched=len(roles),
@@ -135,7 +133,6 @@ class OperationsScanJob(Job):
 
         logger.info("Operations scan complete: %s", result)
 
-        # Skip telemetry in what-if mode (see RoleScanJob.run).
         if not self._dry_run:
             track_operations_scan(len(operations))
 

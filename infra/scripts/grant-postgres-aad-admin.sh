@@ -247,10 +247,13 @@ grant_identity() {
   grant_in_db      "$mi_name"
 }
 
-# Read-only counterpart of ``grant_in_db``: CONNECT + USAGE + SELECT only.
+# Read-only counterpart of ``grant_in_db``: CONNECT + ``pg_read_all_data``.
 # No CREATE/INSERT/UPDATE/DELETE — the reader (staging/ppe) must never be
-# able to mutate the catalog. ALTER DEFAULT PRIVILEGES keeps the read grant
-# in force for any tables the writer creates later.
+# able to mutate the catalog. ``pg_read_all_data`` is used instead of explicit
+# SELECT + ALTER DEFAULT PRIVILEGES because the writer (a different role) owns
+# the tables: default privileges only apply to objects created by the role
+# that sets them, so they would NOT cover writer-created tables. The built-in
+# ``pg_read_all_data`` role grants SELECT on every current and future object.
 grant_in_db_readonly() {
   local mi_name="$1"
   echo "  • grant (read-only) on $PG_DB: $mi_name"
@@ -263,18 +266,11 @@ grant_in_db_readonly() {
 
 GRANT CONNECT ON DATABASE azurerbac TO :"role_name";
 
--- USAGE lets the role resolve names in ``public``; NO CREATE — the reader
--- never owns or alters the schema.
-GRANT USAGE ON SCHEMA public TO :"role_name";
-
-GRANT SELECT ON ALL TABLES    IN SCHEMA public TO :"role_name";
-GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO :"role_name";
-
--- Future tables the writer creates on first start.
-ALTER DEFAULT PRIVILEGES IN SCHEMA public
-  GRANT SELECT ON TABLES    TO :"role_name";
-ALTER DEFAULT PRIVILEGES IN SCHEMA public
-  GRANT USAGE, SELECT ON SEQUENCES TO :"role_name";
+-- ``pg_read_all_data`` (PG 14+) confers SELECT on every table/view/sequence
+-- and USAGE on every schema, INCLUDING objects the writer creates later, with
+-- no write or DDL rights. This sidesteps ALTER DEFAULT PRIVILEGES, which would
+-- only cover tables created by the admin running this script — not the writer.
+GRANT pg_read_all_data TO :"role_name";
 SQL
 }
 

@@ -69,10 +69,10 @@ Two profiles ship out of the box:
 
 - **App Service over AKS / Container Apps** — single-container app; free TLS, slot swaps, and App Insights integration are built in.
 - **P0v3 plan** — smallest Premium V3 (VNet integration, AlwaysOn, 5 free slots).
-- **System-assigned MI (per slot)** — lifecycle bound to the app; simpler than a user-assigned identity for a single app. Each slot has its own MI, and AcrPull + PostgreSQL grants are wired for all three (production + staging + ppe).
+- **User-assigned MIs (writer + reader)** — two UAMIs decouple identity lifecycle from the app and split privilege. A **writer** is attached to the production slot (AcrPull + full CRUD on PostgreSQL); a shared **reader** is attached to staging + ppe (AcrPull + read-only via `pg_read_all_data`). Splitting identities means a non-production slot physically cannot write to the catalog.
 - **PostgreSQL Flexible (not Single)** — better price/perf and Entra ID auth. B1ms is enough for the workload (< 5 RPS, ~200 MB data).
 - **Entra ID for DB auth** — the app opens password-less, token-based connections; rotation is automatic via MSI tokens. The admin password is only needed at first deploy to provision the AAD-mapped role (see [§ Security notes](#security-notes)).
-- **Slot-sticky config** — `MSI_DB_USER`, `APP_ENVIRONMENT_NAME`, and the scan-enable flags (`ROLE_SCAN_ENABLED`, `OPERATIONS_SCAN_ENABLED`) are registered in `slotConfigNames`, so a slot swap does NOT carry the staging PG role, telemetry label, or scanner with the code. Only the **production slot** runs the role + operations scans; staging and ppe are non-writers so they don't race the worker and double-count events.
+- **Slot-sticky config** — `MSI_CLIENT_ID`, `MSI_DB_USER`, `APP_ENVIRONMENT_NAME`, `SCAN_DRY_RUN`, and the scan-enable flags (`ROLE_SCAN_ENABLED`, `OPERATIONS_SCAN_ENABLED`) are registered in `slotConfigNames`, so a slot swap does NOT carry a slot's identity, PG role, telemetry label, or scanner mode with the code. Only the **production slot** writes scan results; staging and ppe run the same scans in what-if mode (`SCAN_DRY_RUN=true`) — they fetch and log changes but never write, so they can't race the worker or double-count events.
 
 ---
 

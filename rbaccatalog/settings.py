@@ -68,8 +68,6 @@ class Settings(BaseSettings):
     role_scan_enabled: bool = True
     operations_scan_enabled: bool = True
     run_scan_on_startup: bool = True
-    # "What-if" mode: scans fetch and log what would change but never write
-    # to the database. Used by non-production slots.
     scan_dry_run: bool = False
 
     # --- Database -----------------------------------------------------------

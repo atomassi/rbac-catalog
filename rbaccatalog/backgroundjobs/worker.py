@@ -10,7 +10,7 @@ import time
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from dotenv import load_dotenv
 
-from rbaccatalog.backgroundjobs.jobs import Job, JobResult, create_jobs
+from rbaccatalog.backgroundjobs.jobs import Job, JobResult, create_all_jobs
 from rbaccatalog.core import (
     DBEngine,
     ensure_db,
@@ -101,8 +101,12 @@ class Worker:
         await DBEngine.dispose()
         logger.info("Worker shutdown complete")
 
-    async def run_job(self, job: Job) -> None:
-        """Execute a job with telemetry tracking."""
+    async def run_job(self, job: Job, *, reraise: bool = False) -> None:
+        """Execute a job with telemetry tracking.
+
+        Set ``reraise=True`` so one-shot runners exit non-zero on failure; the
+        scheduler leaves it ``False`` to survive a single failed run.
+        """
         if not job.enabled:
             logger.info("Job disabled: %s", job.name)
             return
@@ -120,6 +124,8 @@ class Worker:
                 elapsed = time.perf_counter() - start_time
                 logger.exception("Failed to run %s: %s", job.name, e)
                 track_worker_result(job.name, JobResult.FAILURE, elapsed, str(e))
+                if reraise:
+                    raise
 
     def _log_configuration(self) -> None:
         """Log worker configuration at startup."""
@@ -144,7 +150,7 @@ class Worker:
         """Start the worker and run until shutdown signal received."""
         self._log_configuration()
 
-        self._jobs = create_jobs()
+        self._jobs = create_all_jobs()
         self._jobs_by_name = {job.name: job for job in self._jobs}
 
         try:

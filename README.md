@@ -71,12 +71,23 @@ ENABLED_AI_ENGINES=tfidf uvicorn rbaccatalog.web.app:app --port 8000 --reload
 ```
 
 Open <http://localhost:8000>. The UI and search work immediately; the catalog
-stays empty until the background worker runs its first scan. To populate it with
-live data, run `az login` once, then start the worker in a second terminal:
+stays empty until a scan runs. To populate it with live data, run `az login`
+once, then run a one-shot scan in a second terminal:
 
 ```bash
-python -m rbaccatalog.backgroundjobs.worker
+# Populate everything (roles + operations), then exit
+python -m rbaccatalog.backgroundjobs.scan_once
+
+# ...or scan just one source
+python -m rbaccatalog.backgroundjobs.scan_once role-scan
+python -m rbaccatalog.backgroundjobs.scan_once operations-scan
 ```
+
+The command runs the scan once and exits — no background worker stays running.
+Re-run it whenever you want to refresh the local catalog. In production each scan
+runs on its own schedule: a separate cron-triggered scheduled job invokes
+`scan_once` for that single scan (e.g. `role-scan`, `operations-scan`), rather
+than an always-on worker.
 
 Prefer containers? Build and run the image instead:
 

@@ -633,28 +633,40 @@ class TestEmptyFetchResultError:
         assert run_called
 
 
-class TestCreateJobs:
-    """Tests for create_jobs function."""
+class TestJobRegistry:
+    """Tests for the JOB_FACTORIES registry and its factory helpers."""
 
-    def test_creates_both_jobs(self):
-        from rbaccatalog.backgroundjobs.jobs import create_jobs
+    def test_create_all_jobs_creates_both_jobs(self):
+        from rbaccatalog.backgroundjobs.jobs import create_all_jobs
 
-        jobs = create_jobs()
+        jobs = create_all_jobs()
 
         assert len(jobs) == 2
         job_names = {job.name for job in jobs}
         assert "role-scan" in job_names
         assert "operations-scan" in job_names
 
-    def test_jobs_are_job_instances(self):
-        from rbaccatalog.backgroundjobs.jobs import Job, create_jobs
+    def test_create_all_jobs_returns_job_instances(self):
+        from rbaccatalog.backgroundjobs.jobs import Job, create_all_jobs
 
-        jobs = create_jobs()
+        jobs = create_all_jobs()
 
         for job in jobs:
             assert isinstance(job, Job)
             assert callable(job.run)
             assert isinstance(job.interval, timedelta)
+
+    def test_create_job_returns_named_job(self):
+        from rbaccatalog.backgroundjobs.jobs import create_job
+
+        assert create_job("role-scan").name == "role-scan"
+        assert create_job("operations-scan").name == "operations-scan"
+
+    def test_create_job_unknown_name_raises_key_error(self):
+        from rbaccatalog.backgroundjobs.jobs import create_job
+
+        with pytest.raises(KeyError):
+            create_job("does-not-exist")
 
 
 class TestWorker:

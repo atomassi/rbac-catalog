@@ -23,7 +23,7 @@ project space.
 ## Development setup
 
 Requires **Python 3.12, 3.13, or 3.14** (all supported and tested in CI — see
-[`docs/run-local.md`](../docs/run-local.md) for details) and Node 20 for the
+[`docs/run-local.md`](docs/run-local.md) for details) and Node 20 for the
 frontend tooling.
 
 ```bash
@@ -35,7 +35,7 @@ pip install -r requirements.txt
 npm ci
 ```
 
-Run the app locally (full instructions in [`docs/run-local.md`](../docs/run-local.md)):
+Run the app locally (full instructions in [`docs/run-local.md`](docs/run-local.md)):
 
 ```bash
 # Boot fast by disabling the heavy AI engines:
@@ -71,7 +71,7 @@ npm run test:e2e
 ## Coding guidelines
 
 The conventions enforced in this repo are documented in
-[`.github/copilot-instructions.md`](copilot-instructions.md). The
+[`.github/copilot-instructions.md`](.github/copilot-instructions.md). The
 essentials:
 
 - **Async-only** — no synchronous I/O. Use `httpx` and `asyncio.sleep()`, never
@@ -102,4 +102,4 @@ Match the existing naming conventions: `snake_case` for functions/variables,
 ## License
 
 By contributing, you agree that your contributions will be licensed under the
-[MIT License](../LICENSE) that covers this project.
+[MIT License](LICENSE) that covers this project.

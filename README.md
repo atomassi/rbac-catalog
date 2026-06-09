@@ -135,12 +135,19 @@ flowchart TD
     CDN[Cloudflare]:::cdn
     
     subgraph AZ ["<span style='font-size:22px;font-weight:bold'>Azure</span>"]
+        direction TB
         CR[(Container<br/>Registry)]:::azure
-        AS[App Service]:::azure
-        PG[(PostgreSQL)]:::db
-        INSIGHTS[App Insights]:::monitor
-        OL[Ollama VM<br/>B2ms]:::ollama
-        GPU[GPU VM<br/>NVIDIA A10]:::gpu
+        AS[App Service]:::appsvc
+        subgraph DATA [" "]
+            direction LR
+            PG[(PostgreSQL)]:::db
+            INSIGHTS[App Insights]:::monitor
+        end
+        subgraph OPT ["<span style='font-weight:bold'>Optional — self-hosted LLM</span>"]
+            direction LR
+            GPU[GPU VM<br/>NVIDIA A10]:::gpu
+            OL[Ollama VM<br/>B2ms]:::ollama
+        end
     end
     
     USER -->|web| CDN
@@ -153,17 +160,20 @@ flowchart TD
     AS -->|inference| OL
     GPU -.->|models| OL
     
-    classDef user fill:#FFC107,color:#000,stroke:#FFA000,stroke-width:2px
+    classDef user fill:#F5B82E,color:#000,stroke:#C98A00,stroke-width:2px
     classDef ai fill:#10B981,color:#fff,stroke:#059669,stroke-width:2px
     classDef github fill:#24292e,color:#fff,stroke:#1a1e22,stroke-width:2px
     classDef cdn fill:#F6821F,color:#fff,stroke:#d4700f,stroke-width:2px
     classDef azure fill:#0078D4,color:#fff,stroke:#005a9e,stroke-width:2px
-    classDef db fill:#336791,color:#fff,stroke:#264d73,stroke-width:2px
-    classDef ollama fill:#412991,color:#fff,stroke:#301d6b,stroke-width:2px
+    classDef appsvc fill:#4F46E5,color:#fff,stroke:#3730A3,stroke-width:2px
+    classDef db fill:#C2410C,color:#fff,stroke:#7C2D0A,stroke-width:2px
+    classDef ollama fill:#7C3AED,color:#fff,stroke:#5B21B6,stroke-width:2px
     classDef gpu fill:#76B900,color:#fff,stroke:#5a8c00,stroke-width:2px
-    classDef monitor fill:#68217A,color:#fff,stroke:#4e185c,stroke-width:2px
+    classDef monitor fill:#B5179E,color:#fff,stroke:#86116F,stroke-width:2px
     
-    style AZ fill:#E6F2FA,stroke:#0078D4,stroke-width:2px,rx:10
+    style AZ fill:#EEF4FA,stroke:#0078D4,stroke-width:2px,rx:10
+    style DATA fill:none,stroke:none
+    style OPT fill:#F3EEFB,stroke:#7C3AED,stroke-width:1.5px,stroke-dasharray:6 4,rx:10
     style Clients fill:none,stroke:none
 ```
 

@@ -159,8 +159,6 @@ async def roles_list(
         result = await fetch_roles_paginated(deps, status_filter, sort, order, page, limit)
     else:
         cached_roles = deps.app_cache.cache.roles_by_id
-        if not cached_roles:
-            raise RuntimeError("Role cache is empty - application not initialized")
         result = search_roles_in_cache(
             cached_roles,
             q,

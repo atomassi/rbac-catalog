@@ -63,8 +63,7 @@ class Settings(BaseSettings):
         return (init_settings, env_settings, dotenv_settings, file_secret_settings)
 
     # --- Scan / worker ------------------------------------------------------
-    # Scans run as cron-triggered Container Apps Jobs (scan_once); each Job sets
-    # its own flag so a disabled scan is a no-op (Worker.run_job returns early).
+    # Per-scan toggles; a disabled scan makes its Container Apps Job a no-op.
     role_scan_enabled: bool = True
     operations_scan_enabled: bool = True
 

@@ -237,7 +237,7 @@ class TestSettingsValidators:
             assert settings.log_level == expected
 
     def test_azure_client_id_env(self):
-        """AZURE_CLIENT_ID env var maps to the aliased azure_client_id field."""
+        """AZURE_CLIENT_ID env var maps to azure_client_id (case-insensitive name match)."""
         with patch.dict(
             os.environ,
             {"AZURE_CLIENT_ID": "11111111-2222-3333-4444-555555555555"},

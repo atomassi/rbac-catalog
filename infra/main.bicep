@@ -34,6 +34,9 @@ param resourceGroupName string = 'myapp-rg'
 @description('Primary Azure region (App Service, monitoring).')
 param location string = 'westeurope'
 
+@description('Region for the App Service (plan + app). Defaults to `location`.')
+param appServiceLocation string = location
+
 @description('Region for the PostgreSQL Flexible Server. Defaults to `location`.')
 param postgresLocation string = location
 
@@ -158,7 +161,7 @@ module appService 'modules/appservice.bicep' = {
   params: {
     appName: n.app
     planName: n.plan
-    location: location
+    location: appServiceLocation
     tags: tags
     sku: appServicePlanSku
     acrLoginServer: '${n.acr}.azurecr.io'

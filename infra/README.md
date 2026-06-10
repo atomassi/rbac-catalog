@@ -149,33 +149,22 @@ exist after the apps are deployed.
    (registers the App Service MI + each slot MI as PG roles and grants
    them CRUD on the `azurerbac` database). Pass `--skip-pg-grant` to
    skip this step.
-
-### 5. Push the first image
-
-The App Service is now running but has no image to pull. Build and push
-it from the repo root:
-
-```bash
-cd ..                                     # back to repo root (Dockerfile lives here)
-OUT=infra/.deploy-outputs.json
-ACR=$(jq -r .acrName.value         "$OUT")
-APP=$(jq -r .appServiceName.value  "$OUT")
-RG=$(jq  -r .resourceGroupName.value "$OUT")
-URL=$(jq -r .appServiceUrl.value   "$OUT")
-
-az acr build --registry "$ACR" --image rbaccatalog:latest \
-    --build-arg VERSION="$(git describe --tags --always 2>/dev/null || echo dev)" .
-
-az webapp restart -n "$APP" -g "$RG"
-```
+5. Builds and pushes the first image (`az acr build` from the repo root),
+   restarts the App Service, and polls `/healthz` until the container is
+   live (up to 10 min).
 
 The background worker (production slot only — staging/ppe are
 intentionally non-writers) runs the first role + operations scan on
 startup. The catalog populates within a few minutes.
 
-### 6. Verify
+### 5. Verify
+
+`deploy.sh` already waits for `/healthz` to pass, but you can re-check
+anytime:
 
 ```bash
+URL=$(jq -r .appServiceUrl.value .deploy-outputs.json)
+
 # Health endpoint
 curl -fsS "$URL/healthz"
 # {"status":"ok"}
@@ -279,13 +268,75 @@ light Log Analytics ingestion.
 
 ---
 
+## Region availability & quota (pre-flight checks)
+
+`--what-if` is a **template diff only** — it never contacts the resource
+providers, so it cannot predict failures from regional capacity, SKU offer
+restrictions, or subscription quota. Those surface only at actual deploy
+time. A few cheap checks up front save round-trips:
+
+```bash
+# App Service: is the plan SKU offered in the region?
+az appservice list-locations --sku P0V3 -o table
+
+# PostgreSQL: is your tier/SKU even offered in the region?
+az postgres flexible-server list-skus --location "$LOCATION" -o table
+
+# Global name availability (App Service + ACR names are globally unique)
+az webapp list    --query "[?name=='${BASE_NAME}-app'].name" -o tsv   # empty = free
+az acr check-name --name "${BASE_NAME}registry" --query nameAvailable  # true  = free
+```
+
+**App Service vCPU quota** (`SubscriptionIsOverQuotaForSku`) is the common
+wall: Premium V3 families need an explicit quota request **per region**, and
+a fresh or MSDN / Visual Studio subscription often starts at `0` Pv3 vCPUs.
+Either request quota, or fall back to a Basic SKU (`appServicePlanSku=B1`) —
+a **separate quota bucket** that's usually available. On Visual Studio / MSDN
+subscriptions you may also have to remove the **spending limit** before any
+dedicated compute can be created.
+
+### Deploying tiers in different regions
+
+When one region is restricted or out of quota, you don't have to move the
+whole stack. `main.bicep` exposes independent region knobs that each default
+to `location`, so you can place individual tiers where capacity/offers allow:
+
+| Parameter | Controls | Override when… |
+|---|---|---|
+| `location` | Resource group + monitoring; default for the tiers below | — (primary region) |
+| `appServiceLocation` | App Service plan + app | the App Service SKU has no quota in `location` |
+| `postgresLocation` | PostgreSQL Flexible Server | the tier/SKU is offer-restricted in `location` |
+| `acrLocation` | Container Registry | — (rarely needed) |
+
+`deploy.sh` forwards any ad-hoc `name=value` arguments as Bicep parameter
+overrides, so you can mix regions on the command line:
+
+```bash
+# Everything in North Europe, but the App Service (B1) in West Europe where it has quota
+LOCATION=northeurope ./scripts/deploy.sh dev appServiceLocation=westeurope
+```
+
+---
+
 ## Troubleshooting
 
 **`ResourceNameNotAvailable`** — the App Service / ACR / PG name is taken
 globally. Pick a more distinctive `baseName`.
 
-**Container won't start (5xx)** — no image yet. Run step 5 of the
-walkthrough.
+**`SubscriptionIsOverQuotaForSku` (App Service)** — no vCPU quota for that
+SKU family in the region (Premium V3 often starts at `0`, especially on
+MSDN / Visual Studio subscriptions). Request quota, or deploy a Basic SKU:
+`appServicePlanSku=B1 deploySlots=false` (Basic is a separate quota bucket
+and has no deployment slots). See
+[§ Region availability & quota](#region-availability--quota-pre-flight-checks).
+
+**`LocationIsOfferRestricted` (PostgreSQL)** — the tier/SKU isn't offered in
+the region. Check `az postgres flexible-server list-skus --location <loc>`
+and set `postgresLocation=<region-that-offers-it>`.
+
+**Container won't start (5xx)** — the image build/push step may have failed.
+Re-run `./scripts/deploy.sh prod` (it rebuilds the image, restarts, and
+re-checks health).
 
 **PG auth errors in the app logs** — `grant-postgres-aad-admin.sh` didn't
 run (or failed). Re-run it manually and restart the App Service.

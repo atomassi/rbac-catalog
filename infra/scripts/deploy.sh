@@ -138,29 +138,44 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Next steps
+# Post-deploy: build & push image, restart, verify
 # ---------------------------------------------------------------------------
 
-cat <<EOF
+REPO_ROOT="$(dirname "$INFRA_DIR")"
+OUTPUTS_PATH="$INFRA_DIR/$OUTPUTS_FILE"
 
-────────────────────────────────────────────────────────────────────────────
-Next steps (run from the repo root):
+ACR_NAME="$(jq -r .acrName.value "$OUTPUTS_PATH")"
+APP_NAME="$(jq -r .appServiceName.value "$OUTPUTS_PATH")"
+APP_RG="$(jq -r .resourceGroupName.value "$OUTPUTS_PATH")"
+APP_URL="$(jq -r .appServiceUrl.value "$OUTPUTS_PATH")"
+VERSION="$(git -C "$REPO_ROOT" describe --tags --always 2>/dev/null || echo dev)"
 
-  cd ..
-  OUT=infra/$OUTPUTS_FILE
+echo
+echo "→ Building & pushing image (rbaccatalog:latest, VERSION=$VERSION)..."
+az acr build \
+  --registry "$ACR_NAME" \
+  --image rbaccatalog:latest \
+  --build-arg VERSION="$VERSION" \
+  "$REPO_ROOT"
 
-  # 1. Build & push the container image:
-  az acr build \\
-    --registry \$(jq -r .acrName.value \$OUT) \\
-    --image rbaccatalog:latest \\
-    --build-arg VERSION=\$(git describe --tags --always 2>/dev/null || echo dev) .
+echo "→ Restarting App Service ($APP_NAME)..."
+az webapp restart -n "$APP_NAME" -g "$APP_RG" --output none
 
-  # 2. Restart the App Service so it picks up the new image:
-  az webapp restart \\
-    -n \$(jq -r .appServiceName.value \$OUT) \\
-    -g \$(jq -r .resourceGroupName.value \$OUT)
+echo "→ Verifying $APP_URL/healthz (polling up to 10 min for cold start)..."
+deadline=$(( SECONDS + 600 ))
+healthy=0
+while (( SECONDS < deadline )); do
+  if curl -fsS --max-time 10 "$APP_URL/healthz" >/dev/null 2>&1; then
+    healthy=1
+    break
+  fi
+  echo "  …not ready yet, retrying in 15s ($(( (deadline - SECONDS) / 60 ))m left)"
+  sleep 15
+done
 
-  # 3. Verify:  curl -fsS "\$(jq -r .appServiceUrl.value \$OUT)/healthz"
-
-See infra/README.md "Step 5" for the full walkthrough.
-EOF
+if (( healthy )); then
+  echo "✓ Healthy — $APP_URL"
+else
+  echo "⚠ Health check did not pass within 10 min — the container may still be starting."
+  echo "  Retry: curl -fsS \"$APP_URL/healthz\""
+fi

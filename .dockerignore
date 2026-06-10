@@ -1,43 +1,49 @@
+# NOTE: do NOT add trailing slashes to directory rules. `az acr build` compiles
+# a rule like `node_modules/` to the regex `^node_modules/$`, which never matches
+# tar entry names (they have no trailing slash) — so the rule becomes a silent
+# no-op and the directory gets uploaded anyway. Write `node_modules`, not `node_modules/`.
+
 # Git
-.git/
+.git
 .gitignore
-.github/
+.github
 
 # Python environments & cache
-__pycache__/
+__pycache__
+**/__pycache__
 *.py[cod]
-*.egg-info/
-.venv*/
-venv/
-.pytest_cache/
-.ruff_cache/
-.mypy_cache/
+*.egg-info
+.venv*
+venv
+.pytest_cache
+.ruff_cache
+.mypy_cache
 .coverage
-htmlcov/
+htmlcov
 
 # IDE / OS
-.idea/
-.vscode/
+.idea
+.vscode
 .DS_Store
 
 # Tests (not needed in production)
-tests/
-e2e/
-test-results/
+tests
+e2e
+test-results
 
 # Documentation
 *.md
 
 # Logs
 *.log
-logs/
-rbaccatalog/web/logs/
+logs
+rbaccatalog/web/logs
 
 # Node.js (only needed for dev/testing)
-node_modules/
+node_modules
 package.json
 package-lock.json
-config/
+config
 
 # Config files not needed in container
 pyproject.toml
@@ -47,11 +53,11 @@ pyproject.toml
 *.db
 
 # Azure / CI config
-.azure/
+.azure
 
 # Cache directories
-.cache/
-rbaccatalog/.cache/
+.cache
+rbaccatalog/.cache
 
 # Local secrets
 .env
@@ -64,11 +70,16 @@ docker-compose*.yml
 
 # Build artifacts
 deploy.zip
-build/
-dist/
+build
+dist
 
 # Large ML models (downloaded at runtime)
-rbaccatalog/airecommender/models/all-MiniLM-L6-v2/
+rbaccatalog/airecommender/models/all-MiniLM-L6-v2
 
 # Generated version file
 rbaccatalog/_version_generated.py
+
+# Dev/CI scripts, docs, and infra (not copied into the image)
+scripts
+docs
+infra

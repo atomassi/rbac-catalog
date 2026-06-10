@@ -321,7 +321,13 @@ async def fetch_roles_paginated(
     # Build from in-memory cache
     result = _fetch_roles_from_cache(deps, status_filter, sort, order, page, page_size)
     if result is None:
-        raise RuntimeError("Role cache is empty - application not initialized")
+        # Cache not yet populated (e.g. before the first scan writes data) —
+        # degrade to an empty list instead of erroring the page.
+        return PaginatedResult(
+            items=[],
+            total_count=0,
+            total_pages=PaginationInfo.count_pages(0, page_size),
+        )
 
     deps.app_cache.set_role_page(cache_key, result.items)
     deps.app_cache.set_role_page_count(count_cache_key, result.total_count)

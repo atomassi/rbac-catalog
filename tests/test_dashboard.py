@@ -245,6 +245,48 @@ class TestSearchRolesInCache:
             assert result.total_count == 1
             assert result.items[0].role_id == test_guid
 
+    def test_search_empty_cache_returns_empty(self):
+        """An empty cache yields an empty result (no error) for the search path."""
+        from rbaccatalog.web.services.dashboard import search_roles_in_cache
+
+        result = search_roles_in_cache(
+            {},
+            q="anything",
+            status_filter="active",
+            sort="name",
+            order="asc",
+            page=1,
+            page_size=25,
+        )
+
+        assert result.total_count == 0
+        assert result.items == []
+
+
+class TestFetchRolesPaginatedEmptyCache:
+    """fetch_roles_paginated degrades to an empty result before the first scan."""
+
+    async def test_returns_empty_result_when_cache_empty(self):
+        """An empty role cache renders an empty list instead of raising."""
+        from rbaccatalog.web.services.dashboard import fetch_roles_paginated
+
+        deps = MagicMock()
+        deps.app_cache.get_role_page.return_value = None
+        deps.app_cache.get_role_page_count.return_value = None
+        deps.app_cache.cache.roles_by_id = {}
+
+        result = await fetch_roles_paginated(
+            deps,
+            status_filter="active",
+            sort="name",
+            order="asc",
+            page=1,
+            page_size=25,
+        )
+
+        assert result.total_count == 0
+        assert result.items == []
+
 
 class TestRecentPageDefaults:
     """Tests for recent page default values and pagination constants."""

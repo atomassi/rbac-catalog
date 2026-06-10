@@ -1,11 +1,11 @@
 // ============================================================================
 // Module: Azure Container Registry
 // ============================================================================
-// Creates the ACR and grants AcrPull to the writer + reader user-assigned
-// identities (production slot pulls as writer; staging/ppe as reader).
+// Creates the ACR and grants AcrPull to the web + scan user-assigned managed
+// identities (both pull the same private image).
 // ============================================================================
 
-metadata description = 'Basic-tier Azure Container Registry with AcrPull granted to the writer and reader user-assigned identities.'
+metadata description = 'Basic-tier Azure Container Registry with AcrPull granted to the web + scan user-assigned managed identities.'
 
 @description('ACR name. Globally unique, alphanumeric only (5-50 chars).')
 param name string
@@ -16,11 +16,11 @@ param location string
 @description('Resource tags.')
 param tags object
 
-@description('Principal ID of the writer user-assigned identity (production slot; granted AcrPull).')
-param writerPrincipalId string
+@description('Principal ID of the web user-assigned managed identity (granted AcrPull so the web tier can pull the image).')
+param webIdentityPrincipalId string
 
-@description('Principal ID of the reader user-assigned identity (staging/ppe slots). Empty when slots are not deployed; granted AcrPull when set.')
-param readerPrincipalId string = ''
+@description('Principal ID of the scan user-assigned managed identity (granted AcrPull so the scan Jobs can pull the image).')
+param scanIdentityPrincipalId string
 
 @description('Log Analytics workspace ID. When non-empty, registry events are forwarded for security monitoring.')
 param logAnalyticsId string = ''
@@ -45,25 +45,23 @@ resource acr 'Microsoft.ContainerRegistry/registries@2023-11-01-preview' = {
 // AcrPull built-in role definition ID
 var acrPullRoleId = '7f951dda-4ed3-4680-a7ca-43fe172d538d'
 
-resource acrPull 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(acr.id, writerPrincipalId, acrPullRoleId)
+// Both identities pull the same image, so each gets an AcrPull assignment.
+resource acrPullWeb 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(acr.id, webIdentityPrincipalId, acrPullRoleId)
   scope: acr
   properties: {
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', acrPullRoleId)
-    principalId: writerPrincipalId
+    principalId: webIdentityPrincipalId
     principalType: 'ServicePrincipal'
   }
 }
 
-// The staging + ppe slots share the reader user-assigned identity, so a
-// single AcrPull grant covers both — otherwise those slots fail to pull
-// the same private image at first start.
-resource acrPullReader 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(readerPrincipalId)) {
-  name: guid(acr.id, readerPrincipalId, acrPullRoleId)
+resource acrPullScan 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(acr.id, scanIdentityPrincipalId, acrPullRoleId)
   scope: acr
   properties: {
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', acrPullRoleId)
-    principalId: readerPrincipalId
+    principalId: scanIdentityPrincipalId
     principalType: 'ServicePrincipal'
   }
 }

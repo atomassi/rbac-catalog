@@ -16,7 +16,7 @@ async def default_azure_credential() -> AsyncIterator[ManagementCredential]:
     """Async context manager for the Azure Management API credential.
 
     When managed identity is enabled, pin a ``ManagedIdentityCredential`` to the
-    configured user-assigned identity (``msi_client_id``) so the platform knows
+    configured user-assigned identity (``azure_client_id``) so the platform knows
     which UAMI to request a token for; otherwise use the default credential
     chain (env / CLI), keeping local dev working.
     """
@@ -24,7 +24,7 @@ async def default_azure_credential() -> AsyncIterator[ManagementCredential]:
 
     settings = Settings.get()
     credential: ManagementCredential = (
-        ManagedIdentityCredential(client_id=settings.msi_client_id or None)
+        ManagedIdentityCredential(client_id=settings.azure_client_id or None)
         if settings.use_managed_identity
         else DefaultAzureCredential()
     )

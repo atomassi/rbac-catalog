@@ -1,8 +1,3 @@
-# NOTE: do NOT add trailing slashes to directory rules. `az acr build` compiles
-# a rule like `node_modules/` to the regex `^node_modules/$`, which never matches
-# tar entry names (they have no trailing slash) — so the rule becomes a silent
-# no-op and the directory gets uploaded anyway. Write `node_modules`, not `node_modules/`.
-
 # Git
 .git
 .gitignore

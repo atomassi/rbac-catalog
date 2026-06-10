@@ -3,6 +3,3 @@
 .deploy-outputs.json
 .pg-admin-password
 *.local.*
-
-# Rendered Grafana dashboards (use the template instead)
-grafana-appinsights.json

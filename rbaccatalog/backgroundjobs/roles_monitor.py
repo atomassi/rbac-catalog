@@ -46,14 +46,11 @@ class RoleChangeProcessor:
         self,
         session: AsyncSession,
         roles: list[RoleDefinition],
-        *,
-        dry_run: bool = False,
     ) -> None:
         self._session = session
         self._fetched_by_id = {r.role_id: r for r in roles if r.role_id}
         self._existing_by_id: dict[str, Role] = {}
         self._timestamp = utcnow()
-        self._dry_run = dry_run
 
     @property
     def timestamp(self) -> dt.datetime:
@@ -68,17 +65,6 @@ class RoleChangeProcessor:
     async def process(self) -> RoleScanResult:
         """Partition roles, process changes, record scan status, and return result."""
         self._existing_by_id = await self._load_existing_roles()
-        # In dry-run we still compute the full set of changes (so the diffs
-        # get logged), but ``no_autoflush`` keeps the staged ORM mutations
-        # from ever being emitted as SQL; ``apply_role_scan`` rolls them back
-        # instead of committing.
-        if self._dry_run:
-            with self._session.no_autoflush:
-                return await self._partition_and_process()
-        return await self._partition_and_process()
-
-    async def _partition_and_process(self) -> RoleScanResult:
-        """Partition fetched roles and stage the resulting changes."""
         partition = self._partition()
         new = self._process_new(partition.new)
         updated = self._process_updates(partition.update)
@@ -318,10 +304,6 @@ class RoleChangeProcessor:
             updates=updated,
             deletions=deleted,
         )
-        # Dry-run never persists: skip the INSERT/flush and the scan_id
-        # back-link. The unsaved object is returned only for signature parity.
-        if self._dry_run:
-            return scan_status
         self._session.add(scan_status)
         await self._session.flush()
 
@@ -339,37 +321,17 @@ class RoleChangeProcessor:
 async def apply_role_scan(
     session: AsyncSession,
     roles: list[RoleDefinition],
-    *,
-    dry_run: bool = False,
 ) -> RoleScanResult:
-    """Compare fetched roles vs DB snapshots and store changes.
-
-    When ``dry_run`` is true the scan computes and logs every change it would
-    make but writes nothing to the database (the transaction is rolled back).
-    """
-    processor = RoleChangeProcessor(session, roles, dry_run=dry_run)
+    """Compare fetched roles vs DB snapshots and store changes."""
+    processor = RoleChangeProcessor(session, roles)
 
     logger.info(
-        "Processing %d roles fetched from Azure at %s%s",
+        "Processing %d roles fetched from Azure at %s",
         processor.total_fetched,
         processor.timestamp,
-        " (WHAT-IF / dry-run)" if dry_run else "",
     )
 
     result = await processor.process()
-
-    if dry_run:
-        # Discard the staged (never-flushed) changes; nothing is written.
-        await session.rollback()
-        logger.info(
-            "Role scan WHAT-IF complete (no changes written): "
-            "would create=%d, update=%d, delete=%d, total=%d",
-            result.created,
-            result.updated,
-            result.deleted,
-            result.total,
-        )
-        return result
 
     await session.commit()
 

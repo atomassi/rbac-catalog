@@ -60,10 +60,9 @@ class ManagedIdentityAuthenticator:
 
             from rbaccatalog.settings import Settings
 
-            # A non-empty client_id pins the credential to a specific
-            # user-assigned identity; empty (``None``) falls back to the
-            # system-assigned identity.
-            client_id = Settings.get().msi_client_id or None
+            # Pin a user-assigned identity when a client_id is set; otherwise
+            # fall back to the system-assigned identity.
+            client_id = Settings.get().azure_client_id or None
             self._credential = ManagedIdentityCredential(client_id=client_id)
         return self._credential
 

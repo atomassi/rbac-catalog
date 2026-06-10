@@ -1,11 +1,13 @@
 // ============================================================================
-// Module: App Service Plan + App Service (Docker, system MI) + optional slots
+// Module: App Service Plan + App Service (Docker, user-assigned MI) + slots
 // ============================================================================
 // Production slot, staging, and ppe all share `siteProperties` so the three
-// resources stay in sync. Diagnostic logs forward to Log Analytics.
+// resources stay in sync, and all use the SAME web user-assigned identity (a
+// SELECT-only PostgreSQL role — the web tier never writes; the scan Jobs own
+// the schema). Diagnostic logs forward to Log Analytics.
 // ============================================================================
 
-metadata description = 'Linux App Service Plan + Docker-based App Service with system-assigned managed identity and optional staging/ppe slots.'
+metadata description = 'Linux App Service Plan + Docker-based App Service on the read-only web user-assigned managed identity with optional staging/ppe slots.'
 
 @description('App Service name. Globally unique.')
 param appName string
@@ -37,23 +39,14 @@ param postgresHost string
 @description('PostgreSQL database name.')
 param postgresDatabase string = 'azurerbac'
 
-@description('Resource ID of the writer user-assigned identity (attached to the production slot).')
-param writerResourceId string
+@description('PG role used by the AAD-token connection (equals the web identity name; SELECT-only).')
+param postgresUser string
 
-@description('Client ID of the writer user-assigned identity (DB token + ACR pull on the production slot).')
-param writerClientId string
+@description('Resource ID of the web user-assigned managed identity.')
+param userAssignedIdentityId string
 
-@description('PostgreSQL role the production slot connects as (matches the writer identity name).')
-param writerDbRole string
-
-@description('Resource ID of the reader user-assigned identity (attached to the staging/ppe slots). Empty when slots are not deployed.')
-param readerResourceId string = ''
-
-@description('Client ID of the reader user-assigned identity (DB token + ACR pull on the staging/ppe slots).')
-param readerClientId string = ''
-
-@description('PostgreSQL role the staging/ppe slots connect as (matches the reader identity name).')
-param readerDbRole string = ''
+@description('Client ID of the web user-assigned managed identity (AZURE_CLIENT_ID + ACR pull).')
+param userAssignedIdentityClientId string
 
 @description('Provision staging + ppe deployment slots.')
 param deploySlots bool
@@ -90,22 +83,21 @@ var commonAppSettings = [
   // start" errors in the platform log. ``/healthz`` returns a cheap
   // 200 once the lifespan has completed.
   { name: 'WEBSITE_WARMUP_PATH', value: '/healthz' }
-  // Extend the container start window beyond the 230s default. On a fully
-  // populated database the lifespan cache build runs while the co-located
-  // worker commits a full role + operations scan, so first warmup can take
-  // several minutes; 1800s (the platform max) prevents the platform from
-  // killing the container before ``/healthz`` goes green.
+  // The web container builds the full in-memory role/operation cache on
+  // boot (hundreds of seconds on a cold start), so raise the platform's
+  // container-start timeout from its 230s default to 1800s to avoid the
+  // site being marked unhealthy before the lifespan completes.
   { name: 'WEBSITES_CONTAINER_START_TIME_LIMIT', value: '1800' }
-  // Tell App Service to use the system MI when pulling from ACR. Without
-  // ``DOCKER_REGISTRY_SERVER_URL`` the platform falls back to ACR admin
-  // credentials, which fails with "admin credentials on ACR are disabled"
-  // because ``adminUserEnabled = false`` in acr.bicep.
-  { name: 'DOCKER_REGISTRY_SERVER_URL', value: 'https://${acrLoginServer}' }
+  // Select the shared user-assigned identity for both ACR pull (via
+  // ``acrUserManagedIdentityID`` below) and the PostgreSQL AAD token
+  // (``AZURE_CLIENT_ID`` is read by ManagedIdentityCredential).
+  { name: 'AZURE_CLIENT_ID', value: userAssignedIdentityClientId }
   { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: appInsightsConnectionString }
   { name: 'USE_MANAGED_IDENTITY', value: 'true' }
   { name: 'MSI_DB_HOST', value: postgresHost }
   { name: 'MSI_DB_PORT', value: '5432' }
   { name: 'MSI_DB_NAME', value: postgresDatabase }
+  { name: 'MSI_DB_USER', value: postgresUser }
   { name: 'OLLAMA_BASE_URL', value: ollamaBaseUrl }
   { name: 'OLLAMA_MODEL', value: 'qwen-rbac-v5' }
   { name: 'LOG_LEVEL', value: 'INFO' }
@@ -113,80 +105,39 @@ var commonAppSettings = [
 ]
 
 // ---------------------------------------------------------------------------
-// Scan / scheduler settings
+// Per-slot app settings
 // ---------------------------------------------------------------------------
-// The role + operations scans write the canonical catalog rows, and only ONE
-// writer may persist them — the production slot. Running real (committing)
-// scans from staging or ppe would race the production worker and double-count
-// events in role_history.
+// The role + operations scans no longer run in the App Service container. The
+// image starts uvicorn only (see Dockerfile); the scans run as dedicated
+// Container Apps Jobs (infra/modules/containerappjobs.bicep), which are the
+// single writer for the catalog rows. The web tier never reads
+// ROLE_SCAN_ENABLED / OPERATIONS_SCAN_ENABLED, so they are not set here.
 //
-// Non-production slots therefore run the same scans in WHAT-IF mode
-// (``SCAN_DRY_RUN=true``): they fetch from Azure and log every change they
-// would make, but never write to the database. This surfaces drift on each
-// slot without a second writer (and dovetails with the SELECT-only reader DB
-// role those slots authenticate as).
-//
-// SCAN_DRY_RUN, ROLE_SCAN_ENABLED, and OPERATIONS_SCAN_ENABLED are listed in
-// ``slotConfigNames`` below so a slot swap keeps the real (committing) scan ON
-// the production slot and what-if mode ON the pre-swap staging slot. The poll
-// intervals are identical across slots, so they are NOT slot-sticky (a swap
-// can't change them) and are intentionally omitted from ``slotConfigNames``.
-var scanProdSettings = [
-  { name: 'ROLE_SCAN_ENABLED',              value: 'true' }
-  { name: 'OPERATIONS_SCAN_ENABLED',        value: 'true' }
-  { name: 'SCAN_DRY_RUN',                   value: 'false' }
-  { name: 'ROLES_POLL_INTERVAL_SECONDS',    value: '7200' }
-  { name: 'OPERATIONS_POLL_INTERVAL_SECONDS', value: '86400' }
-]
-// Non-production slots: scans run, but in what-if mode (no DB writes).
-var scanDryRunSettings = [
-  { name: 'ROLE_SCAN_ENABLED',              value: 'true' }
-  { name: 'OPERATIONS_SCAN_ENABLED',        value: 'true' }
-  { name: 'SCAN_DRY_RUN',                   value: 'true' }
-  { name: 'ROLES_POLL_INTERVAL_SECONDS',    value: '7200' }
-  { name: 'OPERATIONS_POLL_INTERVAL_SECONDS', value: '86400' }
-]
-
-// APP_ENVIRONMENT_NAME, MSI_DB_USER, MSI_CLIENT_ID, and the scan flags are
-// per-slot:
-//   * APP_ENVIRONMENT_NAME → telemetry / operator log distinction.
-//   * MSI_CLIENT_ID        → which user-assigned identity the app gets its
-//                            PostgreSQL token for (writer on production,
-//                            reader on staging/ppe).
-//   * MSI_DB_USER          → the pgaadauth role to connect as. Production
-//                            uses the writer role (full CRUD); staging/ppe
-//                            use the reader role (SELECT only), so a
-//                            non-production slot physically cannot write.
-//   * SCAN_DRY_RUN /       → production commits scan results; staging/ppe
-//     ROLE_SCAN_ENABLED /     run the same scans in what-if mode (no writes)
-//     OPERATIONS_SCAN_ENABLED so only the single production writer persists.
-//
-// All these names are listed in ``slotConfigNames`` below so a slot swap
-// does NOT carry the labels or the scanner mode with the code — otherwise a
-// staging→production swap would make the (now-production) slot use the
-// reader role/identity and stay in what-if mode.
-var prodAppSettings    = concat(commonAppSettings, scanProdSettings, [
-  // Always 'production' (a recognized runtime env), never the infra token
-  // (e.g. 'dev'), which the app would treat as 'local' — disabling App
+// APP_ENVIRONMENT_NAME is per-slot (telemetry / operator log distinction).
+// MSI_DB_USER is NOT per-slot anymore: every slot uses the same shared
+// user-assigned identity, so they all connect as the same PostgreSQL role
+// (set once in commonAppSettings). A slot swap therefore never moves the DB
+// identity with the code.
+var prodAppSettings    = concat(commonAppSettings, [
+  // Always 'production' (a recognized runtime env), never the infra naming
+  // token (e.g. 'dev'), which the app coerces to 'local' — disabling App
   // Insights and re-enabling file logging.
   { name: 'APP_ENVIRONMENT_NAME', value: 'production' }
-  { name: 'MSI_CLIENT_ID',        value: writerClientId }
-  { name: 'MSI_DB_USER',          value: writerDbRole }
 ])
-var stagingAppSettings = concat(commonAppSettings, scanDryRunSettings, [
+var stagingAppSettings = concat(commonAppSettings, [
   { name: 'APP_ENVIRONMENT_NAME', value: 'staging' }
-  { name: 'MSI_CLIENT_ID',        value: readerClientId }
-  { name: 'MSI_DB_USER',          value: readerDbRole }
 ])
-var ppeAppSettings     = concat(commonAppSettings, scanDryRunSettings, [
+var ppeAppSettings     = concat(commonAppSettings, [
   { name: 'APP_ENVIRONMENT_NAME', value: 'ppe' }
-  { name: 'MSI_CLIENT_ID',        value: readerClientId }
-  { name: 'MSI_DB_USER',          value: readerDbRole }
 ])
 
 var commonSiteConfigBase = {
   linuxFxVersion: 'DOCKER|${acrLoginServer}/rbaccatalog:${imageTag}'
   acrUseManagedIdentityCreds: true
+  // Pull the private image with the shared user-assigned identity (its
+  // client ID). Without this the platform would use the system-assigned MI,
+  // which this app no longer has.
+  acrUserManagedIdentityID: userAssignedIdentityClientId
   alwaysOn: sku != 'B1' && sku != 'F1'
   http20Enabled: true
   ftpsState: 'Disabled'
@@ -195,32 +146,29 @@ var commonSiteConfigBase = {
 }
 
 // Properties shared between the production slot, staging, and ppe — but
-// each gets its own ``appSettings`` (APP_ENVIRONMENT_NAME etc. differ per
-// slot) and its own ``acrUserManagedIdentityID`` so the platform pulls the
-// private image using that slot's attached user-assigned identity.
+// each gets its own ``appSettings`` so APP_ENVIRONMENT_NAME differs per
+// slot.
 var prodSiteProperties = {
   serverFarmId: plan.id
   httpsOnly: httpsOnly
-  siteConfig: union(commonSiteConfigBase, {
-    appSettings: prodAppSettings
-    acrUserManagedIdentityID: writerClientId
-  })
+  siteConfig: union(commonSiteConfigBase, { appSettings: prodAppSettings })
 }
 var stagingSiteProperties = {
   serverFarmId: plan.id
   httpsOnly: httpsOnly
-  siteConfig: union(commonSiteConfigBase, {
-    appSettings: stagingAppSettings
-    acrUserManagedIdentityID: readerClientId
-  })
+  siteConfig: union(commonSiteConfigBase, { appSettings: stagingAppSettings })
 }
 var ppeSiteProperties = {
   serverFarmId: plan.id
   httpsOnly: httpsOnly
-  siteConfig: union(commonSiteConfigBase, {
-    appSettings: ppeAppSettings
-    acrUserManagedIdentityID: readerClientId
-  })
+  siteConfig: union(commonSiteConfigBase, { appSettings: ppeAppSettings })
+}
+
+var sharedIdentity = {
+  type: 'UserAssigned'
+  userAssignedIdentities: {
+    '${userAssignedIdentityId}': {}
+  }
 }
 
 resource app 'Microsoft.Web/sites@2024-04-01' = {
@@ -228,10 +176,7 @@ resource app 'Microsoft.Web/sites@2024-04-01' = {
   location: location
   tags: tags
   kind: 'app,linux,container'
-  identity: {
-    type: 'UserAssigned'
-    userAssignedIdentities: { '${writerResourceId}': {} }
-  }
+  identity: sharedIdentity
   properties: prodSiteProperties
 }
 
@@ -241,10 +186,7 @@ resource stagingSlot 'Microsoft.Web/sites/slots@2024-04-01' = if (deploySlots) {
   location: location
   tags: tags
   kind: 'app,linux,container'
-  identity: {
-    type: 'UserAssigned'
-    userAssignedIdentities: { '${readerResourceId}': {} }
-  }
+  identity: sharedIdentity
   properties: stagingSiteProperties
 }
 
@@ -254,30 +196,20 @@ resource ppeSlot 'Microsoft.Web/sites/slots@2024-04-01' = if (deploySlots) {
   location: location
   tags: tags
   kind: 'app,linux,container'
-  identity: {
-    type: 'UserAssigned'
-    userAssignedIdentities: { '${readerResourceId}': {} }
-  }
+  identity: sharedIdentity
   properties: ppeSiteProperties
 }
 
 // Pin per-slot settings so a swap does NOT move them with the code.
-// Otherwise a staging→production swap would make the (now-production)
-// slot keep ``APP_ENVIRONMENT_NAME=staging``, the reader identity/role
-// and (worst of all) stay in what-if mode (``SCAN_DRY_RUN=true``) so the
-// production slot never persists scans while the pre-swap staging slot
-// becomes the only committing writer.
+// Only APP_ENVIRONMENT_NAME is slot-specific now (MSI_DB_USER is identical
+// across slots since they share one identity). The scan flags are handled by
+// Container Apps Jobs and stay OFF on every slot, so nothing else to pin.
 resource appSlotConfigNames 'Microsoft.Web/sites/config@2024-04-01' = if (deploySlots) {
   parent: app
   name: 'slotConfigNames'
   properties: {
     appSettingNames: [
       'APP_ENVIRONMENT_NAME'
-      'MSI_CLIENT_ID'
-      'MSI_DB_USER'
-      'SCAN_DRY_RUN'
-      'ROLE_SCAN_ENABLED'
-      'OPERATIONS_SCAN_ENABLED'
     ]
   }
 }

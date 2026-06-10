@@ -63,12 +63,9 @@ class Settings(BaseSettings):
         return (init_settings, env_settings, dotenv_settings, file_secret_settings)
 
     # --- Scan / worker ------------------------------------------------------
-    roles_poll_interval_seconds: int = Field(default=7200, gt=0)
-    operations_poll_interval_seconds: int = Field(default=86400, gt=0)
+    # Per-scan toggles; a disabled scan makes its Container Apps Job a no-op.
     role_scan_enabled: bool = True
     operations_scan_enabled: bool = True
-    run_scan_on_startup: bool = True
-    scan_dry_run: bool = False
 
     # --- Database -----------------------------------------------------------
     db_connection_string: str = "sqlite+aiosqlite:///./rbaccatalog.db"
@@ -77,7 +74,7 @@ class Settings(BaseSettings):
     msi_db_port: int = 5432
     msi_db_name: str = ""
     msi_db_user: str = ""
-    msi_client_id: str = ""
+    azure_client_id: str = ""
 
     # --- Ollama -------------------------------------------------------------
     ollama_base_url: str = "http://localhost:11434"

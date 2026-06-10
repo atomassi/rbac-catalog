@@ -28,15 +28,7 @@ from rbaccatalog.telemetry import configure_logging
 
 
 async def run_once(jobs: list[Job]) -> None:
-    """Run the given scan jobs in order, then dispose the database engine.
-
-    Each job runs through the worker, so it gets the same telemetry and
-    operation context as the scheduled path, with ``reraise=True`` so the first
-    failure surfaces as a non-zero exit code.
-
-    Args:
-        jobs: The scan jobs to run, in order.
-    """
+    """Run the given scan jobs in order, then dispose the database engine."""
     worker = Worker()
     try:
         await ensure_db(DBEngine.get())

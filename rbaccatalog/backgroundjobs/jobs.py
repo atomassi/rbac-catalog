@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
-from datetime import timedelta
 from enum import StrEnum
 
 from rbaccatalog.azure import fetch_builtin_roles, fetch_provider_operations
@@ -33,11 +32,6 @@ class Job(ABC):
         return Settings.get()
 
     @property
-    def _dry_run(self) -> bool:
-        """Run in "what-if" mode (compute + log changes, write nothing)."""
-        return self._settings.scan_dry_run
-
-    @property
     @abstractmethod
     def name(self) -> str:
         """Job identifier used for scheduling and logging."""
@@ -47,37 +41,23 @@ class Job(ABC):
     def enabled(self) -> bool:
         """Whether this job should run."""
 
-    @property
-    @abstractmethod
-    def interval(self) -> timedelta:
-        """How often to run this job."""
-
     @abstractmethod
     async def run(self) -> None:
         """Execute the job. Handles fetch, apply, logging, and telemetry."""
 
 
-# Canonical job names, shared by the job classes and the JOB_FACTORIES registry.
-ROLE_SCAN_JOB_NAME = "role-scan"
-OPERATIONS_SCAN_JOB_NAME = "operations-scan"
-
-
 class RoleScanJob(Job):
     """Scans and synchronizes Azure built-in role definitions."""
 
-    _JOB_NAME = ROLE_SCAN_JOB_NAME
+    JOB_NAME = "role-scan"
 
     @property
     def name(self) -> str:
-        return self._JOB_NAME
+        return self.JOB_NAME
 
     @property
     def enabled(self) -> bool:
         return self._settings.role_scan_enabled
-
-    @property
-    def interval(self) -> timedelta:
-        return timedelta(seconds=self._settings.roles_poll_interval_seconds)
 
     async def run(self) -> None:
         logger.info("Fetching built-in role definitions...")
@@ -89,35 +69,30 @@ class RoleScanJob(Job):
 
         session_factory = create_sessionmaker(DBEngine.get())
         async with session_factory() as session:
-            result = await apply_role_scan(session, roles, dry_run=self._dry_run)
+            result = await apply_role_scan(session, roles)
 
         logger.info("Role scan complete: %s", result)
 
-        if not self._dry_run:
-            track_role_scan(
-                roles_fetched=len(roles),
-                roles_added=result.created,
-                roles_updated=result.updated,
-                roles_deleted=result.deleted,
-            )
+        track_role_scan(
+            roles_fetched=len(roles),
+            roles_added=result.created,
+            roles_updated=result.updated,
+            roles_deleted=result.deleted,
+        )
 
 
 class OperationsScanJob(Job):
     """Scans and synchronizes Azure provider operations."""
 
-    _JOB_NAME = OPERATIONS_SCAN_JOB_NAME
+    JOB_NAME = "operations-scan"
 
     @property
     def name(self) -> str:
-        return self._JOB_NAME
+        return self.JOB_NAME
 
     @property
     def enabled(self) -> bool:
         return self._settings.operations_scan_enabled
-
-    @property
-    def interval(self) -> timedelta:
-        return timedelta(seconds=self._settings.operations_poll_interval_seconds)
 
     async def run(self) -> None:
         logger.info("Fetching Azure provider operations...")
@@ -129,25 +104,22 @@ class OperationsScanJob(Job):
 
         session_factory = create_sessionmaker(DBEngine.get())
         async with session_factory() as session:
-            result = await apply_operations_scan(session, operations, dry_run=self._dry_run)
+            result = await apply_operations_scan(session, operations)
 
         logger.info("Operations scan complete: %s", result)
 
-        if not self._dry_run:
-            track_operations_scan(len(operations))
+        track_operations_scan(len(operations))
 
 
-# Registry of job constructors keyed by job name. Single source of truth for
-# both the scheduler (create_all_jobs) and one-shot runners (scan_once), so
-# adding a job here wires it into both paths.
+# Job constructors keyed by job name (used by create_all_jobs and scan_once).
 JOB_FACTORIES: dict[str, type[Job]] = {
-    ROLE_SCAN_JOB_NAME: RoleScanJob,
-    OPERATIONS_SCAN_JOB_NAME: OperationsScanJob,
+    RoleScanJob.JOB_NAME: RoleScanJob,
+    OperationsScanJob.JOB_NAME: OperationsScanJob,
 }
 
 
 def create_job(name: str) -> Job:
-    """Create a single job by name (raises KeyError if unknown)."""
+    """Create a single job by name (e.g. ``role-scan``); raises KeyError if unknown."""
     return JOB_FACTORIES[name]()
 
 

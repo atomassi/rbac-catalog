@@ -18,6 +18,7 @@ env:
   ACR_LOGIN_SERVER: azurerbacregistry.azurecr.io
   IMAGE_NAME: rbaccatalog
   STAGING_URL: https://azurerbac-builtinroles-staging.azurewebsites.net
+  CONTAINERAPP_ENV: rbaccatalog-containerapp
 
 jobs:
   # ═══════════════════════════════════════════════════════════════════════════
@@ -324,6 +325,15 @@ jobs:
             --slot staging \
             --target-slot production
           echo "🔄 Swapped staging to production"
+
+      # Slot swap covers only the web tier; re-pin this env's scan Jobs to the
+      # released image (single source of truth: infra/scripts/pin-scan-jobs.sh).
+      - name: Pin scan Jobs to released image
+        run: |
+          bash infra/scripts/pin-scan-jobs.sh \
+            "${{ env.RESOURCE_GROUP }}" \
+            "${{ env.CONTAINERAPP_ENV }}" \
+            "${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ needs.build-and-push.outputs.version }}"
 
       - name: Notify IndexNow
         continue-on-error: true

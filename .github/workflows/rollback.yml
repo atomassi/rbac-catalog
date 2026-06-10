@@ -19,6 +19,7 @@ env:
   ACR_NAME: azurerbacregistry
   ACR_LOGIN_SERVER: azurerbacregistry.azurecr.io
   IMAGE_NAME: rbaccatalog
+  CONTAINERAPP_ENV: rbaccatalog-containerapp
 
 jobs:
   rollback:
@@ -133,6 +134,15 @@ jobs:
             echo "⏳ Waiting... ${WAITED}s / ${MAX_WAIT}s"
           done
           echo "⚠️ Health check timed out after ${MAX_WAIT}s (deployment may still be in progress)"
+
+      # Slot swap covers only the web tier; re-pin this env's scan Jobs to the
+      # rollback image (single source of truth: infra/scripts/pin-scan-jobs.sh).
+      - name: Pin scan Jobs to rollback image
+        run: |
+          bash infra/scripts/pin-scan-jobs.sh \
+            "${{ env.RESOURCE_GROUP }}" \
+            "${{ env.CONTAINERAPP_ENV }}" \
+            "${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_VERSION }}"
 
       - name: Azure Logout
         if: always()

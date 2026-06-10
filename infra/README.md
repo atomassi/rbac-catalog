@@ -1,7 +1,7 @@
 # Infra — deploy the Azure RBAC Catalog from scratch
 
 Bicep templates + helper scripts to provision the Azure infrastructure for
-the Azure RBAC Catalog. Plan for **~15 minutes** end-to-end.
+the Azure RBAC Catalog. Plan for **~45–60 minutes** end-to-end.
 
 ---
 
@@ -38,8 +38,10 @@ the Azure RBAC Catalog. Plan for **~15 minutes** end-to-end.
 
 **Mandatory** — the app does not run without these:
 
-- App Service Plan (Linux, P0v3) + App Service (user-assigned MIs: writer on
-  production, reader on staging/ppe)
+- App Service Plan (Linux, P0v3) + App Service (read-only web user-assigned MI) — web tier
+- Container Apps Environment (Consumption) + two cron Jobs (`role-scan`,
+  `operations-scan`) sharing the read-write scan user-assigned MI — the
+  background scans, decoupled from the web image (scale-to-zero, ~$0/month)
 - Azure Container Registry (Basic)
 - PostgreSQL Flexible Server v17 — Entra ID auth (password auth is also
   enabled on first deploy so the AAD-mapped role can be provisioned; see
@@ -68,12 +70,12 @@ Two profiles ship out of the box:
 
 ## Design notes
 
-- **App Service over AKS / Container Apps** — single-container app; free TLS, slot swaps, and App Insights integration are built in.
+- **App Service for web, Container Apps Jobs for scans** — the web tier needs an always-warm, memory-heavy replica with deployment slots, which App Service does natively. The role/operations scans are bursty and benefit from cron scheduling + scale-to-zero, so they run as Container Apps Jobs (a single writer by construction) instead of a co-located worker.
 - **P0v3 plan** — smallest Premium V3 (VNet integration, AlwaysOn, 5 free slots).
-- **User-assigned MIs (writer + reader)** — two UAMIs decouple identity lifecycle from the app and split privilege. A **writer** is attached to the production slot (AcrPull + full CRUD on PostgreSQL); a shared **reader** is attached to staging + ppe (AcrPull + read-only via `pg_read_all_data`). Splitting identities means a non-production slot physically cannot write to the catalog.
+- **Two user-assigned MIs (least privilege)** — one *web* identity shared by the production + staging + ppe slots and mapped to a **SELECT-only** PostgreSQL role; one *scan* identity shared by both scan Jobs and mapped to an **owner / read-write** role. The scan identity is the sole schema owner (it alone runs `create_all`), so there is no ownership race; the web role is granted a one-directional default `SELECT` on the scan-owned tables. Each identity gets its own AcrPull grant.
 - **PostgreSQL Flexible (not Single)** — better price/perf and Entra ID auth. B1ms is enough for the workload (< 5 RPS, ~200 MB data).
 - **Entra ID for DB auth** — the app opens password-less, token-based connections; rotation is automatic via MSI tokens. The admin password is only needed at first deploy to provision the AAD-mapped role (see [§ Security notes](#security-notes)).
-- **Slot-sticky config** — `MSI_CLIENT_ID`, `MSI_DB_USER`, `APP_ENVIRONMENT_NAME`, `SCAN_DRY_RUN`, and the scan-enable flags (`ROLE_SCAN_ENABLED`, `OPERATIONS_SCAN_ENABLED`) are registered in `slotConfigNames`, so a slot swap does NOT carry a slot's identity, PG role, telemetry label, or scanner mode with the code. Only the **production slot** writes scan results; staging and ppe run the same scans in what-if mode (`SCAN_DRY_RUN=true`) — they fetch and log changes but never write, so they can't race the worker or double-count events.
+- **Slot-sticky config** — `APP_ENVIRONMENT_NAME` is registered in `slotConfigNames`, so a slot swap does NOT carry the telemetry label with the code. All slots share the one read-only web PG role (`MSI_DB_USER` is identical everywhere), so it needs no slot pinning. The web tier never scans (the image runs uvicorn only); the role + operations scans run exclusively in the Container Apps Jobs, which are single-writer by construction — so there is no scanner to keep off the staging slot anymore.
 
 ---
 
@@ -100,7 +102,8 @@ wire AcrPull / DB grants automatically.
 
 ## Deploy from scratch — copy/paste walkthrough
 
-Total wall time: **~15 min**. Run every step from `infra/`.
+Total wall time: **~45–60 min** (PostgreSQL provisioning and the scan
+bootstrap dominate). Run every step from `infra/`.
 
 ### 1. Create your `.env`
 
@@ -114,7 +117,9 @@ source .env
 
 > `BASE_NAME` becomes `<base>-app`, `<base>registry`, `<base>-pg`, etc.
 > The App Service, ACR, and PG server names are part of public DNS, so
-> pick something short and distinctive (3-15 alphanumeric).
+> pick something short and distinctive (3-15 alphanumeric). The ACR and
+> PostgreSQL names are lowercased automatically (and hyphens stripped for
+> ACR), so any casing is safe.
 
 ### 2. Log in to Azure
 
@@ -131,7 +136,7 @@ az bicep install                          # one-time, no-op if already installed
 ```
 
 Expected output: a list of resources to **Create** under
-`resourceGroups/$RG_NAME`. Any 3 "Unsupported" role-assignment entries
+`resourceGroups/$RG_NAME`. Any "Unsupported" role-assignment entries
 are normal — they reference managed-identity principalIds that only
 exist after the apps are deployed.
 
@@ -141,42 +146,69 @@ exist after the apps are deployed.
 ./scripts/deploy.sh prod
 ```
 
-`deploy.sh` does, in order:
-1. Validates the template against Azure (~10 s).
-2. Runs `az deployment sub create` (~10–15 min — PG is the slow step).
-3. Saves outputs to `infra/.deploy-outputs.json`.
-4. Configures Entra ID auth on PostgreSQL by calling
-   [`grant-postgres-aad-admin.sh`](scripts/grant-postgres-aad-admin.sh)
-   (registers the writer and reader user-assigned identities as PG roles:
-   the **writer** gets full CRUD on the `azurerbac` database, the **reader**
-   gets read-only access via `pg_read_all_data` — the reader is only granted
-   when `deploySlots = true`). Pass `--skip-pg-grant` to skip this step.
-5. Builds and pushes the first image (`az acr build` from the repo root),
-   restarts the App Service, and polls `/healthz` until the container is
-   live (up to 10 min).
+One command, but `deploy.sh` runs it in **two passes** — a scan Job
+(Container Apps Job) verifies it can pull its image the instant it is
+created, yet the ACR that holds the image is created by this same deploy.
+So the script provisions the registry first, pushes the image, then adds the
+Jobs:
 
-The background worker (production slot only — staging/ppe are
-intentionally non-writers) runs the first role + operations scan on
-startup. The catalog populates within a few minutes.
+1. Validates the template against Azure (~10 s).
+2. **Pass 1** (`deployScanJobs=false`) — RG, monitoring, PostgreSQL, App
+   Service, and ACR (~10–15 min; PG is the slow step). Scan Jobs skipped.
+3. **Build & push** the container image into the Pass-1 ACR via
+   [`build-and-push-image.sh`](scripts/build-and-push-image.sh) (`az acr
+   build`, tagged `rbaccatalog:latest`).
+4. **Pass 2** (`deployScanJobs=true`) — Container Apps environment + the two
+   scan Jobs, now that the image they pull exists. Incremental, so it only
+   creates the Jobs.
+5. Saves outputs to `infra/.deploy-outputs.json`.
+6. Configures Entra ID auth on PostgreSQL via
+   [`grant-postgres-aad-admin.sh`](scripts/grant-postgres-aad-admin.sh) —
+   registers the web identity (SELECT-only) and the scan identity (owner) as
+   PG roles, and grants the web role a default `SELECT` on the scan-owned
+   tables.
+7. **Bootstraps the data** — starts both scan Jobs once and waits for them, so
+   the schema + data exist before the web first boots (the read-only web
+   cannot create the schema, and its cache refuses to start on an empty
+   database).
+8. Restarts the App Service so it pulls the freshly pushed image against the
+   now-populated database, then polls `/healthz` until the web tier is up
+   (cold start rebuilds the in-memory cache, so it waits up to ~10 min).
+
+> The image is built **between** the two passes, so the very first deploy
+> takes a few minutes longer than a later redeploy. To ship a new build
+> later, just re-run `./scripts/deploy.sh prod` — it rebuilds & repushes the
+> image and redeploys incrementally. For an **app-image-only** redeploy
+> (no infra changes) run the build helper directly, then restart the web
+> tier:
+>
+> ```bash
+> ./scripts/build-and-push-image.sh        # ACR read from .deploy-outputs.json
+> az webapp restart -n "$(jq -r .appServiceName.value .deploy-outputs.json)" \
+>                   -g "$(jq -r .resourceGroupName.value .deploy-outputs.json)"
+> ```
 
 ### 5. Verify
-
-`deploy.sh` already waits for `/healthz` to pass, but you can re-check
-anytime:
 
 ```bash
 URL=$(jq -r .appServiceUrl.value .deploy-outputs.json)
 
-# Health endpoint
-curl -fsS "$URL/healthz"
-# {"status":"ok"}
-
-# Homepage
-curl -fsS -o /dev/null -w "%{http_code}\n" "$URL"
-# 200
+curl -fsS "$URL/healthz"                              # {"ok":true}
+curl -fsS -o /dev/null -w "%{http_code}\n" "$URL"     # 200
 ```
 
-Open `$URL` in a browser and you should see the role catalog.
+Open `$URL` in a browser and you should see the role catalog — `deploy.sh`
+already ran both scans during bootstrap, so it's populated. They refresh on
+cron afterwards (role-scan every 2 h, operations-scan daily).
+
+To re-run a scan on demand (rarely needed) — portal (Container Apps Job →
+*Run now*) or CLI:
+
+```bash
+RG=$(jq -r .resourceGroupName.value .deploy-outputs.json)
+az containerapp job start -n "${BASE_NAME}-role-scan"       -g "$RG"
+az containerapp job start -n "${BASE_NAME}-operations-scan" -g "$RG"
+```
 
 ---
 
@@ -215,31 +247,9 @@ pipeline you prefer:
   required app settings for you.
 
 Whichever option you pick, the App Service is already configured to pull
-its image with its attached user-assigned identity (`AcrPull` granted on
-the registry by Bicep — writer on production, reader on staging/ppe), so
-your pipeline only needs *push* permission on the ACR — no admin
-credentials required.
-
----
-
-## Grafana dashboard
-
-A portable, 50-panel dashboard for the Application Insights telemetry
-ships as a JSON template
-([`dashboards/grafana-appinsights.template.json`](dashboards/grafana-appinsights.template.json))
-with three placeholders for subscription / resource group / App Insights
-name.
-
-```bash
-./scripts/render-grafana-dashboard.sh -o /tmp/dashboard.json
-```
-
-The script reads the placeholders from `.deploy-outputs.json`. In Grafana →
-**Dashboards → Import → Upload JSON file**, pick the rendered file, and
-select your Azure Monitor data source. Works with both **Azure Managed
-Grafana** (use managed identity with `Monitoring Reader` on the RG) and
-self-hosted Grafana (install the `grafana-azure-monitor-datasource`
-plugin).
+its image with the read-only web user-assigned managed identity (`AcrPull`
+granted on the registry by Bicep), so your pipeline only needs *push*
+permission on the ACR — no admin credentials required.
 
 ---
 
@@ -279,67 +289,81 @@ restrictions, or subscription quota. Those surface only at actual deploy
 time. A few cheap checks up front save round-trips:
 
 ```bash
-# App Service: is the plan SKU offered in the region?
-az appservice list-locations --sku P0V3 -o table
-
 # PostgreSQL: is your tier/SKU even offered in the region?
 az postgres flexible-server list-skus --location "$LOCATION" -o table
 
+# App Service: is the plan SKU offered in the region?
+az appservice list-locations --sku P0V3 -o table
+
 # Global name availability (App Service + ACR names are globally unique)
-az webapp list    --query "[?name=='${BASE_NAME}-app'].name" -o tsv   # empty = free
-az acr check-name --name "${BASE_NAME}registry" --query nameAvailable  # true  = free
+az webapp list  --query "[?name=='${BASE_NAME}-app'].name"     -o tsv   # empty = free
+az acr check-name --name "${BASE_NAME}registry" --query nameAvailable   # true = free
 ```
 
-**App Service vCPU quota** (`SubscriptionIsOverQuotaForSku`) is the common
-wall: Premium V3 families need an explicit quota request **per region**, and
-a fresh or MSDN / Visual Studio subscription often starts at `0` Pv3 vCPUs.
-Either request quota, or fall back to a Basic SKU (`appServicePlanSku=B1`) —
-a **separate quota bucket** that's usually available. On Visual Studio / MSDN
-subscriptions you may also have to remove the **spending limit** before any
-dedicated compute can be created.
+What these **cannot** catch:
+
+- **Container Apps `AKSCapacityHeavyUsage`** — real-time AKS capacity in a
+  region. Azure exposes no API for it; the only signal is to attempt the
+  create. If a region is saturated, deploy the Container Apps tier
+  elsewhere (see below).
+- **App Service vCPU quota** (`SubscriptionIsOverQuotaForSku`) — Premium V3
+  families need an explicit quota request per region. A fresh subscription
+  often has `0` Pv3 vCPUs in a given region; request quota or fall back to a
+  Basic/Standard SKU (separate quota bucket).
 
 ### Deploying tiers in different regions
 
-When one region is restricted or out of quota, you don't have to move the
+When one region is restricted or out of capacity, you don't have to move the
 whole stack. `main.bicep` exposes independent region knobs that each default
 to `location`, so you can place individual tiers where capacity/offers allow:
 
 | Parameter | Controls | Override when… |
 |---|---|---|
-| `location` | Resource group + monitoring; default for the tiers below | — (primary region) |
-| `appServiceLocation` | App Service plan + app | the App Service SKU has no quota in `location` |
+| `location` | App Service + monitoring + the resource group | — (primary region) |
 | `postgresLocation` | PostgreSQL Flexible Server | the tier/SKU is offer-restricted in `location` |
 | `acrLocation` | Container Registry | — (rarely needed) |
+| `containerAppsLocation` | Container Apps environment + scan Jobs | `location` returns `AKSCapacityHeavyUsage` |
 
 `deploy.sh` forwards any ad-hoc `name=value` arguments as Bicep parameter
 overrides, so you can mix regions on the command line:
 
 ```bash
-# Everything in North Europe, but the App Service (B1) in West Europe where it has quota
-LOCATION=northeurope ./scripts/deploy.sh dev appServiceLocation=westeurope
+# App Service in West Europe (has quota), PostgreSQL + scan Jobs in North Europe
+./scripts/deploy.sh prod \
+  postgresLocation=northeurope \
+  containerAppsLocation=northeurope
 ```
 
 ---
 
 ## Troubleshooting
 
+
 **`ResourceNameNotAvailable`** — the App Service / ACR / PG name is taken
 globally. Pick a more distinctive `baseName`.
 
+**`AKSCapacityHeavyUsage` (Container Apps environment)** — the region is
+temporarily out of Container Apps capacity. Redeploy the Container Apps tier
+elsewhere with `containerAppsLocation=<other-region>` (see
+[§ Region availability & quota](#region-availability--quota-pre-flight-checks)).
+
 **`SubscriptionIsOverQuotaForSku` (App Service)** — no vCPU quota for that
-SKU family in the region (Premium V3 often starts at `0`, especially on
-MSDN / Visual Studio subscriptions). Request quota, or deploy a Basic SKU:
-`appServicePlanSku=B1 deploySlots=false` (Basic is a separate quota bucket
-and has no deployment slots). See
-[§ Region availability & quota](#region-availability--quota-pre-flight-checks).
+SKU family in the region (Premium V3 often starts at `0`). Request quota or
+deploy a Basic/Standard SKU via `appServicePlanSku=B1` (separate quota
+bucket; note Basic has no deployment slots, so also pass `deploySlots=false`).
 
 **`LocationIsOfferRestricted` (PostgreSQL)** — the tier/SKU isn't offered in
 the region. Check `az postgres flexible-server list-skus --location <loc>`
 and set `postgresLocation=<region-that-offers-it>`.
 
-**Container won't start (5xx)** — the image build/push step may have failed.
-Re-run `./scripts/deploy.sh prod` (it rebuilds the image, restarts, and
-re-checks health).
+**`InvalidResourceLocation` on retry** — an earlier failed deploy left an
+orphaned resource (e.g. a `Failed`-state Container Apps environment or its
+identity) pinned to the old region, and Azure won't relocate it. Delete the
+leftovers in that region, then re-run.
+
+**Container won't start (5xx)** — the image isn't in the ACR yet. Re-run
+`./scripts/deploy.sh prod` (or `./scripts/build-and-push-image.sh` followed by
+an `az webapp restart`).
 
 **PG auth errors in the app logs** — `grant-postgres-aad-admin.sh` didn't
 run (or failed). Re-run it manually and restart the App Service.
@@ -367,15 +391,15 @@ infra/
 │   └── dev.bicepparam                 # mandatory only
 ├── modules/
 │   ├── monitoring.bicep               # Log Analytics + App Insights
-│   ├── acr.bicep                      # Container Registry + AcrPull (incl. slots)
+│   ├── identity.bicep                 # one user-assigned MI (instantiated twice: web + scan)
+│   ├── acr.bicep                      # Container Registry + AcrPull (web + scan identities)
 │   ├── postgres.bicep                 # PG Flexible Server + AAD auth
-│   └── appservice.bicep               # Plan + app + optional staging/ppe slots
-├── dashboards/
-│   └── grafana-appinsights.template.json
+│   ├── appservice.bicep               # Plan + app + optional staging/ppe slots
+│   └── containerappjobs.bicep         # Container Apps env + role/operations cron Jobs
 └── scripts/
-    ├── deploy.sh                      # validate + deploy + DB grant
-    ├── grant-postgres-aad-admin.sh    # PG Entra ID auth + grants (incl. slot identities)
-    └── render-grafana-dashboard.sh    # fills the dashboard template
+    ├── deploy.sh                      # orchestrates: infra → image → Jobs → DB grant
+    ├── build-and-push-image.sh        # build + push the app image to ACR (az acr build)
+    └── grant-postgres-aad-admin.sh    # PG Entra ID auth + grants (web + scan roles)
 ```
 
 ---

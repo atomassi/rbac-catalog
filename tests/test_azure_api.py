@@ -850,7 +850,7 @@ class TestAzureAuthContext:
 
     @pytest.mark.asyncio
     async def test_default_azure_credential_pins_user_assigned_identity(self):
-        """With managed identity enabled, msi_client_id pins the UAMI."""
+        """With managed identity enabled, azure_client_id pins the UAMI."""
         from unittest.mock import AsyncMock, patch
 
         from rbaccatalog.settings import Settings
@@ -860,7 +860,7 @@ class TestAzureAuthContext:
 
         with (
             patch.object(settings, "use_managed_identity", True),
-            patch.object(settings, "msi_client_id", "uami-client-id"),
+            patch.object(settings, "azure_client_id", "uami-client-id"),
             patch(
                 "rbaccatalog.azure.auth.ManagedIdentityCredential",
                 return_value=mock_credential,

@@ -21,10 +21,10 @@ class TestSettings:
     def test_custom_values(self):
         """Test Settings accepts custom values."""
         settings = Settings(
-            roles_poll_interval_seconds=300,
+            msi_db_port=300,
             db_connection_string="postgresql+asyncpg://user:pass@host/db",
         )
-        assert settings.roles_poll_interval_seconds == 300
+        assert settings.msi_db_port == 300
         assert settings.db_connection_string == "postgresql+asyncpg://user:pass@host/db"
 
     def test_partial_override(self):
@@ -32,14 +32,14 @@ class TestSettings:
         # Clear env so we exercise model defaults, not whatever the test
         # session has injected (e.g. conftest sets DB_CONNECTION_STRING).
         with patch.dict(os.environ, {}, clear=True):
-            settings = Settings(roles_poll_interval_seconds=120)
-            assert settings.roles_poll_interval_seconds == 120
+            settings = Settings(msi_db_port=120)
+            assert settings.msi_db_port == 120
             assert settings.db_connection_string == "sqlite+aiosqlite:///./rbaccatalog.db"
 
-    def test_invalid_poll_interval_type(self):
+    def test_invalid_int_type(self):
         """Test Settings rejects invalid types."""
         with pytest.raises(ValidationError):
-            Settings(roles_poll_interval_seconds="not-a-number")
+            Settings(msi_db_port="not-a-number")
 
     def test_enabled_ai_engines_defaults(self):
         """Test enabled_ai_engines defaults are non-empty, valid, and include the fallback."""
@@ -89,13 +89,13 @@ class TestGetSettings:
         with patch.dict(
             os.environ,
             {
-                "ROLES_POLL_INTERVAL_SECONDS": "120",
+                "MSI_DB_PORT": "120",
                 "DB_CONNECTION_STRING": "postgresql+asyncpg://env@host/db",
             },
             clear=True,
         ):
             settings = Settings.get()
-            assert settings.roles_poll_interval_seconds == 120
+            assert settings.msi_db_port == 120
             assert settings.db_connection_string == "postgresql+asyncpg://env@host/db"
 
     def test_get_settings_uses_defaults_when_env_not_set(self):
@@ -103,7 +103,7 @@ class TestGetSettings:
         with patch.dict(os.environ, {}, clear=True):
             settings = Settings.get()
             # Non-provided values use defaults from Settings model
-            assert settings.roles_poll_interval_seconds > 0  # Has a valid default
+            assert settings.msi_db_port > 0  # Has a valid default
             assert settings.db_connection_string.startswith("sqlite")  # Default is SQLite
             assert settings.role_scan_enabled is True  # Default
             assert settings.mcp_server_enabled is True  # Default
@@ -115,7 +115,7 @@ class TestGetSettings:
             {
                 "ROLE_SCAN_ENABLED": "false",
                 "OPERATIONS_SCAN_ENABLED": "0",
-                "RUN_SCAN_ON_STARTUP": "yes",
+                "USE_MANAGED_IDENTITY": "yes",
                 "MCP_SERVER_ENABLED": "true",
             },
             clear=True,
@@ -123,7 +123,7 @@ class TestGetSettings:
             settings = Settings.get()
             assert settings.role_scan_enabled is False
             assert settings.operations_scan_enabled is False
-            assert settings.run_scan_on_startup is True
+            assert settings.use_managed_identity is True
             assert settings.mcp_server_enabled is True
 
     @pytest.mark.parametrize(
@@ -236,11 +236,15 @@ class TestSettingsValidators:
             settings = Settings()
             assert settings.log_level == expected
 
-    def test_run_scan_on_startup_env(self):
-        """RUN_SCAN_ON_STARTUP env var maps to run_scan_on_startup."""
-        with patch.dict(os.environ, {"RUN_SCAN_ON_STARTUP": "false"}, clear=True):
+    def test_azure_client_id_env(self):
+        """AZURE_CLIENT_ID env var maps to azure_client_id (case-insensitive name match)."""
+        with patch.dict(
+            os.environ,
+            {"AZURE_CLIENT_ID": "11111111-2222-3333-4444-555555555555"},
+            clear=True,
+        ):
             settings = Settings()
-            assert settings.run_scan_on_startup is False
+            assert settings.azure_client_id == "11111111-2222-3333-4444-555555555555"
 
     def test_extra_env_vars_ignored(self):
         """Unknown env vars do not raise (extra='ignore')."""
@@ -256,27 +260,26 @@ class TestSettingsValidators:
         """Numeric env vars are coerced to int by pydantic-settings."""
         with patch.dict(
             os.environ,
-            {"ROLES_POLL_INTERVAL_SECONDS": "900", "MSI_DB_PORT": "6543"},
+            {"MSI_DB_PORT": "6543"},
             clear=True,
         ):
             settings = Settings()
-            assert settings.roles_poll_interval_seconds == 900
             assert settings.msi_db_port == 6543
 
     def test_invalid_integer_env_raises(self):
         """Non-numeric value for an int field raises ValidationError."""
         with (
-            patch.dict(os.environ, {"ROLES_POLL_INTERVAL_SECONDS": "not-a-number"}, clear=True),
+            patch.dict(os.environ, {"MSI_DB_PORT": "not-a-number"}, clear=True),
             pytest.raises(ValidationError),
         ):
             Settings()
 
     def test_empty_int_env_ignored(self):
         """Empty-string env var for an int field is ignored, not coerced to 0/error."""
-        default = Settings.model_fields["roles_poll_interval_seconds"].default
-        with patch.dict(os.environ, {"ROLES_POLL_INTERVAL_SECONDS": ""}, clear=True):
+        default = Settings.model_fields["msi_db_port"].default
+        with patch.dict(os.environ, {"MSI_DB_PORT": ""}, clear=True):
             settings = Settings()
-            assert settings.roles_poll_interval_seconds == default
+            assert settings.msi_db_port == default
 
     def test_empty_bool_env_ignored(self):
         """Empty-string env var for a bool field is ignored, default applies."""

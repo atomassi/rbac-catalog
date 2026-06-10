@@ -72,23 +72,19 @@ ENABLED_AI_ENGINES=tfidf uvicorn rbaccatalog.web.app:app --port 8000 --reload
 
 Open <http://localhost:8000>. The UI and search work immediately; the catalog
 stays empty until a scan runs. To populate it with live data, run `az login`
-once, then run a one-shot scan in a second terminal:
+once, then run the scans in a second terminal (no argument runs both; pass
+`role-scan` or `operations-scan` to run just one):
 
 ```bash
-# Populate everything (roles + operations), then exit
 python -m rbaccatalog.backgroundjobs.scan_once
-
-# ...or scan just one source
-python -m rbaccatalog.backgroundjobs.scan_once role-scan
-python -m rbaccatalog.backgroundjobs.scan_once operations-scan
 ```
 
-The command runs the scan once and exits — no background worker stays running.
-Re-run it whenever you want to refresh the local catalog. (In production the
-catalog is instead kept up to date by the always-on background worker that runs
-alongside the web app.)
+In production these scans run on a schedule as separate Container Apps Jobs;
+locally you just re-run the command whenever you want fresh data.
 
-Prefer containers? Build and run the image instead:
+Prefer containers? Build and run the image instead. The image runs the
+**web server only**; populate the catalog with the `scan_once` commands shown
+above (in production those scans run as separate Container Apps Jobs).
 
 ```bash
 docker build -t rbaccatalog:local --build-arg VERSION=local-dev .
@@ -115,10 +111,10 @@ For prerequisites, environment variables, and the full walkthrough, see
 | **Frontend** | Jinja2 templates, Tailwind CSS, Alpine.js |
 | **Database** | PostgreSQL |
 | **AI/ML** | PyTorch, Ollama, sentence-transformers, Qwen (fine-tuned) |
-| **Hosting** | Azure App Service, Cloudflare CDN |
+| **Hosting** | Azure App Service (web), Azure Container Apps Jobs (scans), Cloudflare CDN |
 | **CI/CD** | GitHub Actions, Azure Container Registry, Docker |
 | **Testing** | pytest, Playwright |
-| **Ops Automation** | Azure Automation |
+| **Ops Automation** | Container Apps Jobs (cron-scheduled scans) |
 
 ## Infrastructure & Costs
 
@@ -141,49 +137,52 @@ flowchart TD
         USER((👥 Users)):::user
         AI((🤖 Agents)):::ai
     end
-    GH[GitHub Actions]:::github
+
     CDN[Cloudflare]:::cdn
-    
-    subgraph AZ ["<span style='font-size:22px;font-weight:bold'>Azure</span>"]
+    GH[GitHub Actions]:::github
+
+    subgraph AZ ["<b><span style='font-size:18px'>Azure</span></b>"]
         direction TB
         CR[(Container<br/>Registry)]:::azure
-        AS[App Service]:::appsvc
-        subgraph DATA [" "]
+        AS[App Service<br/><small>web</small>]:::appsvc
+        CAJ[Container Apps Jobs<br/><small>cron scans</small>]:::jobs
+        PG[(PostgreSQL)]:::db
+        INSIGHTS[App Insights<br/><small>metrics / logs</small>]:::monitor
+
+        subgraph OPT ["<b>Optional — self-hosted LLM</b>"]
             direction LR
-            PG[(PostgreSQL)]:::db
-            INSIGHTS[App Insights]:::monitor
-        end
-        subgraph OPT ["<span style='font-weight:bold'>Optional — self-hosted LLM</span>"]
-            direction LR
-            GPU[GPU VM<br/>NVIDIA A10]:::gpu
-            OL[Ollama VM<br/>B2ms]:::ollama
+            OL[Ollama VM<br/><small>B2ms</small>]:::ollama
+            GPU[GPU VM<br/><small>NVIDIA A10</small>]:::gpu
         end
     end
-    
+
     USER -->|web| CDN
     AI -->|MCP| CDN
     CDN -->|proxy| AS
     GH -->|push image| CR
-    CR -->|deploy| AS
-    AS <-->|queries/ingestion| PG
-    AS -->|telemetry| INSIGHTS
+    CR -->|pull image| AS
+    CR -->|pull image| CAJ
+    AS -->|reads| PG
+    CAJ -->|scan & write| PG
+    AS -.-> INSIGHTS
+    CAJ -.-> INSIGHTS
     AS -->|inference| OL
-    GPU -.->|models| OL
-    
+    GPU -.->|push models| OL
+
     classDef user fill:#F5B82E,color:#000,stroke:#C98A00,stroke-width:2px
     classDef ai fill:#10B981,color:#fff,stroke:#059669,stroke-width:2px
     classDef github fill:#24292e,color:#fff,stroke:#1a1e22,stroke-width:2px
     classDef cdn fill:#F6821F,color:#fff,stroke:#d4700f,stroke-width:2px
     classDef azure fill:#0078D4,color:#fff,stroke:#005a9e,stroke-width:2px
     classDef appsvc fill:#4F46E5,color:#fff,stroke:#3730A3,stroke-width:2px
+    classDef jobs fill:#0D9488,color:#fff,stroke:#0A6E66,stroke-width:2px
     classDef db fill:#C2410C,color:#fff,stroke:#7C2D0A,stroke-width:2px
     classDef ollama fill:#7C3AED,color:#fff,stroke:#5B21B6,stroke-width:2px
     classDef gpu fill:#76B900,color:#fff,stroke:#5a8c00,stroke-width:2px
     classDef monitor fill:#B5179E,color:#fff,stroke:#86116F,stroke-width:2px
-    
-    style AZ fill:#EEF4FA,stroke:#0078D4,stroke-width:2px,rx:10
-    style DATA fill:none,stroke:none
-    style OPT fill:#F3EEFB,stroke:#7C3AED,stroke-width:1.5px,stroke-dasharray:6 4,rx:10
+
+    style AZ fill:#EEF4FA,stroke:#0078D4,stroke-width:2px
+    style OPT fill:#F3EEFB,stroke:#7C3AED,stroke-width:1.5px,stroke-dasharray:6 4
     style Clients fill:none,stroke:none
 ```
 
@@ -196,12 +195,12 @@ flowchart TD
 
 | Service | $/month | Notes |
 |---------|--------:|-------|
-| Cloudflare | $0 | Free plan — fronts the App Service with global CDN caching, TLS termination, DDoS protection, custom security rules, rate limiting, and OpenAPI schema validation at the edge. |
-| App Service | ~$45 | P0v3 Linux, single instance. Cheapest SKU that supports deployment slots. |
-| PostgreSQL | ~$13 | Flexible Server, B1ms (Burstable, 1 vCPU / 2 GiB). |
-| Container Registry | ~$5 | Basic SKU. |
-| App Insights + Log Analytics | ~$2 | Pay-per-GB ingestion, 30-day retention. |
-| Automation Account | $0 | Basic SKU, within the 500 min/month free tier. |
+| [Cloudflare](https://developers.cloudflare.com/fundamentals/) | $0 | Free plan — fronts the App Service with global CDN caching, TLS termination, DDoS protection, custom security rules, rate limiting, and OpenAPI schema validation at the edge. |
+| [App Service](https://learn.microsoft.com/azure/app-service/overview) | ~$45 | P0v3 Linux, single instance. Cheapest SKU that supports deployment slots. Runs the web tier only. |
+| [PostgreSQL](https://learn.microsoft.com/azure/postgresql/flexible-server/overview) | ~$13 | Flexible Server, B1ms (Burstable, 1 vCPU / 2 GiB). |
+| [Container Registry](https://learn.microsoft.com/azure/container-registry/container-registry-intro) | ~$5 | Basic SKU. |
+| [App Insights + Log Analytics](https://learn.microsoft.com/azure/azure-monitor/app/app-insights-overview) | ~$2 | Pay-per-GB ingestion, 30-day retention. |
+| [Container Apps Jobs](https://learn.microsoft.com/azure/container-apps/jobs) | ~$0 | Two cron scans (role + operations), scale-to-zero within the free grant. |
 | **Subtotal** | **~$65** | |
 
 **Optional services** — self-hosted LLM inference and fine-tuning:

@@ -178,7 +178,6 @@ module appService 'modules/appservice.bicep' = {
     readerResourceId: identity.outputs.readerResourceId
     readerClientId: identity.outputs.readerClientId
     readerDbRole: identity.outputs.readerName
-    environmentName: environmentName
     deploySlots: deploySlots
     ollamaBaseUrl: ollamaBaseUrl
     httpsOnly: appServiceHttpsOnly

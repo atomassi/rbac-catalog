@@ -55,9 +55,6 @@ param readerClientId string = ''
 @description('PostgreSQL role the staging/ppe slots connect as (matches the reader identity name).')
 param readerDbRole string = ''
 
-@description('Environment name. Drives APP_ENVIRONMENT_NAME.')
-param environmentName string
-
 @description('Provision staging + ppe deployment slots.')
 param deploySlots bool
 
@@ -93,6 +90,12 @@ var commonAppSettings = [
   // start" errors in the platform log. ``/healthz`` returns a cheap
   // 200 once the lifespan has completed.
   { name: 'WEBSITE_WARMUP_PATH', value: '/healthz' }
+  // Extend the container start window beyond the 230s default. On a fully
+  // populated database the lifespan cache build runs while the co-located
+  // worker commits a full role + operations scan, so first warmup can take
+  // several minutes; 1800s (the platform max) prevents the platform from
+  // killing the container before ``/healthz`` goes green.
+  { name: 'WEBSITES_CONTAINER_START_TIME_LIMIT', value: '1800' }
   // Tell App Service to use the system MI when pulling from ACR. Without
   // ``DOCKER_REGISTRY_SERVER_URL`` the platform falls back to ACR admin
   // credentials, which fails with "admin credentials on ACR are disabled"
@@ -144,11 +147,6 @@ var scanDryRunSettings = [
   { name: 'OPERATIONS_POLL_INTERVAL_SECONDS', value: '86400' }
 ]
 
-// Resolve the production environment label.
-//   * environmentName == 'prod' is the infra naming token; the runtime
-//     value is 'production' so telemetry matches the public site.
-var prodEnvLabel = environmentName == 'prod' ? 'production' : environmentName
-
 // APP_ENVIRONMENT_NAME, MSI_DB_USER, MSI_CLIENT_ID, and the scan flags are
 // per-slot:
 //   * APP_ENVIRONMENT_NAME → telemetry / operator log distinction.
@@ -168,7 +166,10 @@ var prodEnvLabel = environmentName == 'prod' ? 'production' : environmentName
 // staging→production swap would make the (now-production) slot use the
 // reader role/identity and stay in what-if mode.
 var prodAppSettings    = concat(commonAppSettings, scanProdSettings, [
-  { name: 'APP_ENVIRONMENT_NAME', value: prodEnvLabel }
+  // Always 'production' (a recognized runtime env), never the infra token
+  // (e.g. 'dev'), which the app would treat as 'local' — disabling App
+  // Insights and re-enabling file logging.
+  { name: 'APP_ENVIRONMENT_NAME', value: 'production' }
   { name: 'MSI_CLIENT_ID',        value: writerClientId }
   { name: 'MSI_DB_USER',          value: writerDbRole }
 ])

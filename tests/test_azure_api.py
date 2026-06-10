@@ -848,6 +848,54 @@ class TestAzureAuthContext:
 
             mock_credential.close.assert_called_once()
 
+    @pytest.mark.asyncio
+    async def test_default_azure_credential_pins_user_assigned_identity(self):
+        """With managed identity enabled, msi_client_id pins the UAMI."""
+        from unittest.mock import AsyncMock, patch
+
+        from rbaccatalog.settings import Settings
+
+        mock_credential = AsyncMock()
+        settings = Settings.get()
+
+        with (
+            patch.object(settings, "use_managed_identity", True),
+            patch.object(settings, "msi_client_id", "uami-client-id"),
+            patch(
+                "rbaccatalog.azure.auth.ManagedIdentityCredential",
+                return_value=mock_credential,
+            ) as mock_cls,
+        ):
+            from rbaccatalog.azure.auth import default_azure_credential
+
+            async with default_azure_credential():
+                pass
+
+        mock_cls.assert_called_once_with(client_id="uami-client-id")
+
+    @pytest.mark.asyncio
+    async def test_default_azure_credential_disabled_uses_default_chain(self):
+        """With managed identity disabled, the default credential chain is used."""
+        from unittest.mock import AsyncMock, patch
+
+        from rbaccatalog.settings import Settings
+
+        mock_credential = AsyncMock()
+
+        with (
+            patch.object(Settings.get(), "use_managed_identity", False),
+            patch(
+                "rbaccatalog.azure.auth.DefaultAzureCredential",
+                return_value=mock_credential,
+            ) as mock_cls,
+        ):
+            from rbaccatalog.azure.auth import default_azure_credential
+
+            async with default_azure_credential():
+                pass
+
+        mock_cls.assert_called_once_with()
+
 
 # =============================================================================
 # Azure Fetch Functions (Mocked)

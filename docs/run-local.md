@@ -47,6 +47,23 @@ The worker authenticates with [`DefaultAzureCredential`](https://learn.microsoft
 
 You do **not** need Reader on a specific subscription — the app fetches role definitions from the tenant-scoped RBAC API endpoint (`/providers/Microsoft.Authorization/roleDefinitions`), which any principal authenticated to your tenant can read.
 
+### One-shot scan (recommended locally)
+
+If you just want to fill the catalog and move on, run a single scan that exits
+when it's done instead of leaving the always-on worker running:
+
+```bash
+python -m rbaccatalog.backgroundjobs.scan_once              # roles + operations
+python -m rbaccatalog.backgroundjobs.scan_once role-scan        # just roles
+python -m rbaccatalog.backgroundjobs.scan_once operations-scan  # just operations
+```
+
+A failed scan exits non-zero. Re-run it whenever you want to refresh the data.
+For a process that keeps the catalog fresh on a schedule, use the always-on
+worker described below instead.
+
+### Always-on worker
+
 By default the worker runs a scan immediately on startup (`RUN_SCAN_ON_STARTUP=true`), then re-polls automatically (roles every 2h, operations every 24h). To disable the startup scan and only run on the regular schedule:
 
 ```bash

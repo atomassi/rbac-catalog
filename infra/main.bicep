@@ -48,7 +48,7 @@ param acrLocation string = location
 @maxLength(15)
 param baseName string = 'myapp'
 
-@description('App Service Plan SKU.')
+@description('App Service Plan SKU. P0v3 (default) / B3 are ideal; B2 is the practical minimum because the web server and the background scan worker share the plan, so B1\'s single core starves the uvicorn event loop during scans.')
 param appServicePlanSku string = 'P0v3'
 
 @description('PostgreSQL SKU name (e.g. Standard_B1ms).')

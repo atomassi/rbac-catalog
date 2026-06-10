@@ -67,9 +67,8 @@ class Settings(BaseSettings):
     operations_poll_interval_seconds: int = Field(default=86400, gt=0)
     role_scan_enabled: bool = True
     operations_scan_enabled: bool = True
-    # Env name doesn't match field name.
-    run_roles_scan_on_startup: bool = Field(default=True, alias="RUN_SCAN_ON_STARTUP")
-    run_operations_scan_on_startup: bool = True
+    run_scan_on_startup: bool = True
+    scan_dry_run: bool = False
 
     # --- Database -----------------------------------------------------------
     db_connection_string: str = "sqlite+aiosqlite:///./rbaccatalog.db"
@@ -78,6 +77,7 @@ class Settings(BaseSettings):
     msi_db_port: int = 5432
     msi_db_name: str = ""
     msi_db_user: str = ""
+    msi_client_id: str = ""
 
     # --- Ollama -------------------------------------------------------------
     ollama_base_url: str = "http://localhost:11434"

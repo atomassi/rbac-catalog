@@ -10,7 +10,13 @@ import time
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from dotenv import load_dotenv
 
-from rbaccatalog.backgroundjobs.jobs import Job, JobResult, create_all_jobs
+from rbaccatalog.backgroundjobs.jobs import (
+    OPERATIONS_SCAN_JOB_NAME,
+    ROLE_SCAN_JOB_NAME,
+    Job,
+    JobResult,
+    create_all_jobs,
+)
 from rbaccatalog.core import (
     DBEngine,
     ensure_db,
@@ -87,10 +93,9 @@ class Worker:
 
     async def _run_startup_jobs(self) -> None:
         """Run optional startup jobs based on settings."""
-        if self._settings.run_roles_scan_on_startup:
-            await self.run_job(self._jobs_by_name["role-scan"])
-        if self._settings.run_operations_scan_on_startup:
-            await self.run_job(self._jobs_by_name["operations-scan"])
+        if self._settings.run_scan_on_startup:
+            await self.run_job(self._jobs_by_name[ROLE_SCAN_JOB_NAME])
+            await self.run_job(self._jobs_by_name[OPERATIONS_SCAN_JOB_NAME])
 
     async def _cleanup(self) -> None:
         """Clean up resources on shutdown."""
@@ -140,11 +145,8 @@ class Worker:
             self._settings.operations_scan_enabled,
             self._settings.operations_poll_interval_seconds,
         )
-        logger.info("  Run role scan on startup: %s", self._settings.run_roles_scan_on_startup)
-        logger.info(
-            "  Run operations scan on startup: %s",
-            self._settings.run_operations_scan_on_startup,
-        )
+        logger.info("  Run scan on startup: %s", self._settings.run_scan_on_startup)
+        logger.info("  Dry-run (what-if) mode: %s", self._settings.scan_dry_run)
 
     async def start(self) -> None:
         """Start the worker and run until shutdown signal received."""

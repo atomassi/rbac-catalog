@@ -135,30 +135,14 @@ jobs:
           done
           echo "⚠️ Health check timed out after ${MAX_WAIT}s (deployment may still be in progress)"
 
-      # Re-pin this env's scan Jobs to the rollback image (scoped by the env's
-      # resource ID + scan-name suffix). Best-effort: no Jobs yet -> skip.
+      # Slot swap covers only the web tier; re-pin this env's scan Jobs to the
+      # rollback image (single source of truth: infra/scripts/pin-scan-jobs.sh).
       - name: Pin scan Jobs to rollback image
         run: |
-          IMAGE="${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_VERSION }}"
-          ENV_ID=$(az containerapp env show \
-            --resource-group "${{ env.RESOURCE_GROUP }}" \
-            --name "${{ env.CONTAINERAPP_ENV }}" \
-            --query id -o tsv)
-          JOBS=$(az containerapp job list \
-            --resource-group "${{ env.RESOURCE_GROUP }}" \
-            --query "[?properties.environmentId=='$ENV_ID' && (ends_with(name, '-role-scan') || ends_with(name, '-operations-scan'))].name" -o tsv)
-          if [ -z "$JOBS" ]; then
-            echo "⚠️ No scan Jobs (*-role-scan / *-operations-scan) found in env ${{ env.CONTAINERAPP_ENV }} — skipping pin"
-            exit 0
-          fi
-          for JOB in $JOBS; do
-            az containerapp job update \
-              --resource-group "${{ env.RESOURCE_GROUP }}" \
-              --name "$JOB" \
-              --image "$IMAGE" \
-              --output none
-            echo "📌 Pinned $JOB → $IMAGE"
-          done
+          bash infra/scripts/pin-scan-jobs.sh \
+            "${{ env.RESOURCE_GROUP }}" \
+            "${{ env.CONTAINERAPP_ENV }}" \
+            "${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_VERSION }}"
 
       - name: Azure Logout
         if: always()

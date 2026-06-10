@@ -46,7 +46,7 @@ When generating or modifying code, GitHub Copilot should:
 | **Testing** | pytest (unit), Playwright (E2E) |
 | **Linting** | Ruff (linting + formatting), Pyright (type checking) |
 | **CI/CD** | GitHub Actions, Docker, Azure Container Registry |
-| **Hosting** | Azure App Service, Cloudflare CDN |
+| **Hosting** | Azure App Service (web), Azure Container Apps Jobs (scans), Cloudflare CDN |
 
 ## Project Structure
 

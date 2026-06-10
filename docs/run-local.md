@@ -27,14 +27,14 @@ The app is made of **two processes** that run independently. You'll typically ru
 | Process | Command | What it does |
 |---|---|---|
 | **Web server** | `uvicorn rbaccatalog.web.app:app --host 0.0.0.0 --port 8000 --reload` | Serves the UI + API at <http://localhost:8000>. Doesn't need Azure auth. |
-| **Background worker** | `python -m rbaccatalog.backgroundjobs.worker` | Pulls Azure roles + operations on a schedule and writes them to the database. Needs Azure auth. |
+| **Scan job** | `python -m rbaccatalog.backgroundjobs.scan_once` | Pulls Azure roles + operations once and writes them to the database, then exits. Needs Azure auth. |
 
-The web server works on its own — the UI loads, search works — but the catalog will be empty until the worker has scanned at least once.
+The web server works on its own — the UI loads, search works — but the catalog will be empty until a scan has run at least once.
 
 If you want to run both in one terminal:
 
 ```bash
-python -m rbaccatalog.backgroundjobs.worker &
+python -m rbaccatalog.backgroundjobs.scan_once
 uvicorn rbaccatalog.web.app:app --host 0.0.0.0 --port 8000 --reload
 ```
 
@@ -43,15 +43,15 @@ uvicorn rbaccatalog.web.app:app --host 0.0.0.0 --port 8000 --reload
 
 ## Populating the catalog
 
-The worker authenticates with [`DefaultAzureCredential`](https://learn.microsoft.com/en-us/python/api/azure-identity/azure.identity.defaultazurecredential), which tries environment variables → workload identity → managed identity → Azure CLI. The interactive browser flow is disabled by default, so for local development run `az login` once before starting the worker.
+The worker authenticates with [`DefaultAzureCredential`](https://learn.microsoft.com/en-us/python/api/azure-identity/azure.identity.defaultazurecredential), which tries environment variables → workload identity → managed identity → Azure CLI. The interactive browser flow is disabled by default, so for local development run `az login` once before starting a scan.
 
 You do **not** need Reader on a specific subscription — the app fetches role definitions from the tenant-scoped RBAC API endpoint (`/providers/Microsoft.Authorization/roleDefinitions`), which any principal authenticated to your tenant can read.
 
-By default the worker runs a scan immediately on startup (`RUN_SCAN_ON_STARTUP=true`), then re-polls automatically (roles every 2h, operations every 24h). To disable the startup scan and only run on the regular schedule:
+Each invocation runs the requested scans once and exits. Pass a job name to run just one:
 
 ```bash
-export RUN_SCAN_ON_STARTUP=false
-python -m rbaccatalog.backgroundjobs.worker
+python -m rbaccatalog.backgroundjobs.scan_once role-scan
+python -m rbaccatalog.backgroundjobs.scan_once operations-scan
 ```
 
 ## Environment variables
@@ -63,11 +63,8 @@ The app reads all configuration from environment variables. For local runs, an o
 | `DB_CONNECTION_STRING` | `sqlite+aiosqlite:///./rbaccatalog.db` | Switch to `postgresql+asyncpg://...` to use Postgres instead. |
 | `LOG_LEVEL` | `INFO` | Set to `DEBUG` for verbose logs. |
 | `ENABLED_AI_ENGINES` | `crossencoder,semantic,llm,rag,hyde,tfidf` | Comma-separated subset of `tfidf,semantic,crossencoder,llm,rag,hyde,hybrid`. Set to `tfidf` for fast boot. |
-| `RUN_SCAN_ON_STARTUP` | `true` | Worker runs a roles + operations scan immediately on startup. Set to `false` to only run on the regular poll interval. |
-| `ROLE_SCAN_ENABLED` | `true` | Set to `false` to disable the worker's role scanner. |
-| `OPERATIONS_SCAN_ENABLED` | `true` | Set to `false` to disable the worker's operations scanner. |
-| `ROLES_POLL_INTERVAL_SECONDS` | `7200` | How often the worker re-scans roles. |
-| `OPERATIONS_POLL_INTERVAL_SECONDS` | `86400` | How often the worker re-scans operations. |
+| `ROLE_SCAN_ENABLED` | `true` | Set to `false` to make the role scan a no-op. |
+| `OPERATIONS_SCAN_ENABLED` | `true` | Set to `false` to make the operations scan a no-op. |
 
 ## Docker (alternative)
 
@@ -112,6 +109,6 @@ The app runs on native Windows — no Linux-only dependencies. The shell syntax 
 | `python3.12 -m venv .venv` | `py -3.12 -m venv .venv` |
 | `source .venv/bin/activate` | `.\.venv\Scripts\Activate.ps1` |
 | `export VAR=value` | `$env:VAR = "value"` |
-| `python -m rbaccatalog.backgroundjobs.worker &` | Open a second PowerShell window, or `Start-Process python -ArgumentList '-m','rbaccatalog.backgroundjobs.worker'` |
+| `python -m rbaccatalog.backgroundjobs.scan_once &` | Open a second PowerShell window, or `Start-Process python -ArgumentList '-m','rbaccatalog.backgroundjobs.scan_once'` |
 | `-v "$PWD/rbaccatalog.db:/app/rbaccatalog.db"` | `-v "${PWD}\rbaccatalog.db:/app/rbaccatalog.db"` |
 

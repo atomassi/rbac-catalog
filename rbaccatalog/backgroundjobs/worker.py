@@ -26,7 +26,7 @@ class Worker:
         """Execute a job with telemetry tracking.
 
         Set ``reraise=True`` so one-shot runners exit non-zero on failure;
-        the scheduler leaves it ``False`` to survive single failures.
+        the default (``False``) logs the failure and returns normally.
         """
         if not job.enabled:
             logger.info("Job disabled: %s", job.name)

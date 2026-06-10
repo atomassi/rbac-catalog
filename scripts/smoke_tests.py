@@ -9,7 +9,7 @@ Tests are organized into categories:
 2. Content Validation - Pages contain expected elements
 3. API Functionality - APIs return valid JSON responses
 4. Search & Filters - Query parameters work correctly
-5. AI Recommender - All recommender modes function
+5. AI Recommender - LLM-free recommender modes function (no Ollama dependency)
 6. Security Headers - CSP, X-Frame-Options present
 7. Edge Cases - 404s, empty queries, invalid inputs
 8. Performance - Response times are acceptable
@@ -127,10 +127,11 @@ INPUT_VALIDATION_TESTS: Final = [
     ("API search: query too long", "/api/operations/search?q=" + "A" * 200, (400,)),
 ]
 
-# AI Recommender POST endpoint tests — deterministic, no-LLM modes only.
-# LLM-backed modes (llm, rag, hybrid, hyde) depend on the optional Ollama
-# endpoint, which the infra does not provision, so they are not smoke-tested:
-# a missing LLM is expected and must never block a deploy.
+# AI Recommender POST endpoint tests.
+# LLM-free modes only: Ollama is an optional, self-hosted dependency that is
+# not provisioned by default, so smoke tests must not gate the deploy on it.
+# The RAG / LLM / HyDE / Hybrid modes require Ollama and are intentionally
+# excluded here.
 AI_RECOMMENDER_TESTS: Final = [
     ("AI: TFIDF mode", {"query": "read storage blobs", "top_k": 3, "recommender_mode": "tfidf"}),
     (

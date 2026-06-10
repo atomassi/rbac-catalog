@@ -14,10 +14,10 @@
 // They replace the worker's APScheduler loop that used to be co-located in the
 // App Service container.
 //
-// Both Jobs use the SAME shared user-assigned managed identity as the web app
-// (passed in from main.bicep). That identity already has AcrPull (granted in
-// acr.bicep) and maps to the single PostgreSQL role created by
-// scripts/grant-postgres-aad-admin.sh.
+// Both Jobs use the dedicated read-write scan identity (scanIdentityName,
+// passed in from main.bicep) — the schema owner, distinct from the web tier's
+// SELECT-only identity. It has AcrPull (granted in acr.bicep) and maps to the
+// scan PostgreSQL role created by scripts/grant-postgres-aad-admin.sh.
 // ============================================================================
 
 metadata description = 'Container Apps environment with cron Jobs for the role/operations scans (web tier remains on App Service).'

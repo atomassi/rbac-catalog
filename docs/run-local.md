@@ -43,7 +43,7 @@ uvicorn rbaccatalog.web.app:app --host 0.0.0.0 --port 8000 --reload
 
 ## Populating the catalog
 
-The worker authenticates with [`DefaultAzureCredential`](https://learn.microsoft.com/en-us/python/api/azure-identity/azure.identity.defaultazurecredential), which tries environment variables → workload identity → managed identity → Azure CLI. The interactive browser flow is disabled by default, so for local development run `az login` once before starting a scan.
+When running locally, each scan authenticates with [`DefaultAzureCredential`](https://learn.microsoft.com/en-us/python/api/azure-identity/azure.identity.defaultazurecredential), which tries environment variables → workload identity → managed identity → Azure CLI. The interactive browser flow is disabled by default, so for local development run `az login` once before starting a scan. When deployed to Azure the scan Jobs use a user-assigned managed identity instead (`USE_MANAGED_IDENTITY=true` with `AZURE_CLIENT_ID`), so no `az login` is needed.
 
 You do **not** need Reader on a specific subscription — the app fetches role definitions from the tenant-scoped RBAC API endpoint (`/providers/Microsoft.Authorization/roleDefinitions`), which any principal authenticated to your tenant can read.
 

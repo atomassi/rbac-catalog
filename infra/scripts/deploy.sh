@@ -156,27 +156,44 @@ echo "→ Configuring PostgreSQL Entra ID auth..."
 # Run both Jobs once and wait so the schema + data exist before the web first
 # boots (its preload_cache refuses to start on an empty/missing schema).
 RG=$(jq -r .resourceGroupName.value "$OUTPUTS_FILE")
+BOOTSTRAP_OK=true
 for job_out in roleScanJobName operationsScanJobName; do
   JOB=$(jq -r ".${job_out}.value // empty" "$OUTPUTS_FILE")
-  [[ -z "$JOB" ]] && continue
+  if [[ -z "$JOB" ]]; then
+    echo "  ✗ ${job_out} missing from deploy outputs — scan Job not deployed" >&2
+    BOOTSTRAP_OK=false
+    continue
+  fi
   echo "→ Bootstrapping: starting $JOB..."
   EXEC=$(az containerapp job start -g "$RG" -n "$JOB" --query name -o tsv) || EXEC=""
   if [[ -z "$EXEC" ]]; then
-    echo "  ✗ could not start $JOB (skipping; check the job/permissions)" >&2
+    echo "  ✗ could not start $JOB (check the job/permissions)" >&2
+    BOOTSTRAP_OK=false
     continue
   fi
   echo "  execution $EXEC — waiting (up to ~10 min)..."
+  JOB_OK=false
   for _ in $(seq 1 60); do  # 60 × 10s ≈ the 600s job timeout
     STATUS=$(az containerapp job execution show -g "$RG" -n "$JOB" \
       --job-execution-name "$EXEC" --query properties.status -o tsv 2>/dev/null || echo '')
     case "$STATUS" in
-      Succeeded)       echo "  ✓ $JOB succeeded"; break ;;
+      Succeeded)       echo "  ✓ $JOB succeeded"; JOB_OK=true; break ;;
       Failed|Degraded) echo "  ✗ $JOB $STATUS (check job logs)" >&2; break ;;
       *)               printf '.'; sleep 10 ;;
     esac
   done
   echo
+  [[ "$JOB_OK" == true ]] || BOOTSTRAP_OK=false
 done
+
+# The web tier is SELECT-only and can't create the schema; if the scan Jobs
+# didn't populate it, restarting the web just yields a site that 503s on an
+# empty/missing schema. Fail loudly instead of pretending the deploy worked.
+if [[ "$BOOTSTRAP_OK" != true ]]; then
+  echo "✗ Bootstrap did not complete — scan Job(s) failed or timed out." >&2
+  echo "  Skipping the web restart; fix the scan Jobs and re-run." >&2
+  exit 1
+fi
 
 # The App Service was created in pass 1 before the image existed, so restart it
 # now to pull the image. The schema + data already exist (bootstrap above), so

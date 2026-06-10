@@ -135,17 +135,23 @@ jobs:
           done
           echo "⚠️ Health check timed out after ${MAX_WAIT}s (deployment may still be in progress)"
 
-      # Re-pin every scan Job in CONTAINERAPP_ENV to the rollback image so the
-      # scheduled scans don't keep running the bad version on their next cron tick.
-      # Best-effort: no Jobs yet -> warn and continue (never fail a web rollback).
+      # Re-pin this environment's scan Jobs to the rollback image so the
+      # scheduled scans don't keep running the bad version on their next cron
+      # tick. Scope by the environment's full resource ID (exact match, so a
+      # second Container Apps environment in the same RG is never touched) and
+      # the stable scan-name suffixes. Best-effort: no Jobs yet -> warn and continue.
       - name: Pin scan Jobs to rollback image
         run: |
           IMAGE="${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_VERSION }}"
+          ENV_ID=$(az containerapp env show \
+            --resource-group "${{ env.RESOURCE_GROUP }}" \
+            --name "${{ env.CONTAINERAPP_ENV }}" \
+            --query id -o tsv)
           JOBS=$(az containerapp job list \
             --resource-group "${{ env.RESOURCE_GROUP }}" \
-            --query "[?ends_with(properties.environmentId, '/${{ env.CONTAINERAPP_ENV }}')].name" -o tsv)
+            --query "[?properties.environmentId=='$ENV_ID' && (ends_with(name, '-role-scan') || ends_with(name, '-operations-scan'))].name" -o tsv)
           if [ -z "$JOBS" ]; then
-            echo "⚠️ No Container Apps Jobs found in environment ${{ env.CONTAINERAPP_ENV }} — skipping pin"
+            echo "⚠️ No scan Jobs (*-role-scan / *-operations-scan) found in env ${{ env.CONTAINERAPP_ENV }} — skipping pin"
             exit 0
           fi
           for JOB in $JOBS; do

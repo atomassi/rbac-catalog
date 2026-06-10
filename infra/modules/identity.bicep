@@ -1,13 +1,15 @@
 // ============================================================================
-// Module: shared user-assigned managed identity
+// Module: a single user-assigned managed identity
 // ============================================================================
-// ONE identity is used by BOTH the App Service (web) and the Container Apps
-// scan Jobs. A single identity maps to a single PostgreSQL role that owns the
-// schema, so there is no "who created the tables first" ownership race and no
-// cross-grant gymnastics. The same identity also pulls the image from ACR.
+// Creates ONE user-assigned managed identity per invocation. main.bicep calls
+// this module twice — once for the web tier (SELECT-only) and once for the scan
+// Jobs (read-write schema owner) — so each identity maps to exactly one
+// PostgreSQL role and there is no "who created the tables first" ownership race.
+// The identity name doubles as the PostgreSQL role name (MSI_DB_USER), and the
+// identity is also granted AcrPull to pull the image.
 // ============================================================================
 
-metadata description = 'Shared user-assigned managed identity for the web app and scan Jobs.'
+metadata description = 'A single user-assigned managed identity (one per invocation; e.g. web or scan).'
 
 @description('Identity name. Also used as the PostgreSQL role name (MSI_DB_USER).')
 param name string

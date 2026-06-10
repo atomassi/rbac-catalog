@@ -135,11 +135,8 @@ jobs:
           done
           echo "⚠️ Health check timed out after ${MAX_WAIT}s (deployment may still be in progress)"
 
-      # Re-pin this environment's scan Jobs to the rollback image so the
-      # scheduled scans don't keep running the bad version on their next cron
-      # tick. Scope by the environment's full resource ID (exact match, so a
-      # second Container Apps environment in the same RG is never touched) and
-      # the stable scan-name suffixes. Best-effort: no Jobs yet -> warn and continue.
+      # Re-pin this env's scan Jobs to the rollback image (scoped by the env's
+      # resource ID + scan-name suffix). Best-effort: no Jobs yet -> skip.
       - name: Pin scan Jobs to rollback image
         run: |
           IMAGE="${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_VERSION }}"

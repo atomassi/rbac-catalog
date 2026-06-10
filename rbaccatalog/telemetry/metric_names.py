@@ -1,6 +1,6 @@
 """Canonical names for custom metrics emitted to Azure Monitor.
 
-The string values are an external contract: Application Insights
+The string values are an external contract: Grafana/Application Insights
 dashboards query ``customMetrics`` by these names, so don't change a value
 without updating the dashboards.
 """

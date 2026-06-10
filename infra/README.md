@@ -38,7 +38,8 @@ the Azure RBAC Catalog. Plan for **~15 minutes** end-to-end.
 
 **Mandatory** — the app does not run without these:
 
-- App Service Plan (Linux, P0v3) + App Service (system-assigned MI)
+- App Service Plan (Linux, P0v3) + App Service (user-assigned MIs: writer on
+  production, reader on staging/ppe)
 - Azure Container Registry (Basic)
 - PostgreSQL Flexible Server v17 — Entra ID auth (password auth is also
   enabled on first deploy so the AAD-mapped role can be provisioned; see
@@ -146,9 +147,10 @@ exist after the apps are deployed.
 3. Saves outputs to `infra/.deploy-outputs.json`.
 4. Configures Entra ID auth on PostgreSQL by calling
    [`grant-postgres-aad-admin.sh`](scripts/grant-postgres-aad-admin.sh)
-   (registers the App Service MI + each slot MI as PG roles and grants
-   them CRUD on the `azurerbac` database). Pass `--skip-pg-grant` to
-   skip this step.
+   (registers the writer and reader user-assigned identities as PG roles:
+   the **writer** gets full CRUD on the `azurerbac` database, the **reader**
+   gets read-only access via `pg_read_all_data` — the reader is only granted
+   when `deploySlots = true`). Pass `--skip-pg-grant` to skip this step.
 5. Builds and pushes the first image (`az acr build` from the repo root),
    restarts the App Service, and polls `/healthz` until the container is
    live (up to 10 min).
@@ -213,9 +215,10 @@ pipeline you prefer:
   required app settings for you.
 
 Whichever option you pick, the App Service is already configured to pull
-its image with the system-assigned managed identity (`AcrPull` granted on
-the registry by Bicep), so your pipeline only needs *push* permission on
-the ACR — no admin credentials required.
+its image with its attached user-assigned identity (`AcrPull` granted on
+the registry by Bicep — writer on production, reader on staging/ppe), so
+your pipeline only needs *push* permission on the ACR — no admin
+credentials required.
 
 ---
 

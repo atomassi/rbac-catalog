@@ -123,10 +123,11 @@ var commonAppSettings = [
 // slot without a second writer (and dovetails with the SELECT-only reader DB
 // role those slots authenticate as).
 //
-// SCAN_DRY_RUN, ROLE_SCAN_ENABLED, OPERATIONS_SCAN_ENABLED, and the poll
-// intervals are all listed in ``slotConfigNames`` below so a slot swap keeps
-// the real (committing) scan ON the production slot and what-if mode ON the
-// pre-swap staging slot.
+// SCAN_DRY_RUN, ROLE_SCAN_ENABLED, and OPERATIONS_SCAN_ENABLED are listed in
+// ``slotConfigNames`` below so a slot swap keeps the real (committing) scan ON
+// the production slot and what-if mode ON the pre-swap staging slot. The poll
+// intervals are identical across slots, so they are NOT slot-sticky (a swap
+// can't change them) and are intentionally omitted from ``slotConfigNames``.
 var scanProdSettings = [
   { name: 'ROLE_SCAN_ENABLED',              value: 'true' }
   { name: 'OPERATIONS_SCAN_ENABLED',        value: 'true' }

@@ -65,28 +65,29 @@ git clone https://github.com/atomassi/rbac-catalog.git
 cd rbac-catalog
 python3 -m venv .venv && source .venv/bin/activate
 pip install --upgrade pip && pip install -r requirements.txt
-
-# Boot fast with only the lightweight recommender engine
-ENABLED_AI_ENGINES=tfidf uvicorn rbaccatalog.web.app:app --port 8000 --reload
 ```
 
-Open <http://localhost:8000>. The UI and search work immediately; the catalog
-stays empty until a scan runs. To populate it with live data, run `az login`
-once, then run a one-shot scan in a second terminal:
+The catalog starts empty. To populate it with live data, run `az login` once,
+then run a one-shot scan:
 
 ```bash
 # Populate everything (roles + operations), then exit
 python -m rbaccatalog.backgroundjobs.scan_once
-
-# ...or scan just one source
-python -m rbaccatalog.backgroundjobs.scan_once role-scan
-python -m rbaccatalog.backgroundjobs.scan_once operations-scan
 ```
 
 The command runs the scan once and exits — no background worker stays running.
 Re-run it whenever you want to refresh the local catalog. (In production the
 catalog is instead kept up to date by the always-on background worker that runs
 alongside the web app.)
+
+Then start the web app:
+
+```bash
+# Boot fast with only the lightweight recommender engine
+ENABLED_AI_ENGINES=tfidf uvicorn rbaccatalog.web.app:app --port 8000 --reload
+```
+
+Open <http://localhost:8000>.
 
 Prefer containers? Build and run the image instead:
 

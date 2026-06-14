@@ -8,6 +8,19 @@ import httpx
 
 from rbaccatalog.azure.auth import default_azure_credential, get_management_token
 
+# Retry only on transient failures: network/timeout errors and server-side errors.
+RETRYABLE_STATUS_CODES: Final[frozenset[int]] = frozenset({408, 429, 500, 502, 503, 504})
+
+
+def is_retryable_azure_error(exc: BaseException) -> bool:
+    """Check if an exception is retryable (transient failure)."""
+    if isinstance(exc, httpx.TransportError):
+        return True
+    if isinstance(exc, httpx.HTTPStatusError):
+        return exc.response.status_code in RETRYABLE_STATUS_CODES
+    return False
+
+
 MANAGEMENT_BASE_URL: Final = "https://management.azure.com"
 
 

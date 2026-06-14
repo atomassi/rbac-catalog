@@ -161,16 +161,22 @@ flowchart TD
         end
     end
     
-    USER -->|web| CDN
-    AI -->|MCP| CDN
-    CDN -->|proxy| AS
-    GH -->|push image| CR
-    CR -->|deploy| AS
-    AS <-->|queries/ingestion| PG
-    AS -->|telemetry| INSIGHTS
-    AS -->|inference| OL
-    GPU -.->|models| OL
+    %% Ingress Traffic
+    USER -->|Web traffic| CDN
+    AI -->|MCP traffic| CDN
+    CDN -->|proxies traffic| AS
     
+    %% CI/CD Pipeline
+    GH -->|pushes docker image| CR
+    CR -->|pulled by| AS
+    
+    %% Application Dependencies
+    AS <-->|queries & ingestion| PG
+    AS -->|sends telemetry| INSIGHTS
+    AS <-->|LLM Inference| OL
+
+    GPU -->|exports models| OL
+
     classDef user fill:#F5B82E,color:#000,stroke:#C98A00,stroke-width:2px
     classDef ai fill:#10B981,color:#fff,stroke:#059669,stroke-width:2px
     classDef github fill:#24292e,color:#fff,stroke:#1a1e22,stroke-width:2px

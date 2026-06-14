@@ -17,7 +17,7 @@ aiohttp==3.14.1
 mcp==1.27.2
 python-dotenv==1.2.2
 httpx==0.28.1
-pytest==9.0.3
+pytest==9.1.0
 pytest-asyncio==1.4.0
 pytest-cov==6.3.0
 # Telemetry: azure-monitor-opentelemetry exact-pins the opentelemetry-* train; keep sub-packages unpinned.

@@ -3,7 +3,7 @@
 ## Project status
 
 This repository is provided **as-is** and is **not actively maintained**. The
-public site at `rbac-catalog.dev` is being decommissioned (June 12, 2026), and
+public site at `rbac-catalog.dev` is being decommissioned (June 2026), and
 only the source code remains here under the [MIT License](LICENSE).
 
 There is **no support, no guaranteed response, and no commitment to release

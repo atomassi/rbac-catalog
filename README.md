@@ -9,7 +9,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 > [!IMPORTANT]
-> **The public site at [rbac-catalog.dev](https://rbac-catalog.dev/) will be decommissioned on June 12, 2026.**
+> **The public site at [rbac-catalog.dev](https://rbac-catalog.dev/) will be decommissioned in June 2026.**
 >
 > The full source (application code, Bicep templates, and post-deploy
 > scripts) stays in this repository under the MIT license. You have two

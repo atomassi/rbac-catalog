@@ -95,10 +95,10 @@ MAX_REQUEST_BODY_BYTES: Final = 256 * 1024
 # Both the message HTML and the optional feedback URL are constants here
 # (not env vars) because they should travel with the deployment and be
 # code-reviewed.
-DECOMMISSION_BANNER_VERSION: Final[str] = "2026-05-decommission-v4"
+DECOMMISSION_BANNER_VERSION: Final[str] = "2026-06-decommission-v1"
 DECOMMISSION_BANNER_FEEDBACK_URL: Final[str] = "https://forms.gle/N323bjAWGKJzUWb49"
 DECOMMISSION_BANNER_MESSAGE: Final[str] = (
-    "This site is being decommissioned on <strong>June 12, 2026</strong>. "
+    "This site is being decommissioned in <strong>June 2026</strong>. "
     "It's "
     '<a href="https://github.com/atomassi/rbac-catalog" '
     'class="underline font-medium hover:no-underline">open source</a>, '

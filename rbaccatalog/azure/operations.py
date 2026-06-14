@@ -5,7 +5,18 @@ from __future__ import annotations
 import logging
 from typing import Any, Final
 
-from rbaccatalog.azure.http import authenticated_management_async_client, management_url
+from tenacity import (
+    retry,
+    retry_if_exception,
+    stop_after_attempt,
+    wait_random_exponential,
+)
+
+from rbaccatalog.azure.http import (
+    authenticated_management_async_client,
+    is_retryable_azure_error,
+    management_url,
+)
 from rbaccatalog.azure.models import OperationData
 
 logger = logging.getLogger(__name__)
@@ -39,11 +50,20 @@ def _flatten_provider_operations(data: dict[str, Any]) -> list[OperationData]:
     return operations
 
 
+@retry(
+    retry=retry_if_exception(is_retryable_azure_error),
+    stop=stop_after_attempt(4),
+    wait=wait_random_exponential(multiplier=1, max=10),
+    reraise=True,
+)
 async def fetch_provider_operations() -> list[OperationData]:
     """Fetch all provider operations from Azure.
 
     Calls: GET https://management.azure.com/providers/Microsoft.Authorization/providerOperations
        ?api-version=2018-01-01-preview&$expand=resourceTypes
+
+    Retries on transient failures (network errors, 408, 429, 5xx) up to 4 times with
+    exponential backoff + jitter. Non-transient errors (401, 403, 404) are raised immediately.
     """
     url = management_url("/providers/Microsoft.Authorization/providerOperations")
     params = {"api-version": _API_VERSION, "$expand": "resourceTypes"}

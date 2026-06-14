@@ -1157,3 +1157,182 @@ class TestAzureFetchErrorHandling:
 
             with pytest.raises(httpx.HTTPStatusError):
                 await func()
+
+
+class TestIsRetryableAzureError:
+    """Tests for is_retryable_azure_error helper function."""
+
+    def test_transport_error_is_retryable(self):
+        """Test that TransportError is retryable."""
+        import httpx
+
+        from rbaccatalog.azure.http import is_retryable_azure_error
+
+        exc = httpx.ConnectError("Connection failed")
+        assert is_retryable_azure_error(exc) is True
+
+    def test_timeout_error_is_retryable(self):
+        """Test that TimeoutError is retryable (subclass of TransportError)."""
+        import httpx
+
+        from rbaccatalog.azure.http import is_retryable_azure_error
+
+        exc = httpx.TimeoutException("Request timed out")
+        assert is_retryable_azure_error(exc) is True
+
+    @pytest.mark.parametrize(
+        "status_code",
+        [408, 429, 500, 502, 503, 504],
+        ids=[
+            "408_request_timeout",
+            "429_ratelimit",
+            "500_server_error",
+            "502_bad_gateway",
+            "503_unavailable",
+            "504_timeout",
+        ],
+    )
+    def test_retryable_http_status_codes(self, status_code):
+        """Test that retryable HTTP status codes are recognized."""
+        from unittest.mock import MagicMock
+
+        import httpx
+
+        from rbaccatalog.azure.http import is_retryable_azure_error
+
+        mock_response = MagicMock()
+        mock_response.status_code = status_code
+        exc = httpx.HTTPStatusError("Error", request=MagicMock(), response=mock_response)
+
+        assert is_retryable_azure_error(exc) is True
+
+    @pytest.mark.parametrize(
+        "status_code",
+        [400, 401, 403, 404, 409, 422],
+        ids=[
+            "400_bad_request",
+            "401_unauthorized",
+            "403_forbidden",
+            "404_not_found",
+            "409_conflict",
+            "422_unprocessable",
+        ],
+    )
+    def test_non_retryable_http_status_codes(self, status_code):
+        """Test that non-retryable HTTP status codes are not retried."""
+        from unittest.mock import MagicMock
+
+        import httpx
+
+        from rbaccatalog.azure.http import is_retryable_azure_error
+
+        mock_response = MagicMock()
+        mock_response.status_code = status_code
+        exc = httpx.HTTPStatusError("Error", request=MagicMock(), response=mock_response)
+
+        assert is_retryable_azure_error(exc) is False
+
+    def test_other_exceptions_not_retryable(self):
+        """Test that non-httpx exceptions are not retryable."""
+        from rbaccatalog.azure.http import is_retryable_azure_error
+
+        exc = ValueError("Some other error")
+        assert is_retryable_azure_error(exc) is False
+
+
+class TestAzureFetchRetryLogic:
+    """Tests for retry behavior on Azure fetch functions."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "module_path,function_name",
+        [
+            pytest.param(
+                "rbaccatalog.azure.roles",
+                "fetch_builtin_roles",
+                id="fetch_builtin_roles",
+            ),
+            pytest.param(
+                "rbaccatalog.azure.operations",
+                "fetch_provider_operations",
+                id="fetch_provider_operations",
+            ),
+        ],
+    )
+    async def test_fetch_functions_retry_on_transport_error(self, module_path, function_name):
+        """Test that Azure fetch functions retry on transport errors."""
+        from importlib import import_module
+        from unittest.mock import patch
+
+        import httpx
+
+        success_response = _make_mock_response({"value": []})
+
+        with (
+            patch(
+                f"{module_path}.authenticated_management_async_client",
+                side_effect=[
+                    httpx.ConnectError("Connection failed"),
+                    _make_mock_async_client(success_response, method="get"),
+                ],
+            ),
+            patch("tenacity.nap.time.sleep"),
+        ):
+            module = import_module(module_path)
+            func = getattr(module, function_name)
+            result = await func()
+            assert len(result) == 0
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "status_code,should_retry",
+        [
+            pytest.param(408, True, id="408_request_timeout_retries"),
+            pytest.param(429, True, id="429_rate_limit_retries"),
+            pytest.param(500, True, id="500_server_error_retries"),
+            pytest.param(502, True, id="502_bad_gateway_retries"),
+            pytest.param(503, True, id="503_unavailable_retries"),
+            pytest.param(504, True, id="504_timeout_retries"),
+            pytest.param(401, False, id="401_auth_fails_immediately"),
+            pytest.param(403, False, id="403_forbidden_fails_immediately"),
+            pytest.param(404, False, id="404_not_found_fails_immediately"),
+        ],
+    )
+    async def test_fetch_builtin_roles_retry_by_status_code(self, status_code, should_retry):
+        """Test that fetch_builtin_roles retries appropriately based on status code."""
+        from unittest.mock import MagicMock, patch
+
+        import httpx
+
+        http_response = MagicMock()
+        http_response.status_code = status_code
+        error = httpx.HTTPStatusError("Error", request=MagicMock(), response=http_response)
+
+        if should_retry:
+            success_response = _make_mock_response({"value": []})
+            clients = [
+                _make_mock_async_client(error, method="get"),
+                _make_mock_async_client(success_response, method="get"),
+            ]
+            client_iter = iter(clients)
+        else:
+            clients = [_make_mock_async_client(error, method="get")]
+            client_iter = iter(clients)
+
+        with (
+            patch(
+                "rbaccatalog.azure.roles.authenticated_management_async_client",
+                side_effect=lambda **kwargs: next(client_iter),
+            ),
+            patch("tenacity.nap.time.sleep"),
+        ):
+            if not should_retry:
+                with pytest.raises(httpx.HTTPStatusError):
+                    from rbaccatalog.azure.roles import fetch_builtin_roles
+
+                    await fetch_builtin_roles()
+            else:
+                from rbaccatalog.azure.roles import fetch_builtin_roles
+
+                result = await fetch_builtin_roles()
+                assert len(result) == 0

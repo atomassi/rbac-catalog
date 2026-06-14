@@ -2,7 +2,18 @@ from __future__ import annotations
 
 import logging
 
-from rbaccatalog.azure.http import authenticated_management_async_client, management_url
+from tenacity import (
+    retry,
+    retry_if_exception,
+    stop_after_attempt,
+    wait_random_exponential,
+)
+
+from rbaccatalog.azure.http import (
+    authenticated_management_async_client,
+    is_retryable_azure_error,
+    management_url,
+)
 from rbaccatalog.azure.models import RoleDefinition
 
 logger = logging.getLogger(__name__)
@@ -16,6 +27,12 @@ _HEADER_CORRELATION_ID = "x-ms-correlation-request-id"
 _HEADER_REQUEST_ID = "x-ms-request-id"
 
 
+@retry(
+    retry=retry_if_exception(is_retryable_azure_error),
+    stop=stop_after_attempt(4),
+    wait=wait_random_exponential(multiplier=1, max=10),
+    reraise=True,
+)
 async def fetch_builtin_roles() -> list[RoleDefinition]:
     """Fetch all built-in role definitions via the Azure RBAC API.
 
@@ -26,6 +43,9 @@ async def fetch_builtin_roles() -> list[RoleDefinition]:
     still needs ``Microsoft.Authorization/roleDefinitions/read`` at some scope,
     which is included in the default permissions granted to authenticated
     tenant users in most Entra ID tenants.
+
+    Retries on transient failures (network errors, 408, 429, 5xx) up to 4 times with
+    exponential backoff + jitter. Non-transient errors (401, 403, 404) are raised immediately.
     """
     roles: list[RoleDefinition] = []
     url = management_url("/providers/Microsoft.Authorization/roleDefinitions")

@@ -38,7 +38,7 @@ scipy==1.17.1
 
 # Sentence embeddings for semantic search
 sentence-transformers==5.5.1
-transformers==4.57.6
+transformers==5.3.0
 
 # Retry logic
 tenacity==9.1.4

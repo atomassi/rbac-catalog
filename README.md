@@ -137,61 +137,41 @@ through Ollama.
 
 ```mermaid
 flowchart TD
-    subgraph Clients[" "]
+    subgraph Clients
         direction LR
-        USER((👥 Users)):::user
-        AI((🤖 Agents)):::ai
+        USER([Users])
+        AI([Agents])
     end
-    GH[GitHub Actions]:::github
-    CDN[Cloudflare]:::cdn
-    
-    subgraph AZ ["Azure"]
+    GH[GitHub Actions]
+    CDN[Cloudflare]
+
+    subgraph Azure
         direction TB
-        CR[(Container Registry)]:::azure
-        AS[App Service]:::appsvc
-        subgraph DATA [" "]
+        CR[Container Registry]
+        AS[App Service]
+        subgraph Data
             direction LR
-            PG[(PostgreSQL)]:::db
-            INSIGHTS[App Insights]:::monitor
+            PG[PostgreSQL]
+            INSIGHTS[App Insights]
         end
-        subgraph OPT ["Optional — self-hosted LLM"]
+        subgraph Optional
             direction LR
-            GPU[GPU VM NVIDIA A10]:::gpu
-            OL[Ollama VM B2ms]:::ollama
+            GPU[GPU VM NVIDIA A10]
+            OL[Ollama VM B2ms]
         end
     end
-    
-    %% Ingress Traffic
+
     USER -->|Web traffic| CDN
     AI -->|MCP traffic| CDN
     CDN -->|proxies traffic| AS
-    
-    %% CI/CD Pipeline
+
     GH -->|pushes docker image| CR
     CR -->|pulled by| AS
-    
-    %% Application Dependencies
+
     AS <-->|queries & ingestion| PG
     AS -->|sends telemetry| INSIGHTS
     AS <-->|LLM Inference| OL
-
     GPU -->|exports models| OL
-
-    classDef user fill:#F5B82E,color:#000,stroke:#C98A00,stroke-width:2px
-    classDef ai fill:#10B981,color:#fff,stroke:#059669,stroke-width:2px
-    classDef github fill:#24292e,color:#fff,stroke:#1a1e22,stroke-width:2px
-    classDef cdn fill:#F6821F,color:#fff,stroke:#d4700f,stroke-width:2px
-    classDef azure fill:#0078D4,color:#fff,stroke:#005a9e,stroke-width:2px
-    classDef appsvc fill:#4F46E5,color:#fff,stroke:#3730A3,stroke-width:2px
-    classDef db fill:#C2410C,color:#fff,stroke:#7C2D0A,stroke-width:2px
-    classDef ollama fill:#7C3AED,color:#fff,stroke:#5B21B6,stroke-width:2px
-    classDef gpu fill:#76B900,color:#fff,stroke:#5a8c00,stroke-width:2px
-    classDef monitor fill:#B5179E,color:#fff,stroke:#86116F,stroke-width:2px
-    
-    style AZ fill:#EEF4FA,stroke:#0078D4,stroke-width:2px,rx:10
-    style DATA fill:none,stroke:none
-    style OPT fill:#F3EEFB,stroke:#7C3AED,stroke-width:1.5px,stroke-dasharray:6 4,rx:10
-    style Clients fill:none,stroke:none
 ```
 
 ### Current Cost

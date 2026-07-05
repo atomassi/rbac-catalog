@@ -145,19 +145,19 @@ flowchart TD
     GH[GitHub Actions]:::github
     CDN[Cloudflare]:::cdn
     
-    subgraph AZ ["<span style='font-size:22px;font-weight:bold'>Azure</span>"]
+    subgraph AZ ["Azure"]
         direction TB
-        CR[(Container<br/>Registry)]:::azure
+        CR[(Container Registry)]:::azure
         AS[App Service]:::appsvc
         subgraph DATA [" "]
             direction LR
             PG[(PostgreSQL)]:::db
             INSIGHTS[App Insights]:::monitor
         end
-        subgraph OPT ["<span style='font-weight:bold'>Optional — self-hosted LLM</span>"]
+        subgraph OPT ["Optional — self-hosted LLM"]
             direction LR
-            GPU[GPU VM<br/>NVIDIA A10]:::gpu
-            OL[Ollama VM<br/>B2ms]:::ollama
+            GPU[GPU VM NVIDIA A10]:::gpu
+            OL[Ollama VM B2ms]:::ollama
         end
     end
     

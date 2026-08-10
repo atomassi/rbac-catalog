@@ -49,7 +49,7 @@ jobs:
       latest_tag: ${{ steps.version.outputs.latest_tag }}
     
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803  # v6.1.0
         with:
           fetch-depth: 0
           fetch-tags: true
@@ -131,7 +131,7 @@ jobs:
           echo "🏷️ Created tag: ${{ steps.version.outputs.new_tag }}"
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda  # v3.0.0
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228  # v3.0.2
         with:
           tag_name: ${{ steps.version.outputs.new_tag }}
           name: ${{ steps.version.outputs.new_tag }}
@@ -147,7 +147,7 @@ jobs:
 
       # Azure Login using OIDC (federated identity)
       - name: Azure Login
-        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43  # v3.0.0
+        uses: azure/login@f5d393ae46f8fde4be8b75f32e3fc50e654ad0ca  # v3.0.1
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -188,10 +188,10 @@ jobs:
       url: https://azurerbac-builtinroles-staging.azurewebsites.net
     
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803  # v6.1.0
 
       - name: Azure Login
-        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43  # v3.0.0
+        uses: azure/login@f5d393ae46f8fde4be8b75f32e3fc50e654ad0ca  # v3.0.1
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -309,7 +309,7 @@ jobs:
     
     steps:
       - name: Azure Login
-        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43  # v3.0.0
+        uses: azure/login@f5d393ae46f8fde4be8b75f32e3fc50e654ad0ca  # v3.0.1
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -378,7 +378,7 @@ jobs:
     
     steps:
       - name: Azure Login
-        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43  # v3.0.0
+        uses: azure/login@f5d393ae46f8fde4be8b75f32e3fc50e654ad0ca  # v3.0.1
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
